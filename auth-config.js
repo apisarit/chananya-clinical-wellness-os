@@ -9,47 +9,32 @@ window.CHANANYA_AUTH = Object.freeze({
 (() => {
   'use strict';
   const path = location.pathname;
-  if (!(path === '/' || path.endsWith('/index.html'))) return;
 
-  const pharmacyRoles = new Set(['admin', 'pharmacy']);
-  const productionRoles = new Set(['admin', 'pharmacy', 'production']);
+  function addLink(actions, logout, id, href, text) {
+    let link=document.querySelector(`#${id}`);
+    if(!link){link=document.createElement('a');link.id=id;link.href=href;link.textContent=text;link.className='btn ghost';link.style.cssText='display:inline-flex;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';actions.insertBefore(link,logout)}
+    return link;
+  }
 
-  function installWorkspaceButtons() {
-    const actions = document.querySelector('.top .actions');
-    const roleBadge = document.querySelector('#role');
-    const logoutButton = document.querySelector('#logout');
-    if (!actions || !roleBadge || !logoutButton) return false;
+  function installNavigation() {
+    const actions=document.querySelector('.top .actions'),roleBadge=document.querySelector('#role'),logout=document.querySelector('#logout');
+    if(!actions||!roleBadge||!logout)return false;
+    const role=()=>String(roleBadge.textContent||'').trim().toLowerCase();
 
-    const makeLink = (id, href, text) => {
-      let link = document.querySelector(`#${id}`);
-      if (!link) {
-        link = document.createElement('a');
-        link.id = id;
-        link.href = href;
-        link.textContent = text;
-        link.className = 'btn ghost';
-        link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
-        actions.insertBefore(link, logoutButton);
-      }
-      return link;
-    };
+    if(path==='/'||path.endsWith('/index.html')){
+      const pharmacy=addLink(actions,logout,'pharmacy-header-link','/pharmacy.html','Pharmacy');
+      const production=addLink(actions,logout,'production-header-link','/production.html','Production');
+      const sync=()=>{const r=role();pharmacy.style.display=['admin','pharmacy'].includes(r)?'inline-flex':'none';production.style.display=['admin','pharmacy','production'].includes(r)?'inline-flex':'none'};
+      sync();new MutationObserver(sync).observe(roleBadge,{childList:true,subtree:true,characterData:true});
+    }
 
-    const pharmacy = makeLink('pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
-    const production = makeLink('production-header-link', '/production.html', 'Production');
-
-    const sync = () => {
-      const currentRole = (roleBadge.textContent || '').trim().toLowerCase();
-      pharmacy.style.display = pharmacyRoles.has(currentRole) ? 'inline-flex' : 'none';
-      production.style.display = productionRoles.has(currentRole) ? 'inline-flex' : 'none';
-    };
-    sync();
-    new MutationObserver(sync).observe(roleBadge,{childList:true,subtree:true,characterData:true});
+    if(path.endsWith('/production.html')) addLink(actions,logout,'pharmacy-from-production','/pharmacy.html','Pharmacy');
     return true;
   }
 
   document.addEventListener('DOMContentLoaded',()=>{
-    if (installWorkspaceButtons()) return;
-    const timer=setInterval(()=>{if(installWorkspaceButtons())clearInterval(timer)},200);
+    if(installNavigation())return;
+    const timer=setInterval(()=>{if(installNavigation())clearInterval(timer)},200);
     setTimeout(()=>clearInterval(timer),10000);
   });
 })();
