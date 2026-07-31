@@ -11,17 +11,33 @@ window.CHANANYA_AUTH = Object.freeze({
   const path = location.pathname;
 
   function addLink(actions, logout, id, href, text) {
-    let link = document.querySelector(`#${id}`);
+    let link = document.querySelector(`#${id}`)
+      || [...actions.querySelectorAll('a')].find(a => {
+        const linkPath = new URL(a.href, location.origin).pathname;
+        return linkPath === href;
+      });
+
     if (!link) {
       link = document.createElement('a');
-      link.id = id;
       link.href = href;
       link.textContent = text;
       link.className = 'btn ghost';
-      link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
       actions.insertBefore(link, logout);
     }
+
+    link.id = id;
+    link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
     return link;
+  }
+
+  function removeDuplicateLinks(actions) {
+    const seen = new Set();
+    [...actions.querySelectorAll('a')].forEach(link => {
+      const pathname = new URL(link.href, location.origin).pathname;
+      if (!['/admin.html', '/', '/pharmacy.html', '/production.html'].includes(pathname)) return;
+      if (seen.has(pathname)) link.remove();
+      else seen.add(pathname);
+    });
   }
 
   async function getAccess() {
@@ -48,6 +64,8 @@ window.CHANANYA_AUTH = Object.freeze({
     const logout = document.querySelector('#logout');
     if (!actions || !logout) return false;
 
+    removeDuplicateLinks(actions);
+
     const admin = addLink(actions, logout, 'admin-header-link', '/admin.html', 'Admin');
     const clinical = addLink(actions, logout, 'clinical-header-link', '/', 'Clinical');
     const pharmacy = addLink(actions, logout, 'pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
@@ -57,7 +75,7 @@ window.CHANANYA_AUTH = Object.freeze({
       const isAdmin = ['admin', 'super_admin'].includes(systemRole);
       const isSuper = systemRole === 'super_admin';
 
-      admin.style.display = isAdmin ? 'inline-flex' : 'none';
+      admin.style.display = path.endsWith('/admin.html') ? 'none' : (isAdmin ? 'inline-flex' : 'none');
       clinical.style.display = path === '/' || path.endsWith('/index.html') ? 'none' :
         (isSuper || ['admin','practitioner','reception','pharmacy','inventory','billing','viewer'].includes(role) ? 'inline-flex' : 'none');
       pharmacy.style.display = path.endsWith('/pharmacy.html') ? 'none' :
