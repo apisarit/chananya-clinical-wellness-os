@@ -8,51 +8,53 @@ window.CHANANYA_AUTH = Object.freeze({
 
 (() => {
   'use strict';
+
   const path = location.pathname;
+  const isClinicalHome = path === '/' || path.endsWith('/index.html');
+
+  // Admin, Pharmacy and Production pages already define their own
+  // workstation navigation in HTML. Never inject a second copy there.
+  if (!isClinicalHome) return;
 
   function addLink(actions, logout, id, href, text) {
-    let link = document.querySelector(`#${id}`)
-      || [...actions.querySelectorAll('a')].find(a => {
-        const linkPath = new URL(a.href, location.origin).pathname;
-        return linkPath === href;
-      });
-
+    let link = document.querySelector(`#${id}`);
     if (!link) {
       link = document.createElement('a');
+      link.id = id;
       link.href = href;
       link.textContent = text;
       link.className = 'btn ghost';
+      link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
       actions.insertBefore(link, logout);
     }
-
-    link.id = id;
-    link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
     return link;
-  }
-
-  function removeDuplicateLinks(actions) {
-    const seen = new Set();
-    [...actions.querySelectorAll('a')].forEach(link => {
-      const pathname = new URL(link.href, location.origin).pathname;
-      if (!['/admin.html', '/', '/pharmacy.html', '/production.html'].includes(pathname)) return;
-      if (seen.has(pathname)) link.remove();
-      else seen.add(pathname);
-    });
   }
 
   async function getAccess() {
     try {
       const cfg = window.CHANANYA_AUTH;
-      if (!window.supabase || !cfg?.url || !cfg?.anonKey) return { role: 'viewer', systemRole: 'staff' };
+      if (!window.supabase || !cfg?.url || !cfg?.anonKey) {
+        return { role: 'viewer', systemRole: 'staff' };
+      }
+
       const client = window.supabase.createClient(cfg.url, cfg.anonKey, {
         auth: { persistSession: true, autoRefreshToken: true }
       });
       const sessionResult = await client.auth.getSession();
       const userId = sessionResult.data.session?.user?.id;
       if (!userId) return { role: 'viewer', systemRole: 'staff' };
-      const profile = await client.from('profiles').select('role,system_role').eq('id', userId).single();
+
+      const profile = await client
+        .from('profiles')
+        .select('role,system_role')
+        .eq('id', userId)
+        .single();
+
       if (profile.error) return { role: 'viewer', systemRole: 'staff' };
-      return { role: profile.data.role || 'viewer', systemRole: profile.data.system_role || 'staff' };
+      return {
+        role: profile.data.role || 'viewer',
+        systemRole: profile.data.system_role || 'staff'
+      };
     } catch (error) {
       console.warn('Navigation access lookup failed', error);
       return { role: 'viewer', systemRole: 'staff' };
@@ -64,10 +66,7 @@ window.CHANANYA_AUTH = Object.freeze({
     const logout = document.querySelector('#logout');
     if (!actions || !logout) return false;
 
-    removeDuplicateLinks(actions);
-
     const admin = addLink(actions, logout, 'admin-header-link', '/admin.html', 'Admin');
-    const clinical = addLink(actions, logout, 'clinical-header-link', '/', 'Clinical');
     const pharmacy = addLink(actions, logout, 'pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
     const production = addLink(actions, logout, 'production-header-link', '/production.html', 'Production');
 
@@ -75,13 +74,9 @@ window.CHANANYA_AUTH = Object.freeze({
       const isAdmin = ['admin', 'super_admin'].includes(systemRole);
       const isSuper = systemRole === 'super_admin';
 
-      admin.style.display = path.endsWith('/admin.html') ? 'none' : (isAdmin ? 'inline-flex' : 'none');
-      clinical.style.display = path === '/' || path.endsWith('/index.html') ? 'none' :
-        (isSuper || ['admin','practitioner','reception','pharmacy','inventory','billing','viewer'].includes(role) ? 'inline-flex' : 'none');
-      pharmacy.style.display = path.endsWith('/pharmacy.html') ? 'none' :
-        (isSuper || isAdmin || role === 'pharmacy' ? 'inline-flex' : 'none');
-      production.style.display = path.endsWith('/production.html') ? 'none' :
-        (isSuper || isAdmin || ['pharmacy','production'].includes(role) ? 'inline-flex' : 'none');
+      admin.style.display = isAdmin ? 'inline-flex' : 'none';
+      pharmacy.style.display = (isSuper || isAdmin || role === 'pharmacy') ? 'inline-flex' : 'none';
+      production.style.display = (isSuper || isAdmin || ['pharmacy', 'production'].includes(role)) ? 'inline-flex' : 'none';
     });
     return true;
   }
