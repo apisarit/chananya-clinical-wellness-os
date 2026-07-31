@@ -8,46 +8,48 @@ window.CHANANYA_AUTH = Object.freeze({
 
 (() => {
   'use strict';
+  const path = location.pathname;
+  if (!(path === '/' || path.endsWith('/index.html'))) return;
 
-  const allowedRoles = new Set(['admin', 'pharmacy', 'production']);
+  const pharmacyRoles = new Set(['admin', 'pharmacy']);
+  const productionRoles = new Set(['admin', 'pharmacy', 'production']);
 
-  function installProductionButton() {
+  function installWorkspaceButtons() {
     const actions = document.querySelector('.top .actions');
     const roleBadge = document.querySelector('#role');
     const logoutButton = document.querySelector('#logout');
     if (!actions || !roleBadge || !logoutButton) return false;
 
-    let link = document.querySelector('#production-header-link');
-    if (!link) {
-      link = document.createElement('a');
-      link.id = 'production-header-link';
-      link.href = '/production.html';
-      link.textContent = 'Production';
-      link.setAttribute('aria-label', 'เปิด Production Workstation');
-      link.className = 'btn ghost';
-      link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
-      actions.insertBefore(link, logoutButton);
-    }
-
-    const syncVisibility = () => {
-      const currentRole = (roleBadge.textContent || '').trim().toLowerCase();
-      link.style.display = allowedRoles.has(currentRole) ? 'inline-flex' : 'none';
+    const makeLink = (id, href, text) => {
+      let link = document.querySelector(`#${id}`);
+      if (!link) {
+        link = document.createElement('a');
+        link.id = id;
+        link.href = href;
+        link.textContent = text;
+        link.className = 'btn ghost';
+        link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
+        actions.insertBefore(link, logoutButton);
+      }
+      return link;
     };
 
-    syncVisibility();
-    new MutationObserver(syncVisibility).observe(roleBadge, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
+    const pharmacy = makeLink('pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
+    const production = makeLink('production-header-link', '/production.html', 'Production');
+
+    const sync = () => {
+      const currentRole = (roleBadge.textContent || '').trim().toLowerCase();
+      pharmacy.style.display = pharmacyRoles.has(currentRole) ? 'inline-flex' : 'none';
+      production.style.display = productionRoles.has(currentRole) ? 'inline-flex' : 'none';
+    };
+    sync();
+    new MutationObserver(sync).observe(roleBadge,{childList:true,subtree:true,characterData:true});
     return true;
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (installProductionButton()) return;
-    const timer = window.setInterval(() => {
-      if (installProductionButton()) window.clearInterval(timer);
-    }, 200);
-    window.setTimeout(() => window.clearInterval(timer), 10000);
+  document.addEventListener('DOMContentLoaded',()=>{
+    if (installWorkspaceButtons()) return;
+    const timer=setInterval(()=>{if(installWorkspaceButtons())clearInterval(timer)},200);
+    setTimeout(()=>clearInterval(timer),10000);
   });
 })();
