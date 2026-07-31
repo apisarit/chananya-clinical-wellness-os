@@ -18,55 +18,52 @@ window.CHANANYA_AUTH = Object.freeze({
       link.href = href;
       link.textContent = text;
       link.className = 'btn ghost';
-      link.style.cssText = 'display:inline-flex;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
+      link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
       actions.insertBefore(link, logout);
     }
     return link;
   }
 
+  async function getAccess() {
+    try {
+      const cfg = window.CHANANYA_AUTH;
+      if (!window.supabase || !cfg?.url || !cfg?.anonKey) return { role: 'viewer', systemRole: 'staff' };
+      const client = window.supabase.createClient(cfg.url, cfg.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true }
+      });
+      const sessionResult = await client.auth.getSession();
+      const userId = sessionResult.data.session?.user?.id;
+      if (!userId) return { role: 'viewer', systemRole: 'staff' };
+      const profile = await client.from('profiles').select('role,system_role').eq('id', userId).single();
+      if (profile.error) return { role: 'viewer', systemRole: 'staff' };
+      return { role: profile.data.role || 'viewer', systemRole: profile.data.system_role || 'staff' };
+    } catch (error) {
+      console.warn('Navigation access lookup failed', error);
+      return { role: 'viewer', systemRole: 'staff' };
+    }
+  }
+
   function installNavigation() {
     const actions = document.querySelector('.top .actions');
-    const roleBadge = document.querySelector('#role');
     const logout = document.querySelector('#logout');
-    if (!actions || !roleBadge || !logout) return false;
+    if (!actions || !logout) return false;
 
-    const effectiveRole = () => {
-      const current = String(roleBadge.dataset.databaseRole || roleBadge.textContent || '').trim().toLowerCase();
-      return current === 'admin' ? 'super_admin' : current;
-    };
+    const admin = addLink(actions, logout, 'admin-header-link', '/admin.html', 'Admin');
+    const clinical = addLink(actions, logout, 'clinical-header-link', '/', 'Clinical');
+    const pharmacy = addLink(actions, logout, 'pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
+    const production = addLink(actions, logout, 'production-header-link', '/production.html', 'Production');
 
-    const syncBadge = () => {
-      const currentText = String(roleBadge.textContent || '').trim().toLowerCase();
-      if (currentText === 'admin') {
-        roleBadge.dataset.databaseRole = 'admin';
-        roleBadge.textContent = 'super_admin';
-      }
-    };
+    getAccess().then(({ role, systemRole }) => {
+      const isAdmin = ['admin', 'super_admin'].includes(systemRole);
+      const isSuper = systemRole === 'super_admin';
 
-    let pharmacy;
-    let production;
-
-    if (path === '/' || path.endsWith('/index.html')) {
-      pharmacy = addLink(actions, logout, 'pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
-      production = addLink(actions, logout, 'production-header-link', '/production.html', 'Production');
-    }
-
-    if (path.endsWith('/production.html')) {
-      pharmacy = addLink(actions, logout, 'pharmacy-from-production', '/pharmacy.html', 'Pharmacy');
-    }
-
-    const sync = () => {
-      syncBadge();
-      const role = effectiveRole();
-      if (pharmacy) pharmacy.style.display = ['super_admin', 'admin', 'pharmacy'].includes(role) ? 'inline-flex' : 'none';
-      if (production) production.style.display = ['super_admin', 'admin', 'pharmacy', 'production'].includes(role) ? 'inline-flex' : 'none';
-    };
-
-    sync();
-    new MutationObserver(sync).observe(roleBadge, {
-      childList: true,
-      subtree: true,
-      characterData: true
+      admin.style.display = isAdmin ? 'inline-flex' : 'none';
+      clinical.style.display = path === '/' || path.endsWith('/index.html') ? 'none' :
+        (isSuper || ['admin','practitioner','reception','pharmacy','inventory','billing','viewer'].includes(role) ? 'inline-flex' : 'none');
+      pharmacy.style.display = path.endsWith('/pharmacy.html') ? 'none' :
+        (isSuper || isAdmin || role === 'pharmacy' ? 'inline-flex' : 'none');
+      production.style.display = path.endsWith('/production.html') ? 'none' :
+        (isSuper || isAdmin || ['pharmacy','production'].includes(role) ? 'inline-flex' : 'none');
     });
     return true;
   }
