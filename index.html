@@ -1,59 +1,19 @@
-<!doctype html>
-<html lang="th">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#173f31">
-<title>Chananya Clinical OS</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth-config.js"></script>
-<style>
-:root{--g:#173f31;--g2:#2f6d53;--bg:#f4f7f5;--ink:#1c2822;--muted:#6f7b75;--line:#dce4df}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,"Noto Sans Thai",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
-.loading{min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#102e24,#245b46);color:#fff;padding:24px;text-align:center}.loading .box{max-width:420px}.app{display:none}.app.on{display:block}.top{background:var(--g);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px}.top small{display:block;opacity:.75}.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:750;cursor:pointer}.btn-light{background:#fff;color:var(--g)}main{max-width:1100px;margin:auto;padding:20px}.hero{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;border-radius:20px;padding:24px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}.stat,.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:17px}.stat strong{display:block;font-size:30px;color:var(--g);margin-top:6px}.status{margin-top:16px;color:var(--muted)}.error{color:#ffd0d0;white-space:pre-wrap}.badge{display:inline-block;background:#dce9e2;color:var(--g);border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700}@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}}
-</style>
-</head>
-<body>
-<section class="loading" id="loading"><div class="box"><h2>กำลังเปิด Chananya Clinical OS</h2><p id="status">กำลังตรวจสอบ session…</p><p class="error" id="error"></p></div></section>
-<div class="app" id="app">
-<header class="top"><div><b>ชนัญญา Clinical & Wellness OS</b><small id="identity"></small></div><div><span class="badge" id="role">viewer</span> <button class="btn btn-light" id="logout">ออกจากระบบ</button></div></header>
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#173f31"><title>Chananya Clinical OS</title><link rel="stylesheet" href="app.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="auth-config.js"></script><script defer src="app.js"></script></head><body>
+<div id="boot"><div><div class="spinner"></div><h2 id="boot-title">กำลังเปิด Chananya Clinical OS</h2><p id="boot-error">กำลังตรวจสอบ session และสิทธิ์</p></div></div>
+<div id="app" class="hidden"><header class="top"><div><h1>ชนัญญา Clinical & Wellness OS</h1><small id="identity"></small></div><div class="actions"><span class="badge" id="role">viewer</span><button class="btn ghost" id="logout">ออกจากระบบ</button></div></header>
+<nav class="nav"><button class="active" data-view="dashboard">ภาพรวม</button><button data-view="patients">ผู้รับบริการ</button><button data-view="appointments">นัดหมาย</button><button data-view="clinical">Clinical Record</button><button data-view="inventory">สมุนไพร/สต็อก</button><button data-view="audit">Audit</button></nav>
 <main>
-<section class="hero"><h1>เข้าสู่ระบบสำเร็จ</h1><p>Google OAuth • PKCE callback • Supabase session • Row Level Security</p></section>
-<section class="stats"><div class="stat">ผู้รับบริการ<strong id="patients">0</strong></div><div class="stat">นัดหมาย<strong id="appointments">0</strong></div><div class="stat">Clinical records<strong id="encounters">0</strong></div><div class="stat">สต็อกสมุนไพร<strong id="inventory">0</strong></div></section>
-<section class="card" style="margin-top:16px"><h3>สถานะระบบ</h3><p id="dbStatus">กำลังโหลดข้อมูลจาก Supabase…</p><p class="status">Authenticated shell รุ่นแก้ไขแล้ว</p></section>
+<section class="view active" id="dashboard"><div class="hero"><h2>Clinical + Wellness OS</h2><p>Google OAuth • PKCE • Supabase session • RLS • Role permission • Auto-lock 15 นาที • Audit log</p></div><div class="stats"><div class="stat">ผู้รับบริการ<strong id="stat-p">0</strong></div><div class="stat">นัดวันนี้<strong id="stat-a">0</strong></div><div class="stat">Clinical records<strong id="stat-e">0</strong></div><div class="stat">Allergy alerts<strong id="stat-x">0</strong></div><div class="stat">สต็อกหมดอายุ<strong id="stat-i">0</strong></div></div><div class="card"><h3>ประวัติล่าสุด</h3><div id="recent-list" class="list"></div></div></section>
+<section class="view" id="patients"><div class="grid2"><div class="card"><h3>ทะเบียนผู้รับบริการ</h3><form class="form" id="patient-form"><input type="hidden" id="p-id"><label>HN<input id="p-hn" required></label><label>ชื่อ-สกุล<input id="p-name" required></label><label>โทรศัพท์<input id="p-phone"></label><label>วันเกิด<input id="p-dob" type="date"></label><label class="full">ที่อยู่<textarea id="p-address"></textarea></label><label class="full">การแพ้/ข้อควรระวัง<textarea id="p-allergy"></textarea></label><button class="btn primary full">บันทึกผู้รับบริการ</button></form></div><div class="card"><h3>รายการผู้รับบริการ</h3><div id="patient-list" class="list"></div></div></div></section>
+<section class="view" id="appointments"><div class="grid2"><div class="card"><h3>สร้างนัดหมาย</h3><form class="form" id="appointment-form"><label class="full">ผู้รับบริการ<select id="appt-patient" required></select></label><label>วันที่<input id="appt-date" type="date" required></label><label>เวลา<input id="appt-time" type="time" required></label><label>บริการ<input id="appt-service" value="ตรวจและวินิจฉัย"></label><label>ผู้ให้บริการ<input id="appt-practitioner" value="แพทย์แผนไทย"></label><label>ห้อง<input id="appt-room" value="Diagnosis Room 1"></label><label class="full">หมายเหตุ<textarea id="appt-note"></textarea></label><button class="btn primary full">บันทึกนัดหมาย</button></form></div><div class="card"><h3>ตารางนัด</h3><div id="appointment-list" class="list"></div></div></div></section>
+<section class="view" id="clinical"><div class="card"><h3>Core Clinical Record</h3><div class="stepper"><button type="button" class="step active" data-step="1">1 ประวัติ</button><button type="button" class="step" data-step="2">2 ความปลอดภัย</button><button type="button" class="step" data-step="3">3 ประเมิน</button><button type="button" class="step" data-step="4">4 วินิจฉัย</button><button type="button" class="step" data-step="5">5 รักษา/ผลลัพธ์</button></div><form id="encounter-form">
+<div class="step-panel active" data-panel="1"><div class="form"><label class="full">ผู้รับบริการ<select id="enc-patient" required></select></label><label class="full">อาการสำคัญ<textarea id="enc-chief" required></textarea></label><label class="full">ประวัติปัจจุบัน<textarea id="enc-history"></textarea></label><label class="full">ยา/สมุนไพร/อาหารเสริมที่ใช้อยู่<textarea id="enc-med"></textarea></label></div></div>
+<div class="step-panel" data-panel="2"><div class="form"><label>Temperature<input id="enc-temp" type="number" step=".1"></label><label>Pulse<input id="enc-pulse" type="number"></label><label>Respiration<input id="enc-rr" type="number"></label><label>Blood pressure<input id="enc-bp"></label><label>SpO₂<input id="enc-spo2" type="number"></label><label>Pain before<input id="enc-before" type="number" min="0" max="10"></label><label class="full">Red flags / Contraindications<textarea id="enc-redflags"></textarea></label></div></div>
+<div class="step-panel" data-panel="3"><div class="form"><label class="full">ผลตรวจร่างกาย / จุดเจ็บ / การเคลื่อนไหว<textarea id="enc-exam" rows="8"></textarea></label></div></div>
+<div class="step-panel" data-panel="4"><div class="form"><label>ธาตุสมุฏฐาน<select id="enc-element"><option>ปถวี</option><option>อาโป</option><option>วาโย</option><option>เตโช</option></select></label><label>อุตุ/กาลสมุฏฐาน<select id="enc-season"><option>เสมหะ</option><option>วาตะ</option><option>ปิตตะ</option></select></label><label class="full">วินิจฉัยการแพทย์แผนไทย<textarea id="enc-diagnosis" required></textarea></label></div></div>
+<div class="step-panel" data-panel="5"><div class="form"><label class="full">การรักษา<textarea id="enc-treatment"></textarea></label><label class="full">สมุนไพร / สูตร / Lot / Dose<textarea id="enc-herbal"></textarea></label><label>Pain after<input id="enc-after" type="number" min="0" max="10"></label><label>Outcome<select id="enc-outcome"><option>ดีขึ้นมาก</option><option>ดีขึ้น</option><option>คงเดิม</option><option>แย่ลง</option></select></label><label class="full">คำแนะนำกลับบ้าน<textarea id="enc-advice"></textarea></label><label>นัดครั้งต่อไป<input id="enc-next" type="date"></label><label>ผู้ตรวจรักษา<input id="enc-practitioner" value="แพทย์แผนไทย"></label><button class="btn primary full">บันทึก Clinical Record</button></div></div>
+<div class="step-actions"><button type="button" class="btn ghost" id="prev-step">ย้อนกลับ</button><button type="button" class="btn primary" id="next-step">ถัดไป</button></div></form></div></section>
+<section class="view" id="inventory"><div class="grid2"><div class="card"><h3>Herbal Inventory Lot</h3><form class="form" id="inventory-form"><label>ชื่อยา/สมุนไพร<input id="inv-name" required></label><label>Lot<input id="inv-lot" required></label><label>วันหมดอายุ<input id="inv-exp" type="date"></label><label>จำนวน<input id="inv-qty" type="number" min="0"></label><label class="full">ผู้จำหน่าย<input id="inv-supplier"></label><button class="btn primary full">บันทึก Lot</button></form></div><div class="card"><h3>Stock Overview</h3><div id="inventory-list" class="list"></div></div></div></section>
+<section class="view" id="audit"><div class="card"><h3>Audit log</h3><p class="muted">เฉพาะ admin</p><div id="audit-list" class="list"></div></div></section>
 </main></div>
-<script>
-const config=window.CHANANYA_AUTH||{};
-const client=supabase.createClient(config.supabaseUrl,config.publishableKey,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-const byId=id=>document.getElementById(id);
-async function boot(){
-  try{
-    if(!config.supabaseUrl||!config.publishableKey) throw new Error('ไม่พบ Supabase configuration');
-    const result=await client.auth.getSession();
-    if(result.error) throw result.error;
-    const session=result.data.session;
-    if(!session){location.replace('/login-v3.html');return;}
-    byId('identity').textContent=session.user.email||'';
-    const profile=await client.from('profiles').select('role').eq('id',session.user.id).maybeSingle();
-    if(profile.error) throw profile.error;
-    byId('role').textContent=profile.data?.role||'viewer';
-    const stateResult=await client.from('clinic_state').select('data').eq('id','00000000-0000-0000-0000-000000000001').maybeSingle();
-    if(stateResult.error) throw stateResult.error;
-    const data=stateResult.data?.data||{};
-    byId('patients').textContent=(data.patients||[]).length;
-    byId('appointments').textContent=(data.appointments||[]).length;
-    byId('encounters').textContent=(data.encounters||[]).length;
-    byId('inventory').textContent=(data.inventory||[]).length;
-    byId('dbStatus').textContent='เชื่อมต่อ Supabase และอ่านข้อมูลสำเร็จ';
-    byId('loading').style.display='none';
-    byId('app').classList.add('on');
-  }catch(err){
-    byId('status').textContent='เปิดระบบไม่สำเร็จ';
-    byId('error').textContent=err?.message||String(err);
-  }
-}
-byId('logout').onclick=async()=>{await client.auth.signOut({scope:'local'});location.replace('/login-v3.html')};
-boot();
-</script>
-</body>
-</html>
+<div class="lock" id="lock"><div><h2>ระบบถูกล็อก</h2><p>ไม่มีการใช้งานเกิน 15 นาที</p><button class="btn ghost" id="unlock">ปลดล็อก</button></div></div><div class="toast" id="toast"></div></body></html>
