@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#173f31">
+<title>เข้าสู่ระบบ | Chananya Clinical OS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;font-family:Inter,"Noto Sans Thai",system-ui,sans-serif;background:linear-gradient(135deg,#102e24,#245b46);color:#1c2822}.card{width:min(430px,94vw);background:#fff;border-radius:24px;padding:30px;box-shadow:0 30px 100px rgba(0,0,0,.3);text-align:center}.logo{width:70px;height:70px;margin:0 auto 16px;border-radius:20px;display:grid;place-items:center;background:#173f31;color:#fff;font-size:38px}h1{margin:0 0 8px;font-size:27px}p{color:#6f7b75;line-height:1.55}.btn{width:100%;border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:800;cursor:pointer;background:#173f31;color:#fff;margin-top:16px}.btn:disabled{opacity:.6;cursor:wait}.status{margin-top:14px;font-size:13px;color:#6f7b75}.error{margin-top:12px;color:#b14949;font-size:13px}.privacy{margin-top:18px;font-size:12px;color:#6f7b75}
+</style>
+</head>
+<body>
+<main class="card">
+<div class="logo">ช</div>
+<h1>Chananya Clinical OS</h1>
+<p>เข้าสู่ระบบด้วยบัญชี Google เพื่อเข้าใช้งานระบบคลินิก</p>
+<button class="btn" id="login">เข้าสู่ระบบด้วย Google</button>
+<div class="status" id="status">กำลังตรวจสอบสถานะการเข้าสู่ระบบ…</div>
+<div class="error" id="error"></div>
+<div class="privacy">Prototype authentication • Auto-lock is handled by Google session</div>
+</main>
+<script>
+const SUPABASE_URL='https://qptxnrldzzinlcabudjv.supabase.co';
+const SUPABASE_KEY='sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ';
+const client=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const login=document.getElementById('login'),statusEl=document.getElementById('status'),errorEl=document.getElementById('error');
+async function openApp(){
+ const {data:{session},error}=await client.auth.getSession();
+ if(error){errorEl.textContent=error.message;statusEl.textContent='ตรวจสอบ session ไม่สำเร็จ';return;}
+ if(session){statusEl.textContent='เข้าสู่ระบบแล้ว กำลังเปิดระบบ…';location.replace('/index.html');}
+ else statusEl.textContent='ยังไม่ได้เข้าสู่ระบบ';
+}
+login.onclick=async()=>{
+ login.disabled=true;errorEl.textContent='';statusEl.textContent='กำลังเชื่อมต่อ Google…';
+ const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://chananya.netlify.app/'}});
+ if(error){errorEl.textContent=error.message;statusEl.textContent='เข้าสู่ระบบไม่สำเร็จ';login.disabled=false;}
+};
+client.auth.onAuthStateChange((event,session)=>{if(session)location.replace('/index.html')});
+openApp();
+</script>
+</body>
+</html>
