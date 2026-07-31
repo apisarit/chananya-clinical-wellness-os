@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#173f31">
+  <title>Chananya Admin Task Center</title>
+  <link rel="stylesheet" href="app.css?v=admin1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-config.js?v=admin1"></script>
+  <script defer src="admin.js?v=admin1"></script>
+</head>
+<body>
+<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด Admin Task Center</h2><p id="boot-error">กำลังตรวจสอบ session และสิทธิ์</p></div></div>
+<div id="app" class="hidden">
+<header class="top">
+  <div><h1>ชนัญญา Admin Task Center</h1><small id="identity"></small></div>
+  <div class="actions">
+    <span class="badge" id="role">viewer</span>
+    <a class="btn ghost" href="/">Clinical</a>
+    <a class="btn ghost" href="/pharmacy.html">Pharmacy</a>
+    <a class="btn ghost" href="/production.html">Production</a>
+    <button class="btn ghost" id="logout">ออกจากระบบ</button>
+  </div>
+</header>
+<nav class="nav" id="admin-nav">
+  <button class="active" data-view="tasks">Admin Tasks</button>
+  <button data-view="users">Users & Roles</button>
+  <button data-view="history">Approval History</button>
+</nav>
+<main>
+<section class="view active" id="tasks">
+  <div class="hero"><h2>งานรออนุมัติและข้อยกเว้น</h2><p>คิวกลางสำหรับ User Access, Pharmacy, Production, Inventory และ Billing</p></div>
+  <div class="stats">
+    <div class="stat">รออนุมัติ<strong id="stat-pending">0</strong></div>
+    <div class="stat">กำลังตรวจ<strong id="stat-review">0</strong></div>
+    <div class="stat">เร่งด่วน<strong id="stat-urgent">0</strong></div>
+    <div class="stat">เกินกำหนด<strong id="stat-overdue">0</strong></div>
+    <div class="stat">อนุมัติวันนี้<strong id="stat-approved">0</strong></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>สร้าง Task ทดสอบ/งานบริหาร</h3>
+      <form id="task-form" class="form">
+        <label>Module<select id="task-module"><option>user_access</option><option>pharmacy</option><option>production</option><option>inventory</option><option>billing</option><option>system</option></select></label>
+        <label>Task type<input id="task-type" required placeholder="stock_adjustment"></label>
+        <label class="full">หัวข้อ<input id="task-title" required></label>
+        <label class="full">รายละเอียด<textarea id="task-description"></textarea></label>
+        <label>Priority<select id="task-priority"><option>normal</option><option>high</option><option>urgent</option><option>critical</option></select></label>
+        <label>Due date<input id="task-due" type="datetime-local"></label>
+        <button class="btn primary full">สร้าง Approval Task</button>
+      </form>
+    </div>
+    <div class="card"><h3>งานที่ต้องดำเนินการ</h3><div id="task-list" class="list"></div></div>
+  </div>
+</section>
+<section class="view" id="users">
+  <div class="grid2">
+    <div class="card">
+      <h3>กำหนด Role ปฏิบัติงาน</h3>
+      <form id="staff-role-form" class="form">
+        <label class="full">ผู้ใช้<select id="staff-user" required></select></label>
+        <label>Role<select id="staff-role"><option>practitioner</option><option>reception</option><option>pharmacy</option><option>production</option><option>inventory</option><option>billing</option><option>viewer</option></select></label>
+        <label>เหตุผล<input id="staff-reason"></label>
+        <button class="btn primary full">บันทึก Role</button>
+      </form>
+    </div>
+    <div class="card" id="super-admin-card">
+      <h3>Super Admin: แต่งตั้ง Admin ธรรมดา</h3>
+      <form id="system-role-form" class="form">
+        <label class="full">ผู้ใช้<select id="system-user" required></select></label>
+        <label>System role<select id="system-role"><option value="admin">admin</option><option value="staff">staff</option></select></label>
+        <label>เหตุผล<input id="system-reason"></label>
+        <button class="btn primary full">บันทึก System Role</button>
+      </form>
+    </div>
+  </div>
+  <div class="card"><h3>รายชื่อและสิทธิ์</h3><div id="user-list" class="list"></div></div>
+</section>
+<section class="view" id="history"><div class="card"><h3>ประวัติการอนุมัติ</h3><div id="action-list" class="list"></div></div></section>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+</body>
+</html>
