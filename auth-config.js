@@ -11,34 +11,43 @@ window.CHANANYA_AUTH = Object.freeze({
 
   const allowedRoles = new Set(['admin', 'pharmacy', 'production']);
 
-  function addProductionButton() {
-    const nav = document.querySelector('#main-nav');
+  function installProductionButton() {
+    const actions = document.querySelector('.top .actions');
     const roleBadge = document.querySelector('#role');
-    if (!nav || !roleBadge) return;
+    const logoutButton = document.querySelector('#logout');
+    if (!actions || !roleBadge || !logoutButton) return false;
 
-    let link = document.querySelector('#production-nav-link');
+    let link = document.querySelector('#production-header-link');
     if (!link) {
       link = document.createElement('a');
-      link.id = 'production-nav-link';
+      link.id = 'production-header-link';
       link.href = '/production.html';
       link.textContent = 'Production';
       link.setAttribute('aria-label', 'เปิด Production Workstation');
-      link.style.cssText = 'display:none;white-space:nowrap;text-decoration:none;background:#ffffff18;color:#fff;border-radius:10px;padding:10px 13px;align-items:center';
-      nav.appendChild(link);
+      link.className = 'btn ghost';
+      link.style.cssText = 'display:none;text-decoration:none;align-items:center;justify-content:center;white-space:nowrap';
+      actions.insertBefore(link, logoutButton);
     }
 
-    const sync = () => {
+    const syncVisibility = () => {
       const currentRole = (roleBadge.textContent || '').trim().toLowerCase();
       link.style.display = allowedRoles.has(currentRole) ? 'inline-flex' : 'none';
     };
 
-    sync();
-    new MutationObserver(sync).observe(roleBadge, {
+    syncVisibility();
+    new MutationObserver(syncVisibility).observe(roleBadge, {
       childList: true,
       subtree: true,
       characterData: true
     });
+    return true;
   }
 
-  document.addEventListener('DOMContentLoaded', addProductionButton);
+  document.addEventListener('DOMContentLoaded', () => {
+    if (installProductionButton()) return;
+    const timer = window.setInterval(() => {
+      if (installProductionButton()) window.clearInterval(timer);
+    }, 200);
+    window.setTimeout(() => window.clearInterval(timer), 10000);
+  });
 })();
