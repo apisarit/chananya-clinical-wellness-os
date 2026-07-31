@@ -14,30 +14,40 @@
 <main class="card">
 <div class="logo">ช</div>
 <h1>Chananya Clinical OS</h1>
-<p>เข้าสู่ระบบด้วยบัญชี Google เพื่อเข้าใช้งานระบบคลินิก</p>
+<p>เข้าสู่ระบบด้วยบัญชี Google ที่ได้รับอนุญาต</p>
 <button class="btn" id="login">เข้าสู่ระบบด้วย Google</button>
-<div class="status" id="status">กำลังตรวจสอบสถานะการเข้าสู่ระบบ…</div>
+<div class="status" id="status">พร้อมเข้าสู่ระบบ</div>
 <div class="error" id="error"></div>
-<div class="privacy">Prototype authentication • Auto-lock is handled by Google session</div>
+<div class="privacy">Secure pilot authentication</div>
 </main>
 <script>
 const SUPABASE_URL='https://qptxnrldzzinlcabudjv.supabase.co';
 const SUPABASE_KEY='sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ';
-const client=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const login=document.getElementById('login'),statusEl=document.getElementById('status'),errorEl=document.getElementById('error');
+let client;
+try{
+ if(!window.supabase) throw new Error('โหลดระบบยืนยันตัวตนไม่สำเร็จ กรุณารีเฟรชหน้า');
+ client=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+}catch(e){errorEl.textContent=e.message;}
+const timeout=(ms)=>new Promise((_,reject)=>setTimeout(()=>reject(new Error('ตรวจสอบ session เกินเวลา')),ms));
 async function openApp(){
- const {data:{session},error}=await client.auth.getSession();
- if(error){errorEl.textContent=error.message;statusEl.textContent='ตรวจสอบ session ไม่สำเร็จ';return;}
- if(session){statusEl.textContent='เข้าสู่ระบบแล้ว กำลังเปิดระบบ…';location.replace('/index.html');}
- else statusEl.textContent='ยังไม่ได้เข้าสู่ระบบ';
+ if(!client)return;
+ try{
+  const result=await Promise.race([client.auth.getSession(),timeout(5000)]);
+  const session=result?.data?.session;
+  if(session){statusEl.textContent='เข้าสู่ระบบแล้ว กำลังเปิดระบบ…';location.replace('/index.html');return;}
+  statusEl.textContent='ยังไม่ได้เข้าสู่ระบบ';
+ }catch(e){statusEl.textContent='พร้อมเข้าสู่ระบบ';errorEl.textContent='';}
 }
 login.onclick=async()=>{
- login.disabled=true;errorEl.textContent='';statusEl.textContent='กำลังเชื่อมต่อ Google…';
- const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://chananya.netlify.app/'}});
- if(error){errorEl.textContent=error.message;statusEl.textContent='เข้าสู่ระบบไม่สำเร็จ';login.disabled=false;}
+ if(!client){errorEl.textContent='ระบบยืนยันตัวตนยังไม่พร้อม กรุณารีเฟรชหน้า';return;}
+ login.disabled=true;errorEl.textContent='';statusEl.textContent='กำลังเปิด Google…';
+ try{
+  const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://chananya.netlify.app/'}});
+  if(error)throw error;
+ }catch(e){errorEl.textContent=e.message||'เข้าสู่ระบบไม่สำเร็จ';statusEl.textContent='ลองอีกครั้ง';login.disabled=false;}
 };
-client.auth.onAuthStateChange((event,session)=>{if(session)location.replace('/index.html')});
-openApp();
+if(client){client.auth.onAuthStateChange((event,session)=>{if(session)location.replace('/index.html')});openApp();}
 </script>
 </body>
 </html>
