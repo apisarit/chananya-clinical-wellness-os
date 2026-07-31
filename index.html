@@ -1,12 +1,380 @@
-<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#173f31"><title>Chananya Clinical & Wellness OS</title><style>
-:root{--g:#173f31;--g2:#2f6d53;--bg:#f4f7f5;--ink:#1c2822;--muted:#6f7b75;--line:#dce4df;--white:#fff;--danger:#b14949}*{box-sizing:border-box}body{margin:0;font-family:Inter,"Noto Sans Thai",system-ui,sans-serif;background:var(--bg);color:var(--ink)}button,input,select,textarea{font:inherit}.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}.side{background:linear-gradient(180deg,var(--g),#102e24);color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh}.brand{display:flex;gap:12px;align-items:center;margin-bottom:30px}.logo{width:46px;height:46px;border-radius:14px;background:#ffffff18;border:1px solid #ffffff33;display:grid;place-items:center;font-size:27px}.brand small{display:block;opacity:.7}.nav{display:grid;gap:8px}.nav button{border:0;background:transparent;color:#dfe9e4;text-align:left;padding:13px;border-radius:11px;font-weight:700}.nav button.active,.nav button:hover{background:#ffffff18;color:#fff}.foot{position:absolute;bottom:24px;color:#cbd9d2;font-size:12px}.main{padding:28px 32px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:22px}.top h1{margin:0;font-size:28px}.top p{margin:4px 0 0;color:var(--muted)}.btn{border:0;border-radius:11px;padding:11px 15px;font-weight:750;cursor:pointer}.primary{background:var(--g);color:#fff}.ghost{background:#fff;border:1px solid var(--line)}.view{display:none}.view.active{display:block}.hero{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;border-radius:22px;padding:26px;display:grid;grid-template-columns:1.5fr .6fr;gap:20px}.hero h2{font-size:29px;margin:0 0 8px}.hero p{margin:0;opacity:.8;line-height:1.6}.hero strong{font-size:38px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.card,.stat{background:#fff;border:1px solid var(--line);border-radius:17px;padding:18px;box-shadow:0 16px 45px #173f3112}.stat span{color:var(--muted);font-size:13px}.stat strong{display:block;font-size:30px;color:var(--g);margin-top:6px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card h3{margin:0 0 14px}.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{display:grid;gap:6px;font-size:13px;font-weight:700}input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff}.list{display:grid;gap:9px}.item{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;justify-content:space-between;gap:10px}.item small{display:block;color:var(--muted);margin-top:3px}.badge{background:#dce9e2;color:var(--g);padding:5px 8px;border-radius:999px;font-size:12px;font-weight:800}.alert{background:#fff3df;color:#815615;border:1px solid #efd4a6;padding:11px;border-radius:11px}.empty{color:var(--muted);padding:22px;text-align:center;border:1px dashed var(--line);border-radius:12px}table{width:100%;border-collapse:collapse}th,td{padding:11px;border-bottom:1px solid var(--line);text-align:left}th{font-size:12px;color:var(--muted)}@media(max-width:850px){.shell{display:block}.side{height:auto;position:static}.nav{display:flex;overflow:auto}.foot{display:none}.main{padding:18px}.stats{grid-template-columns:1fr 1fr}.grid2,.hero,.form{grid-template-columns:1fr}.full{grid-column:auto}}
-</style></head><body><div class="shell"><aside class="side"><div class="brand"><div class="logo">ช</div><div><b>ชนัญญา</b><small>Clinical & Wellness OS</small></div></div><div class="nav"><button class="active" data-v="dashboard">ภาพรวม</button><button data-v="patients">ผู้รับบริการ</button><button data-v="appointments">นัดหมาย</button><button data-v="clinical">Clinical Record</button><button data-v="inventory">สมุนไพร / สต็อก</button><button data-v="analytics">ผลลัพธ์</button></div><div class="foot">Prototype Mode<br>ข้อมูลเก็บใน browser เครื่องนี้</div></aside><main class="main"><header class="top"><div><h1 id="title">ภาพรวมคลินิก</h1><p id="sub">Clinical operations prototype</p></div><button class="btn primary" id="seed">เพิ่มข้อมูลตัวอย่าง</button></header>
-<section class="view active" id="dashboard"><div class="hero"><div><h2>ระบบเดียวสำหรับ Clinical + Wellness</h2><p>ทะเบียนผู้รับบริการ การคัดกรองความปลอดภัย นัดหมาย เวชระเบียนการแพทย์แผนไทย สมุนไพรแบบสอบกลับได้ และผลลัพธ์ก่อน–หลังการรักษา</p></div><div><small>Clinical records</small><br><strong id="heroN">0</strong></div></div><div class="stats"><div class="stat"><span>ผู้รับบริการ</span><strong id="sp">0</strong></div><div class="stat"><span>นัดหมาย</span><strong id="sa">0</strong></div><div class="stat"><span>การรักษา</span><strong id="se">0</strong></div><div class="stat"><span>Allergy alerts</span><strong id="sx">0</strong></div></div><div class="grid2"><div class="card"><h3>คิวล่าสุด</h3><div id="recentA" class="empty">ยังไม่มีนัดหมาย</div></div><div class="card"><h3>Clinical activity</h3><div id="recentE" class="empty">ยังไม่มีข้อมูล</div></div></div></section>
-<section class="view" id="patients"><div class="grid2"><div class="card"><h3>เพิ่มผู้รับบริการ</h3><form class="form" id="pf"><label>HN<input id="phn" required></label><label>ชื่อ-สกุล<input id="pname" required></label><label>โทรศัพท์<input id="pphone"></label><label>วันเกิด<input id="pdob" type="date"></label><label class="full">การแพ้ / ข้อควรระวัง<textarea id="pallergy"></textarea></label><button class="btn primary full">บันทึก</button></form></div><div class="card"><h3>ทะเบียนผู้รับบริการ</h3><div style="overflow:auto"><table><thead><tr><th>HN</th><th>ชื่อ</th><th>โทรศัพท์</th><th>คำเตือน</th></tr></thead><tbody id="pt"></tbody></table></div></div></div></section>
-<section class="view" id="appointments"><div class="grid2"><div class="card"><h3>สร้างนัดหมาย</h3><form class="form" id="af"><label class="full">ผู้รับบริการ<select id="apat" required></select></label><label>วันที่<input id="adate" type="date" required></label><label>เวลา<input id="atime" type="time" required></label><label>บริการ<select id="aservice"><option>ตรวจและวินิจฉัย</option><option>นวดไทยเพื่อการรักษา</option><option>ประคบสมุนไพร</option><option>ติดตามผล</option></select></label><label>ห้อง<select id="aroom"><option>Diagnosis Room 1</option><option>Treatment Room 1</option><option>Treatment Room 2</option></select></label><button class="btn primary full">บันทึกนัดหมาย</button></form></div><div class="card"><h3>ตารางนัดหมาย</h3><div id="alist" class="empty">ยังไม่มีนัดหมาย</div></div></div></section>
-<section class="view" id="clinical"><div class="card"><h3>Core Clinical Record</h3><form class="form" id="ef"><label class="full">ผู้รับบริการ<select id="epat" required></select></label><label class="full">อาการสำคัญ<textarea id="echief" required></textarea></label><label>BP<input id="ebp" placeholder="120/80"></label><label>SpO₂<input id="espo2" type="number"></label><label>Pain before<input id="ebefore" type="number" min="0" max="10"></label><label>Pain after<input id="eafter" type="number" min="0" max="10"></label><label>ธาตุสมุฏฐาน<select id="eelement"><option>ปถวี</option><option>อาโป</option><option>วาโย</option><option>เตโช</option></select></label><label>อุตุ/กาลสมุฏฐาน<select id="eseason"><option>เสมหะ</option><option>วาตะ</option><option>ปิตตะ</option></select></label><label class="full">วินิจฉัยการแพทย์แผนไทย<textarea id="ediag" required></textarea></label><label class="full">การรักษา / สมุนไพร / Lot / Dose<textarea id="etreat"></textarea></label><label>ผลลัพธ์<select id="eout"><option>ดีขึ้นมาก</option><option>ดีขึ้น</option><option>คงเดิม</option><option>แย่ลง</option></select></label><label>นัดครั้งต่อไป<input id="enext" type="date"></label><button class="btn primary full">บันทึก Clinical Record</button></form></div></section>
-<section class="view" id="inventory"><div class="grid2"><div class="card"><h3>Herbal Inventory Lot</h3><form class="form" id="if"><label>ชื่อยา/สมุนไพร<input id="iname" required></label><label>Lot<input id="ilot" required></label><label>หมดอายุ<input id="iexp" type="date"></label><label>จำนวน<input id="iqty" type="number"></label><button class="btn primary full">บันทึก Lot</button></form></div><div class="card"><h3>Stock Overview</h3><div id="ilist" class="empty">ยังไม่มีข้อมูล</div></div></div></section>
-<section class="view" id="analytics"><div class="stats"><div class="stat"><span>Average pain before</span><strong id="avgb">0</strong></div><div class="stat"><span>Average pain after</span><strong id="avga">0</strong></div><div class="stat"><span>Improvement rate</span><strong id="rate">0%</strong></div><div class="stat"><span>Follow-up</span><strong id="follow">0</strong></div></div><div class="card"><h3>Outcome timeline</h3><div id="timeline" class="empty">ยังไม่มีผลลัพธ์</div></div></section>
-</main></div><script>
-const K='chananya_os_v1';let s=JSON.parse(localStorage.getItem(K)||'{"patients":[],"appointments":[],"encounters":[],"inventory":[]}');const $=x=>document.querySelector(x),$$=x=>[...document.querySelectorAll(x)],uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toISOString().slice(0,10),pn=id=>s.patients.find(p=>p.id===id)?.name||'-';function save(){localStorage.setItem(K,JSON.stringify(s));render()}const meta={dashboard:['ภาพรวมคลินิก','Clinical operations prototype'],patients:['ผู้รับบริการ','Patient master and safety alerts'],appointments:['นัดหมาย','Schedule, room and service'],clinical:['Clinical Record','Structured Thai traditional medicine record'],inventory:['สมุนไพร / สต็อก','Lot and expiry traceability'],analytics:['ผลลัพธ์','Before and after outcome analytics']};$$('.nav button').forEach(b=>b.onclick=()=>{$$('.nav button').forEach(x=>x.classList.toggle('active',x===b));$$('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.v));$('#title').textContent=meta[b.dataset.v][0];$('#sub').textContent=meta[b.dataset.v][1]});$('#adate').value=today();$('#pf').onsubmit=e=>{e.preventDefault();s.patients.unshift({id:uid(),hn:phn.value,name:pname.value,phone:pphone.value,dob:pdob.value,allergy:pallergy.value});e.target.reset();save()};$('#af').onsubmit=e=>{e.preventDefault();s.appointments.unshift({id:uid(),patientId:apat.value,date:adate.value,time:atime.value,service:aservice.value,room:aroom.value});e.target.reset();adate.value=today();save()};$('#ef').onsubmit=e=>{e.preventDefault();s.encounters.unshift({id:uid(),patientId:epat.value,date:new Date().toISOString(),chief:echief.value,bp:ebp.value,spo2:espo2.value,before:+ebefore.value,after:+eafter.value,element:eelement.value,season:eseason.value,diagnosis:ediag.value,treatment:etreat.value,outcome:eout.value,next:enext.value});e.target.reset();save()};$('#if').onsubmit=e=>{e.preventDefault();s.inventory.unshift({id:uid(),name:iname.value,lot:ilot.value,exp:iexp.value,qty:+iqty.value});e.target.reset();save()};$('#seed').onclick=()=>{let p={id:uid(),hn:'CN0001',name:'สมชาย ใจดี',phone:'081-234-5678',allergy:'แพ้ถั่วลิสงและยางลาเท็กซ์'};s.patients.unshift(p);s.appointments.unshift({id:uid(),patientId:p.id,date:today(),time:'10:00',service:'นวดไทยเพื่อการรักษา',room:'Treatment Room 1'});s.encounters.unshift({id:uid(),patientId:p.id,date:new Date().toISOString(),chief:'คอ บ่า ไหล่ตึง',before:7,after:3,diagnosis:'ลมปลายปัตคาดสัญญาณ 4 หลัง',outcome:'ดีขึ้น',next:today()});s.inventory.unshift({id:uid(),name:'ลูกประคบสมุนไพร',lot:'HC-2607-01',exp:'2027-07-31',qty:48});save()};function list(el,arr,fn,empty){el.className=arr.length?'list':'empty';el.innerHTML=arr.length?arr.map(fn).join(''):empty}function render(){sp.textContent=s.patients.length;sa.textContent=s.appointments.length;se.textContent=heroN.textContent=s.encounters.length;sx.textContent=s.patients.filter(p=>p.allergy).length;let opts='<option value="">เลือกผู้รับบริการ</option>'+s.patients.map(p=>`<option value="${p.id}">${p.hn} — ${p.name}</option>`).join('');apat.innerHTML=epat.innerHTML=opts;pt.innerHTML=s.patients.map(p=>`<tr><td>${p.hn}</td><td><b>${p.name}</b></td><td>${p.phone||'-'}</td><td>${p.allergy?`<span class="badge">${p.allergy}</span>`:'-'}</td></tr>`).join('')||'<tr><td colspan="4">ยังไม่มีข้อมูล</td></tr>';list(alist,s.appointments,a=>`<div class="item"><div><b>${a.date} ${a.time}</b><small>${pn(a.patientId)} · ${a.service} · ${a.room}</small></div></div>`,'ยังไม่มีนัดหมาย');list(recentA,s.appointments.slice(0,5),a=>`<div class="item"><div><b>${a.time} ${pn(a.patientId)}</b><small>${a.service}</small></div><span class="badge">${a.room}</span></div>`,'ยังไม่มีนัดหมาย');list(recentE,s.encounters.slice(0,5),e=>`<div class="item"><div><b>${pn(e.patientId)}</b><small>${e.diagnosis}</small></div><span class="badge">${e.before} → ${e.after}</span></div>`,'ยังไม่มีข้อมูล');list(ilist,s.inventory,i=>`<div class="item"><div><b>${i.name}</b><small>Lot ${i.lot} · Exp ${i.exp||'-'}</small></div><span class="badge">${i.qty}</span></div>`,'ยังไม่มีข้อมูล');let es=s.encounters,avg=k=>es.length?(es.reduce((a,e)=>a+(e[k]||0),0)/es.length).toFixed(1):0,avgb.textContent=avg('before'),avga.textContent=avg('after');let imp=es.filter(e=>e.after<e.before).length;rate.textContent=es.length?Math.round(imp/es.length*100)+'%':'0%';follow.textContent=es.filter(e=>e.next).length;list(timeline,es,e=>`<div class="item"><div><b>${pn(e.patientId)}</b><small>${new Date(e.date).toLocaleString('th-TH')} · ${e.outcome}</small></div><span class="badge">Pain ${e.before} → ${e.after}</span></div>`,'ยังไม่มีผลลัพธ์')}render();
-</script></body></html>
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#173f31">
+<title>Chananya Clinical OS</title>
+<style>
+:root{
+  --forest:#173f31;--forest2:#245b46;--sage:#dce9e2;--mist:#f4f7f5;
+  --ink:#1c2822;--muted:#6f7b75;--line:#dce4df;--white:#fff;
+  --gold:#aa8b57;--danger:#b14949;--shadow:0 20px 55px rgba(23,63,49,.10)
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,"Noto Sans Thai",system-ui,-apple-system,sans-serif;background:var(--mist);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.shell{display:grid;grid-template-columns:268px 1fr;min-height:100vh}
+.sidebar{background:linear-gradient(180deg,#173f31,#102e24);color:white;padding:26px 20px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:13px;align-items:center;margin-bottom:34px}
+.logo{width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);display:grid;place-items:center;font-size:28px}
+.brand b,.brand small{display:block}.brand b{font-size:18px}.brand small{opacity:.68;margin-top:2px}
+.nav{display:flex;flex-direction:column;gap:8px}
+.nav button{border:0;background:transparent;color:#dfe9e4;text-align:left;padding:13px 15px;border-radius:12px;font-weight:650}
+.nav button.active,.nav button:hover{background:rgba(255,255,255,.12);color:white}
+.side-foot{margin-top:auto;border-top:1px solid rgba(255,255,255,.15);padding-top:18px;font-size:12px;color:#cbd9d2}
+.side-foot strong{display:block;color:white;margin-bottom:5px}
+.main{padding:30px 34px 70px;min-width:0}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px;gap:16px}
+.title h1{font-size:30px;margin:0 0 5px}.title p{margin:0;color:var(--muted)}
+.actions{display:flex;gap:10px}
+.btn{border-radius:12px;padding:11px 16px;font-weight:750;border:1px solid transparent}
+.btn-primary{background:var(--forest);color:white}.btn-primary:hover{background:var(--forest2)}
+.btn-ghost{background:white;border-color:var(--line);color:var(--ink)}
+.view{display:none}.view.active{display:block}
+.hero{background:linear-gradient(135deg,#173f31,#2f6d53);color:white;border-radius:24px;padding:28px;box-shadow:var(--shadow);display:grid;grid-template-columns:1.5fr .7fr;gap:24px;margin-bottom:22px}
+.hero h2{font-size:30px;margin:0 0 10px}.hero p{margin:0;opacity:.78;max-width:620px;line-height:1.6}
+.hero-note{background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.2);border-radius:18px;padding:18px}
+.hero-note span{display:block;font-size:12px;opacity:.7}.hero-note strong{font-size:31px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px}
+.stat,.panel{background:white;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.stat{padding:18px}.stat span{color:var(--muted);font-size:13px}.stat strong{display:block;font-size:32px;margin:6px 0;color:var(--forest)}.stat small{color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.panel{padding:21px;margin-bottom:18px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px}
+.panel-head h3{margin:0;font-size:19px}.panel-head p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.list{display:flex;flex-direction:column;gap:10px}
+.item{border:1px solid var(--line);border-radius:13px;padding:13px 14px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.item small{display:block;color:var(--muted);margin-top:3px}
+.badge{font-size:12px;padding:5px 8px;border-radius:999px;background:var(--sage);color:var(--forest);font-weight:750}
+.badge.warn{background:#fff1d8;color:#8a5a00}
+.empty{color:var(--muted);padding:26px;border:1px dashed var(--line);border-radius:13px;text-align:center}
+.searchbar{display:flex;gap:10px;margin-bottom:15px}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:white;color:var(--ink);outline:none}
+input:focus,select:focus,textarea:focus{border-color:#79a18f;box-shadow:0 0 0 3px rgba(59,111,86,.12)}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{font-size:12px;color:var(--muted)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
+.section-title{grid-column:1/-1;background:var(--sage);padding:11px 13px;border-radius:11px;font-weight:800;color:var(--forest)}
+.stepper{display:flex;gap:8px;overflow:auto;margin-bottom:16px}
+.step{padding:10px 13px;border:1px solid var(--line);border-radius:11px;background:white;white-space:nowrap;font-weight:700}.step.active{background:var(--forest);color:white}
+.step-panel{display:none}.step-panel.active{display:block}
+.step-actions{display:flex;justify-content:space-between;margin-top:12px}
+.patient-card{background:linear-gradient(180deg,#fff,#f9fbfa);border:1px solid var(--line);border-radius:18px;padding:18px}
+.patient-card-top{display:flex;justify-content:space-between;align-items:center}
+.avatar{width:48px;height:48px;border-radius:50%;background:var(--sage);display:grid;place-items:center;color:var(--forest);font-weight:900}
+.alert{margin-top:12px;background:#fff6e9;border:1px solid #f1d8ae;border-radius:12px;padding:10px 12px;color:#7d540d}
+.clinical-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}
+.body-map{position:relative;background:#fbfcfb;border:1px solid var(--line);border-radius:18px;padding:16px;min-height:430px}
+.body-map svg{width:100%;height:auto}.body-map g{fill:none;stroke:#52665c;stroke-width:3;stroke-linecap:round}.body-map text{fill:#27352e;stroke:none;font-size:14px;text-anchor:middle}
+.marker{position:absolute;width:18px;height:18px;border-radius:50%;background:#bd4141;border:3px solid white;box-shadow:0 0 0 2px #bd4141;transform:translate(-50%,-50%)}
+.score-card{background:var(--forest);color:white;border-radius:18px;padding:18px}.score-card strong{font-size:46px}
+.timeline{border-left:2px solid var(--sage);padding-left:18px}.timeline .event{position:relative;margin-bottom:18px}.timeline .event:before{content:"";width:10px;height:10px;background:var(--forest);border-radius:50%;position:absolute;left:-24px;top:5px}
+.modal{position:fixed;inset:0;background:rgba(12,25,19,.55);display:none;place-items:center;padding:20px;z-index:20}.modal.open{display:grid}
+.modal-card{width:min(760px,96vw);max-height:92vh;overflow:auto;background:white;border-radius:22px;padding:24px;box-shadow:0 40px 120px rgba(0,0,0,.25)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h2{margin:0}.x{border:0;background:transparent;font-size:25px}
+.toast{position:fixed;right:24px;bottom:24px;background:#15392c;color:white;padding:13px 17px;border-radius:11px;opacity:0;transform:translateY(10px);transition:.2s;z-index:30}.toast.show{opacity:1;transform:none}
+@media(max-width:1000px){.shell{grid-template-columns:84px 1fr}.brand>div:last-child,.nav button{font-size:0}.nav button::first-letter{font-size:16px}.sidebar{padding:18px 10px}.brand{justify-content:center}.side-foot{display:none}.stats{grid-template-columns:1fr 1fr}.grid2,.clinical-grid{grid-template-columns:1fr}}
+@media(max-width:650px){.shell{display:block}.sidebar{height:auto;position:static;flex-direction:row;overflow:auto;padding:10px}.brand{display:none}.nav{flex-direction:row}.nav button{font-size:12px!important;white-space:nowrap}.main{padding:18px 12px 50px}.topbar{flex-direction:column;align-items:flex-start}.hero{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.full,.section-title{grid-column:auto}}
+
+.auth-gate{position:fixed;inset:0;z-index:100;background:linear-gradient(135deg,#102e24,#245b46);display:grid;place-items:center;padding:20px}
+.auth-gate.hidden{display:none}.auth-card{width:min(430px,94vw);background:white;border-radius:24px;padding:28px;box-shadow:0 30px 100px rgba(0,0,0,.32);text-align:center}
+.auth-logo{width:68px;height:68px;border-radius:20px;background:var(--forest);color:white;display:grid;place-items:center;font-size:38px;margin:0 auto 16px}.auth-card h1{margin:0 0 8px}.auth-card p{color:var(--muted);line-height:1.55}.google-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:18px}.auth-status{font-size:12px;margin-top:14px;color:var(--muted)}
+.user-chip{display:flex;align-items:center;gap:9px;background:white;border:1px solid var(--line);border-radius:12px;padding:7px 10px}.user-chip img{width:30px;height:30px;border-radius:50%}.user-chip small{display:block;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis}.auth-error{color:var(--danger);font-size:13px;margin-top:12px}
+@media(max-width:650px){.actions{flex-wrap:wrap}.user-chip{width:100%}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth-config.js"></script>
+</head>
+<body>
+<div class="auth-gate" id="auth-gate">
+  <div class="auth-card">
+    <div class="auth-logo">ช</div>
+    <h1 id="auth-title">Chananya Clinical OS</h1>
+    <p id="auth-message">เข้าสู่ระบบเพื่อใช้งานระบบคลินิก</p>
+    <button class="btn btn-primary google-btn" id="google-login">เข้าสู่ระบบด้วย Google</button>
+    <button class="btn btn-primary google-btn" id="unlock-btn" style="display:none">ปลดล็อกระบบ</button>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="auth-status" id="auth-status">กำลังตรวจสอบการตั้งค่า…</div>
+  </div>
+</div>
+<div class="shell" style="visibility:hidden">
+<aside class="sidebar">
+  <div class="brand"><div class="logo">ช</div><div><b>ชนัญญา</b><small>Clinical & Wellness OS</small></div></div>
+  <div class="nav">
+    <button class="active" data-view="dashboard">ภาพรวม</button>
+    <button data-view="patients">ผู้รับบริการ</button>
+    <button data-view="appointments">นัดหมาย</button>
+    <button data-view="clinical">Clinical Record</button>
+    <button data-view="inventory">สมุนไพร / สต็อก</button>
+    <button data-view="analytics">ผลลัพธ์</button>
+  </div>
+  <div class="side-foot"><strong>Prototype Mode</strong>ข้อมูลถูกเก็บใน browser เครื่องนี้เท่านั้น — กด "สำรองข้อมูล" เป็นระยะเพื่อป้องกันข้อมูลหาย<br><span id="last-saved" style="opacity:.75">ยังไม่มีการบันทึก</span></div>
+</aside>
+
+<main class="main">
+<header class="topbar">
+  <div class="title"><h1 id="page-title">ภาพรวมคลินิก</h1><p id="page-subtitle">Calm, structured and clinically meaningful</p></div>
+  <div class="actions"><div class="user-chip" id="user-chip" style="display:none"><img id="user-avatar" alt=""><div><b id="user-name">ผู้ใช้งาน</b><small id="user-email"></small></div><button class="btn btn-ghost" id="logout-btn" type="button">ออกจากระบบ</button></div><button class="btn btn-ghost" id="export-btn" title="ดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์สำรอง">⬇ สำรองข้อมูล</button><button class="btn btn-ghost" id="import-btn" title="นำเข้าไฟล์สำรองข้อมูล">⬆ นำเข้าข้อมูล</button><input type="file" id="import-file" accept="application/json" style="display:none"><button class="btn btn-ghost" id="seed">ข้อมูลตัวอย่าง</button><button class="btn btn-primary" data-open="patient-modal">+ ผู้รับบริการใหม่</button></div>
+</header>
+
+<section id="view-dashboard" class="view active">
+  <div class="hero">
+    <div><h2>ระบบเดียวสำหรับ Clinical + Wellness</h2><p>บันทึกประวัติอย่างเป็นระบบ ประเมินความปลอดภัย วินิจฉัย รักษา ติดตามผล และวัดผลลัพธ์ได้จริง โดยไม่ทำให้ผู้ใช้งานรู้สึกเหมือนกำลังกรอกแบบฟอร์มราชการ</p></div>
+    <div class="hero-note"><span>Clinical records completed</span><strong id="hero-enc">0</strong><small>structured encounters</small></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span>ผู้รับบริการทั้งหมด</span><strong id="stat-p">0</strong><small>Patient master</small></div>
+    <div class="stat"><span>นัดวันนี้</span><strong id="stat-a">0</strong><small>Appointments</small></div>
+    <div class="stat"><span>การรักษา</span><strong id="stat-e">0</strong><small>Clinical records</small></div>
+    <div class="stat"><span>Allergy alerts</span><strong id="stat-x">0</strong><small>Safety flags</small></div>
+    <div class="stat"><span>สต็อกใกล้/หมดอายุ</span><strong id="stat-exp">0</strong><small>Inventory alerts</small></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><div class="panel-head"><div><h3>คิววันนี้</h3><p>ตามลำดับเวลา</p></div></div><div id="today-list" class="empty">ยังไม่มีนัดวันนี้</div></div>
+    <div class="panel"><div class="panel-head"><div><h3>Clinical activity</h3><p>การรักษาล่าสุด</p></div></div><div id="recent-list" class="empty">ยังไม่มีข้อมูล</div></div>
+  </div>
+</section>
+
+<section id="view-patients" class="view">
+  <div class="panel">
+    <div class="panel-head"><div><h3>ทะเบียนผู้รับบริการ</h3><p>ข้อมูลหลัก การแพ้ และประวัติการรักษา</p></div><button class="btn btn-primary" data-open="patient-modal">+ เพิ่มผู้รับบริการ</button></div>
+    <div class="searchbar"><input id="patient-search" placeholder="ค้นหาชื่อ HN หรือโทรศัพท์"></div>
+    <div class="table-wrap"><table><thead><tr><th>HN</th><th>ชื่อ-สกุล</th><th>โทรศัพท์</th><th>การแพ้ / ข้อควรระวัง</th><th>ล่าสุด</th><th></th></tr></thead><tbody id="patient-rows"></tbody></table></div>
+  </div>
+</section>
+
+<section id="view-appointments" class="view">
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><div><h3>สร้างนัดหมาย</h3><p>ผู้รับบริการ ผู้ให้บริการ และห้องรักษา</p></div></div>
+      <form id="appointment-form" class="form-grid">
+        <input type="hidden" id="a-id">
+        <label class="full">ผู้รับบริการ<select id="a-patient" required></select></label>
+        <label>วันที่<input id="a-date" type="date" required></label>
+        <label>เวลา<input id="a-time" type="time" required></label>
+        <label>บริการ<select id="a-service"><option>ตรวจและวินิจฉัย</option><option>นวดไทยเพื่อการรักษา</option><option>ประคบสมุนไพร</option><option>อบสมุนไพร</option><option>ติดตามผล</option></select></label>
+        <label>ผู้ให้บริการ<input id="a-practitioner" value="แพทย์แผนไทย"></label>
+        <label>ห้อง<select id="a-room"><option>Diagnosis Room 1</option><option>Treatment Room 1</option><option>Treatment Room 2</option></select></label>
+        <label class="full">หมายเหตุ<textarea id="a-note" rows="3"></textarea></label>
+        <div class="full" style="display:flex;gap:10px"><button class="btn btn-primary" id="appointment-form-submit" style="flex:1">บันทึกนัดหมาย</button><button type="button" class="btn btn-ghost" id="appointment-cancel" style="display:none">ยกเลิกการแก้ไข</button></div>
+      </form>
+    </div>
+    <div class="panel"><div class="panel-head"><div><h3>ตารางนัดหมาย</h3><p>Upcoming schedule</p></div></div><div id="appointment-list" class="empty">ยังไม่มีนัดหมาย</div></div>
+  </div>
+</section>
+
+<section id="view-clinical" class="view">
+  <div class="clinical-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head"><div><h3>Core Clinical Record</h3><p>History → Safety → Assessment → Diagnosis → Treatment → Outcome</p></div><select id="e-patient"></select></div>
+        <div class="stepper"><button class="step active" data-step="1">1 ประวัติ</button><button class="step" data-step="2">2 ความปลอดภัย</button><button class="step" data-step="3">3 ประเมิน</button><button class="step" data-step="4">4 วินิจฉัย</button><button class="step" data-step="5">5 รักษาและผลลัพธ์</button></div>
+        <form id="encounter-form">
+          <div class="step-panel active" data-panel="1">
+            <div class="form-grid">
+              <label class="full">อาการสำคัญ<textarea id="e-chief" rows="3" required></textarea></label>
+              <label class="full">ประวัติปัจจุบัน<textarea id="e-history" rows="4"></textarea></label>
+              <label class="full">ยา สมุนไพร และอาหารเสริมที่ใช้อยู่<textarea id="e-medication" rows="3"></textarea></label>
+            </div>
+          </div>
+          <div class="step-panel" data-panel="2">
+            <div class="form-grid">
+              <div class="section-title">Vital signs</div>
+              <label>Temperature<input id="e-temp" type="number" step=".1"></label>
+              <label>Pulse<input id="e-pulse" type="number"></label>
+              <label>Respiration<input id="e-rr" type="number"></label>
+              <label>Blood pressure<input id="e-bp" placeholder="120/80"></label>
+              <label>SpO₂<input id="e-spo2" type="number"></label>
+              <label>Pain before<input id="e-before" type="number" min="0" max="10"></label>
+              <label class="full">Red flags / Contraindications<textarea id="e-redflags" rows="3"></textarea></label>
+            </div>
+          </div>
+          <div class="step-panel" data-panel="3">
+            <div class="body-map" id="body-map">
+              <svg viewBox="0 0 720 360">
+                <g transform="translate(80,20)"><text x="60" y="15">ด้านหน้า</text><circle cx="60" cy="45" r="22"/><path d="M60 68L60 170M20 95L100 95M20 95L8 175M100 95L112 175M60 170L25 285M60 170L95 285"/></g>
+                <g transform="translate(245,20)"><text x="60" y="15">ด้านหลัง</text><circle cx="60" cy="45" r="22"/><path d="M60 68L60 170M20 95L100 95M20 95L8 175M100 95L112 175M60 170L25 285M60 170L95 285"/></g>
+                <g transform="translate(420,20)"><text x="60" y="15">ด้านซ้าย</text><circle cx="60" cy="45" r="22"/><path d="M60 68Q45 110 58 170M58 170L30 285M58 170Q78 210 105 220M42 95L30 175M60 95L65 175"/></g>
+                <g transform="translate(580,20)"><text x="60" y="15">ด้านขวา</text><circle cx="60" cy="45" r="22"/><path d="M60 68Q75 110 62 170M62 170L90 285M62 170Q42 210 15 220M78 95L90 175M60 95L55 175"/></g>
+              </svg>
+              <div id="markers"></div>
+            </div>
+            <div class="form-grid" style="margin-top:14px"><label class="full">ลักษณะอาการและผลตรวจร่างกาย<textarea id="e-exam" rows="4"></textarea></label></div>
+          </div>
+          <div class="step-panel" data-panel="4">
+            <div class="form-grid">
+              <label>ธาตุสมุฏฐาน<select id="e-element"><option>ปถวี</option><option>อาโป</option><option>วาโย</option><option>เตโช</option></select></label>
+              <label>อุตุ/กาลสมุฏฐาน<select id="e-season"><option>เสมหะ</option><option>วาตะ</option><option>ปิตตะ</option></select></label>
+              <label class="full">วินิจฉัยการแพทย์แผนไทย<textarea id="e-diagnosis" rows="4" required></textarea></label>
+            </div>
+          </div>
+          <div class="step-panel" data-panel="5">
+            <div class="form-grid">
+              <label class="full">การรักษา<textarea id="e-treatment" rows="4"></textarea></label>
+              <label class="full">สมุนไพร / สูตร / Lot / Dose<textarea id="e-herbal" rows="3"></textarea></label>
+              <label>Pain after<input id="e-after" type="number" min="0" max="10"></label>
+              <label>Outcome<select id="e-outcome"><option>ดีขึ้นมาก</option><option>ดีขึ้น</option><option>คงเดิม</option><option>แย่ลง</option></select></label>
+              <label class="full">คำแนะนำกลับบ้าน<textarea id="e-advice" rows="3"></textarea></label>
+              <label>นัดครั้งต่อไป<input id="e-next" type="date"></label>
+              <label>ผู้ตรวจรักษา<input id="e-practitioner" value="แพทย์แผนไทย"></label>
+              <button class="btn btn-primary full">บันทึก Clinical Record</button>
+            </div>
+          </div>
+          <div class="step-actions"><button type="button" class="btn btn-ghost" id="prev">ย้อนกลับ</button><button type="button" class="btn btn-primary" id="next">ถัดไป</button></div>
+        </form>
+      </div>
+    </div>
+    <aside>
+      <div class="patient-card" id="patient-summary"><div class="patient-card-top"><div style="display:flex;gap:12px;align-items:center"><div class="avatar">—</div><div><b>เลือกผู้รับบริการ</b><small style="display:block;color:var(--muted)">Patient summary</small></div></div></div></div>
+      <div class="score-card" style="margin-top:18px"><span>Outcome improvement</span><strong id="improve-score">0%</strong><small>based on pain score change</small></div>
+      <div class="panel" style="margin-top:18px"><div class="panel-head"><div><h3>Recent history</h3></div></div><div id="patient-history" class="empty">ยังไม่มีประวัติ</div></div>
+    </aside>
+  </div>
+</section>
+
+<section id="view-inventory" class="view">
+  <div class="grid2">
+    <div class="panel"><div class="panel-head"><div><h3>Herbal Inventory Lot</h3><p>Traceability-ready</p></div></div>
+      <form id="inventory-form" class="form-grid">
+        <input type="hidden" id="i-id">
+        <label>ชื่อยา/สมุนไพร<input id="i-name" required></label><label>Lot Number<input id="i-lot" required></label>
+        <label>วันหมดอายุ<input id="i-exp" type="date"></label><label>จำนวน<input id="i-qty" type="number" min="0"></label>
+        <label class="full">ผู้จำหน่าย<input id="i-supplier"></label>
+        <div class="full" style="display:flex;gap:10px"><button class="btn btn-primary" id="inventory-form-submit" style="flex:1">บันทึก Lot</button><button type="button" class="btn btn-ghost" id="inventory-cancel" style="display:none">ยกเลิกการแก้ไข</button></div>
+      </form>
+    </div>
+    <div class="panel"><div class="panel-head"><div><h3>Stock Overview</h3><p>Current herbal lots</p></div></div><div id="inventory-list" class="empty">ยังไม่มีข้อมูล</div></div>
+  </div>
+</section>
+
+<section id="view-analytics" class="view">
+  <div class="stats"><div class="stat"><span>Average pain before</span><strong id="avg-before">0</strong></div><div class="stat"><span>Average pain after</span><strong id="avg-after">0</strong></div><div class="stat"><span>Improvement rate</span><strong id="rate">0%</strong></div><div class="stat"><span>Follow-up scheduled</span><strong id="followups">0</strong></div></div>
+  <div class="panel"><div class="panel-head"><div><h3>Clinical outcome timeline</h3><p>Prototype analytics</p></div></div><div id="timeline" class="timeline empty">ยังไม่มีข้อมูลผลลัพธ์</div></div>
+</section>
+</main>
+</div>
+
+<div class="modal" id="patient-modal"><div class="modal-card"><div class="modal-head"><h2 id="patient-modal-title">เพิ่มผู้รับบริการ</h2><button class="x" data-close>×</button></div>
+<form id="patient-form" class="form-grid">
+<input type="hidden" id="p-id">
+<label>HN<input id="p-hn" required></label><label>ชื่อ-สกุล<input id="p-name" required></label>
+<label>วันเกิด<input id="p-dob" type="date"></label><label>โทรศัพท์<input id="p-phone"></label>
+<label class="full">ที่อยู่<textarea id="p-address" rows="2"></textarea></label>
+<label class="full">การแพ้ / ข้อควรระวัง<textarea id="p-allergy" rows="3"></textarea></label>
+<button class="btn btn-primary full" id="patient-form-submit">บันทึกผู้รับบริการ</button></form></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const AUTH_LOCK_MS=15*60*1000;
+let authClient=null,authSession=null,lastActivity=Date.now(),lockTimer=null;
+const authGate=()=>document.querySelector('#auth-gate');
+function setAuthError(message=''){document.querySelector('#auth-error').textContent=message}
+function setAuthStatus(message=''){document.querySelector('#auth-status').textContent=message}
+function authConfigured(){return window.CHANANYA_AUTH&&window.CHANANYA_AUTH.supabaseUrl&&!window.CHANANYA_AUTH.supabaseUrl.includes('YOUR_')&&window.CHANANYA_AUTH.publishableKey&&!window.CHANANYA_AUTH.publishableKey.includes('YOUR_')}
+function showAuth(mode='login'){
+  authGate().classList.remove('hidden');
+  document.querySelector('.shell').style.visibility='hidden';
+  document.querySelector('#google-login').style.display=mode==='login'?'flex':'none';
+  document.querySelector('#unlock-btn').style.display=mode==='lock'?'flex':'none';
+  document.querySelector('#auth-title').textContent=mode==='lock'?'ระบบถูกล็อก':'Chananya Clinical OS';
+  document.querySelector('#auth-message').textContent=mode==='lock'?'ไม่มีการใช้งานเกิน 15 นาที กรุณาปลดล็อก':'เข้าสู่ระบบด้วยบัญชี Google ที่ได้รับอนุญาต';
+}
+function showApp(session){
+  authSession=session;sessionStorage.removeItem('chananya_locked');
+  authGate().classList.add('hidden');document.querySelector('.shell').style.visibility='visible';
+  const u=session.user,meta=u.user_metadata||{};
+  document.querySelector('#user-chip').style.display='flex';
+  document.querySelector('#user-name').textContent=meta.full_name||meta.name||'ผู้ใช้งาน';
+  document.querySelector('#user-email').textContent=u.email||'';
+  const avatar=document.querySelector('#user-avatar');avatar.src=meta.avatar_url||'';avatar.style.display=meta.avatar_url?'block':'none';
+  lastActivity=Date.now();scheduleLock();
+}
+function scheduleLock(){clearTimeout(lockTimer);lockTimer=setTimeout(lockApp,Math.max(1000,AUTH_LOCK_MS-(Date.now()-lastActivity)))}
+function registerActivity(){if(!authSession||!authGate().classList.contains('hidden'))return;lastActivity=Date.now();scheduleLock()}
+function lockApp(){if(!authSession)return;sessionStorage.setItem('chananya_locked','1');showAuth('lock');setAuthStatus('เซสชัน Google ยังอยู่ แต่หน้าจอถูกล็อกเพื่อความเป็นส่วนตัว')}
+async function initAuth(){
+  showAuth('login');
+  if(!authConfigured()){setAuthError('ยังไม่ได้ตั้งค่า Supabase URL และ Publishable Key ในไฟล์ auth-config.js');setAuthStatus('ต้องสร้าง Supabase project และเปิด Google provider ก่อน');return}
+  authClient=window.supabase.createClient(window.CHANANYA_AUTH.supabaseUrl,window.CHANANYA_AUTH.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  authClient.auth.onAuthStateChange((event,session)=>{authSession=session;if(session){if(sessionStorage.getItem('chananya_locked')==='1')showAuth('lock');else showApp(session)}else showAuth('login')});
+  const {data,error}=await authClient.auth.getSession();
+  if(error){setAuthError(error.message);return}
+  if(data.session){authSession=data.session;if(sessionStorage.getItem('chananya_locked')==='1')showAuth('lock');else showApp(data.session)}else{setAuthStatus('พร้อมเข้าสู่ระบบ')}
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  ['pointerdown','keydown','touchstart','scroll'].forEach(e=>document.addEventListener(e,registerActivity,{passive:true}));
+  document.querySelector('#google-login').onclick=async()=>{setAuthError('');if(!authClient)return setAuthError('ระบบ Authentication ยังไม่ได้ตั้งค่า');const {error}=await authClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});if(error)setAuthError(error.message)};
+  document.querySelector('#unlock-btn').onclick=async()=>{if(!authClient)return;const {data}=await authClient.auth.getSession();if(data.session)showApp(data.session);else showAuth('login')};
+  document.querySelector('#logout-btn').onclick=async()=>{clearTimeout(lockTimer);sessionStorage.removeItem('chananya_locked');await authClient?.auth.signOut({scope:'local'});location.reload()};
+  initAuth();
+});
+
+const KEY='chananya_wonderful_v1';
+let state=JSON.parse(localStorage.getItem(KEY)||'{"patients":[],"appointments":[],"encounters":[],"inventory":[],"activity":[]}');
+let step=1,markers=[];
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2),today=()=>new Date().toISOString().slice(0,10);
+const save=()=>{localStorage.setItem(KEY,JSON.stringify(state));let ls=$('#last-saved');if(ls)ls.textContent='บันทึกล่าสุด '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});renderAll()};
+const pname=id=>state.patients.find(p=>p.id===id)?.name||'ไม่พบข้อมูล';
+const confirmDelete=msg=>confirm(msg||'ยืนยันการลบข้อมูลนี้หรือไม่? การลบไม่สามารถย้อนกลับได้');
+function toast(msg){let t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+const titles={dashboard:['ภาพรวมคลินิก','Calm, structured and clinically meaningful'],patients:['ผู้รับบริการ','Patient master and clinical alerts'],appointments:['นัดหมาย','Appointments, rooms and practitioners'],clinical:['Clinical Record','Structured Thai traditional medicine workflow'],inventory:['สมุนไพร / สต็อก','Herbal traceability and expiry control'],analytics:['ผลลัพธ์','Clinical outcome analytics']};
+$$('.nav button').forEach(b=>b.onclick=()=>show(b.dataset.view));
+function show(v){$$('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$$('.view').forEach(x=>x.classList.remove('active'));$('#view-'+v).classList.add('active');$('#page-title').textContent=titles[v][0];$('#page-subtitle').textContent=titles[v][1]}
+$$('[data-open]').forEach(b=>b.onclick=()=>{if(b.dataset.open==='patient-modal'&&!b.dataset.edit){$('#patient-form').reset();$('#p-id').value='';$('#patient-modal-title').textContent='เพิ่มผู้รับบริการ';$('#patient-form-submit').textContent='บันทึกผู้รับบริการ'}$('#'+b.dataset.open).classList.add('open')});
+$$('[data-close]').forEach(b=>b.onclick=()=>b.closest('.modal').classList.remove('open'));
+
+window.editPatient=id=>{let p=state.patients.find(x=>x.id===id);if(!p)return;$('#p-id').value=p.id;$('#p-hn').value=p.hn||'';$('#p-name').value=p.name||'';$('#p-dob').value=p.dob||'';$('#p-phone').value=p.phone||'';$('#p-address').value=p.address||'';$('#p-allergy').value=p.allergy||'';$('#patient-modal-title').textContent='แก้ไขข้อมูลผู้รับบริการ';$('#patient-form-submit').textContent='บันทึกการแก้ไข';$('#patient-modal').classList.add('open')};
+window.deletePatient=id=>{if(!confirmDelete('ลบผู้รับบริการนี้? ประวัติการรักษาและนัดหมายที่เกี่ยวข้องจะยังอยู่ในระบบแต่จะไม่ผูกกับชื่อผู้รับบริการ'))return;state.patients=state.patients.filter(p=>p.id!==id);save();toast('ลบผู้รับบริการแล้ว')};
+
+$('#patient-form').onsubmit=e=>{e.preventDefault();let id=$('#p-id').value;if(id){let p=state.patients.find(x=>x.id===id);Object.assign(p,{hn:$('#p-hn').value,name:$('#p-name').value,dob:$('#p-dob').value,phone:$('#p-phone').value,address:$('#p-address').value,allergy:$('#p-allergy').value});toast('แก้ไขข้อมูลผู้รับบริการแล้ว')}else{state.patients.unshift({id:uid(),hn:$('#p-hn').value,name:$('#p-name').value,dob:$('#p-dob').value,phone:$('#p-phone').value,address:$('#p-address').value,allergy:$('#p-allergy').value,created:new Date().toISOString()});toast('เพิ่มผู้รับบริการแล้ว')}e.target.reset();$('#p-id').value='';$('#patient-modal').classList.remove('open');save()};
+
+window.editAppointment=id=>{let a=state.appointments.find(x=>x.id===id);if(!a)return;$('#a-id').value=a.id;$('#a-patient').value=a.patientId;$('#a-date').value=a.date;$('#a-time').value=a.time;$('#a-service').value=a.service;$('#a-practitioner').value=a.practitioner;$('#a-room').value=a.room;$('#a-note').value=a.note||'';$('#appointment-form-submit').textContent='บันทึกการแก้ไข';$('#appointment-cancel').style.display='inline-block';show('appointments');window.scrollTo(0,0)};
+window.deleteAppointment=id=>{if(!confirmDelete('ลบนัดหมายนี้?'))return;state.appointments=state.appointments.filter(a=>a.id!==id);save();toast('ลบนัดหมายแล้ว')};
+$('#appointment-cancel').onclick=()=>{$('#appointment-form').reset();$('#a-id').value='';$('#a-date').value=today();$('#appointment-form-submit').textContent='บันทึกนัดหมาย';$('#appointment-cancel').style.display='none'};
+$('#appointment-form').onsubmit=e=>{e.preventDefault();let id=$('#a-id').value;if(id){let a=state.appointments.find(x=>x.id===id);Object.assign(a,{patientId:$('#a-patient').value,date:$('#a-date').value,time:$('#a-time').value,service:$('#a-service').value,practitioner:$('#a-practitioner').value,room:$('#a-room').value,note:$('#a-note').value});toast('แก้ไขนัดหมายแล้ว')}else{state.appointments.unshift({id:uid(),patientId:$('#a-patient').value,date:$('#a-date').value,time:$('#a-time').value,service:$('#a-service').value,practitioner:$('#a-practitioner').value,room:$('#a-room').value,note:$('#a-note').value});toast('บันทึกนัดหมายแล้ว')}e.target.reset();$('#a-id').value='';$('#a-date').value=today();$('#appointment-form-submit').textContent='บันทึกนัดหมาย';$('#appointment-cancel').style.display='none';save()};
+
+window.editInventory=id=>{let i=state.inventory.find(x=>x.id===id);if(!i)return;$('#i-id').value=i.id;$('#i-name').value=i.name;$('#i-lot').value=i.lot;$('#i-exp').value=i.exp||'';$('#i-qty').value=i.qty;$('#i-supplier').value=i.supplier||'';$('#inventory-form-submit').textContent='บันทึกการแก้ไข';$('#inventory-cancel').style.display='inline-block';show('inventory');window.scrollTo(0,0)};
+window.deleteInventory=id=>{if(!confirmDelete('ลบ Lot นี้?'))return;state.inventory=state.inventory.filter(i=>i.id!==id);save();toast('ลบ Lot แล้ว')};
+$('#inventory-cancel').onclick=()=>{$('#inventory-form').reset();$('#i-id').value='';$('#inventory-form-submit').textContent='บันทึก Lot';$('#inventory-cancel').style.display='none'};
+$('#inventory-form').onsubmit=e=>{e.preventDefault();let id=$('#i-id').value;if(id){let i=state.inventory.find(x=>x.id===id);Object.assign(i,{name:$('#i-name').value,lot:$('#i-lot').value,exp:$('#i-exp').value,qty:+$('#i-qty').value,supplier:$('#i-supplier').value});toast('แก้ไข Lot แล้ว')}else{state.inventory.unshift({id:uid(),name:$('#i-name').value,lot:$('#i-lot').value,exp:$('#i-exp').value,qty:+$('#i-qty').value,supplier:$('#i-supplier').value});toast('บันทึก Lot แล้ว')}e.target.reset();$('#i-id').value='';$('#inventory-form-submit').textContent='บันทึก Lot';$('#inventory-cancel').style.display='none';save()};
+
+window.deleteEncounter=id=>{if(!confirmDelete('ลบ Clinical Record นี้?'))return;state.encounters=state.encounters.filter(x=>x.id!==id);save();toast('ลบ Clinical Record แล้ว')};
+$('#encounter-form').onsubmit=e=>{e.preventDefault();if(!$('#e-patient').value)return toast('กรุณาเลือกผู้รับบริการ');state.encounters.unshift({id:uid(),patientId:$('#e-patient').value,date:new Date().toISOString(),chief:$('#e-chief').value,history:$('#e-history').value,medication:$('#e-medication').value,vitals:{temp:$('#e-temp').value,pulse:$('#e-pulse').value,rr:$('#e-rr').value,bp:$('#e-bp').value,spo2:$('#e-spo2').value},before:+$('#e-before').value,redflags:$('#e-redflags').value,markers:[...markers],exam:$('#e-exam').value,element:$('#e-element').value,season:$('#e-season').value,diagnosis:$('#e-diagnosis').value,treatment:$('#e-treatment').value,herbal:$('#e-herbal').value,after:+$('#e-after').value,outcome:$('#e-outcome').value,advice:$('#e-advice').value,next:$('#e-next').value,practitioner:$('#e-practitioner').value});e.target.reset();markers=[];renderMarkers();step=1;showStep();save();toast('บันทึก Clinical Record แล้ว')};
+
+$('#export-btn').onclick=()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});let url=URL.createObjectURL(blob);let a=document.createElement('a');a.href=url;a.download='chananya-backup-'+today()+'.json';a.click();URL.revokeObjectURL(url);toast('ดาวน์โหลดไฟล์สำรองแล้ว')};
+$('#import-btn').onclick=()=>$('#import-file').click();
+$('#import-file').onchange=e=>{let file=e.target.files[0];if(!file)return;let reader=new FileReader();reader.onload=()=>{try{let data=JSON.parse(reader.result);if(!data||typeof data!=='object')throw new Error('invalid');let merge=confirm('กด "ตกลง" เพื่อรวมข้อมูลนำเข้ากับข้อมูลปัจจุบัน หรือกด "ยกเลิก" เพื่อแทนที่ข้อมูลทั้งหมดด้วยไฟล์นี้');if(merge){['patients','appointments','encounters','inventory'].forEach(k=>{if(Array.isArray(data[k])){let existingIds=new Set(state[k].map(x=>x.id));data[k].forEach(item=>{if(!existingIds.has(item.id))state[k].push(item)})}})}else{state=Object.assign({patients:[],appointments:[],encounters:[],inventory:[],activity:[]},data)}save();toast('นำเข้าข้อมูลสำเร็จ')}catch(err){toast('ไฟล์ไม่ถูกต้อง ไม่สามารถนำเข้าได้')}e.target.value=''};reader.readAsText(file)};
+
+$$('.step').forEach(b=>b.onclick=()=>{step=+b.dataset.step;showStep()});$('#next').onclick=()=>{if(step<5){step++;showStep()}};$('#prev').onclick=()=>{if(step>1){step--;showStep()}};
+function showStep(){$$('.step').forEach(b=>b.classList.toggle('active',+b.dataset.step===step));$$('.step-panel').forEach(p=>p.classList.toggle('active',+p.dataset.panel===step));$('#prev').style.visibility=step===1?'hidden':'visible';$('#next').style.display=step===5?'none':'inline-block'}
+$('#body-map').onclick=e=>{if(e.target.classList.contains('marker'))return;let r=e.currentTarget.getBoundingClientRect();markers.push({x:(e.clientX-r.left)/r.width*100,y:(e.clientY-r.top)/r.height*100});renderMarkers()};
+function renderMarkers(){$('#markers').innerHTML=markers.map((m,i)=>`<button type="button" class="marker" style="left:${m.x}%;top:${m.y}%" onclick="event.stopPropagation();markers.splice(${i},1);renderMarkers()"></button>`).join('')}
+
+$('#e-patient').onchange=renderPatientSummary;$('#patient-search').oninput=renderPatients;
+function renderPatientSummary(){let p=state.patients.find(x=>x.id===$('#e-patient').value);if(!p){$('#patient-summary').innerHTML='<div class="patient-card-top"><div style="display:flex;gap:12px;align-items:center"><div class="avatar">—</div><div><b>เลือกผู้รับบริการ</b><small style="display:block;color:var(--muted)">Patient summary</small></div></div></div>';$('#patient-history').className='empty';$('#patient-history').textContent='ยังไม่มีประวัติ';return}
+$('#patient-summary').innerHTML=`<div class="patient-card-top"><div style="display:flex;gap:12px;align-items:center"><div class="avatar">${p.name.charAt(0)}</div><div><b>${p.name}</b><small style="display:block;color:var(--muted)">${p.hn} · ${p.phone||'-'}</small></div></div><span class="badge">Active</span></div>${p.allergy?`<div class="alert"><b>Allergy alert</b><br>${p.allergy}</div>`:''}`;
+let hs=state.encounters.filter(e=>e.patientId===p.id);$('#patient-history').className=hs.length?'':'empty';$('#patient-history').innerHTML=hs.length?hs.slice(0,5).map(e=>`<div class="item"><div><b>${new Date(e.date).toLocaleDateString('th-TH')}</b><small>${e.diagnosis||e.chief}</small></div><span class="badge">${e.before} → ${e.after}</span></div>`).join(''):'ยังไม่มีประวัติ'}
+
+function renderPatients(){let q=$('#patient-search').value.toLowerCase();let rows=state.patients.filter(p=>(p.hn+' '+p.name+' '+p.phone).toLowerCase().includes(q));$('#patient-rows').innerHTML=rows.map(p=>{let last=state.encounters.find(e=>e.patientId===p.id);return `<tr><td>${p.hn}</td><td><b>${p.name}</b></td><td>${p.phone||'-'}</td><td>${p.allergy?`<span class="badge warn">${p.allergy}</span>`:'-'}</td><td>${last?new Date(last.date).toLocaleDateString('th-TH'):'-'}</td><td style="display:flex;gap:6px"><button class="btn btn-ghost" onclick="startEncounter('${p.id}')">เริ่มรักษา</button><button class="btn btn-ghost" onclick="editPatient('${p.id}')">แก้ไข</button><button class="btn btn-ghost" onclick="deletePatient('${p.id}')">ลบ</button></td></tr>`}).join('')||'<tr><td colspan="6">ยังไม่มีข้อมูล</td></tr>'}
+window.startEncounter=id=>{show('clinical');$('#e-patient').value=id;renderPatientSummary()};
+
+function renderAll(){
+$('#stat-p').textContent=state.patients.length;$('#stat-a').textContent=state.appointments.filter(a=>a.date===today()).length;$('#stat-e').textContent=state.encounters.length;$('#hero-enc').textContent=state.encounters.length;$('#stat-x').textContent=state.patients.filter(p=>p.allergy).length;$('#stat-exp').textContent=state.inventory.filter(i=>i.exp&&(new Date(i.exp)-new Date(today()))/864e5<=30).length;
+let opts='<option value="">เลือกผู้รับบริการ</option>'+state.patients.map(p=>`<option value="${p.id}">${p.hn} — ${p.name}</option>`).join('');$('#a-patient').innerHTML=opts;$('#e-patient').innerHTML=opts;
+renderPatients();
+let todays=state.appointments.filter(a=>a.date===today()).sort((a,b)=>a.time.localeCompare(b.time));$('#today-list').className=todays.length?'list':'empty';$('#today-list').innerHTML=todays.length?todays.map(a=>`<div class="item"><div><b>${a.time} ${pname(a.patientId)}</b><small>${a.service} · ${a.room}</small></div><span class="badge">${a.practitioner}</span></div>`).join(''):'ยังไม่มีนัดวันนี้';
+$('#appointment-list').className=state.appointments.length?'list':'empty';$('#appointment-list').innerHTML=state.appointments.length?state.appointments.map(a=>`<div class="item"><div><b>${a.date} ${a.time}</b><small>${pname(a.patientId)} · ${a.service} · ${a.room}</small></div><div style="display:flex;gap:6px"><button class="btn btn-ghost" onclick="editAppointment('${a.id}')">แก้ไข</button><button class="btn btn-ghost" onclick="deleteAppointment('${a.id}')">ลบ</button></div></div>`).join(''):'ยังไม่มีนัดหมาย';
+$('#recent-list').className=state.encounters.length?'list':'empty';$('#recent-list').innerHTML=state.encounters.length?state.encounters.slice(0,6).map(e=>`<div class="item"><div><b>${pname(e.patientId)}</b><small>${e.diagnosis||e.chief}</small></div><div style="display:flex;gap:8px;align-items:center"><span class="badge">${e.before} → ${e.after}</span><button class="btn btn-ghost" onclick="deleteEncounter('${e.id}')">ลบ</button></div></div>`).join(''):'ยังไม่มีข้อมูล';
+let dnow=today();$('#inventory-list').className=state.inventory.length?'list':'empty';$('#inventory-list').innerHTML=state.inventory.length?state.inventory.map(i=>{let expired=i.exp&&i.exp<dnow,soon=i.exp&&!expired&&(new Date(i.exp)-new Date(dnow))/864e5<=30;let badge=expired?'<span class="badge warn">หมดอายุแล้ว</span>':soon?'<span class="badge warn">ใกล้หมดอายุ</span>':'';return `<div class="item"><div><b>${i.name}</b><small>Lot ${i.lot} · Exp ${i.exp||'-'} · ${i.supplier||''}</small></div><div style="display:flex;gap:8px;align-items:center">${badge}<span class="badge">${i.qty}</span><button class="btn btn-ghost" onclick="editInventory('${i.id}')">แก้ไข</button><button class="btn btn-ghost" onclick="deleteInventory('${i.id}')">ลบ</button></div></div>`}).join(''):'ยังไม่มีข้อมูล';
+let es=state.encounters,avg=k=>es.length?(es.reduce((s,e)=>s+(e[k]||0),0)/es.length).toFixed(1):0;$('#avg-before').textContent=avg('before');$('#avg-after').textContent=avg('after');let improved=es.filter(e=>e.after<e.before).length;$('#rate').textContent=es.length?Math.round(improved/es.length*100)+'%':'0%';$('#followups').textContent=es.filter(e=>e.next).length;$('#improve-score').textContent=es.length?Math.round(improved/es.length*100)+'%':'0%';
+$('#timeline').className=es.length?'timeline':'timeline empty';$('#timeline').innerHTML=es.length?es.map(e=>`<div class="event"><b>${pname(e.patientId)}</b><small style="display:block;color:var(--muted)">${new Date(e.date).toLocaleString('th-TH')} · ${e.outcome}</small><span>Pain ${e.before} → ${e.after}</span> <button class="btn btn-ghost" style="margin-left:8px" onclick="deleteEncounter('${e.id}')">ลบ</button></div>`).join(''):'ยังไม่มีข้อมูลผลลัพธ์';
+renderPatientSummary()
+}
+$('#seed').onclick=()=>{if(state.patients.length&&!confirm('เพิ่มข้อมูลตัวอย่างต่อหรือไม่?'))return;let p={id:uid(),hn:'CN0001',name:'สมชาย ใจดี',dob:'1985-05-11',phone:'081-234-5678',address:'กรุงเทพมหานคร',allergy:'แพ้ถั่วลิสงและยางลาเท็กซ์',created:new Date().toISOString()};state.patients.unshift(p);state.appointments.unshift({id:uid(),patientId:p.id,date:today(),time:'10:00',service:'นวดไทยเพื่อการรักษา',practitioner:'อภิสฤษฏิ์',room:'Treatment Room 1',note:''});state.encounters.unshift({id:uid(),patientId:p.id,date:new Date().toISOString(),chief:'คอ บ่า ไหล่ตึง',diagnosis:'ลมปลายปัตคาดสัญญาณ 4 หลัง',before:7,after:3,outcome:'ดีขึ้น',next:today()});state.inventory.unshift({id:uid(),name:'ลูกประคบสมุนไพร',lot:'HC-2607-01',exp:'2027-07-31',qty:48,supplier:'Chananya Herbal Lab'});save();toast('เพิ่มข้อมูลตัวอย่างแล้ว')};
+$('#a-date').value=today();showStep();renderAll();
+</script>
+</body>
+</html>
