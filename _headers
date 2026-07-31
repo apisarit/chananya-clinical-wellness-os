@@ -1,0 +1,11 @@
+/
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/login-v3.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/auth.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
