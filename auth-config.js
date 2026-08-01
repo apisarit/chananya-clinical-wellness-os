@@ -12,8 +12,7 @@ window.CHANANYA_AUTH = Object.freeze({
   const path = location.pathname;
   const isClinicalHome = path === '/' || path.endsWith('/index.html');
 
-  // Admin, Pharmacy and Production pages already define their own
-  // workstation navigation in HTML. Never inject a second copy there.
+  // Other workstations already have their own navigation in HTML.
   if (!isClinicalHome) return;
 
   function addLink(actions, logout, id, href, text) {
@@ -30,54 +29,43 @@ window.CHANANYA_AUTH = Object.freeze({
     return link;
   }
 
-  async function getAccess() {
-    try {
-      const cfg = window.CHANANYA_AUTH;
-      if (!window.supabase || !cfg?.url || !cfg?.anonKey) {
-        return { role: 'viewer', systemRole: 'staff' };
-      }
-
-      const client = window.supabase.createClient(cfg.url, cfg.anonKey, {
-        auth: { persistSession: true, autoRefreshToken: true }
-      });
-      const sessionResult = await client.auth.getSession();
-      const userId = sessionResult.data.session?.user?.id;
-      if (!userId) return { role: 'viewer', systemRole: 'staff' };
-
-      const profile = await client
-        .from('profiles')
-        .select('role,system_role')
-        .eq('id', userId)
-        .single();
-
-      if (profile.error) return { role: 'viewer', systemRole: 'staff' };
-      return {
-        role: profile.data.role || 'viewer',
-        systemRole: profile.data.system_role || 'staff'
-      };
-    } catch (error) {
-      console.warn('Navigation access lookup failed', error);
-      return { role: 'viewer', systemRole: 'staff' };
-    }
-  }
-
   function installNavigation() {
     const actions = document.querySelector('.top .actions');
+    const roleBadge = document.querySelector('#role');
     const logout = document.querySelector('#logout');
-    if (!actions || !logout) return false;
+    if (!actions || !roleBadge || !logout) return false;
 
     const admin = addLink(actions, logout, 'admin-header-link', '/admin.html', 'Admin');
     const pharmacy = addLink(actions, logout, 'pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
     const production = addLink(actions, logout, 'production-header-link', '/production.html', 'Production');
 
-    getAccess().then(({ role, systemRole }) => {
-      const isAdmin = ['admin', 'super_admin'].includes(systemRole);
-      const isSuper = systemRole === 'super_admin';
+    const sync = () => {
+      const role = String(
+        roleBadge.dataset.effectiveRole ||
+        roleBadge.dataset.databaseRole ||
+        roleBadge.textContent ||
+        ''
+      ).trim().toLowerCase();
+
+      const isSuper = role === 'super_admin';
+      const isAdmin = isSuper || role === 'admin';
 
       admin.style.display = isAdmin ? 'inline-flex' : 'none';
-      pharmacy.style.display = (isSuper || isAdmin || role === 'pharmacy') ? 'inline-flex' : 'none';
-      production.style.display = (isSuper || isAdmin || ['pharmacy', 'production'].includes(role)) ? 'inline-flex' : 'none';
+      pharmacy.style.display = (isAdmin || role === 'pharmacy') ? 'inline-flex' : 'none';
+      production.style.display = (isAdmin || ['pharmacy', 'production'].includes(role)) ? 'inline-flex' : 'none';
+    };
+
+    sync();
+    new MutationObserver(sync).observe(roleBadge, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true
     });
+
+    // App initialization may update the role shortly after the DOM appears.
+    const timer = setInterval(sync, 300);
+    setTimeout(() => clearInterval(timer), 10000);
     return true;
   }
 
