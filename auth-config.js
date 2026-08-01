@@ -15,6 +15,12 @@ window.CHANANYA_AUTH = Object.freeze({
   // Other workstations already have their own navigation in HTML.
   if (!isClinicalHome) return;
 
+  // Load low-risk clinical enhancements separately from the core app.
+  const enhancement = document.createElement('script');
+  enhancement.src = '/clinical-enhancements.js?v=multi-rx-1';
+  enhancement.defer = true;
+  document.head.appendChild(enhancement);
+
   function addLink(actions, logout, id, href, text) {
     let link = document.querySelector(`#${id}`);
     if (!link) {
@@ -63,7 +69,6 @@ window.CHANANYA_AUTH = Object.freeze({
       attributes: true
     });
 
-    // App initialization may update the role shortly after the DOM appears.
     const timer = setInterval(sync, 300);
     setTimeout(() => clearInterval(timer), 10000);
     return true;
