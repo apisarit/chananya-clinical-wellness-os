@@ -12,10 +12,8 @@ window.CHANANYA_AUTH = Object.freeze({
   const path = location.pathname;
   const isClinicalHome = path === '/' || path.endsWith('/index.html');
 
-  // Other workstations already have their own navigation in HTML.
   if (!isClinicalHome) return;
 
-  // Load low-risk clinical enhancements separately from the core app.
   const enhancement = document.createElement('script');
   enhancement.src = '/clinical-enhancements.js?v=multi-rx-1';
   enhancement.defer = true;
@@ -42,6 +40,7 @@ window.CHANANYA_AUTH = Object.freeze({
     if (!actions || !roleBadge || !logout) return false;
 
     const admin = addLink(actions, logout, 'admin-header-link', '/admin.html', 'Admin');
+    const clinicalV3 = addLink(actions, logout, 'clinical-v3-header-link', '/clinical-v3.html', 'Clinical v3');
     const pharmacy = addLink(actions, logout, 'pharmacy-header-link', '/pharmacy.html', 'Pharmacy');
     const production = addLink(actions, logout, 'production-header-link', '/production.html', 'Production');
 
@@ -55,8 +54,10 @@ window.CHANANYA_AUTH = Object.freeze({
 
       const isSuper = role === 'super_admin';
       const isAdmin = isSuper || role === 'admin';
+      const isPractitioner = role === 'practitioner';
 
       admin.style.display = isAdmin ? 'inline-flex' : 'none';
+      clinicalV3.style.display = (isAdmin || isPractitioner) ? 'inline-flex' : 'none';
       pharmacy.style.display = (isAdmin || role === 'pharmacy') ? 'inline-flex' : 'none';
       production.style.display = (isAdmin || ['pharmacy', 'production'].includes(role)) ? 'inline-flex' : 'none';
     };
