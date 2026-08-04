@@ -11,13 +11,31 @@ window.CHANANYA_AUTH = Object.freeze({
 
   const path = location.pathname;
   const isClinicalHome = path === '/' || path.endsWith('/index.html');
+  const isClinicalV3 = path.endsWith('/clinical-v3.html');
+  const isPharmacy = path.endsWith('/pharmacy.html');
+
+  function loadScript(src, id) {
+    if (document.getElementById(id)) return;
+    const script = document.createElement('script');
+    script.id = id;
+    script.src = src;
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
+  if (isClinicalV3) {
+    loadScript('/body-pain-map.js?v=interactive-pain-map-1', 'body-pain-map-extension');
+    return;
+  }
+
+  if (isPharmacy) {
+    loadScript('/pharmacy-labels.js?v=medicine-labels-1', 'pharmacy-label-extension');
+    return;
+  }
 
   if (!isClinicalHome) return;
 
-  const enhancement = document.createElement('script');
-  enhancement.src = '/clinical-enhancements.js?v=multi-rx-1';
-  enhancement.defer = true;
-  document.head.appendChild(enhancement);
+  loadScript('/clinical-enhancements.js?v=multi-rx-1', 'clinical-enhancements');
 
   function addLink(actions, logout, id, href, text) {
     let link = document.querySelector(`#${id}`);
