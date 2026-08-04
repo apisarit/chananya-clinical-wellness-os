@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#173f31">
+  <title>Chananya Appointments</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-config.js"></script>
+  <style>
+    *{box-sizing:border-box}.appt-nav{display:flex;gap:10px;overflow:auto;padding:14px 18px;background:#123b2e;position:sticky;top:0;z-index:5}.appt-nav a{flex:0 0 auto}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.full{grid-column:1/-1}.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.toolbar>*{flex:1 1 180px;min-width:0}.schedule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.schedule-card{border:1px solid #d7dfda;border-radius:16px;padding:16px;background:#fff}.schedule-card h3{margin:0 0 8px}.meta{display:grid;gap:5px;color:#5e6b64}.capacity{display:inline-flex;padding:5px 9px;border-radius:999px;background:#eaf5ee;color:#155c3e;font-weight:700}.capacity.full{background:#fff0f0;color:#9b2727}.appt-row{border:1px solid #d7dfda;border-radius:14px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.appt-row small{display:block;color:#68736e;margin-top:5px}.actions{display:flex;gap:8px;flex-wrap:wrap}.notice{padding:12px;border-radius:12px;background:#edf5f1}.danger{background:#fff0f0;color:#8d2929}@media(max-width:900px){.grid,.schedule-grid{grid-template-columns:1fr}}@media(max-width:640px){.top h1{font-size:1.25rem}.appt-row{display:block}.actions{margin-top:10px}}
+  </style>
+</head>
+<body>
+<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิดระบบนัดหมาย</h2><p id="boot-error">กำลังตรวจสอบสิทธิ์</p></div></div>
+<div id="app" class="hidden">
+  <header class="top"><div><h1>ชนัญญา Appointment Center</h1><small id="identity"></small></div><div class="actions"><span class="badge" id="role">viewer</span><button class="btn ghost" id="logout">ออกจากระบบ</button></div></header>
+  <nav class="appt-nav"><a class="btn ghost" href="/">Clinical</a><a class="btn ghost" href="/appointments.html">Appointments</a><a class="btn ghost" href="/clinical-v3.html">Clinical v3</a><a class="btn ghost" href="/pharmacy.html">Pharmacy</a><a class="btn ghost" href="/production.html">Production</a><a class="btn ghost" href="/admin.html">Admin</a></nav>
+  <main>
+    <section class="card">
+      <h2>Search Available</h2>
+      <div class="toolbar">
+        <label>ตั้งแต่วันที่<input id="date-from" type="date"></label>
+        <label>ถึงวันที่<input id="date-to" type="date"></label>
+        <label>ค้นหา<input id="search" placeholder="ชื่อผู้ให้บริการ สาขา ห้อง หรือบริการ"></label>
+        <button id="search-btn" class="btn primary">ค้นหาช่วงเวลาว่าง</button>
+      </div>
+      <p class="muted">ระบบแสดงเฉพาะ Schedule ที่ยังเปิดรับและมีจำนวนว่าง</p>
+      <div id="schedule-status" class="notice">กำลังโหลดช่วงเวลาว่าง…</div>
+      <div id="schedule-list" class="schedule-grid" style="margin-top:14px"></div>
+    </section>
+
+    <section class="card" id="booking-section">
+      <h2>จองนัดหมาย</h2>
+      <form id="booking-form" class="form">
+        <label class="full">ช่วงเวลาที่เลือก<input id="selected-schedule-label" readonly placeholder="เลือกจาก Search Available"></label>
+        <input id="selected-schedule" type="hidden">
+        <label class="full">ค้นหาผู้รับบริการ<input id="patient-search" placeholder="HN ชื่อ นามสกุล หรือโทรศัพท์"></label>
+        <label class="full">ผู้รับบริการ<select id="patient" required><option value="">เลือกผู้รับบริการ</option></select></label>
+        <label class="full">อาการสำคัญ<textarea id="chief-complaint" placeholder="เหตุผลที่มารับบริการ"></textarea></label>
+        <label class="full">หมายเหตุ<textarea id="notes"></textarea></label>
+        <button class="btn primary full">ยืนยันการจอง</button>
+      </form>
+      <div id="booking-status" class="notice">ยังไม่ได้เลือกช่วงเวลา</div>
+    </section>
+
+    <section class="card">
+      <h2>รายการนัดหมาย</h2>
+      <div class="toolbar">
+        <label>วันที่<input id="appointments-date" type="date"></label>
+        <label>สถานะ<select id="status-filter"><option value="">ทั้งหมด</option><option>booked</option><option>confirmed</option><option>checked_in</option><option>in_service</option><option>completed</option><option>cancelled</option><option>no_show</option></select></label>
+        <button id="refresh-appts" class="btn primary">โหลดรายการ</button>
+      </div>
+      <div id="appointment-list" style="margin-top:14px"></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(() => {
+  const cfg=window.CHANANYA_AUTH||{};
+  const $=s=>document.querySelector(s);
+  let db,session,profile,allPatients=[];
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const toast=t=>{const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)};
+  const fail=e=>{console.error(e);alert(e?.message||String(e))};
+  const dateOnly=d=>new Date(d).toLocaleDateString('th-TH',{dateStyle:'medium'});
+  const dateTime=d=>new Date(d).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'});
+  const patientName=p=>[p.title,p.first_name,p.last_name].filter(Boolean).join(' ')||p.full_name||p.name||p.patient_name||'ไม่ระบุชื่อ';
+  const patientLabel=p=>`${p.hn||p.patient_no||'-'} — ${patientName(p)}${p.phone?' • '+p.phone:''}`;
+  const roleAllowed=()=>['super_admin','admin'].includes(profile.system_role)||['admin','reception','practitioner','doctor'].includes(profile.role);
+
+  async function init(){
+    try{
+      const url=cfg.url||cfg.supabaseUrl;
+      const key=cfg.anonKey||cfg.publishableKey;
+      if(!url||!key)throw new Error('ไม่พบ Supabase config');
+      db=supabase.createClient(url,key,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true}});
+      session=(await db.auth.getSession()).data.session;
+      if(!session){location.replace('/login.html');return}
+      const p=await db.from('profiles').select('*').eq('id',session.user.id).single();
+      if(p.error)throw p.error;
+      profile=p.data;
+      if(!roleAllowed())throw new Error('บัญชีนี้ไม่มีสิทธิ์จัดการนัดหมาย');
+      $('#identity').textContent=`${profile.full_name||session.user.email} • ${session.user.email}`;
+      $('#role').textContent=profile.system_role||profile.role;
+      const today=new Date();
+      const in14=new Date(today);in14.setDate(in14.getDate()+14);
+      $('#date-from').value=today.toISOString().slice(0,10);
+      $('#date-to').value=in14.toISOString().slice(0,10);
+      $('#appointments-date').value=today.toISOString().slice(0,10);
+      await loadPatients();
+      await Promise.all([loadSchedules(),loadAppointments()]);
+      $('#app').classList.remove('hidden');$('#boot').classList.add('hidden');
+    }catch(e){$('#boot-error').textContent=e.message;fail(e)}
+  }
+
+  async function loadPatients(){
+    const r=await db.from('patients').select('*').order('created_at',{ascending:false}).limit(500);
+    if(r.error)throw r.error;
+    allPatients=r.data||[];
+    renderPatients(allPatients);
+  }
+  function renderPatients(rows){
+    $('#patient').innerHTML='<option value="">เลือกผู้รับบริการ</option>'+rows.map(p=>`<option value="${p.id}">${esc(patientLabel(p))}</option>`).join('');
+  }
+  $('#patient-search').oninput=e=>{
+    const q=e.target.value.trim().toLowerCase();
+    if(!q){renderPatients(allPatients);return}
+    renderPatients(allPatients.filter(p=>patientLabel(p).toLowerCase().includes(q)).slice(0,100));
+  };
+
+  async function loadSchedules(){
+    $('#schedule-status').textContent='กำลังค้นหาช่วงเวลาว่าง…';
+    let q=db.from('available_practitioner_schedules').select('*').gt('available_capacity',0).order('starts_at');
+    const from=$('#date-from').value,to=$('#date-to').value;
+    if(from)q=q.gte('starts_at',new Date(from+'T00:00:00').toISOString());
+    if(to){const end=new Date(to+'T23:59:59');q=q.lte('starts_at',end.toISOString())}
+    const r=await q;
+    if(r.error)throw r.error;
+    const term=$('#search').value.trim().toLowerCase();
+    const rows=(r.data||[]).filter(x=>!term||[x.practitioner_name,x.specialty_name_th,x.specialty_name_en,x.title,x.room_code,x.branch_code].some(v=>String(v||'').toLowerCase().includes(term)));
+    $('#schedule-status').textContent=`พบ ${rows.length} ช่วงเวลาที่ว่าง`;
+    $('#schedule-list').innerHTML=rows.map(x=>`<article class="schedule-card"><h3>${esc(x.title)}</h3><div class="meta"><span>${esc(x.practitioner_name||'-')}</span><span>${esc(x.specialty_name_th||x.specialty_name_en||'-')}</span><span>${esc(dateTime(x.starts_at))} – ${esc(new Date(x.ends_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}))}</span><span>สาขา ${esc(x.branch_code||'-')} • ห้อง ${esc(x.room_code||'-')}</span></div><p><span class="capacity">ว่าง ${x.available_capacity}/${x.max_patients}</span></p><button class="btn primary" data-book="${x.id}" data-label="${esc(x.title)} • ${esc(dateTime(x.starts_at))} • ${esc(x.practitioner_name||'-')}">เลือกช่วงเวลานี้</button></article>`).join('')||'<p class="muted">ไม่พบช่วงเวลาว่างตามเงื่อนไข</p>';
+    document.querySelectorAll('[data-book]').forEach(b=>b.onclick=()=>{ $('#selected-schedule').value=b.dataset.book;$('#selected-schedule-label').value=b.dataset.label;$('#booking-status').textContent='เลือกช่วงเวลาแล้ว กรุณาเลือกผู้รับบริการ';$('#booking-section').scrollIntoView({behavior:'smooth'}); });
+  }
+
+  $('#search-btn').onclick=()=>loadSchedules().catch(fail);
+  $('#booking-form').onsubmit=async e=>{
+    e.preventDefault();
+    try{
+      const scheduleId=$('#selected-schedule').value,patientId=$('#patient').value;
+      if(!scheduleId)throw new Error('กรุณาเลือกช่วงเวลาว่าง');
+      if(!patientId)throw new Error('กรุณาเลือกผู้รับบริการ');
+      $('#booking-status').textContent='กำลังยืนยันการจอง…';
+      const r=await db.rpc('book_clinic_appointment',{p_patient_id:patientId,p_schedule_id:scheduleId,p_chief_complaint:$('#chief-complaint').value||null,p_notes:$('#notes').value||null,p_booking_source:'staff'});
+      if(r.error)throw r.error;
+      $('#booking-status').textContent=`จองสำเร็จ ${r.data.appointment_no} • คิว ${r.data.queue_number}`;
+      e.target.reset();$('#selected-schedule-label').value='';$('#selected-schedule').value='';
+      toast('จองนัดหมายสำเร็จ');
+      await Promise.all([loadSchedules(),loadAppointments()]);
+    }catch(e){$('#booking-status').textContent=e.message;$('#booking-status').classList.add('danger');fail(e)}
+  };
+
+  async function loadAppointments(){
+    $('#appointment-list').innerHTML='<p class="muted">กำลังโหลด…</p>';
+    const day=$('#appointments-date').value,status=$('#status-filter').value;
+    let q=db.from('clinic_appointments').select('*').order('scheduled_start');
+    if(day){q=q.gte('scheduled_start',new Date(day+'T00:00:00').toISOString()).lte('scheduled_start',new Date(day+'T23:59:59').toISOString())}
+    if(status)q=q.eq('status',status);
+    const r=await q;if(r.error)throw r.error;
+    const rows=r.data||[];
+    const patientMap=Object.fromEntries(allPatients.map(p=>[p.id,p]));
+    $('#appointment-list').innerHTML=rows.map(a=>{const p=patientMap[a.patient_id]||{};return `<div class="appt-row"><div><b>${esc(a.appointment_no)} • คิว ${a.queue_number}</b><small>${esc(patientLabel(p))}</small><small>${esc(dateTime(a.scheduled_start))} • ${esc(a.status)}</small><small>${esc(a.chief_complaint||'')}</small></div><div class="actions">${a.status==='booked'?`<button class="btn ghost" data-status="confirmed" data-id="${a.id}">ยืนยัน</button>`:''}${['booked','confirmed'].includes(a.status)?`<button class="btn ghost" data-status="checked_in" data-id="${a.id}">Check-in</button>`:''}${a.status==='checked_in'?`<button class="btn ghost" data-status="in_service" data-id="${a.id}">เริ่มบริการ</button>`:''}${a.status==='in_service'?`<button class="btn ghost" data-status="completed" data-id="${a.id}">เสร็จสิ้น</button>`:''}${['booked','confirmed'].includes(a.status)?`<button class="btn ghost" data-cancel="${a.id}">ยกเลิก</button>`:''}</div></div>`}).join('')||'<p class="muted">ไม่มีรายการนัดหมาย</p>';
+    document.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>setStatus(b.dataset.id,b.dataset.status));
+    document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>cancelAppointment(b.dataset.cancel));
+  }
+  async function setStatus(id,status){try{const r=await db.rpc('set_clinic_appointment_status',{p_appointment_id:id,p_new_status:status,p_note:null});if(r.error)throw r.error;toast('อัปเดตสถานะแล้ว');await loadAppointments()}catch(e){fail(e)}}
+  async function cancelAppointment(id){const reason=prompt('เหตุผลที่ยกเลิก');if(reason===null)return;try{const r=await db.rpc('cancel_clinic_appointment',{p_appointment_id:id,p_reason:reason});if(r.error)throw r.error;toast('ยกเลิกนัดแล้ว');await Promise.all([loadSchedules(),loadAppointments()])}catch(e){fail(e)}}
+  $('#refresh-appts').onclick=()=>loadAppointments().catch(fail);
+  $('#logout').onclick=async()=>{await db.auth.signOut();location.replace('/login.html')};
+  init();
+})();
+</script>
+</body>
+</html>
