@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" width="800" height="380">
+<rect width="800" height="380" fill="#fff"/>
+<style>.o{fill:none;stroke:#555;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.d{fill:none;stroke:#aaa;stroke-width:1.2;stroke-dasharray:4 4}</style>
+<g transform="translate(28,10)">
+  <circle class="o" cx="72" cy="35" r="25"/>
+  <path class="o" d="M57 58 L54 72 Q35 79 26 100 Q17 124 12 155 L3 230 Q1 243 13 249 Q25 252 31 238 L45 165"/>
+  <path class="o" d="M87 58 L90 72 Q109 79 118 100 Q127 124 132 155 L141 230 Q143 243 131 249 Q119 252 113 238 L99 165"/>
+  <path class="o" d="M54 72 Q72 82 90 72 Q105 92 102 130 Q98 162 93 191 L93 220"/>
+  <path class="o" d="M90 72 Q72 84 54 72 Q39 92 42 130 Q46 162 51 191 L51 220"/>
+  <path class="o" d="M51 220 Q43 251 45 287 L48 356 Q51 369 63 368 L69 292 L72 225"/>
+  <path class="o" d="M93 220 Q101 251 99 287 L96 356 Q93 369 81 368 L75 292 L72 225"/>
+  <path class="d" d="M72 82 L72 220"/>
+  <path class="o" d="M51 136 Q72 146 93 136"/>
+  <path class="o" d="M56 105 Q62 116 72 116 Q82 116 88 105"/>
+</g>
+<g transform="translate(228,10)">
+  <circle class="o" cx="72" cy="35" r="25"/>
+  <path class="o" d="M57 58 L54 72 Q35 79 26 100 Q17 124 12 155 L3 230 Q1 243 13 249 Q25 252 31 238 L45 165"/>
+  <path class="o" d="M87 58 L90 72 Q109 79 118 100 Q127 124 132 155 L141 230 Q143 243 131 249 Q119 252 113 238 L99 165"/>
+  <path class="o" d="M54 72 Q72 78 90 72 Q103 94 101 132 Q98 174 92 215"/>
+  <path class="o" d="M90 72 Q72 78 54 72 Q41 94 43 132 Q46 174 52 215"/>
+  <path class="o" d="M52 215 Q43 247 45 286 L48 356 Q51 369 63 368 L69 292 L72 223"/>
+  <path class="o" d="M92 215 Q101 247 99 286 L96 356 Q93 369 81 368 L75 292 L72 223"/>
+  <path class="d" d="M72 58 L72 218"/>
+  <path class="o" d="M49 205 Q72 220 95 205"/>
+  <path class="o" d="M50 126 Q72 139 94 126"/>
+</g>
+<g transform="translate(432,8)">
+  <circle class="o" cx="70" cy="37" r="24"/>
+  <path class="o" d="M52 51 Q45 67 53 78 Q39 94 40 124 Q41 151 50 181 Q56 201 52 226"/>
+  <path class="o" d="M77 57 Q91 73 89 98 Q87 119 81 138 Q77 153 80 172 Q84 193 91 214"/>
+  <path class="o" d="M56 84 Q66 101 66 126 Q66 156 63 188 L59 240"/>
+  <path class="o" d="M64 122 Q77 153 81 186 L83 241"/>
+  <path class="o" d="M59 240 Q48 262 43 292 L31 342 Q28 356 40 363 L58 307 L74 260"/>
+  <path class="o" d="M83 241 Q101 260 112 287 L133 319 Q141 330 151 323 L127 276 Q113 250 91 214"/>
+  <path class="o" d="M64 105 Q81 108 85 124"/>
+  <path class="o" d="M60 152 L43 229 Q42 242 54 246 Q65 247 69 234 L77 168"/>
+</g>
+<g transform="translate(632,8) scale(-1,1) translate(-144,0)">
+  <circle class="o" cx="70" cy="37" r="24"/>
+  <path class="o" d="M52 51 Q45 67 53 78 Q39 94 40 124 Q41 151 50 181 Q56 201 52 226"/>
+  <path class="o" d="M77 57 Q91 73 89 98 Q87 119 81 138 Q77 153 80 172 Q84 193 91 214"/>
+  <path class="o" d="M56 84 Q66 101 66 126 Q66 156 63 188 L59 240"/>
+  <path class="o" d="M64 122 Q77 153 81 186 L83 241"/>
+  <path class="o" d="M59 240 Q48 262 43 292 L31 342 Q28 356 40 363 L58 307 L74 260"/>
+  <path class="o" d="M83 241 Q101 260 112 287 L133 319 Q141 330 151 323 L127 276 Q113 250 91 214"/>
+  <path class="o" d="M64 105 Q81 108 85 124"/>
+  <path class="o" d="M60 152 L43 229 Q42 242 54 246 Q65 247 69 234 L77 168"/>
+</g>
+</svg>
