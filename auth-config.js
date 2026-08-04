@@ -13,6 +13,7 @@ window.CHANANYA_AUTH = Object.freeze({
   const isClinicalHome = path === '/' || path.endsWith('/index.html');
   const isClinicalV3 = path.endsWith('/clinical-v3.html');
   const isPharmacy = path.endsWith('/pharmacy.html');
+  const isAppointments = path.endsWith('/appointments.html');
 
   function loadScript(src, id) {
     if (document.getElementById(id)) return;
@@ -30,6 +31,11 @@ window.CHANANYA_AUTH = Object.freeze({
 
   if (isPharmacy) {
     loadScript('/pharmacy-labels.js?v=medicine-labels-1', 'pharmacy-label-extension');
+    return;
+  }
+
+  if (isAppointments) {
+    loadScript('/appointments-permissions.js?v=appointment-role-fix-1', 'appointments-permissions');
     return;
   }
 
