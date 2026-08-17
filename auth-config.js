@@ -17,6 +17,7 @@ window.CHANANYA_AUTH = Object.freeze({
   if(isClinicalV3){
     loadScript('/body-pain-map.js?v=interactive-pain-map-1','body-pain-map-extension');
     loadScript('/ttm-diagnosis-assistant.js?v=ttm-dkr-v1','ttm-diagnosis-assistant');
+    loadScript('/opd-workflow.js?v=opd-workflow-1','opd-workflow-extension');
     return;
   }
   if(isPharmacy){loadScript('/pharmacy-labels.js?v=medicine-labels-1','pharmacy-label-extension');return;}
