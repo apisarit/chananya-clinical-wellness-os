@@ -1,7 +1,6 @@
 (() => {
   'use strict';
 
-  const cfg = window.CHANANYA_AUTH || {};
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   let db = null;
@@ -14,10 +13,12 @@
   }[m]));
   const num = v => Number(v || 0);
 
-  async function initDb() {
-    if (!cfg.url || !cfg.anonKey || !window.supabase) throw new Error('ไม่พบ Supabase config');
-    db = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
-    session = (await db.auth.getSession()).data.session;
+  async function waitRuntime() {
+    for (let i = 0; i < 50; i++) {
+      if (window.ChananyaRuntime) return window.ChananyaRuntime;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
   }
 
   function labelWindow(title, labels) {
@@ -133,28 +134,26 @@
   async function enhanceDoctorQueue() {
     const list = $('#rx-list');
     if (!list) return;
-    const result = await db.from('dispensing_orders').select('id,status,created_at').order('created_at', { ascending: false });
+    const result = await db.from('dispensing_orders').select('id,status').in('status', ['dispensed','submitted_to_billing','billed']);
     if (result.error) throw result.error;
-    const orders = result.data || [];
-    const cards = $$('.item', list);
-    cards.forEach((card, index) => {
-      const order = orders[index];
-      if (!order || !['dispensed', 'submitted_to_billing', 'billed'].includes(order.status)) return;
-      addButton(card, `rx-${order.id}`, 'พิมพ์ฉลากยา', () => printDoctorLabels(order.id));
+    const allowed = new Set((result.data || []).map(x => x.id));
+    $$('[data-dispensing-order-id]', list).forEach(card => {
+      const orderId = card.dataset.dispensingOrderId;
+      if (!allowed.has(orderId)) return;
+      addButton(card, `rx-${orderId}`, 'พิมพ์ฉลากยา', () => printDoctorLabels(orderId));
     });
   }
 
   async function enhanceWalkinQueue() {
     const list = $('#walkin-list');
     if (!list) return;
-    const result = await db.from('pharmacy_counter_sales').select('id,status,created_at').not('status', 'in', '("paid","cancelled")').order('created_at', { ascending: false });
+    const result = await db.from('pharmacy_counter_sales').select('id,status').in('status', ['dispensed','submitted_to_billing']);
     if (result.error) throw result.error;
-    const sales = result.data || [];
-    const cards = $$('.item', list);
-    cards.forEach((card, index) => {
-      const sale = sales[index];
-      if (!sale || !['dispensed', 'submitted_to_billing'].includes(sale.status)) return;
-      addButton(card, `walkin-${sale.id}`, 'พิมพ์ฉลากยา', () => printWalkinLabels(sale.id));
+    const allowed = new Set((result.data || []).map(x => x.id));
+    $$('[data-sale-id]', list).forEach(card => {
+      const saleId = card.dataset.saleId;
+      if (!allowed.has(saleId)) return;
+      addButton(card, `walkin-${saleId}`, 'พิมพ์ฉลากยา', () => printWalkinLabels(saleId));
     });
   }
 
@@ -165,15 +164,19 @@
     finally { enhancing = false; }
   }
 
-  function scheduleEnhance() { clearTimeout(timer); timer = setTimeout(() => enhance().catch(console.error), 250); }
+  function scheduleEnhance() { clearTimeout(timer); timer = setTimeout(() => enhance().catch(console.error), 150); }
 
   async function install() {
-    await initDb();
+    const R = await waitRuntime();
+    db = R.getDb();
+    session = await R.getSession();
+    if (!session) return;
     await enhance();
     ['rx-list', 'walkin-list', 'history-list'].forEach(id => {
       const node = $(`#${id}`);
       if (node) new MutationObserver(scheduleEnhance).observe(node, { childList: true, subtree: true });
     });
+    window.addEventListener('chananya:pharmacy-rendered', scheduleEnhance);
   }
 
   window.addEventListener('load', () => install().catch(error => console.error('Pharmacy label extension failed', error)));
