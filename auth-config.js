@@ -38,8 +38,9 @@ window.CHANANYA_AUTH = Object.freeze({
       await loadScript('/chananya-runtime.js?v=runtime-1', 'chananya-runtime');
       if (isClinicalV3) {
         await loadScript('/body-pain-map.js?v=interactive-pain-map-1', 'body-pain-map-extension');
-        await loadScript('/ttm-diagnosis-assistant.js?v=ttm-dkr-v1', 'ttm-diagnosis-assistant');
-        await loadScript('/opd-workflow.js?v=opd-workflow-1', 'opd-workflow-extension');
+        await loadScript('/ttm-diagnosis-assistant.js?v=ttm-dkr-v2', 'ttm-diagnosis-assistant');
+        await loadScript('/diagnosis-atomic-bridge.js?v=atomic-dx-1', 'diagnosis-atomic-bridge');
+        await loadScript('/opd-workflow.js?v=opd-workflow-2', 'opd-workflow-extension');
         return;
       }
       if (isPharmacy) {
