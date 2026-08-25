@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  const cfg = window.CHANANYA_AUTH;
-  if (!cfg || !window.supabase) return;
+  const runtime = window.ChananyaRuntime;
+  if (!runtime) { console.error('ChananyaRuntime is required before OPD workflow'); return; }
 
   const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const $ = s => document.querySelector(s);
@@ -30,18 +30,12 @@
         <label class="full">โรคประจำตัว<textarea id="opd-chronic"></textarea></label>
         <label class="full">ประวัติครอบครัว<textarea id="opd-family"></textarea></label>
         <label class="full">ประวัติส่วนตัว<textarea id="opd-personal"></textarea></label>
-        <label>อาหาร<input id="opd-food"></label>
-        <label>น้ำ (แก้ว/วัน)<input id="opd-water" type="number" min="0" step="0.5"></label>
-        <label>ชา/กาแฟ (แก้ว/วัน)<input id="opd-coffee" type="number" min="0" step="0.5"></label>
-        <label>บุหรี่<input id="opd-smoking" placeholder="ไม่สูบ / จำนวนมวนต่อวัน"></label>
-        <label>แอลกอฮอล์<input id="opd-alcohol"></label>
-        <label>ปัสสาวะ (ครั้ง/วัน)<input id="opd-urination" type="number" min="0" step="0.5"></label>
-        <label>อุจจาระ (ครั้ง/วัน)<input id="opd-bowel" type="number" min="0" step="0.5"></label>
-        <label>การนอน<input id="opd-sleep"></label>
-        <label>อิริยาบถ<input id="opd-posture"></label>
-        <label>อารมณ์<input id="opd-emotion"></label>
-        <label>การแพ้ยา/อาหาร<input id="opd-allergy"></label>
-        <label>ประจำเดือน<input id="opd-menstruation"></label>
+        <label>อาหาร<input id="opd-food"></label><label>น้ำ (แก้ว/วัน)<input id="opd-water" type="number" min="0" step="0.5"></label>
+        <label>ชา/กาแฟ (แก้ว/วัน)<input id="opd-coffee" type="number" min="0" step="0.5"></label><label>บุหรี่<input id="opd-smoking" placeholder="ไม่สูบ / จำนวนมวนต่อวัน"></label>
+        <label>แอลกอฮอล์<input id="opd-alcohol"></label><label>ปัสสาวะ (ครั้ง/วัน)<input id="opd-urination" type="number" min="0" step="0.5"></label>
+        <label>อุจจาระ (ครั้ง/วัน)<input id="opd-bowel" type="number" min="0" step="0.5"></label><label>การนอน<input id="opd-sleep"></label>
+        <label>อิริยาบถ<input id="opd-posture"></label><label>อารมณ์<input id="opd-emotion"></label>
+        <label>การแพ้ยา/อาหาร<input id="opd-allergy"></label><label>ประจำเดือน<input id="opd-menstruation"></label>
         <label class="full">ยา / อาหารเสริมที่ใช้อยู่<textarea id="opd-meds"></textarea></label>
         <label class="full">ตรวจร่างกายเพิ่มเติม / Narrative<textarea id="opd-physical"></textarea></label>
         <button class="btn primary full" type="submit">บันทึก OPD History</button>
@@ -54,9 +48,7 @@
     section.innerHTML=`
       <h2 class="section-title">Treatment Session & Outcome</h2>
       <form id="opd-session-form" class="opd-grid">
-        <div class="full opd-chipgrid">
-          ${['นวดไทย','ประคบสมุนไพร','อบสมุนไพร','ยาสมุนไพร','หัตถการอื่น'].map((x,i)=>`<label><input type="checkbox" name="opd-modality" value="${x}">${x}</label>`).join('')}
-        </div>
+        <div class="full opd-chipgrid">${['นวดไทย','ประคบสมุนไพร','อบสมุนไพร','ยาสมุนไพร','หัตถการอื่น'].map(x=>`<label><input type="checkbox" name="opd-modality" value="${x}">${x}</label>`).join('')}</div>
         <label>ความปวดก่อนรักษา 0–10<input id="opd-pain-before" type="number" min="0" max="10"></label>
         <label>ความปวดหลังรักษา 0–10<input id="opd-pain-after" type="number" min="0" max="10"></label>
         <label class="full">วิธีการรักษา / รายละเอียด<textarea id="opd-treatment-detail" required></textarea></label>
@@ -74,13 +66,10 @@
 
   function inject(){
     if ($('#opd-history-section')) return true;
-    const main=$('main'), encounterCard=$('#encounter')?.closest('section');
-    if(!main||!encounterCard) return false;
+    const main=$('main'), encounterCard=$('#encounter')?.closest('section'); if(!main||!encounterCard) return false;
     encounterCard.insertAdjacentElement('afterend', historySection());
-    const plan=$('#plan-form')?.closest('section');
-    if(plan) plan.insertAdjacentElement('afterend', sessionSection()); else main.appendChild(sessionSection());
-    bind();
-    return true;
+    const plan=$('#plan-form')?.closest('section'); if(plan) plan.insertAdjacentElement('afterend', sessionSection()); else main.appendChild(sessionSection());
+    bind(); return true;
   }
 
   const val=id=>$(id)?.value || null;
@@ -116,23 +105,30 @@
 
   async function saveSession(ev){
     ev.preventDefault(); if(!currentEncounter) return alert('เลือก Encounter ก่อน');
-    const {data:last}=await db.from('clinical_treatment_sessions').select('session_no').eq('encounter_id',currentEncounter).order('session_no',{ascending:false}).limit(1);
-    const sessionNo=(last?.[0]?.session_no||0)+1;
     const modalities=[...document.querySelectorAll('input[name="opd-modality"]:checked')].map(x=>x.value);
-    const payload={encounter_id:currentEncounter,session_no:sessionNo,treatment_modalities:modalities,treatment_detail:val('#opd-treatment-detail'),procedure_referral:$('#opd-procedure-referral').checked,procedure_referral_detail:val('#opd-procedure-detail'),precautions:val('#opd-precautions'),pain_before:num('#opd-pain-before'),pain_after:num('#opd-pain-after'),outcome_summary:val('#opd-outcome'),advice:val('#opd-advice'),practitioner_id:user.id};
-    const {error}=await db.from('clinical_treatment_sessions').insert(payload); if(error) return alert(error.message);
+    const {error}=await db.rpc('create_clinical_treatment_session',{
+      p_encounter_id:currentEncounter,
+      p_treatment_modalities:modalities,
+      p_treatment_detail:val('#opd-treatment-detail'),
+      p_procedure_referral:$('#opd-procedure-referral').checked,
+      p_procedure_referral_detail:val('#opd-procedure-detail'),
+      p_precautions:val('#opd-precautions'),
+      p_pain_before:num('#opd-pain-before'),
+      p_pain_after:num('#opd-pain-after'),
+      p_outcome_summary:val('#opd-outcome'),
+      p_advice:val('#opd-advice')
+    });
+    if(error) return alert(error.message);
     ev.target.reset(); await loadSessions();
   }
 
   function bind(){
-    $('#opd-history-form')?.addEventListener('submit',saveHistory);
-    $('#opd-session-form')?.addEventListener('submit',saveSession);
+    $('#opd-history-form')?.addEventListener('submit',saveHistory); $('#opd-session-form')?.addEventListener('submit',saveSession);
     const encounter=$('#encounter'); if(encounter){encounter.addEventListener('change',async()=>{currentEncounter=encounter.value||null;await loadHistory();await loadSessions();});currentEncounter=encounter.value||null;}
   }
 
   async function init(){
-    style(); db=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true}});
-    const {data:{session}}=await db.auth.getSession(); if(!session) return; user=session.user;
+    style(); db=runtime.getDb(); const session=await runtime.getSession(); if(!session) return; user=session.user;
     if(!inject()){const timer=setInterval(()=>{if(inject())clearInterval(timer)},250);setTimeout(()=>clearInterval(timer),10000)}
     setTimeout(async()=>{const e=$('#encounter');currentEncounter=e?.value||null;if(currentEncounter){await loadHistory();await loadSessions();}},700);
   }
