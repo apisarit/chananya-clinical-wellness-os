@@ -13,6 +13,7 @@ window.CHANANYA_AUTH = Object.freeze({
   const isClinicalV3 = path.endsWith('/clinical-v3.html');
   const isPharmacy = path.endsWith('/pharmacy.html');
   const isAppointments = path.endsWith('/appointments.html');
+  const isAdmin = path.endsWith('/admin.html');
 
   function loadScript(src, id) {
     return new Promise((resolve, reject) => {
@@ -46,6 +47,11 @@ window.CHANANYA_AUTH = Object.freeze({
       }
       if (isPharmacy) {
         await loadScript('/pharmacy-labels.js?v=medicine-labels-v32', 'pharmacy-label-extension');
+        await loadScript('/pharmacy-v33-tools.js?v=pharmacy-v33', 'pharmacy-v33-tools');
+        return;
+      }
+      if (isAdmin) {
+        await loadScript('/admin-clinical-audit.js?v=admin-audit-v33', 'admin-clinical-audit');
         return;
       }
       if (isAppointments) {
@@ -92,15 +98,15 @@ window.CHANANYA_AUTH = Object.freeze({
     const sync = () => {
       const role = String(roleBadge.dataset.effectiveRole || roleBadge.dataset.databaseRole || roleBadge.textContent || '').trim().toLowerCase();
       const isSuper = role === 'super_admin';
-      const isAdmin = role === 'admin';
+      const isAdminRole = role === 'admin';
       const isPractitioner = ['practitioner', 'doctor'].includes(role);
       const isReception = role === 'reception';
 
-      admin.style.display = (isSuper || isAdmin) ? 'inline-flex' : 'none';
-      appointments.style.display = (isSuper || isAdmin || isPractitioner || isReception) ? 'inline-flex' : 'none';
-      clinicalV3.style.display = (isSuper || isAdmin || isPractitioner) ? 'inline-flex' : 'none';
-      pharmacy.style.display = (isSuper || isAdmin || role === 'pharmacy') ? 'inline-flex' : 'none';
-      production.style.display = (isSuper || isAdmin || ['pharmacy', 'production', 'inventory'].includes(role)) ? 'inline-flex' : 'none';
+      admin.style.display = (isSuper || isAdminRole) ? 'inline-flex' : 'none';
+      appointments.style.display = (isSuper || isAdminRole || isPractitioner || isReception) ? 'inline-flex' : 'none';
+      clinicalV3.style.display = (isSuper || isAdminRole || isPractitioner) ? 'inline-flex' : 'none';
+      pharmacy.style.display = (isSuper || isAdminRole || role === 'pharmacy') ? 'inline-flex' : 'none';
+      production.style.display = (isSuper || isAdminRole || ['pharmacy', 'production', 'inventory'].includes(role)) ? 'inline-flex' : 'none';
     };
 
     sync();
