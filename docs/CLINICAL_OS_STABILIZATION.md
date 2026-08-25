@@ -16,22 +16,29 @@ Stabilize the current Clinical OS before adding more features. Preserve existing
 - `clinical_treatment_sessions`: actual treatment sessions and before/after outcomes.
 - Prescription/pharmacy tables: medication ordering and dispensing source of truth. Do not duplicate medicine dispensing in OPD history.
 
-## Migration order for the v3 clinical path
+## Existing prerequisites
 
-Run only migrations that have not yet been applied, in this order:
-
+The current database should already contain these previously-run foundations:
 1. `202608011430_clinical_record_v3.sql`
-   - Creates the structured Clinical v3 foundation including `ttm_structured_diagnoses`.
 2. `202608151200_ttm_diagnostic_knowledge_layer.sql`
-   - Adds TTM diagnostic knowledge and `ttm_diagnostic_contexts`.
 3. `202608172300_opd_encounter_workflow.sql`
-   - Adds OPD encounter history and treatment sessions.
-4. `202608251410_stabilize_treatment_session_rpc.sql`
+
+## Simplest stabilization install
+
+For a human operator, use one file only:
+
+`supabase/manual/RUN_ONCE_STABILIZATION_V3_1.sql`
+
+It installs both stabilization RPCs and prints the health check at the end.
+
+## Individual migration files (for CI / migration history)
+
+1. `202608252110_stabilize_treatment_sessions.sql`
    - Adds transaction-safe treatment-session creation RPC.
-5. `202608251500_atomic_ttm_diagnosis.sql`
+2. `202608251500_atomic_ttm_diagnosis.sql`
    - Saves structured TTM diagnosis and Samutthan context in one database transaction.
-6. `202608251430_clinical_os_health_check.sql`
-   - Read-only verification query; safe to run repeatedly. Run this last even though its filename timestamp is earlier than step 5.
+3. `202608251430_clinical_os_health_check.sql`
+   - Read-only verification query; safe to run repeatedly and should be run last.
 
 ## Frontend stabilization rules
 
