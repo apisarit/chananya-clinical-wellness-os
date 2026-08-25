@@ -5,14 +5,14 @@ Stabilize the current Clinical OS before adding more features. Preserve existing
 
 ## Current source-of-truth boundaries
 
-- `patients` / patient master: durable demographic and patient identity data.
+- `patients`: durable demographic and patient identity data.
 - `encounters`: one clinical visit / episode context.
 - `ttm_opd_histories`: encounter snapshot of history and lifestyle context used for that visit.
-- `physical_examination_findings`: structured physical examination findings for the encounter.
+- `clinical_examination_findings`: structured physical examination findings for the encounter.
 - `body_pain_points`: structured pain/body-map findings linked to the encounter.
 - `ttm_structured_diagnoses`: practitioner-authored structured Thai Traditional Medicine diagnosis.
 - `ttm_diagnostic_contexts`: diagnostic knowledge context / Samutthan support record for the encounter.
-- `treatment_plans`: intended care plan.
+- `clinical_treatment_plans`: intended care plan.
 - `clinical_treatment_sessions`: actual treatment sessions and before/after outcomes.
 - Prescription/pharmacy tables: medication ordering and dispensing source of truth. Do not duplicate medicine dispensing in OPD history.
 
@@ -28,8 +28,10 @@ Run only migrations that have not yet been applied, in this order:
    - Adds OPD encounter history and treatment sessions.
 4. `202608251410_stabilize_treatment_session_rpc.sql`
    - Adds transaction-safe treatment-session creation RPC.
-5. `202608251430_clinical_os_health_check.sql`
-   - Read-only verification query; safe to run repeatedly.
+5. `202608251500_atomic_ttm_diagnosis.sql`
+   - Saves structured TTM diagnosis and Samutthan context in one database transaction.
+6. `202608251430_clinical_os_health_check.sql`
+   - Read-only verification query; safe to run repeatedly. Run this last even though its filename timestamp is earlier than step 5.
 
 ## Frontend stabilization rules
 
