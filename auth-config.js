@@ -41,10 +41,11 @@ window.CHANANYA_AUTH = Object.freeze({
         await loadScript('/ttm-diagnosis-assistant.js?v=ttm-dkr-v31', 'ttm-diagnosis-assistant');
         await loadScript('/diagnosis-atomic-bridge.js?v=atomic-dx-v31', 'diagnosis-atomic-bridge');
         await loadScript('/opd-workflow.js?v=opd-workflow-v31', 'opd-workflow-extension');
+        await loadScript('/clinical-signoff.js?v=signoff-v32', 'clinical-signoff-extension');
         return;
       }
       if (isPharmacy) {
-        await loadScript('/pharmacy-labels.js?v=medicine-labels-1', 'pharmacy-label-extension');
+        await loadScript('/pharmacy-labels.js?v=medicine-labels-v32', 'pharmacy-label-extension');
         return;
       }
       if (isAppointments) {
