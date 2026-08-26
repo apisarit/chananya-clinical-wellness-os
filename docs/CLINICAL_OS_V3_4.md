@@ -30,6 +30,17 @@ Run:
 node tests/v34-runtime-role-matrix.mjs
 ```
 
+## Deploy Preview safety
+
+The static Deploy Preview currently uses the same public Supabase project configuration as Production. Do not create, edit, sign, dispense, or delete real patient records from a preview URL.
+
+For authenticated end-to-end verification:
+
+1. Use a dedicated test account and clearly marked test patient/encounter only.
+2. Temporarily allow the exact Netlify Deploy Preview callback URL in Supabase Auth redirect configuration if it is not already allowlisted.
+3. Remove the temporary preview callback after the release is merged or closed.
+4. Treat a successful Netlify build as static-delivery verification, not as proof that authenticated clinical writes were exercised.
+
 Before production merge, verify the Netlify Deploy Preview with these profiles:
 
 1. `system_role=staff, role=practitioner` — Clinical v3.4 opens and can write.
