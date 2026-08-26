@@ -1,16 +1,15 @@
 (() => {
   'use strict';
 
-  const cfg = window.CHANANYA_AUTH || {};
-  const url = cfg.url || cfg.supabaseUrl;
-  const key = cfg.anonKey || cfg.publishableKey;
-  if (!url || !key || !window.supabase) return;
-
-  const db = window.supabase.createClient(url, key, {
-    auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true }
-  });
-
   let mode = 'read_only';
+
+  async function waitRuntime() {
+    for (let i = 0; i < 50; i += 1) {
+      if (window.ChananyaRuntime) return window.ChananyaRuntime;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
+  }
 
   function applyPermissions() {
     const bookingSection = document.querySelector('#booking-section');
@@ -53,16 +52,10 @@
   }
 
   async function init() {
-    const session = (await db.auth.getSession()).data.session;
+    const runtime = await waitRuntime();
+    const session = await runtime.getSession();
     if (!session) return;
-
-    const result = await db.from('profiles')
-      .select('role,system_role')
-      .eq('id', session.user.id)
-      .single();
-    if (result.error) return;
-
-    const profile = result.data || {};
+    const profile = await runtime.getProfile(session.user.id) || {};
     const systemRole = String(profile.system_role || '').toLowerCase();
     const role = String(profile.role || '').toLowerCase();
 
