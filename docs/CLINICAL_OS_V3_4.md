@@ -17,10 +17,17 @@ The shared runtime previously preferred `profiles.system_role` over the operatio
   - responsive desktop/mobile layout.
 - Strengthen record-lock UX so dynamically added and list-level edit/delete controls are disabled after sign-off. Database triggers remain authoritative.
 - Translate common sign-off gate errors into actionable Thai messages.
+- Restore `รากวิชา` as a first-class workspace instead of hiding the Thai medicine foundation inside the diagnosis form:
+  - five knowledge layers from human model through physical medicine;
+  - source, concept, relation, review status, and encounter-binding boundaries;
+  - explicit legacy bridge for the existing 23 TTM-DKR rules and Sen placeholders;
+  - source/review context visible from the Clinical diagnosis step.
 
 ## Database impact
 
-No migration is required. This release reads existing v3.1–v3.3 tables and RPCs only.
+The operational UI and existing Clinical v3.1–v3.3 records require no migration. `/foundation.html` works read-only against the current `ttm_diagnostic_knowledge` and `sen_line_master` tables and clearly labels that state as `Legacy bridge`.
+
+The optional additive migration `202608270100_ttm_foundation_ontology.sql` activates the normalized source → concept → relation → encounter-binding model. It does not replace or copy existing encounter, diagnosis, dispensing, treatment, or audit records. Apply and verify it in a non-production Supabase environment before Production.
 
 ## Verification
 
@@ -28,6 +35,8 @@ Run:
 
 ```bash
 node tests/v34-runtime-role-matrix.mjs
+node tests/ia-static-contract.mjs
+node tests/ttm-foundation-contract.mjs
 ```
 
 ## Deploy Preview safety

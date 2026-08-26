@@ -9,6 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const contracts = [
   { page: 'index.html', scripts: ['app-shell.js', 'app.js'] },
   { page: 'appointments.html', scripts: ['app-shell.js', 'appointments.js'] },
+  { page: 'foundation.html', scripts: ['app-shell.js', 'foundation.js'] },
   {
     page: 'clinical-v3.html',
     scripts: ['app-shell.js', 'clinical-v3.js', 'clinical-context-guard.js', 'body-pain-map.js', 'ttm-diagnosis-assistant.js', 'diagnosis-atomic-bridge.js', 'opd-workflow.js', 'clinical-signoff.js']
@@ -50,6 +51,7 @@ const css = read('app.css');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.app-frame \{ display: block; \}/, 'tablet/mobile layout must collapse the desktop shell');
 assert.match(css, /body\.shell-open \.sidebar \{ transform: none; \}/, 'mobile navigation must expose the sidebar as a drawer');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.clinical-layout \{ grid-template-columns: 1fr; \}/, 'clinical workspace must stack on narrow screens');
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.foundation-browser \{ grid-template-columns: 1fr; \}/, 'foundation browser must stack on narrow screens');
 assert.match(css, /\.workflow-nav \{ grid-template-columns: repeat\(7,minmax\(122px,1fr\)\); overflow-x: auto;/, 'clinical workflow must remain reachable with horizontal scrolling');
 assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.form, \.opd-grid, \.bm-grid, \.ttm-context-grid, \.checkgrid, \.opd-chipgrid \{ grid-template-columns: 1fr; \}/, 'clinical forms must become single-column on phones');
 

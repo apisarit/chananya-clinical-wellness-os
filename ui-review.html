@@ -15,6 +15,7 @@
       <nav class="global-nav">
         <a href="/"><span class="nav-icon">⌂</span><span class="nav-copy"><b>ศูนย์ปฏิบัติการ</b><small>ภาพรวม ผู้รับบริการ การเงิน</small></span></a>
         <a href="/appointments.html"><span class="nav-icon">◷</span><span class="nav-copy"><b>นัดหมาย</b><small>ตารางแพทย์และคิว</small></span></a>
+        <a href="/foundation.html"><span class="nav-icon">ร</span><span class="nav-copy"><b>รากวิชา</b><small>คัมภีร์และองค์ความรู้</small></span></a>
         <a href="/clinical-v3.html" aria-current="page"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
         <a href="/pharmacy.html"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
       </nav>
@@ -28,6 +29,17 @@
       </header>
       <main>
         <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — หน้านี้ใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้</div>
+        <section class="card foundation-root-card">
+          <div class="section-heading"><span class="section-number">ร</span><div><h2>รากวิชาอยู่ก่อน Clinical Workflow</h2><p>คัมภีร์และ ontology เป็นฐานกลาง ส่วน Encounter 7 ขั้นคือการนำรากมาใช้กับผู้รับบริการหนึ่งราย</p></div></div>
+          <div class="foundation-layers">
+            <button class="foundation-layer active" type="button"><span class="foundation-layer-index">ชั้น 1</span><b>โลก–มนุษย์–ธาตุ</b><small>ธาตุ 4 และธาตุเจ้าเรือน</small><strong>01</strong></button>
+            <button class="foundation-layer" type="button"><span class="foundation-layer-index">ชั้น 2</span><b>วินิจฉัยเชิงหน้าที่</b><small>สมุฏฐาน พิกัด และสถานะธาตุ</small><strong>02</strong></button>
+            <button class="foundation-layer" type="button"><span class="foundation-layer-index">ชั้น 3</span><b>โรคและคัมภีร์เฉพาะ</b><small>โรค อาการ และกลไก</small><strong>03</strong></button>
+            <button class="foundation-layer" type="button"><span class="foundation-layer-index">ชั้น 4</span><b>เภสัชและการรักษา</b><small>ตำรับ สมุนไพร และรสยา</small><strong>04</strong></button>
+            <button class="foundation-layer" type="button"><span class="foundation-layer-index">ชั้น 5</span><b>หัตถการและเส้น</b><small>เส้นประธานสิบ จุด และวิธีรักษา</small><strong>05</strong></button>
+          </div>
+          <div class="foundation-chain"><span>คัมภีร์ / Dataset</span><i>→</i><span>Concept</span><i>→</i><span>Relation</span><i>→</i><span>Encounter Evidence</span><i>→</i><span>Practitioner Confirmation</span></div>
+        </section>
         <div class="clinical-layout">
           <aside class="encounter-rail">
             <section class="card encounter-picker">
@@ -68,7 +80,8 @@
               <label>ธาตุเจ้าเรือน<input disabled value="วาโย"></label>
               <div class="full checkgrid"><label><input type="checkbox" checked disabled>อิริยาบถ</label><label><input type="checkbox" checked disabled>อากาศ/ฤดูกาล</label><label><input type="checkbox" disabled>อาหาร</label><label><input type="checkbox" disabled>อารมณ์</label></div>
               <section class="ttm-assistant full">
-                <div class="ttm-assistant-head"><div><b>TTM Diagnostic Context</b><small>Decision support — practitioner confirmation required</small></div><span class="badge">Human reviewed</span></div>
+                <div class="ttm-assistant-head"><div><b>รากวินิจฉัยแพทย์แผนไทย</b><small>Source → Concept → Relation → Encounter → Practitioner confirmation</small></div><span class="badge">Human reviewed</span></div>
+                <div class="ttm-root-track"><span>คัมภีร์/ชุดข้อมูล</span><i>→</i><span>สมุฏฐาน/พิกัด</span><i>→</i><span>โรค/อาการ</span><i>→</i><span>การรักษา</span><i>→</i><span>ผู้ประกอบวิชาชีพยืนยัน</span></div>
                 <p class="ttm-note">ระบบช่วยจัดบริบทเท่านั้น ไม่วินิจฉัยแทนผู้ประกอบวิชาชีพ</p>
               </section>
               <label class="full">กลไกการเกิดอาการตามศาสตร์แผนไทย<textarea disabled>วาตะกำเริบจากอิริยาบถคงค้าง ร่วมกับความเย็น กระทบการไหลเวียนบริเวณคอและบ่า</textarea></label>

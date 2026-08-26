@@ -11,10 +11,11 @@
   slot.innerHTML = `
     <section id="ttm-knowledge-assistant" class="ttm-assistant">
       <div class="ttm-assistant-head">
-        <div><b>ฐานความรู้วินิจฉัยแพทย์แผนไทย</b><small>ช่วยจัดโครงสร้างสมุฏฐานจาก TTM-DKR-v1 — ผู้ประกอบวิชาชีพต้องตรวจและยืนยัน</small></div>
-        <button type="button" id="ttm-load-rules" class="btn ghost">เปิดฐานความรู้</button>
+        <div><b>รากวินิจฉัยแพทย์แผนไทย</b><small>Source → Concept → Relation → Encounter → Practitioner confirmation</small></div>
+        <div class="actions"><a class="btn ghost" href="/foundation.html">เปิดรากวิชาทั้งระบบ</a><button type="button" id="ttm-load-rules" class="btn ghost">โหลดใหม่</button></div>
       </div>
-      <div id="ttm-rule-status" class="muted space-top-xs">ยังไม่ได้โหลดฐานความรู้</div>
+      <div class="ttm-root-track" aria-label="ลำดับรากวิชา"><span>คัมภีร์/ชุดข้อมูล</span><i>→</i><span>สมุฏฐาน/พิกัด</span><i>→</i><span>โรค/อาการ</span><i>→</i><span>การรักษา</span><i>→</i><span>ผู้ประกอบวิชาชีพยืนยัน</span></div>
+      <div id="ttm-rule-status" class="muted space-top-xs">กำลังโหลดฐานความรู้และ provenance</div>
       <div id="ttm-coordinate-panel" class="space-top-sm" hidden>
         <label>พิกัดสมุฏฐาน<select id="ttm-coordinate"><option value="">เลือกพิกัด</option></select></label>
         <div id="ttm-coordinate-desc" class="status space-top-xs"></div>
@@ -44,13 +45,14 @@
     $('#ttm-coordinate-panel').hidden = false;
     $('#ttm-context-panel').hidden = false;
     const pending = rules.filter(item => item.review_status !== 'approved').length;
-    $('#ttm-rule-status').textContent = `โหลด ${rules.length} rules • ${pending} รายการยังต้อง practitioner review`;
+    const sources = new Set(rules.map(item => item.source_ref).filter(Boolean)).size;
+    $('#ttm-rule-status').textContent = `โหลด ${rules.length} rules จาก ${sources} source references • ${pending} รายการยังต้อง practitioner review`;
   }
 
   $('#ttm-load-rules').addEventListener('click', () => loadRules().catch(error => { console.error(error); $('#ttm-rule-status').textContent = error.message; }));
   $('#ttm-coordinate').addEventListener('change', () => {
     const item = rules.find(rule => rule.domain === 'coordinate' && rule.input_key === $('#ttm-coordinate').value);
-    $('#ttm-coordinate-desc').textContent = item ? `${item.output_value || ''}${item.description ? ` — ${item.description}` : ''} • ${item.review_status === 'approved' ? 'Approved' : 'Review required'}` : '';
+    $('#ttm-coordinate-desc').textContent = item ? `${item.output_value || ''}${item.description ? ` — ${item.description}` : ''} • Source: ${item.source_ref || 'ยังไม่ผูก citation'} • ${item.review_status === 'approved' ? 'Approved' : 'Review required'}` : '';
     if (item) {
       const dhatu = document.querySelector('#dx-dhatu');
       const map = { ไฟ: 'เตโช', ลม: 'วาโย', น้ำ: 'อาโป', ดิน: 'ปถวี' };
@@ -74,4 +76,5 @@
     }
   });
   window.dispatchEvent(new CustomEvent('chananya:ttm-assistant-ready'));
+  loadRules().catch(error => { console.error(error); $('#ttm-rule-status').textContent = `โหลดฐานความรู้ไม่ได้: ${error.message}`; });
 })();

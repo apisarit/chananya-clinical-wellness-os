@@ -38,6 +38,7 @@
   }
 
   const permissions = Object.freeze({
+    knowledge_read: ['super_admin','admin','practitioner','doctor','pharmacy','production','inventory'],
     clinical_read: ['super_admin','admin','practitioner','doctor','pharmacy'],
     clinical_write: ['super_admin','admin','practitioner','doctor'],
     appointments_operate: ['admin','reception'],

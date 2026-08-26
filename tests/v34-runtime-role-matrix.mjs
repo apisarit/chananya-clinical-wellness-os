@@ -18,6 +18,13 @@ assert.equal(typeof runtime.rolesOf, 'function', 'runtime should expose rolesOf'
 
 const cases = [
   {
+    label: 'practitioner can inspect the Thai medicine foundation',
+    profile: { role: 'practitioner', system_role: 'staff' },
+    effective: 'practitioner',
+    capability: 'knowledge_read',
+    allowed: true
+  },
+  {
     label: 'pharmacy operational role is not masked by system staff',
     profile: { role: 'pharmacy', system_role: 'staff' },
     effective: 'pharmacy',
@@ -75,6 +82,7 @@ const scriptsToParse = [
   'admin.js',
   'admin-clinical-audit.js',
   'appointments.js',
+  'foundation.js',
   'chananya-runtime.js',
   'clinical-v3.js',
   'clinical-context-guard.js',
@@ -108,7 +116,7 @@ assert.match(clinicalHtml, /data-stage="intake"/, 'Clinical page should expose t
 assert.match(clinicalHtml, /data-stage="signoff"/, 'Clinical workflow should end with sign-off');
 assert.match(read('clinical-signoff.js'), /fields\.inert=locked/, 'sign-off lock should disable the owned record boundary');
 
-for (const page of ['index.html', 'appointments.html', 'clinical-v3.html', 'pharmacy.html', 'production.html', 'admin.html']) {
+for (const page of ['index.html', 'appointments.html', 'foundation.html', 'clinical-v3.html', 'pharmacy.html', 'production.html', 'admin.html']) {
   const html = read(page);
   const runtimeIndex = html.indexOf('chananya-runtime.js');
   const shellIndex = html.indexOf('app-shell.js');
@@ -120,5 +128,6 @@ assert.match(read('admin.html'), /id="clinical-audit"/, 'Admin audit section sho
 assert.doesNotMatch(read('pharmacy-labels.js'), /MutationObserver/, 'Pharmacy labels should use the render event contract');
 assert.doesNotMatch(read('pharmacy-v33-tools.js'), /MutationObserver/, 'Pharmacy print tools should use the render event contract');
 assert.match(read('_redirects'), /^\/app\.html\s+\/\s+301!/m, 'Legacy localStorage prototype should redirect to the canonical operations route');
+assert.match(read('app-shell.js'), /href: '\/foundation\.html'[\s\S]*?capability: 'knowledge_read'/, 'shared shell must expose the foundation as a canonical route');
 
 console.log(`IA release checks passed: ${cases.length} role cases + ${scriptsToParse.length} syntax checks + shared shell/order assertions`);
