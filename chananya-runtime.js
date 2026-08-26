@@ -18,8 +18,23 @@
     return db;
   }
 
+  const normalizeRole = value => String(value || '').trim().toLowerCase();
+
+  function rolesOf(profile) {
+    const operationalRole = normalizeRole(profile?.role) || 'viewer';
+    const systemRole = normalizeRole(profile?.system_role) || 'staff';
+    const effectiveRole = ['super_admin', 'admin'].includes(systemRole)
+      ? systemRole
+      : operationalRole;
+    const grantedRoles = [...new Set(
+      [effectiveRole, operationalRole, systemRole]
+        .filter(role => role && role !== 'staff')
+    )];
+    return Object.freeze({ operationalRole, systemRole, effectiveRole, grantedRoles });
+  }
+
   function roleOf(profile) {
-    return String(profile?.system_role || profile?.role || '').trim().toLowerCase();
+    return rolesOf(profile).effectiveRole;
   }
 
   const permissions = Object.freeze({
@@ -33,7 +48,8 @@
   });
 
   function can(profile, capability) {
-    return (permissions[capability] || []).includes(roleOf(profile));
+    const allowed = permissions[capability] || [];
+    return rolesOf(profile).grantedRoles.some(role => allowed.includes(role));
   }
 
   async function getSession() {
@@ -51,5 +67,5 @@
     return data;
   }
 
-  window.ChananyaRuntime = Object.freeze({ getDb, getSession, getProfile, roleOf, can, permissions });
+  window.ChananyaRuntime = Object.freeze({ getDb, getSession, getProfile, rolesOf, roleOf, can, permissions });
 })();
