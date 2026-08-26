@@ -1,62 +1,340 @@
-(()=>{'use strict';
-const LOCK_MS=15*60*1000,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let db,session,profile=null,role='viewer',lockTimer;
-let data={patients:[],allergies:[],appointments:[],services:[],encounters:[],treatments:[],products:[],lots:[],prescriptions:[],rxItems:[],dispensing:[],dispensingItems:[],invoices:[],invoiceItems:[],payments:[],audit:[]};
-const permissions={super_admin:['all'],admin:['all'],practitioner:['patients','appointments','doctor'],doctor:['patients','appointments','doctor'],reception:['patients','appointments'],pharmacy:['pharmacy','inventory'],production:['inventory'],inventory:['inventory'],billing:['billing'],viewer:[]};
-const home={super_admin:'dashboard',admin:'dashboard',practitioner:'doctor',doctor:'doctor',reception:'appointments',pharmacy:'pharmacy',production:'inventory',inventory:'inventory',billing:'billing',viewer:'dashboard'};
-const can=p=>(permissions[role]||[]).includes('all')||(permissions[role]||[]).includes(p),today=()=>new Date().toISOString().slice(0,10),num=v=>Number(v||0),money=v=>num(v).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
-const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
-function fail(err){console.error(err);alert(err?.message||String(err))}
-function patient(id){return data.patients.find(x=>x.id===id)}
-function patientName(id){const p=patient(id);return p?`${p.prefix||''}${p.first_name} ${p.last_name}`:'-'}
-function product(id){return data.products.find(x=>x.id===id)}
-function rxForOrder(o){return data.prescriptions.find(x=>x.id===o.prescription_id)}
-function encounterForRx(rx){return data.encounters.find(x=>x.id===rx?.encounter_id)}
-async function audit(action,entity,entityId,metadata={}){try{await db.from('audit_logs').insert({user_id:session.user.id,action,entity,entity_id:entityId||null,metadata:{...metadata,role}})}catch(e){console.warn(e)}}
-async function q(table,select='*',order){let r=db.from(table).select(select);if(order)r=r.order(order,{ascending:false});const out=await r;if(out.error)throw out.error;return out.data||[]}
-async function optionalQ(table,select='*',order){try{return await q(table,select,order)}catch(e){console.warn(table,e);return[]}}
-async function loadAll(){const [patients,allergies,appointments,services,encounters,treatments,products,lots,prescriptions,rxItems,dispensing,dispensingItems,invoices,invoiceItems,payments,auditRows]=await Promise.all([
-q('patients','*','created_at'),optionalQ('patient_allergies'),optionalQ('appointments'),q('services','*'),q('encounters','*','started_at'),optionalQ('treatment_sessions'),q('products','*'),q('inventory_lots','*'),q('prescriptions','*','prescribed_at'),q('prescription_items'),q('dispensing_orders','*','created_at'),optionalQ('dispensing_items'),q('invoices','*','created_at'),optionalQ('invoice_items'),optionalQ('payments'),['admin','super_admin'].includes(role)?optionalQ('audit_logs','*','created_at'):Promise.resolve([])]);
-Object.assign(data,{patients,allergies,appointments,services,encounters,treatments,products,lots,prescriptions,rxItems,dispensing,dispensingItems,invoices,invoiceItems,payments,audit:auditRows});render()}
-function opts(arr,label){return '<option value="">เลือก</option>'+arr.map(x=>`<option value="${x.id}">${esc(label(x))}</option>`).join('')}
-function show(view){$$('.view').forEach(v=>v.classList.toggle('active',v.id===view));$$('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view))}
-function applyRole(){$$('[data-perm]').forEach(el=>el.classList.toggle('hidden',!can(el.dataset.perm)));const badge=$('#role'),roles=window.ChananyaRuntime?.rolesOf(profile)||{systemRole:profile?.system_role||'staff',operationalRole:profile?.role||'viewer',effectiveRole:role};badge.textContent=role;badge.dataset.systemRole=roles.systemRole;badge.dataset.operationalRole=roles.operationalRole;badge.dataset.effectiveRole=roles.effectiveRole;const titles={super_admin:'Super Admin Control Center',admin:'Admin Control Center',practitioner:'Doctor Workstation',doctor:'Doctor Workstation',reception:'Reception Workstation',pharmacy:'Pharmacy Workstation',production:'Production Workstation',inventory:'Inventory Workstation',billing:'Billing Workstation',viewer:'Read-only'};$('#workspace-title').textContent=titles[role]||titles.viewer;show(home[role]||'dashboard')}
-function render(){const po=opts(data.patients,p=>`${p.hn} — ${patientName(p.id)}`),so=opts(data.services,s=>`${s.service_code} — ${s.name_th}`),eo=opts(data.encounters,e=>`${e.encounter_no} — ${patientName(e.patient_id)}`),pro=opts(data.products,p=>`${p.sku} — ${p.name_th}`);
-['#appt-patient','#enc-patient'].forEach(s=>$(s).innerHTML=po);['#appt-service','#enc-service'].forEach(s=>$(s).innerHTML=so);$('#rx-encounter').innerHTML=eo;['#rx-product','#lot-product'].forEach(s=>$(s).innerHTML=pro);
-const open=data.invoices.filter(i=>num(i.balance_due)>0&&!['void','cancelled'].includes(i.status));$('#pay-invoice').innerHTML=opts(open,i=>`${i.invoice_number} — ${patientName(i.patient_id)} — ฿${money(i.balance_due)}`);
-$('#stat-p').textContent=data.patients.length;$('#stat-a').textContent=data.appointments.filter(a=>a.appointment_date===today()).length;$('#stat-d').textContent=data.encounters.filter(e=>!['closed','cancelled'].includes(e.status)).length;$('#stat-rx').textContent=data.dispensing.filter(o=>!['submitted_to_billing','billed','cancelled','rejected'].includes(o.status)).length;$('#stat-b').textContent=data.dispensing.filter(o=>o.status==='submitted_to_billing').length;
-renderPatients();renderAppointments();renderEncounters();renderInventory();renderPharmacy();renderBilling();renderDashboard();renderAudit();bindDynamic()}
-function renderPatients(){$('#patient-list').innerHTML=data.patients.map(p=>{const a=data.allergies.filter(x=>x.patient_id===p.id&&x.status==='active');return `<div class="item"><div><b>${esc(p.hn)} ${esc(patientName(p.id))}</b><small>${esc(p.phone||'-')}${a.length?' • แพ้: '+esc(a.map(x=>x.allergen_name).join(', ')):''}</small></div><span class="badge">${esc(p.payment_right||'ทั่วไป')}</span></div>`}).join('')||'<p class="muted">ยังไม่มีผู้รับบริการ</p>'}
-function renderAppointments(){$('#appointment-list').innerHTML=[...data.appointments].sort((a,b)=>(a.appointment_date+(a.appointment_time||'')).localeCompare(b.appointment_date+(b.appointment_time||''))).map(a=>`<div class="item"><div><b>${esc(a.appointment_date)} ${esc(a.appointment_time||'')}</b><small>${esc(patientName(a.patient_id))} • ${esc(data.services.find(s=>s.id===a.service_id)?.name_th||'-')}</small></div><span class="badge">${esc(a.status)}</span></div>`).join('')||'<p class="muted">ยังไม่มีนัด</p>'}
-function renderEncounters(){$('#encounter-list').innerHTML=data.encounters.slice(0,20).map(e=>`<div class="item"><div><b>${esc(e.encounter_no)} • ${esc(patientName(e.patient_id))}</b><small>${esc(e.thai_diagnosis||e.chief_complaint||'-')}</small></div><span class="badge">${esc(e.status)}</span></div>`).join('')||'<p class="muted">ยังไม่มี Encounter</p>'}
-function renderInventory(){$('#inventory-list').innerHTML=[...data.lots].sort((a,b)=>(a.expiry_date||'9999').localeCompare(b.expiry_date||'9999')).map(l=>`<div class="item"><div><b>${esc(product(l.product_id)?.name_th||'-')} • Lot ${esc(l.lot_number)}</b><small>EXP ${esc(l.expiry_date||'-')} • ${esc(l.storage_location||'-')}</small></div><span class="badge">${num(l.current_quantity)} ${esc(l.unit)}</span></div>`).join('')||'<p class="muted">ยังไม่มี Lot</p>'}
-function allergyText(patientId){const a=data.allergies.filter(x=>x.patient_id===patientId&&x.status==='active');return a.length?a.map(x=>x.allergen_name+(x.reaction?` (${x.reaction})`:'' )).join(', '):'ไม่พบข้อมูลการแพ้'}
-function renderPharmacy(){$('#pharmacy-list').innerHTML=data.dispensing.map(o=>{const rx=rxForOrder(o),enc=encounterForRx(rx),items=data.rxItems.filter(i=>i.prescription_id===rx?.id),buttons=[];if(o.status==='waiting')buttons.push(`<button class="btn primary" data-action="review" data-id="${o.id}">Review</button>`);if(o.status==='reviewed')buttons.push(`<button class="btn primary" data-action="prepare" data-id="${o.id}">Prepare</button>`);if(o.status==='prepared')buttons.push(`<button class="btn primary" data-action="dispense" data-id="${o.id}">Dispense FEFO</button>`);if(['dispensed','submitted_to_billing','billed'].includes(o.status)){buttons.push(`<button class="btn ghost" data-action="print-rx" data-id="${o.id}">Print ใบสั่งยา</button><button class="btn ghost" data-action="print-label" data-id="${o.id}">Print ฉลาก</button>`)}if(o.status==='dispensed')buttons.push(`<button class="btn primary" data-action="submit-billing" data-id="${o.id}">Submit to Billing</button>`);return `<div class="item column"><div class="wide"><div class="row"><b>${esc(o.queue_number||'-')} • ${esc(patientName(rx?.patient_id))}</b><span class="badge">${esc(o.status)}</span></div><small>RX ${esc(rx?.prescription_no||'-')} • ผู้สั่ง ${esc(rx?.prescriber_id||'-')}</small><div class="alert"><b>Allergy:</b> ${esc(allergyText(rx?.patient_id))}</div><small>Diagnosis: ${esc(enc?.thai_diagnosis||enc?.modern_diagnosis||'-')}</small>${items.map(i=>`<div class="drug"><b>${esc(product(i.product_id)?.name_th||'-')}</b> ${num(i.quantity_prescribed)} ${esc(i.unit)} • ${esc(i.dose||'-')} • ${esc(i.frequency||'-')} • ${esc(i.duration||'-')}</div>`).join('')}<div class="right">${buttons.join('')}</div></div></div>`}).join('')||'<p class="muted">ไม่มีคิวจ่ายยา</p>'}
-function billingOrderRows(){return data.dispensing.filter(o=>o.status==='submitted_to_billing')}
-function renderBilling(){$('#billing-queue').innerHTML=billingOrderRows().map(o=>{const rx=rxForOrder(o),enc=encounterForRx(rx),di=data.dispensingItems.filter(x=>x.dispensing_order_id===o.id),med=di.reduce((s,x)=>s+num(x.quantity_dispensed)*num(x.unit_price),0);return `<div class="item"><div><b>${esc(o.queue_number)} • ${esc(patientName(rx?.patient_id))}</b><small>${esc(enc?.encounter_no||'-')} • ค่ายาที่จ่ายจริง ฿${money(med)}</small></div><button class="btn primary" data-action="invoice" data-id="${o.id}">สร้าง Invoice</button></div>`}).join('')||'<p class="muted">ไม่มีรายการรอการเงิน</p>';$('#invoice-list').innerHTML=data.invoices.map(i=>`<div class="item"><div><b>${esc(i.invoice_number)} • ${esc(patientName(i.patient_id))}</b><small>รวม ฿${money(i.grand_total)} • ชำระ ฿${money(i.paid_amount)} • คงเหลือ ฿${money(i.balance_due)}</small></div><span class="badge">${esc(i.status)}</span></div>`).join('')||'<p class="muted">ยังไม่มี Invoice</p>'}
-function renderDashboard(){const rows=[];if(can('doctor'))rows.push(...data.appointments.filter(a=>a.appointment_date===today()).slice(0,5).map(a=>`<div class="item"><div><b>นัด ${esc(a.appointment_time||'')}</b><small>${esc(patientName(a.patient_id))}</small></div><span class="badge">Doctor</span></div>`));if(can('pharmacy'))rows.push(...data.dispensing.filter(o=>!['submitted_to_billing','billed'].includes(o.status)).slice(0,5).map(o=>`<div class="item"><div><b>${esc(o.queue_number||'-')}</b><small>${esc(patientName(rxForOrder(o)?.patient_id))}</small></div><span class="badge">${esc(o.status)}</span></div>`));if(can('billing'))rows.push(...billingOrderRows().slice(0,5).map(o=>`<div class="item"><div><b>${esc(o.queue_number||'-')}</b><small>${esc(patientName(rxForOrder(o)?.patient_id))}</small></div><span class="badge">Billing</span></div>`));$('#work-list').innerHTML=rows.join('')||'<p class="muted">ไม่มีงานค้าง</p>'}
-function renderAudit(){$('#audit-list').innerHTML=data.audit.slice(0,100).map(a=>`<div class="item audit-item"><div><b>${esc(a.action)} • ${esc(a.entity)}</b><small>${new Date(a.created_at).toLocaleString('th-TH')} • ${esc(a.user_id||'-')}</small></div></div>`).join('')||'<p class="muted">ไม่มีข้อมูลหรือไม่มีสิทธิ์</p>'}
-function bindDynamic(){$$('[data-action]').forEach(b=>b.onclick=()=>runAction(b.dataset.action,b.dataset.id))}
-async function runAction(action,id){try{if(action==='review')await setPharmacyStatus(id,'reviewed');if(action==='prepare')await setPharmacyStatus(id,'prepared');if(action==='dispense')await dispense(id);if(action==='submit-billing')await submitBilling(id);if(action==='invoice')await createInvoice(id);if(action==='print-rx')printPrescription(id);if(action==='print-label')printLabels(id)}catch(e){fail(e)}}
-async function savePatient(e){e.preventDefault();const payload={hn:$('#p-hn').value.trim(),prefix:$('#p-prefix').value.trim()||null,first_name:$('#p-first').value.trim(),last_name:$('#p-last').value.trim(),national_id:$('#p-national').value.trim()||null,gender:$('#p-gender').value||null,date_of_birth:$('#p-dob').value||null,phone:$('#p-phone').value.trim()||null,address:$('#p-address').value.trim()||null,payment_right:$('#p-right').value.trim()||null,emergency_contact_name:$('#p-emergency').value.trim()||null,created_by:session.user.id};const r=await db.from('patients').insert(payload).select().single();if(r.error)throw r.error;const a=$('#p-allergy').value.trim();if(a){const ar=await db.from('patient_allergies').insert({patient_id:r.data.id,allergen_type:'other',allergen_name:a,status:'active',created_by:session.user.id});if(ar.error)throw ar.error}await audit('create','patients',r.data.id);e.target.reset();await loadAll();toast('บันทึกผู้รับบริการแล้ว')}
-async function saveAppointment(e){e.preventDefault();const r=await db.from('appointments').insert({patient_id:$('#appt-patient').value,appointment_date:$('#appt-date').value,appointment_time:$('#appt-time').value||null,service_id:$('#appt-service').value||null,room:$('#appt-room').value||null,notes:$('#appt-note').value||null,status:'scheduled',created_by:session.user.id}).select().single();if(r.error)throw r.error;await audit('create','appointments',r.data.id);e.target.reset();$('#appt-date').value=today();await loadAll();toast('บันทึกนัดแล้ว')}
-function bp(){const [s,d]=($('#enc-bp').value||'').split('/').map(Number);return{systolic_bp:s||null,diastolic_bp:d||null}}
-async function saveEncounter(e){e.preventDefault();const er=await db.from('encounters').insert({encounter_no:`ENC-${Date.now()}`,patient_id:$('#enc-patient').value,status:'completed',chief_complaint:$('#enc-chief').value,present_illness:$('#enc-history').value||null,past_history:$('#enc-past').value||null,current_medications:$('#enc-past').value||null,red_flags:$('#enc-exam').value||null,general_examination:$('#enc-exam').value||null,modern_diagnosis:$('#enc-modern').value||null,thai_diagnosis:$('#enc-diagnosis').value,element_principle:$('#enc-element').value,seasonal_principle:$('#enc-season').value,practitioner_id:session.user.id,created_by:session.user.id,completed_at:new Date().toISOString()}).select().single();if(er.error)throw er.error;const id=er.data.id;let r=await db.from('vital_signs').insert({encounter_id:id,temperature:num($('#enc-temp').value)||null,pulse:num($('#enc-pulse').value)||null,respiration:num($('#enc-rr').value)||null,spo2:num($('#enc-spo2').value)||null,...bp(),recorded_by:session.user.id});if(r.error)throw r.error;const pain=[];if($('#enc-before').value!=='')pain.push({encounter_id:id,assessment_stage:'before',score:num($('#enc-before').value),assessed_by:session.user.id});if($('#enc-after').value!=='')pain.push({encounter_id:id,assessment_stage:'after',score:num($('#enc-after').value),assessed_by:session.user.id});if(pain.length){r=await db.from('pain_assessments').insert(pain);if(r.error)throw r.error}const service=$('#enc-service').value||null;const or=await db.from('treatment_orders').insert({encounter_id:id,service_id:service,order_type:'treatment',instructions:$('#enc-treatment').value||null,treatment_area:$('#enc-area').value||null,status:'completed',ordered_by:session.user.id}).select().single();if(or.error)throw or.error;r=await db.from('treatment_sessions').insert({treatment_order_id:or.data.id,encounter_id:id,service_id:service,practitioner_id:session.user.id,started_at:new Date().toISOString(),ended_at:new Date().toISOString(),treatment_area:$('#enc-area').value||null,procedure_notes:$('#enc-treatment').value||null,outcome:$('#enc-outcome').value||null,status:'completed'});if(r.error)throw r.error;if($('#enc-next').value||$('#enc-advice').value){r=await db.from('followups').insert({encounter_id:id,next_visit_date:$('#enc-next').value||null,advice:$('#enc-advice').value||null,outcome:$('#enc-outcome').value||null,created_by:session.user.id});if(r.error)throw r.error}await audit('complete','encounters',id);e.target.reset();await loadAll();toast('บันทึก Encounter และ Treatment แล้ว')}
-async function savePrescription(e){e.preventDefault();const enc=data.encounters.find(x=>x.id===$('#rx-encounter').value);if(!enc)throw new Error('ไม่พบ Encounter');const rx=await db.from('prescriptions').insert({prescription_no:`RX-${Date.now()}`,encounter_id:enc.id,patient_id:enc.patient_id,prescriber_id:session.user.id,status:'sent_to_pharmacy',clinical_notes:$('#rx-instructions').value||null,sent_to_pharmacy_at:new Date().toISOString()}).select().single();if(rx.error)throw rx.error;let r=await db.from('prescription_items').insert({prescription_id:rx.data.id,product_id:$('#rx-product').value,dose:$('#rx-dose').value||null,frequency:$('#rx-frequency').value||null,duration:$('#rx-duration').value||null,route:$('#rx-route').value||null,quantity_prescribed:num($('#rx-qty').value),unit:$('#rx-unit').value,instructions:$('#rx-instructions').value||null,status:'ordered'});if(r.error)throw r.error;r=await db.from('dispensing_orders').insert({prescription_id:rx.data.id,queue_number:`Q-${String(Date.now()).slice(-6)}`,status:'waiting'});if(r.error)throw r.error;await audit('send_to_pharmacy','prescriptions',rx.data.id);e.target.reset();await loadAll();toast('ส่งใบสั่งยาไป Pharmacy แล้ว')}
-async function setPharmacyStatus(id,status){const o=data.dispensing.find(x=>x.id===id),fields={status};if(status==='reviewed'){fields.reviewed_by=session.user.id;fields.reviewed_at=new Date().toISOString()}if(status==='prepared'){fields.prepared_by=session.user.id;fields.prepared_at=new Date().toISOString()}const r=await db.from('dispensing_orders').update(fields).eq('id',id);if(r.error)throw r.error;await audit(status,'dispensing_orders',id);await loadAll();toast(`สถานะ ${status}`)}
-async function dispense(id){const o=data.dispensing.find(x=>x.id===id),rx=rxForOrder(o),items=data.rxItems.filter(i=>i.prescription_id===rx.id);for(const item of items){let need=num(item.quantity_prescribed);const lots=data.lots.filter(l=>l.product_id===item.product_id&&l.status==='active'&&num(l.current_quantity)>0&&(!l.expiry_date||l.expiry_date>=today())).sort((a,b)=>(a.expiry_date||'9999').localeCompare(b.expiry_date||'9999'));const available=lots.reduce((s,l)=>s+num(l.current_quantity),0);if(available<need)throw new Error(`${product(item.product_id)?.name_th||'ยา'} มีไม่พอ: ต้องการ ${need} มี ${available}`);const price=num(prompt(`ราคาขายต่อหน่วยของ ${product(item.product_id)?.name_th||'ยา'} (บาท)`,String(product(item.product_id)?.standard_cost||0)));for(const lot of lots){if(need<=0)break;const take=Math.min(need,num(lot.current_quantity));const di=await db.from('dispensing_items').insert({dispensing_order_id:id,prescription_item_id:item.id,inventory_lot_id:lot.id,quantity_dispensed:take,unit:item.unit,unit_price:price,status:'dispensed'}).select().single();if(di.error)throw di.error;const sm=await db.from('stock_movements').insert({inventory_lot_id:lot.id,movement_type:'dispense',quantity:take,direction:'out',reference_type:'dispensing_item',reference_id:di.data.id,reason:`Prescription ${rx.prescription_no}`,performed_by:session.user.id});if(sm.error)throw sm.error;need-=take}}
-let r=await db.from('dispensing_orders').update({status:'dispensed',dispensed_by:session.user.id,dispensed_at:new Date().toISOString()}).eq('id',id);if(r.error)throw r.error;r=await db.from('prescriptions').update({status:'dispensed'}).eq('id',rx.id);if(r.error)throw r.error;await audit('dispense','dispensing_orders',id);await loadAll();toast('จ่ายยาและตัด Stock ตาม FEFO แล้ว')}
-async function submitBilling(id){const o=data.dispensing.find(x=>x.id===id),rx=rxForOrder(o);let r=await db.from('dispensing_orders').update({status:'submitted_to_billing'}).eq('id',id);if(r.error)throw r.error;r=await db.from('prescriptions').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',rx.id);if(r.error)throw r.error;await audit('submit_to_billing','dispensing_orders',id);await loadAll();toast('ส่งรายการจริงไป Billing แล้ว')}
-async function createInvoice(orderId){const o=data.dispensing.find(x=>x.id===orderId),rx=rxForOrder(o),enc=encounterForRx(rx);if(data.invoices.some(i=>i.encounter_id===enc.id&&!['void','cancelled'].includes(i.status)))throw new Error('Encounter นี้มี Invoice แล้ว');const dis=data.dispensingItems.filter(x=>x.dispensing_order_id===orderId),medicine=dis.reduce((s,x)=>s+num(x.quantity_dispensed)*num(x.unit_price),0),serviceFee=num(prompt('ค่าบริการรักษาที่ทำจริง (บาท)','0')),discount=num(prompt('ส่วนลดรวม (บาท)','0')),grand=Math.max(0,medicine+serviceFee-discount);const ir=await db.from('invoices').insert({invoice_number:`INV-${Date.now()}`,patient_id:rx.patient_id,encounter_id:enc.id,status:'issued',subtotal:medicine+serviceFee,discount_total:discount,tax_total:0,rounding:0,grand_total:grand,paid_amount:0,balance_due:grand,issued_at:new Date().toISOString(),created_by:session.user.id}).select().single();if(ir.error)throw ir.error;const lines=[];if(serviceFee>0)lines.push({invoice_id:ir.data.id,item_type:'service',description:'ค่าตรวจและบริการรักษา',quantity:1,unit_price:serviceFee,line_total:serviceFee});for(const d of dis){const ri=data.rxItems.find(x=>x.id===d.prescription_item_id);lines.push({invoice_id:ir.data.id,item_type:'product',product_id:ri?.product_id||null,dispensing_item_id:d.id,description:product(ri?.product_id)?.name_th||'ยา/สมุนไพร',quantity:d.quantity_dispensed,unit_price:d.unit_price,line_total:num(d.quantity_dispensed)*num(d.unit_price)})}if(lines.length){const lr=await db.from('invoice_items').insert(lines);if(lr.error)throw lr.error}let r=await db.from('dispensing_orders').update({status:'billed'}).eq('id',orderId);if(r.error)throw r.error;await audit('create','invoices',ir.data.id,{orderId});await loadAll();toast('สร้าง Invoice จากรายการจริงแล้ว')}
-async function saveLot(e){e.preventDefault();const qty=num($('#lot-qty').value);const lr=await db.from('inventory_lots').insert({product_id:$('#lot-product').value,lot_number:$('#lot-number').value,expiry_date:$('#lot-exp').value||null,received_quantity:qty,current_quantity:0,unit:$('#lot-unit').value,purchase_cost:num($('#lot-cost').value),storage_location:$('#lot-location').value||null,created_by:session.user.id}).select().single();if(lr.error)throw lr.error;const r=await db.from('stock_movements').insert({inventory_lot_id:lr.data.id,movement_type:'receive',quantity:qty,direction:'in',reference_type:'goods_receipt',reference_id:lr.data.id,performed_by:session.user.id});if(r.error)throw r.error;await audit('receive','inventory_lots',lr.data.id,{qty});e.target.reset();await loadAll();toast('รับเข้า Stock แล้ว')}
-async function savePayment(e){e.preventDefault();const inv=data.invoices.find(x=>x.id===$('#pay-invoice').value),amount=num($('#pay-amount').value);if(!inv)throw new Error('ไม่พบ Invoice');if(amount>num(inv.balance_due))throw new Error('จำนวนรับชำระมากกว่ายอดคงเหลือ');const pr=await db.from('payments').insert({invoice_id:inv.id,payment_reference:`PAY-${Date.now()}`,provider:'manual',channel:$('#pay-channel').value,amount,status:'paid',gateway_transaction_id:$('#pay-note').value||null,paid_at:new Date().toISOString(),received_by:session.user.id}).select().single();if(pr.error)throw pr.error;const paid=num(inv.paid_amount)+amount,balance=Math.max(0,num(inv.grand_total)-paid),status=balance===0?'paid':'partially_paid';let r=await db.from('invoices').update({paid_amount:paid,balance_due:balance,status}).eq('id',inv.id);if(r.error)throw r.error;if(balance===0&&inv.encounter_id){r=await db.from('encounters').update({status:'closed'}).eq('id',inv.encounter_id);if(r.error)throw r.error}await audit('payment','payments',pr.data.id,{invoice:inv.id,amount});e.target.reset();await loadAll();toast(balance===0?'รับชำระและปิด Encounter แล้ว':'บันทึกชำระบางส่วนแล้ว')}
-function printable(title,body){const w=window.open('','_blank','width=820,height=900');w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Arial,"Noto Sans Thai",sans-serif;padding:28px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:8px;text-align:left}.meta{line-height:1.8;margin-bottom:16px}.label{border:1px dashed #333;padding:14px;margin:10px 0;page-break-inside:avoid}@media print{button{display:none}}</style></head><body>${body}<button onclick="print()">Print</button></body></html>`);w.document.close()}
-function printPrescription(orderId){const o=data.dispensing.find(x=>x.id===orderId),rx=rxForOrder(o),p=patient(rx.patient_id),enc=encounterForRx(rx),items=data.rxItems.filter(i=>i.prescription_id===rx.id);printable(`Prescription ${rx.prescription_no}`,`<h1>ใบสั่งยา — Chananya Clinical OS</h1><div class="meta">เลขที่ ${esc(rx.prescription_no)}<br>HN ${esc(p?.hn||'-')} ชื่อ ${esc(patientName(p?.id))}<br>Diagnosis ${esc(enc?.thai_diagnosis||enc?.modern_diagnosis||'-')}<br>Allergy ${esc(allergyText(p?.id))}<br>วันที่ ${new Date(rx.prescribed_at).toLocaleString('th-TH')}</div><table><tr><th>ยา</th><th>จำนวน</th><th>วิธีใช้</th><th>ความถี่</th><th>ระยะเวลา</th></tr>${items.map(i=>`<tr><td>${esc(product(i.product_id)?.name_th||'-')}</td><td>${num(i.quantity_prescribed)} ${esc(i.unit)}</td><td>${esc(i.dose||'-')}</td><td>${esc(i.frequency||'-')}</td><td>${esc(i.duration||'-')}</td></tr>`).join('')}</table><p>ผู้สั่งยา: ${esc(rx.prescriber_id||'-')}</p>`) }
-function printLabels(orderId){const o=data.dispensing.find(x=>x.id===orderId),rx=rxForOrder(o),p=patient(rx.patient_id),rows=data.dispensingItems.filter(x=>x.dispensing_order_id===orderId);printable(`Labels ${rx.prescription_no}`,`<h1>ฉลากยา</h1>${rows.map(d=>{const ri=data.rxItems.find(i=>i.id===d.prescription_item_id),lot=data.lots.find(l=>l.id===d.inventory_lot_id);return `<div class="label"><b>${esc(patientName(p?.id))} • HN ${esc(p?.hn||'-')}</b><h2>${esc(product(ri?.product_id)?.name_th||'-')}</h2><div>จำนวน ${num(d.quantity_dispensed)} ${esc(d.unit)}</div><div>วิธีใช้ ${esc(ri?.dose||'-')} • ${esc(ri?.frequency||'-')}</div><div>คำแนะนำ ${esc(ri?.instructions||'-')}</div><small>Lot ${esc(lot?.lot_number||'-')} • EXP ${esc(lot?.expiry_date||'-')} • RX ${esc(rx.prescription_no)}</small></div>`}).join('')}`)}
-function resetLock(){clearTimeout(lockTimer);lockTimer=setTimeout(()=>$('#lock').classList.add('show'),LOCK_MS)}
-async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(r=>setTimeout(r,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
-async function init(){try{const R=await waitRuntime();db=R.getDb();session=await R.getSession();if(!session){location.replace('login.html');return}profile=await R.getProfile(session.user.id);if(!profile)throw new Error('ไม่พบ Profile');role=R.roleOf(profile)||'viewer';$('#identity').textContent=`${profile.full_name||session.user.email} • ${session.user.email}`;$('#app').classList.remove('hidden');$('#boot').classList.add('hidden');applyRole();await loadAll();resetLock()}catch(e){console.error(e);$('#boot-error').textContent=e.message}}
-$('#main-nav').onclick=e=>{const b=e.target.closest('button[data-view]');if(b&&!b.classList.contains('hidden'))show(b.dataset.view)};$('#logout').onclick=async()=>{await db.auth.signOut();location.replace('login.html')};$('#unlock').onclick=()=>{$('#lock').classList.remove('show');resetLock()};['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,resetLock,{passive:true}));
-[['#patient-form',savePatient],['#appointment-form',saveAppointment],['#encounter-form',saveEncounter],['#prescription-form',savePrescription],['#lot-form',saveLot],['#payment-form',savePayment]].forEach(([s,f])=>$(s).addEventListener('submit',e=>f(e).catch(fail)));$('#appt-date').value=today();init();
+(() => {
+  'use strict';
+
+  const LOCK_MS = 15 * 60 * 1000;
+  const $ = selector => document.querySelector(selector);
+  const $$ = selector => [...document.querySelectorAll(selector)];
+  const num = value => Number(value || 0);
+  const today = () => new Date().toISOString().slice(0, 10);
+  const money = value => num(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
+  let db;
+  let session;
+  let profile;
+  let role = 'viewer';
+  let lockTimer;
+  let patientFilter = '';
+  let editingPatientId = null;
+  const data = {
+    patients: [], allergies: [], appointments: [], encounters: [], prescriptions: [],
+    dispensing: [], dispensingItems: [], rxItems: [], products: [], invoices: [], payments: [], audit: []
+  };
+
+  const viewPermissions = {
+    super_admin: ['all'], admin: ['all'], practitioner: ['patients'], doctor: ['patients'],
+    reception: ['patients'], billing: ['billing'], pharmacy: [], production: [], inventory: [], viewer: []
+  };
+
+  const canView = permission => (viewPermissions[role] || []).includes('all') || (viewPermissions[role] || []).includes(permission);
+
+  function toast(message) {
+    const element = $('#toast');
+    element.textContent = message;
+    element.classList.add('show');
+    setTimeout(() => element.classList.remove('show'), 2400);
+  }
+
+  function fail(error) {
+    console.error(error);
+    alert(error?.message || String(error));
+  }
+
+  function patient(id) { return data.patients.find(item => item.id === id); }
+  function patientName(id) {
+    const item = patient(id);
+    return item ? `${item.prefix || ''}${item.first_name} ${item.last_name}`.trim() : '-';
+  }
+  function product(id) { return data.products.find(item => item.id === id); }
+  function prescriptionFor(order) { return data.prescriptions.find(item => item.id === order?.prescription_id); }
+  function encounterFor(prescription) { return data.encounters.find(item => item.id === prescription?.encounter_id); }
+
+  async function audit(action, entity, entityId, metadata = {}) {
+    try {
+      await db.from('audit_logs').insert({ user_id: session.user.id, action, entity, entity_id: entityId || null, metadata: { ...metadata, role } });
+    } catch (error) {
+      console.warn('Audit write failed', error);
+    }
+  }
+
+  async function query(table, select = '*', order) {
+    let request = db.from(table).select(select);
+    if (order) request = request.order(order, { ascending: false });
+    const result = await request;
+    if (result.error) throw result.error;
+    return result.data || [];
+  }
+
+  async function optionalQuery(table, select = '*', order) {
+    try { return await query(table, select, order); }
+    catch (error) { console.warn(`Optional table unavailable: ${table}`, error); return []; }
+  }
+
+  async function loadAll() {
+    const rows = await Promise.all([
+      optionalQuery('patients', '*', 'created_at'),
+      optionalQuery('patient_allergies'),
+      optionalQuery('appointments'),
+      optionalQuery('encounters', '*', 'started_at'),
+      optionalQuery('prescriptions', '*', 'prescribed_at'),
+      optionalQuery('dispensing_orders', '*', 'created_at'),
+      optionalQuery('dispensing_items'),
+      optionalQuery('prescription_items'),
+      optionalQuery('products', '*'),
+      optionalQuery('invoices', '*', 'created_at'),
+      optionalQuery('payments'),
+      ['admin', 'super_admin'].includes(role) ? optionalQuery('audit_logs', '*', 'created_at') : Promise.resolve([])
+    ]);
+    [data.patients, data.allergies, data.appointments, data.encounters, data.prescriptions, data.dispensing,
+      data.dispensingItems, data.rxItems, data.products, data.invoices, data.payments, data.audit] = rows;
+    render();
+  }
+
+  function options(rows, label) {
+    return '<option value="">เลือก</option>' + rows.map(item => `<option value="${item.id}">${esc(label(item))}</option>`).join('');
+  }
+
+  function show(view) {
+    $$('.view').forEach(element => element.classList.toggle('active', element.id === view));
+    $$('#main-nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function applyRole() {
+    window.ChananyaShell?.mount({ profile, session, active: 'operations' });
+    $$('[data-perm]').forEach(element => element.classList.toggle('hidden', !canView(element.dataset.perm)));
+    const titles = {
+      super_admin: 'ภาพรวมทั้ง Clinical OS', admin: 'ภาพรวมและงานควบคุม', practitioner: 'งานคลินิกที่รอดำเนินการ',
+      doctor: 'งานคลินิกที่รอดำเนินการ', reception: 'ผู้รับบริการและคิวนัดหมาย', pharmacy: 'คิวห้องยาและการผลิต',
+      production: 'งานผลิตและวัตถุดิบ', inventory: 'คลังและวัตถุดิบ', billing: 'งานการเงินที่รอดำเนินการ', viewer: 'ภาพรวมแบบอ่านอย่างเดียว'
+    };
+    $('#workspace-title').textContent = titles[role] || titles.viewer;
+    show(role === 'billing' ? 'billing' : 'dashboard');
+  }
+
+  function render() {
+    const openInvoices = data.invoices.filter(invoice => num(invoice.balance_due) > 0 && !['void', 'cancelled'].includes(invoice.status));
+    $('#pay-invoice').innerHTML = options(openInvoices, invoice => `${invoice.invoice_number} — ${patientName(invoice.patient_id)} — ฿${money(invoice.balance_due)}`);
+    $('#stat-p').textContent = data.patients.length;
+    $('#stat-a').textContent = data.appointments.filter(item => item.appointment_date === today()).length;
+    $('#stat-d').textContent = data.encounters.filter(item => !['closed', 'cancelled'].includes(item.status)).length;
+    $('#stat-rx').textContent = data.dispensing.filter(item => !['submitted_to_billing', 'billed', 'cancelled', 'rejected'].includes(item.status)).length;
+    $('#stat-b').textContent = billingOrders().length;
+    renderPatients();
+    renderBilling();
+    renderDashboard();
+    renderAudit();
+    bindActions();
+  }
+
+  function activeAllergies(patientId) {
+    return data.allergies.filter(item => item.patient_id === patientId && item.status === 'active');
+  }
+
+  function renderPatients() {
+    const term = patientFilter.trim().toLowerCase();
+    const rows = data.patients.filter(item => {
+      const allergies = activeAllergies(item.id).map(allergy => allergy.allergen_name).join(' ');
+      return !term || [item.hn, patientName(item.id), item.phone, allergies].some(value => String(value || '').toLowerCase().includes(term));
+    });
+    $('#patient-list').innerHTML = rows.slice(0, 200).map(item => {
+      const allergies = activeAllergies(item.id);
+      return `<article class="item"><div><b>${esc(item.hn)} • ${esc(patientName(item.id))}</b><small>${esc(item.phone || 'ไม่มีโทรศัพท์')}${allergies.length ? ` • แพ้: ${esc(allergies.map(allergy => allergy.allergen_name).join(', '))}` : ''}</small></div><div class="actions"><span class="badge">${esc(item.payment_right || 'ทั่วไป')}</span>${canView('patients') ? `<button class="btn ghost" data-edit-patient="${esc(item.id)}">แก้ไข</button>` : ''}</div></article>`;
+    }).join('') || '<p class="muted">ไม่พบผู้รับบริการ</p>';
+  }
+
+  function billingOrders() { return data.dispensing.filter(order => order.status === 'submitted_to_billing'); }
+
+  function renderBilling() {
+    $('#billing-queue').innerHTML = billingOrders().map(order => {
+      const prescription = prescriptionFor(order);
+      const encounter = encounterFor(prescription);
+      const dispensed = data.dispensingItems.filter(item => item.dispensing_order_id === order.id);
+      const medicine = dispensed.reduce((sum, item) => sum + num(item.quantity_dispensed) * num(item.unit_price), 0);
+      return `<article class="item column"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(patientName(prescription?.patient_id))}</b><small>${esc(encounter?.encounter_no || '-')} • ค่ายาที่จ่ายจริง ฿${money(medicine)}</small></div><span class="badge">พร้อมออก Invoice</span></div><div class="form"><label>ค่าบริการจริง<input data-service-fee="${order.id}" type="number" min="0" step=".01" value="0"></label><label>ส่วนลด<input data-discount="${order.id}" type="number" min="0" step=".01" value="0"></label><button class="btn primary full" data-action="invoice" data-id="${order.id}">สร้าง Invoice</button></div></article>`;
+    }).join('') || '<p class="muted">ไม่มีรายการรอออก Invoice</p>';
+
+    $('#invoice-list').innerHTML = data.invoices.map(invoice => `<article class="item"><div><b>${esc(invoice.invoice_number)} • ${esc(patientName(invoice.patient_id))}</b><small>รวม ฿${money(invoice.grand_total)} • ชำระ ฿${money(invoice.paid_amount)} • คงเหลือ ฿${money(invoice.balance_due)}</small></div><span class="badge">${esc(invoice.status)}</span></article>`).join('') || '<p class="muted">ยังไม่มี Invoice</p>';
+  }
+
+  function renderDashboard() {
+    const shell = window.ChananyaShell?.mount({ profile, session, active: 'operations' });
+    const routeNames = { appointments: 'จัดการนัดหมาย', clinical: 'เปิดเวชระเบียน', pharmacy: 'ไปห้องยา', production: 'ดูงานผลิต', admin: 'ศูนย์ควบคุม' };
+    $('#quick-actions').innerHTML = (shell?.visibleRoutes || []).filter(route => route.key !== 'operations').map(route => `<a class="item" href="${route.href}"><div><b>${esc(routeNames[route.key] || route.label)}</b><small>${esc(route.note)}</small></div><span class="badge">เปิด →</span></a>`).join('') || '<p class="muted">ไม่มี workstation เพิ่มเติมสำหรับสิทธิ์นี้</p>';
+
+    const work = [];
+    if (window.ChananyaRuntime.can(profile, 'appointments_view')) {
+      work.push(...data.appointments.filter(item => item.appointment_date === today()).slice(0, 4).map(item => `<article class="item"><div><b>นัด ${esc(item.appointment_time || '')}</b><small>${esc(patientName(item.patient_id))}</small></div><span class="badge">นัดหมาย</span></article>`));
+    }
+    if (window.ChananyaRuntime.can(profile, 'clinical_read')) {
+      work.push(...data.encounters.filter(item => !['closed', 'cancelled'].includes(item.status)).slice(0, 4).map(item => `<a class="item" href="/clinical-v3.html?encounter=${encodeURIComponent(item.id)}"><div><b>${esc(item.encounter_no || '-')}</b><small>${esc(patientName(item.patient_id))} • ${esc(item.chief_complaint || 'ยังไม่มีอาการสำคัญ')}</small></div><span class="badge">เวชระเบียน</span></a>`));
+    }
+    if (window.ChananyaRuntime.can(profile, 'pharmacy_operate')) {
+      work.push(...data.dispensing.filter(item => !['submitted_to_billing', 'billed', 'cancelled'].includes(item.status)).slice(0, 4).map(item => `<a class="item" href="/pharmacy.html"><div><b>${esc(item.queue_number || '-')}</b><small>${esc(patientName(prescriptionFor(item)?.patient_id))}</small></div><span class="badge">${esc(item.status)}</span></a>`));
+    }
+    if (canView('billing')) {
+      work.push(...billingOrders().slice(0, 4).map(item => `<button class="item" data-go-view="billing"><div><b>${esc(item.queue_number || '-')}</b><small>${esc(patientName(prescriptionFor(item)?.patient_id))}</small></div><span class="badge">การเงิน</span></button>`));
+    }
+    $('#work-list').innerHTML = work.join('') || '<p class="muted">ไม่มีงานค้างในขอบเขตสิทธิ์นี้</p>';
+  }
+
+  function renderAudit() {
+    $('#audit-list').innerHTML = data.audit.slice(0, 100).map(item => `<article class="item audit-item"><div><b>${esc(item.action)} • ${esc(item.entity)}</b><small>${new Date(item.created_at).toLocaleString('th-TH')} • ${esc(item.user_id || '-')}</small></div></article>`).join('') || '<p class="muted">ไม่มีข้อมูลหรือไม่มีสิทธิ์</p>';
+  }
+
+  function bindActions() {
+    $$('[data-action="invoice"]').forEach(button => { button.onclick = () => createInvoice(button.dataset.id).catch(fail); });
+    $$('[data-go-view]').forEach(button => { button.onclick = () => show(button.dataset.goView); });
+  }
+
+  function resetPatientForm() {
+    editingPatientId = null;
+    $('#patient-form').reset();
+    $('#patient-submit').textContent = 'บันทึกผู้รับบริการ';
+    $('#patient-cancel').classList.add('hidden');
+  }
+
+  function beginPatientEdit(patientId) {
+    const item = patient(patientId);
+    if (!item) return;
+    editingPatientId = patientId;
+    $('#p-hn').value = item.hn || '';
+    $('#p-prefix').value = item.prefix || '';
+    $('#p-first').value = item.first_name || '';
+    $('#p-last').value = item.last_name || '';
+    $('#p-national').value = item.national_id || '';
+    $('#p-gender').value = item.gender || '';
+    $('#p-dob').value = item.date_of_birth || '';
+    $('#p-phone').value = item.phone || '';
+    $('#p-address').value = item.address || '';
+    $('#p-right').value = item.payment_right || '';
+    $('#p-emergency').value = item.emergency_contact_name || '';
+    $('#p-allergy').value = '';
+    $('#patient-submit').textContent = 'บันทึกการแก้ไข';
+    $('#patient-cancel').classList.remove('hidden');
+    $('#patient-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function savePatient(event) {
+    event.preventDefault();
+    const payload = {
+      hn: $('#p-hn').value.trim(), prefix: $('#p-prefix').value.trim() || null,
+      first_name: $('#p-first').value.trim(), last_name: $('#p-last').value.trim(),
+      national_id: $('#p-national').value.trim() || null, gender: $('#p-gender').value || null,
+      date_of_birth: $('#p-dob').value || null, phone: $('#p-phone').value.trim() || null,
+      address: $('#p-address').value.trim() || null, payment_right: $('#p-right').value.trim() || null,
+      emergency_contact_name: $('#p-emergency').value.trim() || null
+    };
+    const result = editingPatientId
+      ? await db.from('patients').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingPatientId).select().single()
+      : await db.from('patients').insert({ ...payload, created_by: session.user.id }).select().single();
+    if (result.error) throw result.error;
+    const allergy = $('#p-allergy').value.trim();
+    const alreadyRecorded = activeAllergies(result.data.id).some(item => String(item.allergen_name || '').toLowerCase() === allergy.toLowerCase());
+    if (allergy && !alreadyRecorded) {
+      const allergyResult = await db.from('patient_allergies').insert({ patient_id: result.data.id, allergen_type: 'other', allergen_name: allergy, status: 'active', created_by: session.user.id });
+      if (allergyResult.error) throw allergyResult.error;
+    }
+    await audit(editingPatientId ? 'update' : 'create', 'patients', result.data.id);
+    const wasEditing = Boolean(editingPatientId);
+    resetPatientForm();
+    await loadAll();
+    toast(wasEditing ? 'แก้ไขข้อมูลผู้รับบริการแล้ว' : 'บันทึกผู้รับบริการแล้ว');
+  }
+
+  async function createInvoice(orderId) {
+    const order = data.dispensing.find(item => item.id === orderId);
+    const prescription = prescriptionFor(order);
+    const encounter = encounterFor(prescription);
+    if (!order || !prescription || !encounter) throw new Error('ข้อมูลใบสั่งยาหรือ Encounter ไม่ครบ');
+    if (data.invoices.some(invoice => invoice.encounter_id === encounter.id && !['void', 'cancelled'].includes(invoice.status))) throw new Error('Encounter นี้มี Invoice แล้ว');
+    const dispensed = data.dispensingItems.filter(item => item.dispensing_order_id === orderId);
+    const medicine = dispensed.reduce((sum, item) => sum + num(item.quantity_dispensed) * num(item.unit_price), 0);
+    const serviceFee = num(document.querySelector(`[data-service-fee="${CSS.escape(orderId)}"]`)?.value);
+    const discount = num(document.querySelector(`[data-discount="${CSS.escape(orderId)}"]`)?.value);
+    const grand = Math.max(0, medicine + serviceFee - discount);
+    const invoiceResult = await db.from('invoices').insert({ invoice_number: `INV-${Date.now()}`, patient_id: prescription.patient_id, encounter_id: encounter.id, status: 'issued', subtotal: medicine + serviceFee, discount_total: discount, tax_total: 0, rounding: 0, grand_total: grand, paid_amount: 0, balance_due: grand, issued_at: new Date().toISOString(), created_by: session.user.id }).select().single();
+    if (invoiceResult.error) throw invoiceResult.error;
+    const lines = [];
+    if (serviceFee > 0) lines.push({ invoice_id: invoiceResult.data.id, item_type: 'service', description: 'ค่าตรวจและบริการรักษา', quantity: 1, unit_price: serviceFee, line_total: serviceFee });
+    for (const item of dispensed) {
+      const prescribed = data.rxItems.find(row => row.id === item.prescription_item_id);
+      lines.push({ invoice_id: invoiceResult.data.id, item_type: 'product', product_id: prescribed?.product_id || null, dispensing_item_id: item.id, description: product(prescribed?.product_id)?.name_th || 'ยา/สมุนไพร', quantity: item.quantity_dispensed, unit_price: item.unit_price, line_total: num(item.quantity_dispensed) * num(item.unit_price) });
+    }
+    if (lines.length) {
+      const lineResult = await db.from('invoice_items').insert(lines);
+      if (lineResult.error) throw lineResult.error;
+    }
+    const orderResult = await db.from('dispensing_orders').update({ status: 'billed' }).eq('id', orderId);
+    if (orderResult.error) throw orderResult.error;
+    await audit('create', 'invoices', invoiceResult.data.id, { orderId });
+    await loadAll();
+    toast('สร้าง Invoice แล้ว');
+  }
+
+  async function savePayment(event) {
+    event.preventDefault();
+    const invoice = data.invoices.find(item => item.id === $('#pay-invoice').value);
+    const amount = num($('#pay-amount').value);
+    if (!invoice) throw new Error('ไม่พบ Invoice');
+    if (amount > num(invoice.balance_due)) throw new Error('จำนวนรับชำระมากกว่ายอดคงเหลือ');
+    const paymentResult = await db.from('payments').insert({ invoice_id: invoice.id, payment_reference: `PAY-${Date.now()}`, provider: 'manual', channel: $('#pay-channel').value, amount, status: 'paid', gateway_transaction_id: $('#pay-note').value || null, paid_at: new Date().toISOString(), received_by: session.user.id }).select().single();
+    if (paymentResult.error) throw paymentResult.error;
+    const paid = num(invoice.paid_amount) + amount;
+    const balance = Math.max(0, num(invoice.grand_total) - paid);
+    const status = balance === 0 ? 'paid' : 'partially_paid';
+    let result = await db.from('invoices').update({ paid_amount: paid, balance_due: balance, status }).eq('id', invoice.id);
+    if (result.error) throw result.error;
+    if (balance === 0 && invoice.encounter_id) {
+      result = await db.from('encounters').update({ status: 'closed' }).eq('id', invoice.encounter_id);
+      if (result.error) throw result.error;
+    }
+    await audit('payment', 'payments', paymentResult.data.id, { invoice: invoice.id, amount });
+    event.target.reset();
+    await loadAll();
+    toast(balance === 0 ? 'รับชำระและปิด Encounter แล้ว' : 'บันทึกชำระบางส่วนแล้ว');
+  }
+
+  function resetLock() {
+    clearTimeout(lockTimer);
+    lockTimer = setTimeout(() => $('#lock').classList.add('show'), LOCK_MS);
+  }
+
+  async function init() {
+    try {
+      const runtime = window.ChananyaRuntime;
+      if (!runtime) throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
+      db = runtime.getDb();
+      session = await runtime.getSession();
+      if (!session) { location.replace('/login.html'); return; }
+      profile = await runtime.getProfile(session.user.id);
+      if (!profile) throw new Error('ไม่พบ Profile');
+      role = runtime.roleOf(profile) || 'viewer';
+      applyRole();
+      $('#app').classList.remove('hidden');
+      $('#boot').classList.add('hidden');
+      await loadAll();
+      resetLock();
+    } catch (error) {
+      console.error(error);
+      $('#boot-error').textContent = error.message;
+    }
+  }
+
+  $('#main-nav').addEventListener('click', event => {
+    const button = event.target.closest('button[data-view]');
+    if (button && !button.classList.contains('hidden')) show(button.dataset.view);
+  });
+  $('#patient-search').addEventListener('input', event => { patientFilter = event.target.value; renderPatients(); });
+  $('#patient-list').addEventListener('click', event => {
+    const button = event.target.closest('[data-edit-patient]');
+    if (button) beginPatientEdit(button.dataset.editPatient);
+  });
+  $('#patient-form').addEventListener('submit', event => savePatient(event).catch(fail));
+  $('#patient-cancel').addEventListener('click', resetPatientForm);
+  $('#payment-form').addEventListener('submit', event => savePayment(event).catch(fail));
+  $('#logout').addEventListener('click', async () => { await db.auth.signOut(); location.replace('/login.html'); });
+  $('#unlock').addEventListener('click', () => { $('#lock').classList.remove('show'); resetLock(); });
+  ['click', 'keydown', 'touchstart'].forEach(name => document.addEventListener(name, resetLock, { passive: true }));
+  init();
 })();

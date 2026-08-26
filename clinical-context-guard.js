@@ -24,47 +24,8 @@
     throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
   }
 
-  function addStyles() {
-    if ($('#clinical-context-guard-style')) return;
-    const style = document.createElement('style');
-    style.id = 'clinical-context-guard-style';
-    style.textContent = `
-      #clinical-context-guard{margin-top:14px;border:1px solid #cfded6;border-radius:14px;overflow:hidden;background:#f8fbf9}
-      .ccg-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;background:#e7f1eb}
-      .ccg-head strong{color:#173f31}.ccg-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px}
-      .ccg-cell{min-width:0;padding:10px;border:1px solid #dce7e1;border-radius:11px;background:#fff}
-      .ccg-cell b,.ccg-cell small{display:block}.ccg-cell small{color:#65736c;margin-bottom:4px}.ccg-wide{grid-column:1/-1}
-      .ccg-alert{border-color:#e3b8b8;background:#fff4f4;color:#7d2525}.ccg-warning{border-color:#ead3a3;background:#fff8e8;color:#744b00}
-      .ccg-chips{display:flex;gap:7px;flex-wrap:wrap}.ccg-chip{padding:6px 9px;border-radius:999px;font-size:.82rem;font-weight:800;background:#eef2ef;color:#5d6963}
-      .ccg-chip.ready{background:#dff1e7;color:#1d6746}.ccg-chip.missing{background:#fff0db;color:#8a5600}.ccg-chip.locked{background:#e8e1f5;color:#533488}
-      #clinical-context-guard[aria-busy="true"]{opacity:.66}
-      @media(max-width:760px){.ccg-grid{grid-template-columns:1fr 1fr}.ccg-wide{grid-column:1/-1}}
-      @media(max-width:480px){.ccg-grid{grid-template-columns:1fr}.ccg-wide{grid-column:auto}.ccg-head{align-items:flex-start;flex-direction:column}}
-      @media print{#clinical-context-guard{break-inside:avoid}.ccg-head{background:#fff}}
-    `;
-    document.head.appendChild(style);
-  }
-
   function mount() {
-    let host = $('#clinical-context-guard');
-    if (host) return host;
-    const info = $('#encounter-info');
-    if (!info) return null;
-    host = document.createElement('section');
-    host.id = 'clinical-context-guard';
-    host.setAttribute('aria-live', 'polite');
-    host.innerHTML = `
-      <div class="ccg-head"><strong>Clinical Context & Readiness Guard</strong><span id="ccg-state">เลือก Encounter</span></div>
-      <div class="ccg-grid">
-        <div class="ccg-cell"><small>ผู้รับบริการ</small><b id="ccg-patient">—</b><span id="ccg-demographic">—</span></div>
-        <div class="ccg-cell"><small>Encounter</small><b id="ccg-encounter">—</b><span id="ccg-encounter-meta">—</span></div>
-        <div class="ccg-cell"><small>อาการสำคัญ</small><span id="ccg-chief">—</span></div>
-        <div class="ccg-cell ccg-wide" id="ccg-allergy-box"><small>Allergy / ข้อควรระวัง</small><div id="ccg-allergies">ยังไม่เลือก Encounter</div></div>
-        <div class="ccg-cell ccg-wide" id="ccg-redflag-box"><small>Red flags / ผลตรวจเดิม</small><div id="ccg-redflags">ยังไม่เลือก Encounter</div></div>
-        <div class="ccg-cell ccg-wide"><small>Sign-off readiness</small><div class="ccg-chips" id="ccg-readiness"></div></div>
-      </div>`;
-    info.insertAdjacentElement('afterend', host);
-    return host;
+    return $('#clinical-context-guard');
   }
 
   function text(selector, value) {
@@ -218,7 +179,6 @@
   }
 
   async function init() {
-    addStyles();
     const runtime = await waitRuntime();
     db = runtime.getDb();
     const session = await runtime.getSession();
@@ -229,7 +189,7 @@
     document.addEventListener('submit', event => {
       if (watchedForms.has(event.target?.id)) scheduleRefresh(1100);
     }, true);
-    ['chananya:diagnosis-saved', 'chananya:signoff-changed'].forEach(eventName => {
+    ['chananya:diagnosis-saved', 'chananya:signoff-changed', 'chananya:clinical-data-changed'].forEach(eventName => {
       window.addEventListener(eventName, () => scheduleRefresh(150));
     });
     window.ChananyaClinicalContext = Object.freeze({ refresh: () => scheduleRefresh() });

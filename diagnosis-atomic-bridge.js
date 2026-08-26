@@ -4,13 +4,8 @@
   if (!runtime) return;
   const $ = s => document.querySelector(s);
 
-  const timer = setInterval(() => {
-    const form = $('#diagnosis-form');
-    if (!form || !window.ChananyaTTMContext) return;
-    clearInterval(timer);
-    install(form);
-  }, 250);
-  setTimeout(() => clearInterval(timer), 15000);
+  const form = $('#diagnosis-form');
+  if (form && window.ChananyaTTMContext) install(form);
 
   function install(form){
     if(form.dataset.atomicDiagnosis==='1') return;

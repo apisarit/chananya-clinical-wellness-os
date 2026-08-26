@@ -1,14 +1,71 @@
 (() => {
   'use strict';
-  const $=(s,r=document)=>r.querySelector(s);
-  let db=null, session=null, profile=null;
-  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(r=>setTimeout(r,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
-  function mount(){if($('#clinical-audit'))return;const nav=$('#admin-nav'),main=$('main');if(!nav||!main)return;const b=document.createElement('button');b.dataset.view='clinical-audit';b.textContent='Clinical Audit';nav.appendChild(b);const sec=document.createElement('section');sec.className='view';sec.id='clinical-audit';sec.innerHTML=`<div class="hero"><h2>Clinical Audit & Amendment</h2><p>ตรวจการ Sign-off, Lock และประวัติการแก้ไขเวชระเบียน</p></div><div class="grid2"><div class="card"><h3>ค้นหา Encounter</h3><form id="audit-search-form" class="form"><label class="full">Encounter ID / No.<input id="audit-query" required placeholder="Encounter UUID หรือเลข Encounter"></label><button class="btn primary full">ค้นหา</button></form><div id="audit-signoff" class="status">ยังไม่ได้ค้นหา</div></div><div class="card"><h3>เปิดเพื่อ Amendment</h3><form id="amend-form" class="form"><label class="full">Encounter ID<input id="amend-encounter" required></label><label class="full">เหตุผลอย่างน้อย 5 ตัวอักษร<textarea id="amend-reason" required></textarea></label><button class="btn danger full">Unlock for Amendment</button></form></div></div><div class="card"><h3>Audit Timeline</h3><div id="clinical-audit-list" class="list"></div></div>`;main.appendChild(sec);$('#audit-search-form').onsubmit=e=>{e.preventDefault();search($('#audit-query').value.trim()).catch(fail)};$('#amend-form').onsubmit=e=>{e.preventDefault();unlock().catch(fail)}}
-  const fail=e=>{console.error(e);alert(e.message||String(e))};
-  async function resolveEncounter(q){if(!q)throw new Error('กรุณาระบุ Encounter');if(/^[0-9a-f-]{36}$/i.test(q))return q;const r=await db.from('encounters').select('id,encounter_no').eq('encounter_no',q).maybeSingle();if(r.error)throw r.error;if(!r.data)throw new Error('ไม่พบ Encounter');return r.data.id}
-  async function search(q){const id=await resolveEncounter(q);$('#amend-encounter').value=id;const [s,a,e]=await Promise.all([db.from('clinical_record_signoffs').select('*').eq('encounter_id',id).order('signed_at',{ascending:false}),db.from('clinical_record_audit_events').select('*').eq('encounter_id',id).order('created_at',{ascending:false}),db.from('encounters').select('encounter_no,chief_complaint,started_at').eq('id',id).maybeSingle()]);[s,a,e].forEach(x=>{if(x.error)throw x.error});const sign=(s.data||[]).find(x=>x.record_section==='complete_record');$('#audit-signoff').innerHTML=`<b>${esc(e.data?.encounter_no||id)}</b><br>${sign?(sign.lock_record?'SIGNED & LOCKED':'SIGNED • UNLOCKED'):'ยังไม่มี Complete Sign-off'}${sign?`<br><small>${esc(sign.signer_name||'-')} • ${new Date(sign.signed_at).toLocaleString('th-TH')}</small>`:''}`;$('#clinical-audit-list').innerHTML=(a.data||[]).map(x=>`<div class="item"><div><b>${esc(x.event_type)} • ${esc(x.record_section||'-')}</b><small>${new Date(x.created_at).toLocaleString('th-TH')} • ${esc(x.reason||'')}</small></div></div>`).join('')||'<p class="muted">ยังไม่มี Audit Event</p>'}
-  async function unlock(){const id=$('#amend-encounter').value.trim(),reason=$('#amend-reason').value.trim();if(!id||reason.length<5)throw new Error('กรุณาระบุ Encounter และเหตุผลอย่างน้อย 5 ตัวอักษร');if(!confirm('ยืนยัน Unlock เวชระเบียนเพื่อ Amendment? การกระทำนี้จะถูกบันทึก Audit'))return;const r=await db.rpc('unlock_clinical_record_for_amendment',{p_encounter_id:id,p_reason:reason});if(r.error)throw r.error;$('#amend-reason').value='';await search(id);alert('Unlock for Amendment สำเร็จ')}
-  async function init(){const R=await waitRuntime();db=R.getDb();session=await R.getSession();if(!session)return;profile=await R.getProfile(session.user.id);if(!R.can(profile,'admin_center'))return;mount()}
-  window.addEventListener('load',()=>init().catch(e=>console.error('Admin clinical audit extension failed',e)));
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character]));
+  let db = null;
+
+  const fail = error => {
+    console.error(error);
+    alert(error?.message || String(error));
+  };
+
+  async function resolveEncounter(query) {
+    if (!query) throw new Error('กรุณาระบุ Encounter');
+    if (/^[0-9a-f-]{36}$/i.test(query)) return query;
+    const result = await db.from('encounters').select('id,encounter_no').eq('encounter_no', query).maybeSingle();
+    if (result.error) throw result.error;
+    if (!result.data) throw new Error('ไม่พบ Encounter');
+    return result.data.id;
+  }
+
+  async function search(query) {
+    const encounterId = await resolveEncounter(query);
+    $('#amend-encounter').value = encounterId;
+    const [signoffResult, auditResult, encounterResult] = await Promise.all([
+      db.from('clinical_record_signoffs').select('*').eq('encounter_id', encounterId).order('signed_at', { ascending: false }),
+      db.from('clinical_record_audit_events').select('*').eq('encounter_id', encounterId).order('created_at', { ascending: false }),
+      db.from('encounters').select('encounter_no,chief_complaint,started_at').eq('id', encounterId).maybeSingle()
+    ]);
+    [signoffResult, auditResult, encounterResult].forEach(result => { if (result.error) throw result.error; });
+    const signoff = (signoffResult.data || []).find(item => item.record_section === 'complete_record');
+    $('#audit-signoff').innerHTML = `<b>${esc(encounterResult.data?.encounter_no || encounterId)}</b><br>${signoff ? (signoff.lock_record ? 'SIGNED & LOCKED' : 'SIGNED • UNLOCKED') : 'ยังไม่มี Complete Sign-off'}${signoff ? `<br><small>${esc(signoff.signer_name || '-')} • ${new Date(signoff.signed_at).toLocaleString('th-TH')}</small>` : ''}`;
+    $('#clinical-audit-list').innerHTML = (auditResult.data || []).map(item => `<article class="item"><div><b>${esc(item.event_type)} • ${esc(item.record_section || '-')}</b><small>${new Date(item.created_at).toLocaleString('th-TH')} • ${esc(item.reason || '')}</small></div></article>`).join('') || '<p class="muted">ยังไม่มี Audit Event</p>';
+  }
+
+  async function unlock() {
+    const encounterId = $('#amend-encounter').value.trim();
+    const reason = $('#amend-reason').value.trim();
+    if (!encounterId || reason.length < 5) throw new Error('กรุณาค้นหา Encounter และระบุเหตุผลอย่างน้อย 5 ตัวอักษร');
+    if (!confirm('ยืนยัน Unlock เวชระเบียนเพื่อ Amendment? การกระทำนี้จะถูกบันทึก Audit')) return;
+    const result = await db.rpc('unlock_clinical_record_for_amendment', { p_encounter_id: encounterId, p_reason: reason });
+    if (result.error) throw result.error;
+    $('#amend-reason').value = '';
+    await search(encounterId);
+    alert('Unlock for Amendment สำเร็จ');
+  }
+
+  async function init() {
+    const runtime = window.ChananyaRuntime;
+    if (!runtime) throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
+    db = runtime.getDb();
+    const session = await runtime.getSession();
+    if (!session) return;
+    const profile = await runtime.getProfile(session.user.id);
+    if (!runtime.can(profile, 'admin_center')) return;
+    const searchForm = $('#audit-search-form');
+    const amendForm = $('#amend-form');
+    if (!searchForm || !amendForm) throw new Error('Admin Clinical Audit markup ไม่ครบ');
+    searchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      search($('#audit-query').value.trim()).catch(fail);
+    });
+    amendForm.addEventListener('submit', event => {
+      event.preventDefault();
+      unlock().catch(fail);
+    });
+  }
+
+  init().catch(error => console.error('Admin clinical audit failed', error));
 })();

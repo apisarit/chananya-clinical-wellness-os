@@ -70,13 +70,23 @@ assert.deepEqual(
 
 const scriptsToParse = [
   'auth-config.js',
+  'app-shell.js',
   'app.js',
-  'appointments-permissions.js',
+  'admin.js',
+  'admin-clinical-audit.js',
+  'appointments.js',
   'chananya-runtime.js',
+  'clinical-v3.js',
   'clinical-context-guard.js',
-  'clinical-enhancements.js',
+  'body-pain-map.js',
+  'ttm-diagnosis-assistant.js',
+  'diagnosis-atomic-bridge.js',
+  'opd-workflow.js',
   'clinical-signoff.js',
   'pharmacy.js',
+  'pharmacy-sale-selector-fix.js',
+  'pharmacy-labels.js',
+  'pharmacy-v33-tools.js',
   'production.js'
 ];
 for (const file of scriptsToParse) {
@@ -84,14 +94,31 @@ for (const file of scriptsToParse) {
 }
 
 const authConfig = read('auth-config.js');
-const contextIndex = authConfig.indexOf('/clinical-context-guard.js');
-const bodyMapIndex = authConfig.indexOf('/body-pain-map.js');
-const signoffIndex = authConfig.indexOf('/clinical-signoff.js');
-assert.ok(contextIndex > -1, 'Clinical Context Guard should be loaded');
-assert.ok(contextIndex < bodyMapIndex && bodyMapIndex < signoffIndex, 'Clinical extensions should load in safe sequence');
+assert.doesNotMatch(authConfig, /createElement|appendChild|setInterval|MutationObserver/, 'auth config must remain configuration-only');
 
 const clinicalHtml = read('clinical-v3.html');
-assert.match(clinicalHtml, /Clinical Record v3\.4/, 'Clinical page should expose v3.4');
-assert.match(read('clinical-signoff.js'), /data-signoff-disabled/, 'sign-off lock should track controls it disabled');
+const contextIndex = clinicalHtml.indexOf('clinical-context-guard.js');
+const bodyMapIndex = clinicalHtml.indexOf('body-pain-map.js');
+const diagnosisIndex = clinicalHtml.indexOf('diagnosis-atomic-bridge.js');
+const signoffIndex = clinicalHtml.indexOf('clinical-signoff.js');
+assert.ok(contextIndex > -1, 'Clinical Context Guard should be loaded explicitly');
+assert.ok(contextIndex < bodyMapIndex && bodyMapIndex < signoffIndex, 'Clinical extensions should load in safe sequence');
+assert.ok(bodyMapIndex < diagnosisIndex && diagnosisIndex < signoffIndex, 'Diagnosis and sign-off sequence should be deterministic');
+assert.match(clinicalHtml, /data-stage="intake"/, 'Clinical page should expose the staged workflow');
+assert.match(clinicalHtml, /data-stage="signoff"/, 'Clinical workflow should end with sign-off');
+assert.match(read('clinical-signoff.js'), /fields\.inert=locked/, 'sign-off lock should disable the owned record boundary');
 
-console.log(`v3.4 release checks passed: ${cases.length} role cases + ${scriptsToParse.length} syntax checks`);
+for (const page of ['index.html', 'appointments.html', 'clinical-v3.html', 'pharmacy.html', 'production.html', 'admin.html']) {
+  const html = read(page);
+  const runtimeIndex = html.indexOf('chananya-runtime.js');
+  const shellIndex = html.indexOf('app-shell.js');
+  assert.ok(runtimeIndex > -1 && shellIndex > runtimeIndex, `${page} should load the shared shell after the runtime`);
+}
+
+assert.doesNotMatch(read('admin-clinical-audit.js'), /createElement|appendChild/, 'Admin audit should bind to owned static markup');
+assert.match(read('admin.html'), /id="clinical-audit"/, 'Admin audit section should exist in HTML');
+assert.doesNotMatch(read('pharmacy-labels.js'), /MutationObserver/, 'Pharmacy labels should use the render event contract');
+assert.doesNotMatch(read('pharmacy-v33-tools.js'), /MutationObserver/, 'Pharmacy print tools should use the render event contract');
+assert.match(read('_redirects'), /^\/app\.html\s+\/\s+301!/m, 'Legacy localStorage prototype should redirect to the canonical operations route');
+
+console.log(`IA release checks passed: ${cases.length} role cases + ${scriptsToParse.length} syntax checks + shared shell/order assertions`);

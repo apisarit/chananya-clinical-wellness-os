@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0d2d24">
+  <title>Chananya Clinical OS — Read-only UI Review</title>
+  <link rel="stylesheet" href="app.css?v=clinical-os-ia1">
+</head>
+<body data-page="clinical">
+  <div class="app-frame">
+    <aside class="sidebar" aria-label="เมนูระบบตัวอย่าง">
+      <a class="brand" href="/"><span class="brand-mark">ช</span><span><strong>CHANANYA</strong><small>Thai Traditional Medicine<br>Clinical & Wellness OS</small></span></a>
+      <nav class="global-nav">
+        <a href="/"><span class="nav-icon">⌂</span><span class="nav-copy"><b>ศูนย์ปฏิบัติการ</b><small>ภาพรวม ผู้รับบริการ การเงิน</small></span></a>
+        <a href="/appointments.html"><span class="nav-icon">◷</span><span class="nav-copy"><b>นัดหมาย</b><small>ตารางแพทย์และคิว</small></span></a>
+        <a href="/clinical-v3.html" aria-current="page"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
+        <a href="/pharmacy.html"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
+      </nav>
+      <div class="sidebar-foot">Read-only visual review<br>No session • No patient data • No writes</div>
+    </aside>
+    <button class="sidebar-scrim" aria-label="ปิดเมนู"></button>
+    <div class="workspace">
+      <header class="top">
+        <div class="actions"><button class="btn ghost menu-toggle" aria-label="เมนู">☰</button><div class="top-title"><span class="page-kicker">Clinical Workspace</span><h1>เวชระเบียนแพทย์แผนไทย</h1></div></div>
+        <div class="actions"><div class="identity-block"><small>ผู้ประกอบวิชาชีพตัวอย่าง</small></div><span class="badge">practitioner</span></div>
+      </header>
+      <main>
+        <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — หน้านี้ใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้</div>
+        <div class="clinical-layout">
+          <aside class="encounter-rail">
+            <section class="card encounter-picker">
+              <h2>Encounter ที่กำลังทำงาน</h2>
+              <p class="muted">ทุกข้อมูลด้านขวาผูกกับ Encounter เดียว</p>
+              <label>เลือก Encounter<select><option>ENC-DEMO-001 — ผู้รับบริการตัวอย่าง</option></select></label>
+              <div class="status space-top-xs">ENC-DEMO-001 • HN-DEMO-001</div>
+            </section>
+            <section id="clinical-context-guard" class="card">
+              <div class="ccg-head"><strong>บริบทและความพร้อม</strong><span>พร้อมตรวจสอบ</span></div>
+              <div class="ccg-grid">
+                <div class="ccg-cell"><small>ผู้รับบริการ</small><b>HN-DEMO-001 • ผู้รับบริการตัวอย่าง</b><span>หญิง • อายุ 42 ปี</span></div>
+                <div class="ccg-cell"><small>Encounter</small><b>ENC-DEMO-001</b><span>วันนี้ • in progress</span></div>
+                <div class="ccg-cell"><small>อาการสำคัญ</small><span>ปวดตึงคอ บ่า ไหล่ 5 วัน</span></div>
+                <div class="ccg-cell ccg-alert"><small>Allergy / ข้อควรระวัง</small><div>ตัวอย่าง: แพ้น้ำมันระกำ — ผื่นแดง</div></div>
+                <div class="ccg-cell ccg-warning"><small>Red flags</small><div>ไม่พบ red flag จากการคัดกรองตัวอย่าง</div></div>
+                <div class="ccg-cell"><small>Sign-off readiness</small><div class="ccg-chips"><span class="ccg-chip ready">ผลตรวจพร้อม</span><span class="ccg-chip ready">Diagnosis พร้อม</span><span class="ccg-chip missing">รอ Treatment</span></div></div>
+              </div>
+            </section>
+            <nav class="workflow-nav" aria-label="ลำดับเวชระเบียน">
+              <button><span class="workflow-index">1</span><span class="workflow-copy"><b>Visit intake</b><small>เปิด Encounter</small></span><span class="workflow-state ready"></span></button>
+              <button><span class="workflow-index">2</span><span class="workflow-copy"><b>ประวัติ</b><small>OPD & lifestyle</small></span><span class="workflow-state ready"></span></button>
+              <button><span class="workflow-index">3</span><span class="workflow-copy"><b>ตรวจร่างกาย</b><small>Finding & pain map</small></span><span class="workflow-state ready"></span></button>
+              <button class="active"><span class="workflow-index">4</span><span class="workflow-copy"><b>วินิจฉัยแผนไทย</b><small>สมุฏฐานและพิกัด</small></span><span class="workflow-state ready"></span></button>
+              <button><span class="workflow-index">5</span><span class="workflow-copy"><b>แผนและการรักษา</b><small>Plan & outcome</small></span><span class="workflow-state"></span></button>
+              <button><span class="workflow-index">6</span><span class="workflow-copy"><b>ใบสั่งยา</b><small>ส่งห้องยา</small></span><span class="workflow-state"></span></button>
+              <button><span class="workflow-index">7</span><span class="workflow-copy"><b>ลงนาม</b><small>Review & lock</small></span><span class="workflow-state"></span></button>
+            </nav>
+          </aside>
+          <section class="card clinical-stage active">
+            <div class="section-heading"><span class="section-number">4</span><div><h2>การวินิจฉัยแพทย์แผนไทย</h2><p>ยึด ontology แผนไทยเป็นหลัก โดยผู้ประกอบวิชาชีพเป็นผู้ตรวจและยืนยัน</p></div></div>
+            <form class="form">
+              <label>ธาตุสมุฏฐาน<select disabled><option>วาโย</option></select></label>
+              <label>อุตุสมุฏฐาน<select disabled><option>วาตะ</option></select></label>
+              <label>อายุสมุฏฐาน<select disabled><option>มัชฌิมวัย</option></select></label>
+              <label>กาลสมุฏฐาน<input disabled value="อาการเด่นช่วงเย็น"></label>
+              <label>ประเทศสมุฏฐาน<input disabled value="ทำงานห้องปรับอากาศ"></label>
+              <label>ธาตุเจ้าเรือน<input disabled value="วาโย"></label>
+              <div class="full checkgrid"><label><input type="checkbox" checked disabled>อิริยาบถ</label><label><input type="checkbox" checked disabled>อากาศ/ฤดูกาล</label><label><input type="checkbox" disabled>อาหาร</label><label><input type="checkbox" disabled>อารมณ์</label></div>
+              <section class="ttm-assistant full">
+                <div class="ttm-assistant-head"><div><b>TTM Diagnostic Context</b><small>Decision support — practitioner confirmation required</small></div><span class="badge">Human reviewed</span></div>
+                <p class="ttm-note">ระบบช่วยจัดบริบทเท่านั้น ไม่วินิจฉัยแทนผู้ประกอบวิชาชีพ</p>
+              </section>
+              <label class="full">กลไกการเกิดอาการตามศาสตร์แผนไทย<textarea disabled>วาตะกำเริบจากอิริยาบถคงค้าง ร่วมกับความเย็น กระทบการไหลเวียนบริเวณคอและบ่า</textarea></label>
+              <label class="full">สรุปการวิเคราะห์<textarea disabled>อาการสัมพันธ์กับวาตะกำเริบและเส้นประธานสิบในบริเวณคอ บ่า ไหล่</textarea></label>
+              <label class="full">การวินิจฉัยโรคแผนไทย<textarea disabled>ลมปลายปัตคาดบริเวณสัญญาณ 4 หลัง</textarea></label>
+              <button class="btn primary full" disabled>บันทึก Diagnosis และสมุฏฐาน</button>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

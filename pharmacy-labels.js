@@ -172,12 +172,8 @@
     session = await R.getSession();
     if (!session) return;
     await enhance();
-    ['rx-list', 'walkin-list', 'history-list'].forEach(id => {
-      const node = $(`#${id}`);
-      if (node) new MutationObserver(scheduleEnhance).observe(node, { childList: true, subtree: true });
-    });
-    window.addEventListener('chananya:pharmacy-rendered', scheduleEnhance);
   }
 
+  window.addEventListener('chananya:pharmacy-rendered', scheduleEnhance);
   window.addEventListener('load', () => install().catch(error => console.error('Pharmacy label extension failed', error)));
 })();

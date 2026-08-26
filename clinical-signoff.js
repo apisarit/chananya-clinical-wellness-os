@@ -1,28 +1,21 @@
 (() => {
   'use strict';
   const $ = (s, root=document) => root.querySelector(s);
-  let db=null, session=null, profile=null, currentEncounter=null, locked=false, lockObserver=null;
+  let db=null, session=null, profile=null, currentEncounter=null, locked=false;
 
   async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(r=>setTimeout(r,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
   function mount(){
-    if($('#clinical-signoff-panel')) return;
-    const main=$('main'); if(!main) return;
-    const section=document.createElement('section');
-    section.className='card'; section.id='clinical-signoff-panel';
-    section.innerHTML=`<h2 class="section-title">Clinical Sign-off / Record Lock</h2>
-      <p class="muted">ลงนามเมื่อการวินิจฉัยและการรักษาครบแล้ว หลังลงนาม เวชระเบียนส่วนคลินิกจะถูก Lock เพื่อป้องกันการแก้ไขโดยไม่ผ่านกระบวนการ amendment</p>
-      <div id="signoff-status" class="status">เลือก Encounter เพื่อดูสถานะ</div>
-      <form id="signoff-form" class="form" style="margin-top:12px">
-        <label>ชื่อผู้ลงนาม<input id="signer-name"></label>
-        <label>เลขใบประกอบวิชาชีพ<input id="license-no" placeholder="ถ้ามี"></label>
-        <label class="full">เหตุผล/หมายเหตุ<input id="signoff-reason" value="Complete clinical record sign-off"></label>
-        <button class="btn primary full" id="signoff-btn">ลงนามและ Lock เวชระเบียน</button>
-      </form>`;
-    main.appendChild(section);
+    const section=$('#clinical-signoff-panel');
+    const form=$('#signoff-form');
+    if(!section||!form) return false;
     $('#signer-name').value=profile?.full_name||session?.user?.email||'';
-    $('#signoff-form').addEventListener('submit',signAndLock);
+    if(form.dataset.signoffBound!=='1'){
+      form.dataset.signoffBound='1';
+      form.addEventListener('submit',signAndLock);
+    }
+    return true;
   }
 
   async function loadStatus(){
@@ -36,33 +29,10 @@
     setLockedUI(Boolean(data.lock_record));
   }
 
-  function disableForLock(el){
-    if(!locked||el===document.querySelector('#encounter')||el.closest('#clinical-signoff-panel'))return;
-    if(!el.disabled){el.disabled=true;el.dataset.signoffDisabled='1'}
-  }
-
-  function observeLockedControls(){
-    if(lockObserver)return;
-    const main=document.querySelector('main');if(!main)return;
-    lockObserver=new MutationObserver(records=>{
-      if(!locked)return;
-      records.forEach(record=>record.addedNodes.forEach(node=>{
-        if(!(node instanceof Element))return;
-        if(node.matches('button,input,textarea,select'))disableForLock(node);
-        node.querySelectorAll?.('button,input,textarea,select').forEach(disableForLock);
-      }));
-    });
-    lockObserver.observe(main,{childList:true,subtree:true});
-  }
-
   function setLockedUI(isLocked){
-    locked=Boolean(isLocked);observeLockedControls();
-    if(locked){
-      document.querySelectorAll('main button,main input,main textarea,main select').forEach(disableForLock);
-    }else{
-      document.querySelectorAll('[data-signoff-disabled="1"]').forEach(el=>{el.disabled=false;delete el.dataset.signoffDisabled});
-    }
-    const encounter=$('#encounter'); if(encounter) encounter.disabled=false;
+    locked=Boolean(isLocked);
+    const fields=$('#clinical-record-fields');
+    if(fields){fields.inert=locked;fields.setAttribute('aria-disabled',String(locked))}
     const btn=$('#signoff-btn'); if(btn){btn.disabled=locked;btn.textContent=locked?'เวชระเบียนถูก Lock แล้ว':'ลงนามและ Lock เวชระเบียน'}
     window.dispatchEvent(new CustomEvent('chananya:signoff-changed',{detail:{encounterId:currentEncounter,locked}}));
   }
