@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = (s, root=document) => root.querySelector(s);
-  let db=null, session=null, profile=null, currentEncounter=null;
+  let db=null, session=null, profile=null, currentEncounter=null, locked=false, lockObserver=null;
 
   async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(r=>setTimeout(r,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -30,16 +30,54 @@
     currentEncounter=$('#encounter')?.value||null;
     if(!currentEncounter){box.textContent='เลือก Encounter เพื่อดูสถานะ';setLockedUI(false);return}
     const {data,error}=await db.from('clinical_record_signoffs').select('signer_name,professional_license_no,signed_at,lock_record,reason').eq('encounter_id',currentEncounter).eq('record_section','complete_record').maybeSingle();
-    if(error){box.textContent=`อ่านสถานะไม่ได้: ${error.message}`;return}
+    if(error){box.textContent=`อ่านสถานะไม่ได้: ${friendlyError(error)}`;setLockedUI(true);return}
     if(!data){box.innerHTML='<b>ยังไม่ลงนาม</b><br><small>ต้องมี Diagnosis และ Treatment ก่อนจึงจะ Sign-off ได้</small>';setLockedUI(false);return}
     box.innerHTML=`<b>${data.lock_record?'SIGNED & LOCKED':'SIGNED • UNLOCKED FOR AMENDMENT'}</b><br>${esc(data.signer_name||'-')} • ${data.professional_license_no?`ใบประกอบ ${esc(data.professional_license_no)} • `:''}${new Date(data.signed_at).toLocaleString('th-TH')}<br><small>${esc(data.reason||'')}</small>`;
     setLockedUI(Boolean(data.lock_record));
   }
 
-  function setLockedUI(locked){
-    document.querySelectorAll('main form:not(#signoff-form) input,main form:not(#signoff-form) textarea,main form:not(#signoff-form) select,main form:not(#signoff-form) button').forEach(el=>el.disabled=locked);
+  function disableForLock(el){
+    if(!locked||el===document.querySelector('#encounter')||el.closest('#clinical-signoff-panel'))return;
+    if(!el.disabled){el.disabled=true;el.dataset.signoffDisabled='1'}
+  }
+
+  function observeLockedControls(){
+    if(lockObserver)return;
+    const main=document.querySelector('main');if(!main)return;
+    lockObserver=new MutationObserver(records=>{
+      if(!locked)return;
+      records.forEach(record=>record.addedNodes.forEach(node=>{
+        if(!(node instanceof Element))return;
+        if(node.matches('button,input,textarea,select'))disableForLock(node);
+        node.querySelectorAll?.('button,input,textarea,select').forEach(disableForLock);
+      }));
+    });
+    lockObserver.observe(main,{childList:true,subtree:true});
+  }
+
+  function setLockedUI(isLocked){
+    locked=Boolean(isLocked);observeLockedControls();
+    if(locked){
+      document.querySelectorAll('main button,main input,main textarea,main select').forEach(disableForLock);
+    }else{
+      document.querySelectorAll('[data-signoff-disabled="1"]').forEach(el=>{el.disabled=false;delete el.dataset.signoffDisabled});
+    }
     const encounter=$('#encounter'); if(encounter) encounter.disabled=false;
     const btn=$('#signoff-btn'); if(btn){btn.disabled=locked;btn.textContent=locked?'เวชระเบียนถูก Lock แล้ว':'ลงนามและ Lock เวชระเบียน'}
+    window.dispatchEvent(new CustomEvent('chananya:signoff-changed',{detail:{encounterId:currentEncounter,locked}}));
+  }
+
+  function friendlyError(error){
+    const message=error?.message||String(error);
+    const known={
+      DIAGNOSIS_REQUIRED_BEFORE_SIGNOFF:'ต้องบันทึก Diagnosis ก่อนลงนาม',
+      TREATMENT_REQUIRED_BEFORE_SIGNOFF:'ต้องมี Treatment Plan หรือ Treatment Session ก่อนลงนาม',
+      CLINICAL_RECORD_LOCKED:'เวชระเบียนนี้ถูก Lock แล้ว',
+      PERMISSION_DENIED:'บัญชีนี้ไม่มีสิทธิ์ลงนามเวชระเบียน',
+      AUTH_REQUIRED:'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่'
+    };
+    const code=Object.keys(known).find(key=>message.includes(key));
+    return code?known[code]:message;
   }
 
   async function signAndLock(e){
@@ -58,7 +96,7 @@
       if(error) throw error;
       await loadStatus();
       alert('ลงนามและ Lock เวชระเบียนสำเร็จ');
-    }catch(err){console.error(err);alert(err.message||String(err));btn.disabled=false;btn.textContent=old}
+    }catch(err){console.error(err);alert(friendlyError(err));btn.disabled=false;btn.textContent=old}
   }
 
   async function init(){
@@ -68,5 +106,6 @@
     await loadStatus();
   }
 
-  window.addEventListener('load',()=>init().catch(e=>console.error('Clinical sign-off extension failed',e)));
+  const start=()=>init().catch(e=>console.error('Clinical sign-off extension failed',e));
+  if(document.readyState==='complete')start();else window.addEventListener('load',start,{once:true});
 })();
