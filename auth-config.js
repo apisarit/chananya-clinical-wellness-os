@@ -36,8 +36,9 @@ window.CHANANYA_AUTH = Object.freeze({
 
   async function bootExtensions() {
     try {
-      await loadScript('/chananya-runtime.js?v=runtime-1', 'chananya-runtime');
+      await loadScript('/chananya-runtime.js?v=runtime-v34', 'chananya-runtime');
       if (isClinicalV3) {
+        await loadScript('/clinical-context-guard.js?v=clinical-context-v34', 'clinical-context-guard');
         await loadScript('/body-pain-map.js?v=bodymap-v31', 'body-pain-map-extension');
         await loadScript('/ttm-diagnosis-assistant.js?v=ttm-dkr-v31', 'ttm-diagnosis-assistant');
         await loadScript('/diagnosis-atomic-bridge.js?v=atomic-dx-v31', 'diagnosis-atomic-bridge');
@@ -96,17 +97,24 @@ window.CHANANYA_AUTH = Object.freeze({
     const production = addLink(actions, logout, 'production-header-link', '/production.html', 'Production');
 
     const sync = () => {
-      const role = String(roleBadge.dataset.effectiveRole || roleBadge.dataset.databaseRole || roleBadge.textContent || '').trim().toLowerCase();
-      const isSuper = role === 'super_admin';
-      const isAdminRole = role === 'admin';
-      const isPractitioner = ['practitioner', 'doctor'].includes(role);
-      const isReception = role === 'reception';
+      const normalize = value => String(value || '').trim().toLowerCase();
+      const systemRole = normalize(roleBadge.dataset.systemRole);
+      const operationalRole = normalize(roleBadge.dataset.operationalRole || roleBadge.dataset.databaseRole);
+      const fallbackRole = normalize(roleBadge.textContent);
+      const effectiveRole = normalize(roleBadge.dataset.effectiveRole)
+        || (['super_admin', 'admin'].includes(systemRole) ? systemRole : operationalRole)
+        || fallbackRole;
+      const roles = new Set([systemRole, operationalRole, effectiveRole, fallbackRole].filter(role => role && role !== 'staff'));
+      const isSuper = roles.has('super_admin');
+      const isAdminRole = roles.has('admin');
+      const isPractitioner = roles.has('practitioner') || roles.has('doctor');
+      const isReception = roles.has('reception');
 
       admin.style.display = (isSuper || isAdminRole) ? 'inline-flex' : 'none';
       appointments.style.display = (isSuper || isAdminRole || isPractitioner || isReception) ? 'inline-flex' : 'none';
       clinicalV3.style.display = (isSuper || isAdminRole || isPractitioner) ? 'inline-flex' : 'none';
-      pharmacy.style.display = (isSuper || isAdminRole || role === 'pharmacy') ? 'inline-flex' : 'none';
-      production.style.display = (isSuper || isAdminRole || ['pharmacy', 'production', 'inventory'].includes(role)) ? 'inline-flex' : 'none';
+      pharmacy.style.display = (isSuper || isAdminRole || roles.has('pharmacy')) ? 'inline-flex' : 'none';
+      production.style.display = (isSuper || isAdminRole || ['pharmacy', 'production', 'inventory'].some(role => roles.has(role))) ? 'inline-flex' : 'none';
     };
 
     sync();
