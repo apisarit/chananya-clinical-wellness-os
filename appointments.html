@@ -59,7 +59,6 @@
 <div class="toast" id="toast"></div>
 <script>
 (() => {
-  const cfg=window.CHANANYA_AUTH||{};
   const $=s=>document.querySelector(s);
   let db,session,profile,allPatients=[];
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -70,21 +69,20 @@
   const patientName=p=>[p.title,p.first_name,p.last_name].filter(Boolean).join(' ')||p.full_name||p.name||p.patient_name||'ไม่ระบุชื่อ';
   const patientLabel=p=>`${p.hn||p.patient_no||'-'} — ${patientName(p)}${p.phone?' • '+p.phone:''}`;
   const roleAllowed=()=>['super_admin','admin'].includes(profile.system_role)||['admin','reception','practitioner','doctor'].includes(profile.role);
+  async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
 
   async function init(){
     try{
-      const url=cfg.url||cfg.supabaseUrl;
-      const key=cfg.anonKey||cfg.publishableKey;
-      if(!url||!key)throw new Error('ไม่พบ Supabase config');
-      db=supabase.createClient(url,key,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true}});
-      session=(await db.auth.getSession()).data.session;
+      const R=await waitRuntime();
+      db=R.getDb();
+      session=await R.getSession();
       if(!session){location.replace('/login.html');return}
-      const p=await db.from('profiles').select('*').eq('id',session.user.id).single();
-      if(p.error)throw p.error;
-      profile=p.data;
+      profile=await R.getProfile(session.user.id);
+      if(!profile)throw new Error('ไม่พบ Profile');
       if(!roleAllowed())throw new Error('บัญชีนี้ไม่มีสิทธิ์จัดการนัดหมาย');
+      const roles=R.rolesOf(profile),roleBadge=$('#role');
       $('#identity').textContent=`${profile.full_name||session.user.email} • ${session.user.email}`;
-      $('#role').textContent=profile.system_role||profile.role;
+      roleBadge.textContent=roles.effectiveRole;roleBadge.dataset.systemRole=roles.systemRole;roleBadge.dataset.operationalRole=roles.operationalRole;roleBadge.dataset.effectiveRole=roles.effectiveRole;
       const today=new Date();
       const in14=new Date(today);in14.setDate(in14.getDate()+14);
       $('#date-from').value=today.toISOString().slice(0,10);
