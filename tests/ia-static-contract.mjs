@@ -46,4 +46,11 @@ for (const contract of contracts) {
 const config = read('auth-config.js');
 assert.doesNotMatch(config, /createElement|appendChild|insertAdjacent|MutationObserver|setInterval/, 'auth-config.js must remain configuration-only');
 
+const css = read('app.css');
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.app-frame \{ display: block; \}/, 'tablet/mobile layout must collapse the desktop shell');
+assert.match(css, /body\.shell-open \.sidebar \{ transform: none; \}/, 'mobile navigation must expose the sidebar as a drawer');
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.clinical-layout \{ grid-template-columns: 1fr; \}/, 'clinical workspace must stack on narrow screens');
+assert.match(css, /\.workflow-nav \{ grid-template-columns: repeat\(7,minmax\(122px,1fr\)\); overflow-x: auto;/, 'clinical workflow must remain reachable with horizontal scrolling');
+assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.form, \.opd-grid, \.bm-grid, \.ttm-context-grid, \.checkgrid, \.opd-chipgrid \{ grid-template-columns: 1fr; \}/, 'clinical forms must become single-column on phones');
+
 console.log(`Static IA contracts passed for ${contracts.length} operational routes`);
