@@ -4,11 +4,10 @@ const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,m=
 let db=null, session=null, editingPatientId=null, rxCart=[];
 
 async function initClient(){
-  const cfg=window.CHANANYA_AUTH||{};
-  const url=cfg.url||cfg.supabaseUrl, key=cfg.anonKey||cfg.publishableKey||cfg.key;
-  if(!url||!key||!window.supabase)return;
-  db=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true}});
-  const s=await db.auth.getSession();session=s.data.session;
+  for(let i=0;i<50&&!window.ChananyaRuntime;i++)await new Promise(resolve=>setTimeout(resolve,100));
+  if(!window.ChananyaRuntime)return;
+  db=window.ChananyaRuntime.getDb();
+  session=await window.ChananyaRuntime.getSession();
 }
 function toast(t){const e=$('#toast');if(!e)return; e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
 function fail(e){console.error(e);alert(e?.message||String(e))}
