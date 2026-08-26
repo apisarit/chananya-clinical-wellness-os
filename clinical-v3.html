@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#173f31">
-  <title>Chananya Clinical Record v3</title>
+  <title>Chananya Clinical Record v3.4</title>
   <link rel="stylesheet" href="app.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="auth-config.js"></script>
@@ -14,9 +14,9 @@
   </style>
 </head>
 <body>
-<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด Clinical Record v3</h2><p id="boot-error">กำลังตรวจสอบสิทธิ์</p></div></div>
+<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด Clinical Record v3.4</h2><p id="boot-error">กำลังตรวจสอบสิทธิ์</p></div></div>
 <div id="app" class="hidden">
-  <header class="top"><div><h1>ชนัญญา Clinical Record v3</h1><small id="identity"></small></div><div class="actions"><span class="badge" id="role">viewer</span><button class="btn ghost" id="logout">ออกจากระบบ</button></div></header>
+  <header class="top"><div><h1>ชนัญญา Clinical Record v3.4</h1><small id="identity"></small></div><div class="actions"><span class="badge" id="role">viewer</span><button class="btn ghost" id="logout">ออกจากระบบ</button></div></header>
   <nav class="v3nav"><a class="btn ghost" href="/">Clinical</a><a class="btn ghost" href="/clinical-v3.html">Clinical v3</a><a class="btn ghost" href="/pharmacy.html">Pharmacy</a><a class="btn ghost" href="/production.html">Production</a><a class="btn ghost" href="/admin.html">Admin</a></nav>
   <main>
     <section class="card">
@@ -103,18 +103,21 @@
 <div class="toast" id="toast"></div>
 <script>
 (() => {
-  const cfg=window.CHANANYA_AUTH,$=s=>document.querySelector(s);let db,session,profile,currentEncounter=null;
+  const $=s=>document.querySelector(s);let db,session,profile,currentEncounter=null;
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const toast=t=>{const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)};
   const fail=e=>{console.error(e);alert(e?.message||String(e))};
   const csv=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
+  async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(resolve=>setTimeout(resolve,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
   async function init(){
     try{
-      db=supabase.createClient(cfg.url,cfg.anonKey,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true}});
-      session=(await db.auth.getSession()).data.session;if(!session){location.replace('/login.html');return}
-      const p=await db.from('profiles').select('role,system_role,full_name').eq('id',session.user.id).single();if(p.error)throw p.error;profile=p.data;
-      if(!['admin','practitioner'].includes(profile.role)&&!['admin','super_admin'].includes(profile.system_role))throw new Error('บัญชีนี้ไม่มีสิทธิ์บันทึก Clinical Record v3');
-      $('#identity').textContent=`${profile.full_name||session.user.email} • ${session.user.email}`;$('#role').textContent=profile.system_role==='super_admin'?'super_admin':profile.role;
+      const R=await waitRuntime();db=R.getDb();session=await R.getSession();if(!session){location.replace('/login.html');return}
+      profile=await R.getProfile(session.user.id);if(!profile)throw new Error('ไม่พบ Profile');
+      if(!R.can(profile,'clinical_write'))throw new Error('บัญชีนี้ไม่มีสิทธิ์บันทึก Clinical Record v3.4');
+      const roles=R.rolesOf(profile),systemRole=roles.systemRole,operationalRole=roles.operationalRole,effectiveRole=roles.effectiveRole;
+      const roleBadge=$('#role');
+      $('#identity').textContent=`${profile.full_name||session.user.email} • ${session.user.email}`;roleBadge.textContent=effectiveRole;
+      roleBadge.dataset.systemRole=systemRole;roleBadge.dataset.operationalRole=operationalRole;roleBadge.dataset.effectiveRole=effectiveRole;
       const e=await db.from('encounters').select('id,encounter_no,patient_id,chief_complaint,thai_diagnosis,started_at').order('started_at',{ascending:false}).limit(200);if(e.error)throw e.error;
       $('#encounter').innerHTML='<option value="">เลือก Encounter</option>'+e.data.map(x=>`<option value="${x.id}">${esc(x.encounter_no)} — ${esc(x.chief_complaint||'-')}</option>`).join('');
       $('#app').classList.remove('hidden');$('#boot').classList.add('hidden');
