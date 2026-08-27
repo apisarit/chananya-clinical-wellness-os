@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -63,6 +64,28 @@ assert.doesNotMatch(identityReview, /(?:src|href)=["'][^"']*(?:supabase|auth-con
 assert.match(identityReview, /Read-only UI review/, 'identity review must identify itself as non-operational');
 const identityReviewIds = [...identityReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(identityReviewIds).size, identityReviewIds.length, 'identity review should not contain duplicate IDs');
+
+const platformReview = read('ui-review.html');
+const platformReviewSource = read('ui-review.js');
+assert.doesNotThrow(() => new vm.Script(platformReviewSource, { filename: 'ui-review.js' }), 'platform review controller should parse');
+assert.doesNotMatch(platformReview, /<script(?![^>]*\bsrc=)[^>]*>/i, 'platform review must not contain inline scripts');
+assert.doesNotMatch(platformReview, /(?:src|href)=["'][^"']*(?:supabase|auth-config)/i, 'platform review must not connect to database or auth services');
+assert.doesNotMatch(platformReview, /href=["']\/(?:appointments|check-in|foundation|clinical-v3|pharmacy|production|quality|admin)(?:\.html)?["']/i, 'platform review navigation must not escape into database-locked operational routes');
+assert.doesNotMatch(platformReviewSource, /fetch\s*\(|XMLHttpRequest|supabase|localStorage|sessionStorage/i, 'platform review controller must remain credential-free and read-only');
+for (const workspace of ['operations','appointments','checkin','foundation','clinical','pharmacy','production','quality','admin']) {
+  assert.match(platformReview, new RegExp(`data-review-workspace=["']${workspace}["']`), `platform review should expose ${workspace}`);
+  assert.match(platformReview, new RegExp(`data-review-route=["']${workspace}["']`), `platform review should navigate to ${workspace}`);
+}
+for (const gate of ['Authenticated staging ทุก role', 'LINE callback จริง', 'Encrypted backup + restore drill', 'Privacy / Security / Legal review']) {
+  assert.ok(platformReview.includes(gate), `platform review should disclose release gate: ${gate}`);
+}
+assert.match(platformReview, /ปิตตะ 42 \/ วาตะ 80 \/ เสมหะ 20[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must not claim complete disease coverage');
+assert.match(platformReview, /รูปธาตุ 42 \/ อวัยวะแผนไทย[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must disclose incomplete rupa-dhatu coverage');
+const platformReviewIds = [...platformReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+assert.equal(new Set(platformReviewIds).size, platformReviewIds.length, 'platform review should not contain duplicate IDs');
+const coverageManifest = read('docs/PLATFORM_COVERAGE_AND_RELEASE_GATES.md');
+assert.match(coverageManifest, /Source present[\s\S]*?Preview visible[\s\S]*?Staging verified[\s\S]*?Knowledge complete/, 'coverage manifest must separate code, preview, staging and knowledge completion');
+assert.match(coverageManifest, /Preview \/ production candidate under verification/, 'coverage manifest must prohibit a premature commercial-production claim');
 
 const config = read('auth-config.js');
 assert.doesNotMatch(config, /createElement|appendChild|insertAdjacent|MutationObserver|setInterval/, 'auth-config.js must remain configuration-only');

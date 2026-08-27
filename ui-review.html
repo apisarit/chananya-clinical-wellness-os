@@ -10,31 +10,87 @@
   <script src="brand-config.js?v=white-label1"></script>
   <script src="tenant-brand.js?v=white-label1"></script>
   <script defer src="searchable-select.js?v=clinical-os-production-atomic1"></script>
+  <script defer src="ui-review.js?v=platform-coverage1"></script>
 </head>
-<body data-page="clinical">
+<body data-page="review">
   <div class="app-frame">
     <aside class="sidebar" aria-label="เมนูระบบตัวอย่าง">
-      <a class="brand" href="/"><span class="brand-mark">ช</span><span><strong>CHANANYA</strong><small>Thai Traditional Medicine<br>Clinical & Wellness OS</small></span></a>
+      <a class="brand" href="#operations" data-review-route="operations"><span class="brand-mark">ช</span><span><strong>CHANANYA</strong><small>Thai Traditional Medicine<br>Clinical & Wellness OS</small></span></a>
       <nav class="global-nav">
-        <a href="/"><span class="nav-icon">⌂</span><span class="nav-copy"><b>ศูนย์ปฏิบัติการ</b><small>ภาพรวม ผู้รับบริการ การเงิน</small></span></a>
-        <a href="/appointments.html"><span class="nav-icon">◷</span><span class="nav-copy"><b>นัดหมาย</b><small>ตารางแพทย์และคิว</small></span></a>
-        <a href="/check-in.html"><span class="nav-icon">▣</span><span class="nav-copy"><b>ยืนยันผู้รับบริการ</b><small>LINE QR หรือ HN</small></span></a>
-        <a href="/foundation.html"><span class="nav-icon">ร</span><span class="nav-copy"><b>รากวิชา</b><small>คัมภีร์และองค์ความรู้</small></span></a>
-        <a href="/clinical-v3.html" aria-current="page"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
-        <a href="/pharmacy.html"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
-        <a href="/production.html"><span class="nav-icon">⚗</span><span class="nav-copy"><b>ผลิตและคลัง</b><small>สูตร Batch และ QC</small></span></a>
-        <a href="/admin.html"><span class="nav-icon">⚙</span><span class="nav-copy"><b>ศูนย์ควบคุม</b><small>สิทธิ์ อนุมัติ Audit</small></span></a>
+        <a href="#operations" data-review-route="operations"><span class="nav-icon">⌂</span><span class="nav-copy"><b>ศูนย์ปฏิบัติการ</b><small>ภาพรวม ผู้รับบริการ การเงิน</small></span></a>
+        <a href="#appointments" data-review-route="appointments"><span class="nav-icon">◷</span><span class="nav-copy"><b>นัดหมาย</b><small>ตารางแพทย์และคิว</small></span></a>
+        <a href="#checkin" data-review-route="checkin"><span class="nav-icon">▣</span><span class="nav-copy"><b>ยืนยันผู้รับบริการ</b><small>LINE QR หรือ HN</small></span></a>
+        <a href="#foundation" data-review-route="foundation"><span class="nav-icon">ร</span><span class="nav-copy"><b>รากวิชา</b><small>คัมภีร์และองค์ความรู้</small></span></a>
+        <a href="#clinical" data-review-route="clinical"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
+        <a href="#pharmacy" data-review-route="pharmacy"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
+        <a href="#production" data-review-route="production"><span class="nav-icon">⚗</span><span class="nav-copy"><b>ผลิตและคลัง</b><small>สูตร Batch และวัตถุดิบ</small></span></a>
+        <a href="#quality" data-review-route="quality"><span class="nav-icon">✓</span><span class="nav-copy"><b>คุณภาพ</b><small>ตรวจ QC และปล่อยผ่าน</small></span></a>
+        <a href="#admin" data-review-route="admin"><span class="nav-icon">⚙</span><span class="nav-copy"><b>ศูนย์ควบคุม</b><small>สิทธิ์ อนุมัติ Audit</small></span></a>
       </nav>
-      <div class="sidebar-foot">Read-only visual review<br>No session • No patient data • No writes</div>
+      <div class="sidebar-foot">Platform review • 9 workspaces<br>No session • No patient data • No writes</div>
     </aside>
-    <button class="sidebar-scrim" aria-label="ปิดเมนู"></button>
+    <button class="sidebar-scrim" data-review-close aria-label="ปิดเมนู"></button>
     <div class="workspace">
       <header class="top">
-        <div class="actions"><button class="btn ghost menu-toggle" aria-label="เมนู">☰</button><div class="top-title"><span class="page-kicker">Clinical Workspace</span><h1>เวชระเบียนแพทย์แผนไทย</h1></div></div>
+        <div class="actions"><button class="btn ghost menu-toggle" data-review-menu aria-label="เมนู" aria-expanded="false">☰</button><div class="top-title"><span class="page-kicker" id="review-kicker">Platform Review</span><h1 id="review-title">ศูนย์ปฏิบัติการคลินิก</h1></div></div>
         <div class="actions"><div class="identity-block"><small>ผู้ดูแลระบบตัวอย่าง</small></div><span class="badge">super_admin</span></div>
       </header>
       <main>
-        <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — หน้านี้ใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้ เมนูทั้งหมดแสดงเพราะเป็นตัวอย่าง <b>super_admin</b>; บัญชีทั่วไปเห็นเฉพาะแผนกของตน</div>
+        <div class="notice warning space-bottom-md"><b>Read-only Platform Review</b> — ทุก workspace ด้านล่างใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้ เมนูทั้งหมดแสดงเพราะเป็นตัวอย่าง <b>super_admin</b>; บัญชีทั่วไปเห็นเฉพาะแผนกของตน</div>
+        <nav class="module-nav review-module-nav" aria-label="เลือกหน้าสำหรับตรวจ UI">
+          <a href="#operations" data-review-route="operations">ภาพรวม</a>
+          <a href="#appointments" data-review-route="appointments">นัดหมาย</a>
+          <a href="#checkin" data-review-route="checkin">LINE / HN</a>
+          <a href="#foundation" data-review-route="foundation">รากวิชา</a>
+          <a href="#clinical" data-review-route="clinical">เวชระเบียน</a>
+          <a href="#pharmacy" data-review-route="pharmacy">ห้องยา</a>
+          <a href="#production" data-review-route="production">ผลิต</a>
+          <a href="#quality" data-review-route="quality">คุณภาพ</a>
+          <a href="#admin" data-review-route="admin">ควบคุม</a>
+        </nav>
+
+        <section class="review-workspace" id="review-operations" data-review-workspace="operations">
+          <div class="hero"><span class="page-kicker">Operations</span><h2>งานวันนี้อยู่ที่เดียว</h2><p>ภาพรวมเดิมยังอยู่ครบ: ผู้รับบริการ นัดหมาย Encounter ห้องยา การเงิน และ Audit โดยส่งต่องานตามขอบเขตแผนก</p></div>
+          <div class="stats"><div class="stat">ผู้รับบริการ<strong>128</strong></div><div class="stat">นัดวันนี้<strong>12</strong></div><div class="stat">Encounter เปิดอยู่<strong>7</strong></div><div class="stat">คิวห้องยา<strong>4</strong></div><div class="stat">รอการเงิน<strong>3</strong></div></div>
+          <div class="grid2">
+            <section class="card"><div class="section-heading"><span class="section-number">HN</span><div><h2>ทะเบียนผู้รับบริการ</h2><p>ค้นด้วย HN ชื่อ โทรศัพท์ การแพ้ และเชื่อม LINE อย่างมี consent</p></div></div><div class="list"><div class="item"><div><b>HN-DEMO-001 • ผู้รับบริการตัวอย่าง</b><small>มี Allergy flag • นัดติดตามวันนี้</small></div><span class="badge">active</span></div></div></section>
+            <section class="card"><div class="section-heading"><span class="section-number">฿</span><div><h2>การเงินและ Audit</h2><p>Invoice เกิดจากรายการที่จ่ายจริงและมี audit trail</p></div></div><div class="list"><div class="item"><div><b>INV-DEMO-0003</b><small>ชำระด้วย QR • อ้างอิงแบบ manual verification</small></div><span class="badge">pending</span></div></div></section>
+          </div>
+          <section class="card space-top-md release-gate-card" id="commercial-release-gates">
+            <div class="section-heading"><span class="section-number">GATE</span><div><h2>ยังไม่ใช่ Commercial Production 100%</h2><p>ห้ามประกาศพร้อมขาย/พร้อมใช้จริงจนกว่าหลักฐานด้านล่างผ่านครบ</p></div></div>
+            <div class="coverage-grid"><div><b>Authenticated staging ทุก role</b><span class="coverage-state pending">ยังไม่ผ่านหลักฐาน</span></div><div><b>LINE callback จริง</b><span class="coverage-state pending">ยังไม่ทดสอบครบ</span></div><div><b>Encrypted backup + restore drill</b><span class="coverage-state pending">ยังไม่ทำ drill</span></div><div><b>Privacy / Security / Legal review</b><span class="coverage-state pending">ยังไม่อนุมัติ</span></div></div>
+          </section>
+        </section>
+
+        <section class="review-workspace" id="review-appointments" data-review-workspace="appointments" hidden>
+          <div class="grid2"><section class="card"><div class="section-heading"><span class="section-number">◷</span><div><h2>ตารางแพทย์และ Capacity</h2><p>เลือกเฉพาะช่วงเวลาที่ยังมี capacity</p></div></div><div class="list"><div class="item"><div><b>09:00–10:00 • พท. ตัวอย่าง</b><small>ห้องตรวจ 1 • เหลือ 2 คิว</small></div><span class="badge">available</span></div><div class="item"><div><b>13:00–14:00 • พท. ตัวอย่าง</b><small>ห้องตรวจ 2 • เต็มแล้ว</small></div><span class="coverage-state blocked">full</span></div></div></section><section class="card"><div class="section-heading"><span class="section-number">01</span><div><h2>จองและติดตามนัด</h2><p>Reception เป็นผู้ดำเนินการ; Practitioner อ่านตารางของตน</p></div></div><label>ผู้รับบริการ<select><option>HN-DEMO-001 — ผู้รับบริการตัวอย่าง</option></select></label><label>บริการ<select><option>ตรวจและวินิจฉัยแพทย์แผนไทย</option><option>ติดตามผล</option></select></label><button class="btn primary wide" disabled>ยืนยันการนัดหมาย</button></section></div>
+        </section>
+
+        <section class="review-workspace" id="review-checkin" data-review-workspace="checkin" hidden>
+          <div class="grid2"><section class="card"><div class="section-heading"><span class="section-number">QR</span><div><h2>LINE Patient QR</h2><p>Opaque • ใช้ครั้งเดียว • หมดอายุ • ไม่ฝัง HN หรือข้อมูลสุขภาพ</p></div></div><div class="review-qr-placeholder" aria-label="QR ตัวอย่าง">ช</div><div class="status">ยืนยันตัวตนโดย Reception ก่อนเปิด Encounter</div></section><section class="card"><div class="section-heading"><span class="section-number">HN</span><div><h2>ทางเลือกสำหรับผู้ไม่มีมือถือ</h2><p>ค้น HN / ชื่อ / วันเกิด แล้วให้เจ้าหน้าที่ตรวจสอบตัวตน</p></div></div><label>ค้นหาผู้รับบริการ<input type="search" value="HN-DEMO-001" readonly></label><div class="identity-preview"><div><small>HN</small><strong>HN-DEMO-001</strong></div><div><small>ชื่อ</small><strong>ผู้รับบริการตัวอย่าง</strong></div><div><small>วันเกิด</small><strong>12/03/2527</strong></div><div><small>วิธีตรวจสอบ</small><strong>manual</strong></div></div><button class="btn primary wide" disabled>ยืนยันและเปิด Encounter</button></section></div>
+        </section>
+
+        <section class="review-workspace" id="review-foundation" data-review-workspace="foundation" hidden>
+          <section class="card foundation-root-card"><div class="section-heading"><span class="section-number">ร</span><div><h2>Knowledge Coverage ตามหลักฐานจริง</h2><p>แยกของที่ preserve แล้วออกจาก coverage target ที่ยังไม่บรรจุครบ</p></div></div><div class="coverage-grid"><div><b>กฎ TTM-DKR เดิมทุกแถว</b><span class="coverage-state ready">preserve/import อัตโนมัติ</span></div><div><b>ธาตุ 4 • ธาตุเจ้าเรือนเกิด/ปัจจุบัน • ปิตตะ/วาตะ/เสมหะ</b><span class="coverage-state review">seed แล้ว • ต้อง review</span></div><div><b>พิกัด 9 • กำเริบ/หย่อน/พิการ • สมุฏฐานหลัก</b><span class="coverage-state review">seed แล้ว • ต้อง review</span></div><div><b>ปิตตะ 42 / วาตะ 80 / เสมหะ 20</b><span class="coverage-state missing">เป็น target • ยังไม่บรรจุครบ</span></div><div><b>รูปธาตุ 42 / อวัยวะแผนไทย</b><span class="coverage-state missing">ยังไม่บรรจุครบ</span></div><div><b>โรค คัมภีร์ ตำรับ สมุนไพร รสยา เส้น และหัตถการ</b><span class="coverage-state missing">มี schema • dataset ยังไม่ครบ</span></div></div><div class="foundation-chain"><span>คัมภีร์ / Dataset</span><i>→</i><span>Concept</span><i>→</i><span>Relation</span><i>→</i><span>Encounter Evidence</span><i>→</i><span>Practitioner Confirmation</span></div><p class="notice warning space-top-sm"><b>หลักการ:</b> แพทย์แผนไทยเป็น primary ontology; ICD/WHO เป็น secondary mapping และ AI ห้ามวินิจฉัยแทนผู้ประกอบวิชาชีพ</p></section>
+        </section>
+
+        <section class="review-workspace" id="review-pharmacy" data-review-workspace="pharmacy" hidden>
+          <div class="grid2"><section class="card"><div class="section-heading"><span class="section-number">Rx</span><div><h2>คิวใบสั่งยาและ Allergy Guard</h2><p>ตรวจผู้รับบริการ ใบสั่งยา Lot และคำเตือนก่อนจ่าย</p></div></div><div class="item"><div><b>RX-DEMO-001 • HN-DEMO-001</b><small>ยาสมุนไพรตัวอย่าง 12 แคปซูล • FEFO</small></div><span class="coverage-state blocked">allergy check</span></div><button class="btn primary wide" disabled>ยืนยันจ่าย + ส่งการเงิน</button></section><section class="card"><div class="section-heading"><span class="section-number">PM</span><div><h2>Product Master และ Walk-in Sale</h2><p>SKU ชื่อ ราคา หน่วย สถานะ Lot และฉลากยา</p></div></div><label>ค้นหาสินค้า<select><option>HERB-DEMO-001 — ผลิตภัณฑ์ตัวอย่าง</option></select></label><div class="item"><div><b>LOT-DEMO-001</b><small>คงเหลือ 48 • Exp 31/12/2570</small></div><span class="badge">FEFO</span></div></section></div>
+        </section>
+
+        <section class="review-workspace" id="review-production" data-review-workspace="production" hidden>
+          <div class="grid2"><section class="card"><div class="section-heading"><span class="section-number">⚗</span><div><h2>Production Request → Batch</h2><p>ไม่เปิดเผย HN, diagnosis หรือข้อมูลผู้รับบริการแก่ฝ่ายผลิต</p></div></div><div class="item"><div><b>PR-DEMO-00042 • FORM-TTM-001 Rev.00</b><small>12 แคปซูล • approved formula</small></div><span class="badge">requested</span></div><button class="btn primary wide" disabled>เปิด Production Order</button></section><section class="card"><div class="section-heading"><span class="section-number">LOT</span><div><h2>วัตถุดิบและ FEFO</h2><p>เบิก Lot และ stock movement ใน transaction เดียว</p></div></div><div class="foundation-chain"><span>Issue</span><i>→</i><span>Consume</span><i>→</i><span>Complete Batch</span><i>→</i><span>รอ Quality</span></div><p class="notice space-top-sm">Production ทำ batch ให้เสร็จได้ แต่ปล่อยผ่านเองไม่ได้</p></section></div>
+        </section>
+
+        <section class="review-workspace" id="review-quality" data-review-workspace="quality" hidden>
+          <section class="card"><div class="section-heading"><span class="section-number">QC</span><div><h2>Independent Quality Release</h2><p>เห็น Formula, Batch และหลักฐาน QC เท่านั้น—ไม่เห็น HN ผู้รับบริการ ใบสั่งยา หรือข้อมูลการจ่าย</p></div></div><div class="grid2"><div class="item"><div><b>LOT-DEMO-00042</b><small>Actual 12 แคปซูล • awaiting_qc</small></div><span class="badge">review</span></div><div class="item"><div><b>Segregation of duties</b><small>ผู้ผลิตกับผู้อนุมัติต้องเป็นคนละคน รวมถึง super_admin</small></div><span class="coverage-state blocked">enforced</span></div></div><div class="actions right"><button class="btn ghost" disabled>Reject</button><button class="btn primary" disabled>QC Pass &amp; Release</button></div></section>
+        </section>
+
+        <section class="review-workspace" id="review-admin" data-review-workspace="admin" hidden>
+          <div class="grid2"><section class="card"><div class="section-heading"><span class="section-number">RBAC</span><div><h2>Department Access</h2><p>หนึ่งบัญชีมีหนึ่ง operational department; มีเพียง super_admin ที่ข้าม workspace ใน tenant เดียวได้</p></div></div><div class="coverage-grid"><div><b>Practitioner</b><span>Clinical + Foundation</span></div><div><b>Reception</b><span>Patient + Appointment + Check-in</span></div><div><b>Pharmacy</b><span>Prescription + Product + Dispense</span></div><div><b>Production / Quality / Billing</b><span>เฉพาะ workspace ของตน</span></div></div></section><section class="card"><div class="section-heading"><span class="section-number">A</span><div><h2>Audit และ Amendment</h2><p>Sign-off แล้ว lock; การแก้ไขต้องมีเหตุผลและ audit event ใหม่</p></div></div><div class="list"><div class="item"><div><b>ENC-DEMO-001 • complete_record</b><small>signed • locked • practitioner license recorded</small></div><span class="badge">immutable</span></div></div></section></div>
+        </section>
+
+        <section class="review-workspace" id="review-clinical" data-review-workspace="clinical" hidden>
         <section class="card">
           <div class="section-heading"><span class="section-number">Tx</span><div><h2>Pharmacy → Production → Quality แบบแยกแผนก</h2><p>Pharmacy เห็นผู้รับบริการและใบสั่งยา, Production ได้รับเฉพาะข้อมูลผลิต และ Quality เป็นผู้ปล่อยผ่านอิสระ</p></div></div>
           <div class="grid2">
@@ -121,6 +177,7 @@
             </form>
           </section>
         </div>
+        </section>
       </main>
     </div>
   </div>
