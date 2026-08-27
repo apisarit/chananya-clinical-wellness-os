@@ -5,6 +5,7 @@
   const routes = Object.freeze([
     { key: 'operations', href: '/', icon: '⌂', label: 'ศูนย์ปฏิบัติการ', note: 'ภาพรวม ผู้รับบริการ การเงิน' },
     { key: 'appointments', href: '/appointments.html', icon: '◷', label: 'นัดหมาย', note: 'ตารางแพทย์และคิว', capability: 'appointments_view' },
+    { key: 'checkin', href: '/check-in.html', icon: '▣', label: 'ยืนยันผู้รับบริการ', note: 'LINE QR หรือ HN', capability: 'patient_checkin' },
     { key: 'foundation', href: '/foundation.html', icon: 'ร', label: 'รากวิชา', note: 'คัมภีร์และองค์ความรู้', capability: 'knowledge_read' },
     { key: 'clinical', href: '/clinical-v3.html', icon: '✚', label: 'เวชระเบียน', note: 'ตรวจ วินิจฉัย รักษา', capability: 'clinical_read' },
     { key: 'pharmacy', href: '/pharmacy.html', icon: 'Rx', label: 'ห้องยา', note: 'จ่ายยาและผลิตภัณฑ์', capability: 'pharmacy_operate' },

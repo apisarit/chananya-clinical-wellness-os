@@ -76,9 +76,9 @@
         <section class="view" id="patients">
           <div class="grid2">
             <section class="card">
-              <div class="section-heading"><span class="section-number">HN</span><div><h2>ลงทะเบียนผู้รับบริการ</h2><p>ข้อมูลประชากรและการแพ้เป็นข้อมูลกลาง ใช้ร่วมกันทุก workstation</p></div></div>
+              <div class="section-heading"><span class="section-number">HN</span><div><h2>ลงทะเบียนผู้รับบริการ</h2><p>ข้อมูลประชากรและการแพ้เป็นข้อมูลกลาง HN จะออกจากฐานข้อมูลอัตโนมัติเมื่อ Hybrid Identity เปิดใช้งาน</p></div></div>
               <form class="form" id="patient-form">
-                <label>HN<input id="p-hn" required></label>
+                <label>HN<input id="p-hn" placeholder="ระบบออกให้อัตโนมัติ"><small id="p-hn-note">กำลังตรวจสอบ Identity service</small></label>
                 <label>คำนำหน้า<input id="p-prefix"></label>
                 <label>ชื่อ<input id="p-first" required></label>
                 <label>นามสกุล<input id="p-last" required></label>
@@ -96,6 +96,7 @@
             </section>
             <section class="card">
               <div class="section-heading"><span class="section-number">01</span><div><h2>ทะเบียนผู้รับบริการ</h2><p>ค้นด้วย HN ชื่อ โทรศัพท์ หรือข้อมูลการแพ้</p></div></div>
+              <a class="btn primary wide space-bottom-md" href="/check-in.html">สแกน QR / เปิด Encounter ด้วย HN</a>
               <label>ค้นหา<input id="patient-search" type="search" placeholder="HN / ชื่อ / โทรศัพท์ / การแพ้"></label>
               <div id="patient-list" class="list space-top-sm"></div>
             </section>
@@ -135,6 +136,35 @@
   </div>
 
   <div class="lock" id="lock"><div><h2>ระบบถูกล็อก</h2><p>ไม่มีการใช้งานเกิน 15 นาที</p><button class="btn ghost" id="unlock">ปลดล็อก</button></div></div>
+  <dialog class="identity-dialog" id="identity-link-dialog" aria-labelledby="identity-link-title">
+    <form method="dialog" class="identity-dialog-head"><h2 id="identity-link-title">เชื่อมผู้รับบริการกับ LINE</h2><button class="btn ghost" value="cancel" aria-label="ปิด">ปิด</button></form>
+    <p class="muted" id="identity-link-patient">—</p>
+    <form class="form" id="identity-link-form">
+      <label>ประเภทการเชื่อม
+        <select id="identity-link-type"><option value="self">บัญชีของผู้รับบริการ</option><option value="guardian">บัญชีผู้ดูแล</option></select>
+      </label>
+      <label>ความสัมพันธ์<input id="identity-link-relation" type="text" placeholder="เช่น มารดา บุตร ผู้ดูแล" disabled></label>
+      <label class="full check-row"><input id="identity-link-consent" type="checkbox" required> ผู้รับบริการหรือผู้แทนให้ความยินยอมให้ออกรหัสเชื่อมบัญชี LINE และฉันได้อธิบายวิธียกเลิกการเชื่อมแล้ว</label>
+      <button class="btn primary full" type="submit">ออกรหัสเชื่อมบัญชี 15 นาที</button>
+    </form>
+    <section class="identity-link-management">
+      <div class="section-heading"><span class="section-number">↺</span><div><h3>บัญชีที่เคยเชื่อม</h3><p>แสดงเฉพาะประเภทและเวลา ไม่แสดง LINE user ID</p></div></div>
+      <div class="list" id="identity-existing-links"><p class="muted">กำลังตรวจสอบ…</p></div>
+      <form class="form hidden" id="identity-revoke-form">
+        <input id="identity-revoke-id" type="hidden">
+        <p class="full muted" id="identity-revoke-summary">—</p>
+        <label class="full">เหตุผลการยกเลิกการเชื่อม<textarea id="identity-revoke-reason" minlength="5" maxlength="500" required placeholder="เช่น ผู้รับบริการเปลี่ยนบัญชี LINE หรือถอนความยินยอม"></textarea></label>
+        <button class="btn danger full" type="submit">ยืนยันยกเลิกการเชื่อม</button>
+        <button class="btn ghost full" id="identity-revoke-cancel" type="button">ไม่ยกเลิก</button>
+      </form>
+    </section>
+    <section class="identity-link-code hidden" id="identity-link-result" aria-live="polite">
+      <small>ให้ผู้รับบริการกรอกใน LINE Patient Card</small>
+      <strong id="identity-link-code">—— ————</strong>
+      <span id="identity-link-expiry">—</span>
+      <div class="actions"><button class="btn ghost" id="identity-copy-code" type="button">คัดลอกรหัส</button><a class="btn ghost" href="/patient-card.html" target="_blank" rel="noopener">เปิด Patient Card</a></div>
+    </section>
+  </dialog>
   <div class="toast" id="toast"></div>
 </body>
 </html>

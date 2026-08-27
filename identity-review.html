@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#0d2d24">
+  <title>Hybrid Patient Identity — Read-only Review</title>
+  <link rel="stylesheet" href="app.css?v=hybrid-identity1">
+</head>
+<body data-page="checkin">
+  <div class="app-frame">
+    <aside class="sidebar" aria-label="เมนูตัวอย่าง">
+      <a class="brand" href="/"><span class="brand-mark">ช</span><span><strong>CHANANYA</strong><small>Thai Traditional Medicine<br>Clinical &amp; Wellness OS</small></span></a>
+      <nav class="global-nav">
+        <a href="/"><span class="nav-icon">⌂</span><span class="nav-copy"><b>ศูนย์ปฏิบัติการ</b><small>ทะเบียนผู้รับบริการ</small></span></a>
+        <a href="/check-in.html" aria-current="page"><span class="nav-icon">▣</span><span class="nav-copy"><b>ยืนยันผู้รับบริการ</b><small>LINE QR หรือ HN</small></span></a>
+        <a href="/clinical-v3.html"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
+        <a href="/pharmacy.html"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
+      </nav>
+      <div class="sidebar-foot">Read-only review<br>No login • No database • No writes</div>
+    </aside>
+    <div class="workspace">
+      <header class="top">
+        <div class="top-title"><span class="page-kicker">Hybrid Patient Identity</span><h1>LINE QR + HN fallback</h1></div>
+        <span class="badge">v3.5 preview</span>
+      </header>
+      <main>
+        <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — ข้อมูลทั้งหมดเป็นตัวอย่าง หน้านี้ไม่มี Supabase, LINE login, กล้อง หรือการบันทึกข้อมูล</div>
+
+        <section class="identity-review-grid">
+          <article class="card review-phone-card">
+            <div class="patient-card-brand"><span class="brand-mark">ช</span><div><strong>CHANANYA</strong><small>Digital Patient Card</small></div></div>
+            <span class="page-kicker">หน้าจอผู้รับบริการใน LINE</span>
+            <div class="patient-qr-head"><div><small>ผู้รับบริการ</small><strong>ผู้รับบริการตัวอย่าง</strong></div><span class="badge">CHANANYA-00001234</span></div>
+            <div class="review-qr-placeholder" role="img" aria-label="ตำแหน่ง QR ตัวอย่าง">▦</div>
+            <div class="patient-display-code"><small>หากกล้องสแกนไม่ได้ แจ้งรหัส 6 หลัก</small><strong>123 456</strong></div>
+            <p class="patient-qr-expiry">QR หมดอายุใน 64 วินาที • ใช้ได้ครั้งเดียว</p>
+            <div class="notice patient-access-note"><b>ไม่มีมือถือก็รับบริการได้ตามปกติ</b><span>ใช้ HN ชื่อ–วันเกิด หรือบัตรผู้รับบริการเดิม</span></div>
+          </article>
+
+          <div class="identity-review-workflow">
+            <section class="card">
+              <div class="section-heading"><span class="section-number">1</span><div><h2>เจ้าหน้าที่สแกนและตรวจสอบร่วมกัน</h2><p>QR ไม่มีชื่อ HN หรือข้อมูลสุขภาพ ผู้รักษาเห็นข้อมูลหลังผ่านสิทธิ์ของคลินิกเท่านั้น</p></div></div>
+              <div class="identity-preview">
+                <div><small>HN</small><strong>CHANANYA-00001234</strong></div>
+                <div><small>ชื่อ–นามสกุล</small><strong>ผู้รับบริการตัวอย่าง</strong></div>
+                <div><small>วันเกิด</small><strong>2 มกราคม 2533</strong></div>
+                <div><small>โทรศัพท์ 4 ตัวท้าย</small><strong>••••••5678</strong></div>
+              </div>
+              <div class="alert warning"><b>Allergy / ข้อควรระวัง</b><ul><li>Penicillin • ผื่นแดง • moderate</li></ul></div>
+              <label class="check-row identity-present-check"><input type="checkbox" checked disabled> ตรวจสอบชื่อและข้อมูลระบุตัวกับผู้รับบริการแล้ว</label>
+              <button class="btn primary wide" type="button" disabled>ยืนยันตัวตนและเปิด Encounter</button>
+            </section>
+
+            <section class="card">
+              <div class="section-heading"><span class="section-number">2</span><div><h2>ไม่มีมือถือ — ใช้ฐานข้อมูลเดียวกัน</h2><p>ค้น HN ชื่อ วันเกิด หรือโทรศัพท์ แล้วบันทึกวิธียืนยัน/ผู้ดูแลใน audit เดียวกับ QR</p></div></div>
+              <div class="form"><label class="full">ค้นหาผู้รับบริการ<input type="text" value="CHANANYA-00001234" disabled></label></div>
+              <article class="item identity-result"><span><b>CHANANYA-00001234 • ผู้รับบริการตัวอย่าง</b><small>1990-01-02 • โทรศัพท์ท้าย 5678</small></span><span class="badge">เลือก</span></article>
+              <div class="identity-proof-row"><span>Manual HN</span><span>Demographic match</span><span>Guardian attestation</span></div>
+            </section>
+
+            <section class="card">
+              <div class="section-heading"><span class="section-number">3</span><div><h2>Consent และวงจรการยกเลิก</h2><p>เจ้าหน้าที่และผู้ถือบัญชี LINE ยืนยัน consent แยกกัน; การยกเลิกต้องมีเหตุผลและไม่ลบประวัติ</p></div></div>
+              <article class="item"><div><b>บัญชีของผู้รับบริการ</b><small>เชื่อมเมื่อ 27 ส.ค. 2569 • consent ครบ 2 ฝั่ง</small></div><button class="btn danger" type="button" disabled>ยกเลิก</button></article>
+              <p class="muted space-top-sm">เมื่อยกเลิก ระบบทำให้ QR ที่ยังไม่ใช้หมดอายุ และเพิ่ม Identity Event + Audit Log</p>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

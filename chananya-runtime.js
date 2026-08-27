@@ -41,6 +41,8 @@
     knowledge_read: ['super_admin','admin','practitioner','doctor','pharmacy','production','inventory'],
     clinical_read: ['super_admin','admin','practitioner','doctor','pharmacy'],
     clinical_write: ['super_admin','admin','practitioner','doctor'],
+    patient_checkin: ['super_admin','admin','practitioner','doctor','reception'],
+    patient_identity_link: ['super_admin','admin','practitioner','doctor','reception'],
     appointments_operate: ['admin','reception'],
     appointments_view: ['super_admin','admin','reception','practitioner','doctor'],
     pharmacy_operate: ['super_admin','admin','pharmacy'],

@@ -15,6 +15,7 @@
   let products = [];
   let encounters = [];
   let prescriptionCart = [];
+  let hybridIdentityReady = false;
 
   function toast(message) {
     const element = $('#toast');
@@ -146,38 +147,82 @@
     return { systolic_bp: systolic || null, diastolic_bp: diastolic || null };
   }
 
+  function syncVerificationNoteRequirement() {
+    const guardian = $('#enc-verification-method').value === 'guardian_attestation';
+    $('#enc-verification-note').required = guardian;
+  }
+
   async function saveEncounter(event) {
     event.preventDefault();
-    const result = await db.from('encounters').insert({
-      encounter_no: `ENC-${Date.now()}`,
-      patient_id: $('#enc-patient').value,
-      status: 'completed',
+    if (!$('#enc-identity-confirmed').checked) throw new Error('กรุณาตรวจสอบตัวตนกับผู้รับบริการก่อนเปิด Encounter');
+    const bp = bloodPressure();
+    const intake = {
       chief_complaint: $('#enc-chief').value,
       present_illness: $('#enc-history').value || null,
       past_history: $('#enc-past').value || null,
       current_medications: $('#enc-meds').value || null,
       red_flags: $('#enc-redflags').value || null,
       general_examination: $('#enc-exam').value || null,
-      practitioner_id: session.user.id,
-      created_by: session.user.id,
-      completed_at: new Date().toISOString()
-    }).select().single();
-    if (result.error) throw result.error;
-    const vitalValues = [$('#enc-temp').value, $('#enc-pulse').value, $('#enc-rr').value, $('#enc-spo2').value, $('#enc-bp').value];
-    if (vitalValues.some(Boolean)) {
-      const vitalResult = await db.from('vital_signs').insert({
-        encounter_id: result.data.id,
-        temperature: num($('#enc-temp').value), pulse: num($('#enc-pulse').value), respiration: num($('#enc-rr').value),
-        spo2: num($('#enc-spo2').value), ...bloodPressure(), recorded_by: session.user.id
+      temperature: num($('#enc-temp').value),
+      pulse: num($('#enc-pulse').value),
+      respiration: num($('#enc-rr').value),
+      spo2: num($('#enc-spo2').value),
+      systolic_bp: bp.systolic_bp,
+      diastolic_bp: bp.diastolic_bp,
+      pain_before: num($('#enc-before').value)
+    };
+    let encounterId;
+    if (hybridIdentityReady) {
+      const result = await db.rpc('start_manual_patient_encounter', {
+        p_patient_id: $('#enc-patient').value,
+        p_verification_method: $('#enc-verification-method').value,
+        p_patient_present_confirmed: true,
+        p_verification_note: $('#enc-verification-note').value.trim() || null,
+        p_chief_complaint: $('#enc-chief').value,
+        p_intake: intake
       });
-      if (vitalResult.error) throw vitalResult.error;
+      if (result.error) throw result.error;
+      const encounter = Array.isArray(result.data) ? result.data[0] : result.data;
+      encounterId = encounter?.encounter_id;
+    } else {
+      const result = await db.from('encounters').insert({
+        encounter_no: `ENC-${Date.now()}`,
+        patient_id: $('#enc-patient').value,
+        status: 'draft',
+        chief_complaint: intake.chief_complaint,
+        present_illness: intake.present_illness,
+        past_history: intake.past_history,
+        current_medications: intake.current_medications,
+        red_flags: intake.red_flags,
+        general_examination: intake.general_examination,
+        practitioner_id: session.user.id,
+        created_by: session.user.id
+      }).select().single();
+      if (result.error) throw result.error;
+      encounterId = result.data.id;
+      const vitalValues = [intake.temperature, intake.pulse, intake.respiration, intake.spo2, intake.systolic_bp, intake.diastolic_bp];
+      if (vitalValues.some(value => value != null)) {
+        const vitalResult = await db.from('vital_signs').insert({
+          encounter_id: encounterId,
+          temperature: intake.temperature,
+          pulse: intake.pulse,
+          respiration: intake.respiration,
+          spo2: intake.spo2,
+          systolic_bp: intake.systolic_bp,
+          diastolic_bp: intake.diastolic_bp,
+          recorded_by: session.user.id
+        });
+        if (vitalResult.error) throw vitalResult.error;
+      }
+      if (intake.pain_before != null) {
+        const painResult = await db.from('pain_assessments').insert({ encounter_id: encounterId, assessment_stage: 'before', score: intake.pain_before, assessed_by: session.user.id });
+        if (painResult.error) throw painResult.error;
+      }
     }
-    if ($('#enc-before').value !== '') {
-      const painResult = await db.from('pain_assessments').insert({ encounter_id: result.data.id, assessment_stage: 'before', score: num($('#enc-before').value), assessed_by: session.user.id });
-      if (painResult.error) throw painResult.error;
-    }
+    if (!encounterId) throw new Error('ไม่สามารถเปิด Encounter ได้');
     event.target.reset();
-    await loadReferences(result.data.id);
+    syncVerificationNoteRequirement();
+    await loadReferences(encounterId);
     setStep('history');
     toast('เปิด Encounter แล้ว');
   }
@@ -276,6 +321,8 @@
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'clinical_write')) throw new Error('บัญชีนี้ไม่มีสิทธิ์บันทึกเวชระเบียน');
       window.ChananyaShell?.mount({ profile, session, active: 'clinical' });
+      const identityHealth = await db.rpc('hybrid_patient_identity_healthcheck');
+      hybridIdentityReady = !identityHealth.error && Boolean((Array.isArray(identityHealth.data) ? identityHealth.data[0] : identityHealth.data)?.ready);
       const requested = new URL(location.href).searchParams.get('encounter');
       await loadReferences(requested);
       const requestedStep = new URL(location.href).searchParams.get('step');
@@ -290,6 +337,7 @@
 
   $$('[data-clinical-step]').forEach(button => button.addEventListener('click', () => setStep(button.dataset.clinicalStep)));
   $('#encounter').addEventListener('change', event => selectEncounter(event.target.value).catch(fail));
+  $('#enc-verification-method').addEventListener('change', syncVerificationNoteRequirement);
   $('#encounter-form').addEventListener('submit', event => saveEncounter(event).catch(fail));
   $('#exam-form').addEventListener('submit', event => saveExam(event).catch(fail));
   $('#plan-form').addEventListener('submit', event => savePlan(event).catch(fail));

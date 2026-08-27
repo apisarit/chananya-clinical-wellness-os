@@ -16,6 +16,11 @@
   let lockTimer;
   let patientFilter = '';
   let editingPatientId = null;
+  let hybridDatabaseReady = false;
+  let lineIdentityReady = false;
+  let identityLinkPatientId = null;
+  let latestIdentityLinkCode = '';
+  let identityLinks = [];
   const data = {
     patients: [], allergies: [], appointments: [], encounters: [], prescriptions: [],
     dispensing: [], dispensingItems: [], rxItems: [], products: [], invoices: [], payments: [], audit: []
@@ -139,7 +144,8 @@
     });
     $('#patient-list').innerHTML = rows.slice(0, 200).map(item => {
       const allergies = activeAllergies(item.id);
-      return `<article class="item"><div><b>${esc(item.hn)} • ${esc(patientName(item.id))}</b><small>${esc(item.phone || 'ไม่มีโทรศัพท์')}${allergies.length ? ` • แพ้: ${esc(allergies.map(allergy => allergy.allergen_name).join(', '))}` : ''}</small></div><div class="actions"><span class="badge">${esc(item.payment_right || 'ทั่วไป')}</span>${canView('patients') ? `<button class="btn ghost" data-edit-patient="${esc(item.id)}">แก้ไข</button>` : ''}</div></article>`;
+      const canLink = lineIdentityReady && window.ChananyaRuntime.can(profile, 'patient_identity_link');
+      return `<article class="item"><div><b>${esc(item.hn)} • ${esc(patientName(item.id))}</b><small>${esc(item.phone || 'ไม่มีโทรศัพท์')}${allergies.length ? ` • แพ้: ${esc(allergies.map(allergy => allergy.allergen_name).join(', '))}` : ''}</small></div><div class="actions"><span class="badge">${esc(item.payment_right || 'ทั่วไป')}</span>${canLink ? `<button class="btn ghost" data-link-patient="${esc(item.id)}">เชื่อม LINE</button>` : ''}${canView('patients') ? `<button class="btn ghost" data-edit-patient="${esc(item.id)}">แก้ไข</button>` : ''}</div></article>`;
     }).join('') || '<p class="muted">ไม่พบผู้รับบริการ</p>';
   }
 
@@ -194,6 +200,27 @@
     $('#patient-cancel').classList.add('hidden');
   }
 
+  function applyIdentityMode() {
+    const hn = $('#p-hn');
+    hn.readOnly = hybridDatabaseReady;
+    hn.required = !hybridDatabaseReady;
+    hn.placeholder = hybridDatabaseReady ? 'ระบบออกให้อัตโนมัติเมื่อบันทึก' : 'กรอก HN ตามระบบเดิม';
+    $('#p-hn-note').textContent = hybridDatabaseReady
+      ? 'HN ออกโดยฐานข้อมูลและไม่เปลี่ยนเมื่อแก้ไขข้อมูล'
+      : 'Identity migration ยังไม่เปิด: ใช้ HN เดิมได้ตามปกติ';
+  }
+
+  async function detectIdentityBackend() {
+    const [databaseResult, serviceResult] = await Promise.all([
+      db.rpc('hybrid_patient_identity_healthcheck'),
+      fetch('/api/patient-identity', { cache: 'no-store' }).then(response => response.json()).catch(() => null)
+    ]);
+    hybridDatabaseReady = !databaseResult.error
+      && Boolean((Array.isArray(databaseResult.data) ? databaseResult.data[0] : databaseResult.data)?.ready);
+    lineIdentityReady = hybridDatabaseReady && serviceResult?.enabled === true;
+    applyIdentityMode();
+  }
+
   function beginPatientEdit(patientId) {
     const item = patient(patientId);
     if (!item) return;
@@ -225,21 +252,156 @@
       address: $('#p-address').value.trim() || null, payment_right: $('#p-right').value.trim() || null,
       emergency_contact_name: $('#p-emergency').value.trim() || null
     };
-    const result = editingPatientId
-      ? await db.from('patients').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingPatientId).select().single()
-      : await db.from('patients').insert({ ...payload, created_by: session.user.id }).select().single();
-    if (result.error) throw result.error;
     const allergy = $('#p-allergy').value.trim();
-    const alreadyRecorded = activeAllergies(result.data.id).some(item => String(item.allergen_name || '').toLowerCase() === allergy.toLowerCase());
-    if (allergy && !alreadyRecorded) {
-      const allergyResult = await db.from('patient_allergies').insert({ patient_id: result.data.id, allergen_type: 'other', allergen_name: allergy, status: 'active', created_by: session.user.id });
-      if (allergyResult.error) throw allergyResult.error;
+    let savedPatient;
+    if (hybridDatabaseReady) {
+      const result = await db.rpc('upsert_patient_registration', {
+        p_patient_id: editingPatientId,
+        p_prefix: payload.prefix,
+        p_first_name: payload.first_name,
+        p_last_name: payload.last_name,
+        p_national_id: payload.national_id,
+        p_gender: payload.gender,
+        p_date_of_birth: payload.date_of_birth,
+        p_phone: payload.phone,
+        p_address: payload.address,
+        p_payment_right: payload.payment_right,
+        p_emergency_contact_name: payload.emergency_contact_name,
+        p_allergy: allergy || null
+      });
+      if (result.error) throw result.error;
+      savedPatient = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (!savedPatient?.id) throw new Error('ฐานข้อมูลไม่ส่งข้อมูลผู้รับบริการกลับมา');
+    } else {
+      if (!payload.hn) throw new Error('กรุณาระบุ HN ในโหมดระบบเดิม');
+      const result = editingPatientId
+        ? await db.from('patients').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingPatientId).select().single()
+        : await db.from('patients').insert({ ...payload, created_by: session.user.id }).select().single();
+      if (result.error) throw result.error;
+      savedPatient = result.data;
+      const alreadyRecorded = activeAllergies(savedPatient.id).some(item => String(item.allergen_name || '').toLowerCase() === allergy.toLowerCase());
+      if (allergy && !alreadyRecorded) {
+        const allergyResult = await db.from('patient_allergies').insert({ patient_id: savedPatient.id, allergen_type: 'other', allergen_name: allergy, status: 'active', created_by: session.user.id });
+        if (allergyResult.error) throw allergyResult.error;
+      }
+      await audit(editingPatientId ? 'update' : 'create', 'patients', savedPatient.id, { identityMode: 'legacy_hn' });
     }
-    await audit(editingPatientId ? 'update' : 'create', 'patients', result.data.id);
     const wasEditing = Boolean(editingPatientId);
     resetPatientForm();
     await loadAll();
     toast(wasEditing ? 'แก้ไขข้อมูลผู้รับบริการแล้ว' : 'บันทึกผู้รับบริการแล้ว');
+  }
+
+  function renderIdentityLinks() {
+    const host = $('#identity-existing-links');
+    host.replaceChildren();
+    if (!identityLinks.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = 'ยังไม่มีบัญชี LINE ที่เชื่อมกับผู้รับบริการรายนี้';
+      host.append(empty);
+      return;
+    }
+    for (const link of identityLinks) {
+      const item = document.createElement('article');
+      item.className = 'item';
+      const detail = document.createElement('div');
+      const title = document.createElement('b');
+      title.textContent = link.link_type === 'guardian'
+        ? `ผู้ดูแล • ${link.relation_label || 'ไม่ระบุความสัมพันธ์'}`
+        : 'บัญชีของผู้รับบริการ';
+      const time = document.createElement('small');
+      time.textContent = link.status === 'active'
+        ? `เชื่อมเมื่อ ${new Date(link.verified_at).toLocaleString('th-TH')}`
+        : `ยกเลิกเมื่อ ${new Date(link.revoked_at).toLocaleString('th-TH')}`;
+      detail.append(title, time);
+      item.append(detail);
+      if (link.status === 'active') {
+        const revoke = document.createElement('button');
+        revoke.type = 'button';
+        revoke.className = 'btn danger';
+        revoke.dataset.revokeIdentity = link.link_id;
+        revoke.textContent = 'ยกเลิก';
+        item.append(revoke);
+      } else {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'ยกเลิกแล้ว';
+        item.append(badge);
+      }
+      host.append(item);
+    }
+  }
+
+  async function loadIdentityLinks() {
+    const result = await db.rpc('list_patient_identity_links', {
+      p_patient_id: identityLinkPatientId
+    });
+    if (result.error) throw result.error;
+    identityLinks = result.data || [];
+    renderIdentityLinks();
+  }
+
+  async function openIdentityLinkDialog(patientId) {
+    const item = patient(patientId);
+    if (!item || !lineIdentityReady) return;
+    identityLinkPatientId = patientId;
+    latestIdentityLinkCode = '';
+    $('#identity-link-patient').textContent = `${item.hn} • ${patientName(item.id)}`;
+    $('#identity-link-form').reset();
+    $('#identity-link-relation').disabled = true;
+    $('#identity-link-relation').required = false;
+    $('#identity-revoke-form').reset();
+    $('#identity-revoke-form').classList.add('hidden');
+    $('#identity-existing-links').innerHTML = '<p class="muted">กำลังตรวจสอบ…</p>';
+    $('#identity-link-result').classList.add('hidden');
+    const dialog = $('#identity-link-dialog');
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    await loadIdentityLinks();
+  }
+
+  function beginIdentityRevocation(linkId) {
+    const link = identityLinks.find(item => item.link_id === linkId && item.status === 'active');
+    if (!link) return;
+    $('#identity-revoke-id').value = linkId;
+    $('#identity-revoke-summary').textContent = link.link_type === 'guardian'
+      ? `ยกเลิกบัญชีผู้ดูแล (${link.relation_label || 'ไม่ระบุความสัมพันธ์'})`
+      : 'ยกเลิกบัญชี LINE ของผู้รับบริการ';
+    $('#identity-revoke-form').classList.remove('hidden');
+    $('#identity-revoke-reason').focus();
+  }
+
+  async function revokeIdentityLink(event) {
+    event.preventDefault();
+    const result = await db.rpc('revoke_patient_identity_link', {
+      p_link_id: $('#identity-revoke-id').value,
+      p_reason: $('#identity-revoke-reason').value.trim()
+    });
+    if (result.error) throw result.error;
+    $('#identity-revoke-form').reset();
+    $('#identity-revoke-form').classList.add('hidden');
+    await loadIdentityLinks();
+    toast('ยกเลิกการเชื่อม LINE และบันทึก Audit แล้ว');
+  }
+
+  async function issueIdentityLink(event) {
+    event.preventDefault();
+    if (!identityLinkPatientId) throw new Error('ไม่พบผู้รับบริการที่เลือก');
+    const result = await db.rpc('issue_patient_line_link_code', {
+      p_patient_id: identityLinkPatientId,
+      p_link_type: $('#identity-link-type').value,
+      p_relation_label: $('#identity-link-relation').value.trim() || null,
+      p_consent_confirmed: $('#identity-link-consent').checked
+    });
+    if (result.error) throw result.error;
+    const row = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!row?.link_code) throw new Error('ไม่สามารถออกรหัสเชื่อมบัญชีได้');
+    latestIdentityLinkCode = row.link_code;
+    $('#identity-link-code').textContent = row.link_code.match(/.{1,4}/g).join('-');
+    $('#identity-link-expiry').textContent = `หมดอายุ ${new Date(row.expires_at).toLocaleString('th-TH')}`;
+    $('#identity-link-result').classList.remove('hidden');
+    toast('ออกรหัสเชื่อมบัญชีแล้ว');
   }
 
   async function createInvoice(orderId) {
@@ -311,6 +473,7 @@
       if (!profile) throw new Error('ไม่พบ Profile');
       role = runtime.roleOf(profile) || 'viewer';
       applyRole();
+      await detectIdentityBackend();
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
       await loadAll();
@@ -327,11 +490,39 @@
   });
   $('#patient-search').addEventListener('input', event => { patientFilter = event.target.value; renderPatients(); });
   $('#patient-list').addEventListener('click', event => {
-    const button = event.target.closest('[data-edit-patient]');
-    if (button) beginPatientEdit(button.dataset.editPatient);
+    const editButton = event.target.closest('[data-edit-patient]');
+    if (editButton) beginPatientEdit(editButton.dataset.editPatient);
+    const linkButton = event.target.closest('[data-link-patient]');
+    if (linkButton) openIdentityLinkDialog(linkButton.dataset.linkPatient).catch(fail);
   });
   $('#patient-form').addEventListener('submit', event => savePatient(event).catch(fail));
   $('#patient-cancel').addEventListener('click', resetPatientForm);
+  $('#identity-link-form').addEventListener('submit', event => issueIdentityLink(event).catch(fail));
+  $('#identity-existing-links').addEventListener('click', event => {
+    const button = event.target.closest('[data-revoke-identity]');
+    if (button) beginIdentityRevocation(button.dataset.revokeIdentity);
+  });
+  $('#identity-revoke-form').addEventListener('submit', event => revokeIdentityLink(event).catch(fail));
+  $('#identity-revoke-cancel').addEventListener('click', () => {
+    $('#identity-revoke-form').reset();
+    $('#identity-revoke-form').classList.add('hidden');
+  });
+  $('#identity-link-type').addEventListener('change', event => {
+    const relation = $('#identity-link-relation');
+    const guardian = event.target.value === 'guardian';
+    relation.disabled = !guardian;
+    relation.required = guardian;
+    if (!guardian) relation.value = '';
+  });
+  $('#identity-copy-code').addEventListener('click', async () => {
+    if (!latestIdentityLinkCode) return;
+    try {
+      await navigator.clipboard.writeText(latestIdentityLinkCode);
+      toast('คัดลอกรหัสแล้ว');
+    } catch {
+      toast('คัดลอกอัตโนมัติไม่ได้ กรุณาจดรหัสจากหน้าจอ');
+    }
+  });
   $('#payment-form').addEventListener('submit', event => savePayment(event).catch(fail));
   $('#logout').addEventListener('click', async () => { await db.auth.signOut(); location.replace('/login.html'); });
   $('#unlock').addEventListener('click', () => { $('#lock').classList.remove('show'); resetLock(); });

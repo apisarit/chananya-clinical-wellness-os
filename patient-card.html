@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0d2d24">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>บัตรผู้รับบริการ — Chananya</title>
+  <link rel="stylesheet" href="app.css?v=hybrid-identity1">
+  <script defer src="patient-card.js?v=hybrid-identity1"></script>
+</head>
+<body class="patient-card-page">
+  <main class="patient-card-shell">
+    <header class="patient-card-brand">
+      <span class="brand-mark">ช</span>
+      <div>
+        <strong>CHANANYA</strong>
+        <small>Digital Patient Card</small>
+      </div>
+    </header>
+
+    <section class="card patient-card-intro">
+      <span class="page-kicker">ยืนยันตัวตนแบบไม่ใช้กระดาษ</span>
+      <h1>บัตรผู้รับบริการ</h1>
+      <p>QR นี้ใช้ครั้งเดียวและหมดอายุอัตโนมัติ ไม่มี HN ชื่อ เลขบัตรประชาชน หรือข้อมูลสุขภาพอยู่ภายใน QR</p>
+      <div class="status" id="patient-app-status" role="status" aria-live="polite">กำลังเปิดบริการผ่าน LINE…</div>
+    </section>
+
+    <section class="card hidden" id="patient-link-section">
+      <div class="section-heading">
+        <span class="section-number">1</span>
+        <div><h2>เชื่อมบัญชีครั้งแรก</h2><p>รับรหัสเชื่อมบัญชีจากเจ้าหน้าที่ แล้วกรอกภายใน 15 นาที</p></div>
+      </div>
+      <form class="form" id="patient-link-form">
+        <label class="full">รหัสเชื่อมบัญชี
+          <input id="patient-link-code" type="text" inputmode="text" autocomplete="one-time-code" maxlength="14" placeholder="เช่น A1B2-C3D4-E5F6" required>
+        </label>
+        <label class="full check-row"><input id="patient-link-consent" type="checkbox" required> ฉันยินยอมเชื่อมบัญชี LINE นี้กับประวัติผู้รับบริการตามที่เจ้าหน้าที่ระบุ และทราบว่าสามารถขอยกเลิกการเชื่อมได้</label>
+        <button class="btn primary full" type="submit">ยืนยันการเชื่อมบัญชี</button>
+      </form>
+    </section>
+
+    <section class="card hidden" id="patient-profile-section">
+      <div class="section-heading">
+        <span class="section-number">2</span>
+        <div><h2>เลือกผู้รับบริการ</h2><p>บัญชีผู้ดูแลสามารถเลือกบุคคลที่ได้รับความยินยอมให้ดูแล</p></div>
+      </div>
+      <label>โปรไฟล์ผู้รับบริการ<select id="patient-profile-select"></select></label>
+      <button class="btn primary wide space-top-sm" id="patient-generate-card" type="button">สร้าง QR สำหรับเข้ารับบริการ</button>
+    </section>
+
+    <section class="card patient-qr-card hidden" id="patient-qr-section" aria-live="polite">
+      <div class="patient-qr-head">
+        <div><small>ผู้รับบริการ</small><strong id="patient-card-name">—</strong></div>
+        <span class="badge" id="patient-card-hn">—</span>
+      </div>
+      <img id="patient-qr-image" class="patient-qr-image" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="QR สำหรับยืนยันตัวตนครั้งเดียว">
+      <div class="patient-display-code">
+        <small>หากกล้องสแกนไม่ได้ แจ้งรหัส 6 หลัก</small>
+        <strong id="patient-display-code">—— ——</strong>
+      </div>
+      <p class="patient-qr-expiry" id="patient-qr-expiry">กำลังคำนวณเวลาคงเหลือ</p>
+      <button class="btn ghost wide" id="patient-refresh-card" type="button">สร้าง QR ใหม่</button>
+    </section>
+
+    <section class="notice patient-access-note">
+      <b>ไม่มีมือถือก็รับบริการได้ตามปกติ</b>
+      <span>แจ้ง HN ชื่อ–วันเกิด หรือใช้บัตรผู้รับบริการเดิม เจ้าหน้าที่จะเปิด Encounter จากฐานข้อมูลเดียวกัน</span>
+    </section>
+  </main>
+</body>
+</html>

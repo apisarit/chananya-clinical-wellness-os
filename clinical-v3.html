@@ -79,6 +79,7 @@
             <div id="clinical-record-fields">
               <section class="card clinical-stage active" data-stage="intake">
                 <div class="section-heading"><span class="section-number">1</span><div><h2>เปิด Visit / Initial Encounter</h2><p>บันทึกอาการสำคัญ ประวัติปัจจุบัน สัญญาณชีพ และข้อมูลคัดกรองก่อนเข้าสู่เวชระเบียน</p></div></div>
+                <div class="notice space-bottom-md"><b>ทางเลือกที่เร็วและตรวจสอบได้</b><br><a href="/check-in.html">เปิด Patient Check-in เพื่อสแกน LINE QR หรือค้น HN</a> แล้วระบบจะกลับมายัง Encounter นี้โดยอัตโนมัติ</div>
                 <form class="form" id="encounter-form">
                   <label class="full">ผู้รับบริการ<select id="enc-patient" required></select></label>
                   <label class="full">อาการสำคัญ<textarea id="enc-chief" required></textarea></label>
@@ -93,6 +94,9 @@
                   <label>Pain แรกรับ<input id="enc-before" type="number" min="0" max="10"></label>
                   <label class="full">Red flags / ข้อควรส่งต่อ<textarea id="enc-redflags"></textarea></label>
                   <label class="full">ผลตรวจคัดกรองทั่วไป<textarea id="enc-exam"></textarea></label>
+                  <label>วิธียืนยันผู้รับบริการ<select id="enc-verification-method" required><option value="demographic_match">ชื่อ + วันเกิด/โทรศัพท์ตรงกัน</option><option value="manual_hn">บัตร HN / แจ้ง HN</option><option value="government_id">ตรวจบัตรที่ออกโดยรัฐ</option><option value="guardian_attestation">ผู้ดูแลยืนยันแทน</option></select></label>
+                  <label>หมายเหตุการยืนยัน<textarea id="enc-verification-note" placeholder="ระบุชื่อ/ความสัมพันธ์เมื่อผู้ดูแลยืนยันแทน"></textarea></label>
+                  <label class="full check-row identity-present-check"><input type="checkbox" id="enc-identity-confirmed" required>ตรวจสอบชื่อและข้อมูลระบุตัวกับผู้รับบริการ/ผู้ดูแลแล้ว</label>
                   <button class="btn primary full">เปิด Encounter และทำงานต่อ</button>
                 </form>
               </section>

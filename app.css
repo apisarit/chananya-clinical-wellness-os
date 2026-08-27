@@ -324,6 +324,58 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 .appt-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 9px; padding: 13px; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
 .appt-row small { display: block; margin-top: 4px; color: var(--muted); }
 
+/* Hybrid patient identity */
+.identity-hero h2 { position: relative; z-index: 1; margin: 2px 0 5px; }
+.identity-hero p { position: relative; z-index: 1; max-width: 850px; }
+.identity-checkin-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.identity-results { display: grid; gap: 8px; max-height: 470px; overflow: auto; }
+.identity-result { width: 100%; color: var(--ink); text-align: left; }
+.identity-preview { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
+.identity-preview > div { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--forest-50); }
+.identity-preview small, .identity-preview strong { display: block; }
+.identity-preview small { margin-bottom: 4px; color: var(--muted); font-size: .68rem; }
+.identity-preview strong { overflow-wrap: anywhere; color: var(--forest-950); }
+.identity-present-check { align-items: flex-start; padding: 12px; border: 1px solid #c9dcd2; border-radius: 11px; background: var(--forest-50); }
+.scanner-frame { position: relative; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 16px; background: #071d17; }
+.scanner-frame video { width: 100%; height: 100%; object-fit: cover; }
+.scanner-guide { position: absolute; inset: 18%; border: 3px solid var(--gold-soft); border-radius: 18px; box-shadow: 0 0 0 999px rgba(3,18,14,.34); }
+.identity-dialog { overflow: auto; width: min(560px, calc(100vw - 28px)); max-height: min(88vh,800px); border: 1px solid var(--line); border-radius: 18px; padding: 20px; color: var(--ink); background: var(--paper); box-shadow: var(--shadow-md); }
+.identity-dialog::backdrop { background: rgba(8,25,20,.66); backdrop-filter: blur(4px); }
+.identity-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.identity-dialog-head h2 { margin: 0; color: var(--forest-950); font-size: 1.18rem; }
+.identity-link-code { display: grid; justify-items: center; gap: 8px; margin-top: 15px; padding: 18px; border: 1px solid #d8c795; border-radius: 14px; background: #fcf8ec; text-align: center; }
+.identity-link-code strong { color: var(--forest-950); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: clamp(1.6rem, 7vw, 2.25rem); letter-spacing: .08em; }
+.identity-link-code small, .identity-link-code span { color: var(--muted); }
+.identity-link-management { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.identity-review-grid { display: grid; grid-template-columns: minmax(300px,380px) minmax(0,1fr); gap: 18px; align-items: start; }
+.review-phone-card { position: sticky; top: 88px; background: radial-gradient(circle at 80% 0%, rgba(182,146,78,.16), transparent 17rem), var(--surface); }
+.review-qr-placeholder { display: grid; place-items: center; width: min(100%,260px); aspect-ratio: 1; margin: 18px auto; border: 10px solid #fff; border-radius: 14px; background: repeating-conic-gradient(#123b2e 0 25%, #fff 0 50%) 50% / 22px 22px; box-shadow: 0 8px 24px rgba(13,45,36,.12); color: rgba(255,255,255,.94); font-size: 7rem; text-shadow: 0 2px 12px #123b2e; }
+.identity-review-workflow { display: grid; gap: 16px; }
+.identity-proof-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.identity-proof-row span { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: .78rem; }
+
+.patient-card-page { min-height: 100vh; padding: max(16px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 80% 0%, rgba(182,146,78,.2), transparent 24rem), var(--cream); }
+.patient-card-shell { width: min(100%, 520px); margin: 0 auto; padding: 0; }
+.patient-card-brand { display: flex; align-items: center; gap: 12px; padding: 10px 3px 18px; }
+.patient-card-brand strong { display: block; color: var(--forest-950); font-family: Georgia, serif; letter-spacing: .09em; }
+.patient-card-brand small { display: block; margin-top: 2px; color: var(--muted); }
+.patient-card-intro h1 { margin: 7px 0 5px; color: var(--forest-950); font-size: 1.55rem; }
+.patient-card-intro p { margin: 0 0 14px; color: var(--muted); line-height: 1.6; }
+.patient-qr-card { display: grid; justify-items: center; gap: 14px; text-align: center; }
+.patient-qr-head { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; text-align: left; }
+.patient-qr-head small, .patient-qr-head strong { display: block; }
+.patient-qr-head small { color: var(--muted); }
+.patient-qr-head strong { margin-top: 2px; color: var(--forest-950); }
+.patient-qr-image { width: min(100%, 360px); aspect-ratio: 1; border: 10px solid #fffefa; border-radius: 16px; image-rendering: pixelated; box-shadow: var(--shadow-sm); }
+.patient-display-code { display: grid; gap: 5px; }
+.patient-display-code small { color: var(--muted); }
+.patient-display-code strong { color: var(--forest-950); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 2rem; letter-spacing: .16em; }
+.patient-qr-expiry { margin: 0; color: var(--success); font-weight: 800; }
+.patient-qr-card.expired .patient-qr-image { opacity: .3; filter: grayscale(1); }
+.patient-qr-card.expired .patient-qr-expiry { color: var(--danger); }
+.patient-access-note { display: grid; gap: 4px; margin-bottom: 14px; }
+.patient-access-note span { color: var(--muted); font-size: .8rem; line-height: 1.55; }
+
 @media (max-width: 1120px) {
   .stats { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .clinical-layout { grid-template-columns: 260px minmax(0,1fr); }
@@ -351,6 +403,10 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
   .foundation-browser { grid-template-columns: 1fr; }
   .foundation-detail { position: static; }
   .foundation-gates { grid-template-columns: 1fr; }
+  .identity-checkin-grid { grid-template-columns: 1fr; }
+  .identity-review-grid { grid-template-columns: 1fr; }
+  .review-phone-card { position: static; width: min(100%,520px); justify-self: center; }
+  .identity-preview { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 600px) {
   .top { padding: 11px 13px; }
@@ -358,6 +414,8 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
   .actions .btn { min-height: 38px; padding: 8px 10px; font-size: .78rem; }
   .module-nav, .nav { padding-inline: 13px; }
   main { padding: 13px; }
+  .identity-preview { grid-template-columns: 1fr; }
+  .patient-display-code strong { font-size: 1.7rem; }
   .card { padding: 15px; border-radius: 14px; }
   .hero { border-radius: 18px; }
   .form, .opd-grid, .bm-grid, .ttm-context-grid, .checkgrid, .opd-chipgrid { grid-template-columns: 1fr; }

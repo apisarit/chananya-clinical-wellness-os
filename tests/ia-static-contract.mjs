@@ -9,6 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const contracts = [
   { page: 'index.html', scripts: ['app-shell.js', 'app.js'] },
   { page: 'appointments.html', scripts: ['app-shell.js', 'appointments.js'] },
+  { page: 'check-in.html', scripts: ['app-shell.js', 'check-in.js'] },
   { page: 'foundation.html', scripts: ['app-shell.js', 'foundation.js'] },
   {
     page: 'clinical-v3.html',
@@ -44,6 +45,22 @@ for (const contract of contracts) {
   assert.doesNotMatch(activeSource, /localStorage/, `${contract.page} should not create a second client-side source of truth`);
 }
 
+const patientCardHtml = read('patient-card.html');
+const patientCardSource = read('patient-card.js');
+assert.doesNotMatch(patientCardHtml, /\sstyle=/i, 'patient card should use the shared stylesheet');
+assert.doesNotMatch(patientCardHtml, /<script(?![^>]*\bsrc=)[^>]*>/i, 'patient card should not contain inline scripts');
+assert.doesNotMatch(patientCardSource, /localStorage|sessionStorage|setInterval\s*\(/, 'patient card must not persist credentials in browser storage');
+assert.doesNotMatch(patientCardSource, /SUPABASE|service[_-]?role/i, 'patient card must never receive database credentials');
+const patientCardIds = [...patientCardHtml.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+assert.equal(new Set(patientCardIds).size, patientCardIds.length, 'patient card should not contain duplicate IDs');
+
+const identityReview = read('identity-review.html');
+assert.doesNotMatch(identityReview, /<script/i, 'identity review must remain script-free');
+assert.doesNotMatch(identityReview, /(?:src|href)=["'][^"']*(?:supabase|auth-config)/i, 'identity review must not connect to production services');
+assert.match(identityReview, /Read-only UI review/, 'identity review must identify itself as non-operational');
+const identityReviewIds = [...identityReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+assert.equal(new Set(identityReviewIds).size, identityReviewIds.length, 'identity review should not contain duplicate IDs');
+
 const config = read('auth-config.js');
 assert.doesNotMatch(config, /createElement|appendChild|insertAdjacent|MutationObserver|setInterval/, 'auth-config.js must remain configuration-only');
 
@@ -52,6 +69,9 @@ assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.app-frame \{ display: bl
 assert.match(css, /body\.shell-open \.sidebar \{ transform: none; \}/, 'mobile navigation must expose the sidebar as a drawer');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.clinical-layout \{ grid-template-columns: 1fr; \}/, 'clinical workspace must stack on narrow screens');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.foundation-browser \{ grid-template-columns: 1fr; \}/, 'foundation browser must stack on narrow screens');
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.identity-checkin-grid \{ grid-template-columns: 1fr; \}/, 'hybrid check-in must stack on narrow screens');
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.identity-review-grid \{ grid-template-columns: 1fr; \}/, 'identity review must stack on narrow screens');
+assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.identity-preview \{ grid-template-columns: 1fr; \}/, 'identity confirmation must become single-column on phones');
 assert.match(css, /\.workflow-nav \{ grid-template-columns: repeat\(7,minmax\(122px,1fr\)\); overflow-x: auto;/, 'clinical workflow must remain reachable with horizontal scrolling');
 assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.form, \.opd-grid, \.bm-grid, \.ttm-context-grid, \.checkgrid, \.opd-chipgrid \{ grid-template-columns: 1fr; \}/, 'clinical forms must become single-column on phones');
 
