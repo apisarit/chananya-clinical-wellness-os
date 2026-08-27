@@ -20,6 +20,10 @@ const RX_BAD_REQUEST = '66666666-6666-4666-a666-666666666666';
 const PAYMENT_PARTIAL_REQUEST = '77777777-7777-4777-a777-777777777777';
 const PAYMENT_FINAL_REQUEST = '88888888-8888-4888-a888-888888888888';
 const PAYMENT_OVER_REQUEST = '99999999-9999-4999-a999-999999999999';
+const PRODUCTION_RX_REQUEST = '10101010-1010-4010-a010-101010101010';
+const PRODUCTION_REQUEST_KEY = '20202020-2020-4020-a020-202020202020';
+const PRODUCTION_ROLLBACK_RX_REQUEST = '30303030-3030-4030-a030-303030303030';
+const PRODUCTION_ROLLBACK_REQUEST_KEY = '40404040-4040-4040-a040-404040404040';
 const QR_TOKEN = 'A'.repeat(43);
 const db = new PGlite();
 
@@ -768,6 +772,343 @@ await expectDatabaseError(
   'permission denied'
 );
 
+// Pharmacy -> Production -> FEFO -> QC -> Finished Goods is server-owned.
+// Browser calls are idempotent, department scoped and roll back as one unit.
+const productionPrescription = await asUser(USER_A, `
+  select * from public.create_atomic_prescription_handoff(
+    '${PRODUCTION_RX_REQUEST}',
+    '${encounterA}',
+    'ส่งผลิตจาก Pharmacy',
+    '[{"product_id":"${departmentProduct.rows[0].id}","quantity_prescribed":12,"unit":"แคปซูล","dose":"ตามแผนการรักษา"}]'::jsonb
+  )
+`);
+const productionPrescriptionItem = await db.query(`
+  select id from public.prescription_items
+  where prescription_id='${productionPrescription.rows[0].prescription_id}'
+`);
+const productionItemId = productionPrescriptionItem.rows[0].id;
+
+await asService(`
+  insert into public.products(
+    id,clinic_id,sku,name_th,category,stock_unit,dispense_unit
+  ) values (
+    '60606060-6060-4060-a060-606060606060','${CLINIC_B}',
+    'CROSS-TENANT-001','สินค้าต่างคลินิก','medicine','กล่อง','กล่อง'
+  )
+`);
+await expectDatabaseError(
+  asService(`
+    insert into public.prescription_items(
+      prescription_id,product_id,quantity_prescribed,unit
+    ) values (
+      '${productionPrescription.rows[0].prescription_id}',
+      '60606060-6060-4060-a060-606060606060',1,'กล่อง'
+    )
+  `),
+  'PRESCRIPTION_PRODUCT_TENANT_MISMATCH'
+);
+
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    select * from public.create_production_request(
+      '${PRODUCTION_REQUEST_KEY}',
+      '${productionPrescription.rows[0].dispensing_order_id}',
+      '${productionItemId}',12,'แคปซูล',null,'urgent','stock not enough'
+    )
+  `),
+  'PHARMACY_DEPARTMENT_REQUIRED'
+);
+const productionRequest = await asUser(USER_PHARMACY, `
+  select * from public.create_production_request(
+    '${PRODUCTION_REQUEST_KEY}',
+    '${productionPrescription.rows[0].dispensing_order_id}',
+    '${productionItemId}',12,'แคปซูล',null,'urgent','stock not enough'
+  )
+`);
+assert.match(productionRequest.rows[0].request_no, /^PR-CHANANYA-\d{8}-\d{8}$/);
+assert.equal(productionRequest.rows[0].status, 'requested');
+const productionRequestRetry = await asUser(USER_PHARMACY, `
+  select * from public.create_production_request(
+    '${PRODUCTION_REQUEST_KEY}',
+    '${productionPrescription.rows[0].dispensing_order_id}',
+    '${productionItemId}',12,'แคปซูล',null,'urgent','stock not enough'
+  )
+`);
+assert.equal(productionRequestRetry.rows[0].id, productionRequest.rows[0].id);
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    select * from public.create_production_request(
+      '${PRODUCTION_REQUEST_KEY}',
+      '${productionPrescription.rows[0].dispensing_order_id}',
+      '${productionItemId}',13,'แคปซูล',null,'urgent','stock not enough'
+    )
+  `),
+  'IDEMPOTENCY_KEY_REUSED'
+);
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    select * from public.create_production_request(
+      '50505050-5050-4050-a050-505050505050',
+      '${prescription.rows[0].dispensing_order_id}',
+      (select id from public.prescription_items where prescription_id='${prescription.rows[0].prescription_id}' limit 1),
+      1,'ขวด',null,'normal','finalized order must fail'
+    )
+  `),
+  'PHARMACY_PRESCRIPTION_ITEM_NOT_FOUND'
+);
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    insert into public.production_requests(
+      request_no,source_type,requested_product_id,requested_quantity,unit,status
+    ) values ('PR-BYPASS','pharmacy','${departmentProduct.rows[0].id}',1,'แคปซูล','requested')
+  `),
+  'permission denied'
+);
+
+const rawMaterial = await asUser(USER_PRODUCTION, `
+  select * from public.upsert_product_master(
+    null,'RAW-PROD-001','วัตถุดิบทดสอบ FEFO',null,'raw_material',null,
+    'กิโลกรัม','กิโลกรัม','กิโลกรัม',1,100,0,0
+  )
+`);
+const productionFormula = await asUser(USER_PRODUCTION, `
+  select * from public.upsert_production_formula(
+    null,'FORM-PROD-001','00','สูตรทดสอบ Atomic Production',
+    '${departmentProduct.rows[0].id}',10,'แคปซูล',100,365,
+    'ทดสอบตาม batch record','approved'
+  )
+`);
+const formulaComponent = await asUser(USER_PRODUCTION, `
+  select * from public.upsert_production_formula_component(
+    null,'${productionFormula.rows[0].id}','${rawMaterial.rows[0].id}',
+    1,1,'กิโลกรัม','ชั่งวัตถุดิบ',null
+  )
+`);
+assert.equal(formulaComponent.rows[0].clinic_id, '00000000-0000-0000-0000-000000000001');
+
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    select * from public.stage_production_import(
+      'inventory_lots','forbidden.xlsx','Lots','[]'::jsonb
+    )
+  `),
+  'PRODUCTION_DEPARTMENT_REQUIRED'
+);
+const lotImport = await asUser(USER_PRODUCTION, `
+  select * from public.stage_production_import(
+    'inventory_lots','raw-lots.xlsx','Lots',
+    '[
+      {"row_number":2,"raw_data":{},"normalized_data":{"sku":"RAW-PROD-001","lot_number":"RAW-EARLY","expiry_date":"2027-01-01","current_quantity":"0.6","unit":"กิโลกรัม","location":"RM-A"}},
+      {"row_number":3,"raw_data":{},"normalized_data":{"sku":"RAW-PROD-001","lot_number":"RAW-LATE","expiry_date":"2028-01-01","current_quantity":"1.0","unit":"กิโลกรัม","location":"RM-B"}}
+    ]'::jsonb
+  )
+`);
+assert.equal(lotImport.rows[0].valid_rows, 2);
+const committedLotImport = await asUser(USER_PRODUCTION, `
+  select public.commit_production_import('${lotImport.rows[0].id}') result
+`);
+assert.equal(committedLotImport.rows[0].result.imported_rows, 2);
+const importRetry = await asUser(USER_PRODUCTION, `
+  select public.commit_production_import('${lotImport.rows[0].id}') result
+`);
+assert.equal(importRetry.rows[0].result.imported_rows, 2);
+
+const rollbackImport = await asUser(USER_PRODUCTION, `
+  select * from public.stage_production_import(
+    'inventory_lots','rollback-lots.xlsx','Lots',
+    '[
+      {"row_number":2,"raw_data":{},"normalized_data":{"sku":"RAW-PROD-001","lot_number":"RAW-ROLLBACK-NEW","expiry_date":"2029-01-01","current_quantity":"0.1","unit":"กิโลกรัม"}},
+      {"row_number":3,"raw_data":{},"normalized_data":{"sku":"RAW-PROD-001","lot_number":"RAW-LATE","expiry_date":"2028-01-01","current_quantity":"0.1","unit":"กิโลกรัม"}}
+    ]'::jsonb
+  )
+`);
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    select public.commit_production_import('${rollbackImport.rows[0].id}')
+  `),
+  'IMPORT_LOT_ALREADY_EXISTS'
+);
+const rollbackImportEvidence = await db.query(`
+  select
+    (select count(*)::int from public.inventory_lots where lot_number='RAW-ROLLBACK-NEW') new_lot,
+    (select status from public.import_batches where id='${rollbackImport.rows[0].id}') batch_status,
+    (select count(*)::int from public.import_rows where import_batch_id='${rollbackImport.rows[0].id}' and validation_status='imported') imported_rows
+`);
+assert.deepEqual(rollbackImportEvidence.rows[0], {
+  new_lot: 0, batch_status: 'validated', imported_rows: 0
+});
+
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    select * from public.open_production_order(
+      '${productionRequest.rows[0].id}','${productionFormula.rows[0].id}',null
+    )
+  `),
+  'PRODUCTION_DEPARTMENT_REQUIRED'
+);
+const productionOrder = await asUser(USER_PRODUCTION, `
+  select * from public.open_production_order(
+    '${productionRequest.rows[0].id}','${productionFormula.rows[0].id}',null
+  )
+`);
+assert.match(productionOrder.rows[0].production_order_no, /^PO-CHANANYA-\d{8}-\d{8}$/);
+assert.equal(Number(productionOrder.rows[0].planned_quantity), 12);
+const productionOrderRetry = await asUser(USER_PRODUCTION, `
+  select * from public.open_production_order(
+    '${productionRequest.rows[0].id}','${productionFormula.rows[0].id}',null
+  )
+`);
+assert.equal(productionOrderRetry.rows[0].id, productionOrder.rows[0].id);
+
+await asUser(USER_PRODUCTION, `
+  select public.issue_production_materials_fefo('${productionOrder.rows[0].id}')
+`);
+const issuedFefo = await db.query(`
+  select l.lot_number,i.issued_quantity,l.current_quantity
+  from public.production_material_issues i
+  join public.inventory_lots l on l.id=i.inventory_lot_id
+  where i.production_order_id='${productionOrder.rows[0].id}'
+  order by l.expiry_date
+`);
+assert.deepEqual(issuedFefo.rows.map(row => ({
+  lot_number: row.lot_number,
+  issued_quantity: Number(row.issued_quantity),
+  current_quantity: Number(row.current_quantity)
+})), [
+  { lot_number: 'RAW-EARLY', issued_quantity: 0.6, current_quantity: 0 },
+  { lot_number: 'RAW-LATE', issued_quantity: 0.6, current_quantity: 0.4 }
+]);
+const issueEvidenceBeforeRetry = await db.query(`
+  select
+    (select count(*)::int from public.production_material_issues where production_order_id='${productionOrder.rows[0].id}') issues,
+    (select count(*)::int from public.stock_movements where reference_type='production_material_issue') movements
+`);
+await asUser(USER_PRODUCTION, `
+  select public.issue_production_materials_fefo('${productionOrder.rows[0].id}')
+`);
+const issueEvidenceAfterRetry = await db.query(`
+  select
+    (select count(*)::int from public.production_material_issues where production_order_id='${productionOrder.rows[0].id}') issues,
+    (select count(*)::int from public.stock_movements where reference_type='production_material_issue') movements
+`);
+assert.deepEqual(issueEvidenceAfterRetry.rows[0], issueEvidenceBeforeRetry.rows[0]);
+
+const completedProduction = await asUser(USER_PRODUCTION, `
+  select * from public.complete_production_order(
+    '${productionOrder.rows[0].id}',11.5,0.3,0.2
+  )
+`);
+assert.equal(completedProduction.rows[0].status, 'awaiting_qc');
+assert.equal(Number(completedProduction.rows[0].yield_percent), 95.83);
+const completedProductionRetry = await asUser(USER_PRODUCTION, `
+  select * from public.complete_production_order(
+    '${productionOrder.rows[0].id}',11.5,0.3,0.2
+  )
+`);
+assert.equal(completedProductionRetry.rows[0].id, completedProduction.rows[0].id);
+
+const releasedProduction = await asUser(USER_PRODUCTION, `
+  select public.release_production_order(
+    '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
+    'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
+  ) result
+`);
+assert.equal(releasedProduction.rows[0].result.status, 'released');
+assert.equal(Number(releasedProduction.rows[0].result.received_quantity), 11.5);
+const releaseRetry = await asUser(USER_PRODUCTION, `
+  select public.release_production_order(
+    '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
+    'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
+  ) result
+`);
+assert.equal(releaseRetry.rows[0].result.inventory_lot_id, releasedProduction.rows[0].result.inventory_lot_id);
+const releaseEvidence = await db.query(`
+  select
+    (select status from public.production_requests where id='${productionRequest.rows[0].id}') request_status,
+    (select status from public.dispensing_orders where id='${productionPrescription.rows[0].dispensing_order_id}') dispensing_status,
+    (select count(*)::int from public.production_qc where production_order_id='${productionOrder.rows[0].id}') qc_rows,
+    (select count(*)::int from public.finished_goods_receipts where production_order_id='${productionOrder.rows[0].id}') receipts,
+    (select current_quantity from public.inventory_lots where id='${releasedProduction.rows[0].result.inventory_lot_id}') finished_quantity
+`);
+assert.deepEqual({
+  ...releaseEvidence.rows[0],
+  finished_quantity: Number(releaseEvidence.rows[0].finished_quantity)
+}, {
+  request_status: 'fulfilled', dispensing_status: 'waiting',
+  qc_rows: 1, receipts: 1, finished_quantity: 11.5
+});
+
+// Deliberately under-stock the next order. The first FEFO insert would occur
+// before the shortage is discovered; the raised exception must roll it back.
+const rollbackPrescription = await asUser(USER_A, `
+  select * from public.create_atomic_prescription_handoff(
+    '${PRODUCTION_ROLLBACK_RX_REQUEST}','${encounterA}',
+    'ทดสอบ rollback เมื่อวัตถุดิบไม่พอ',
+    '[{"product_id":"${departmentProduct.rows[0].id}","quantity_prescribed":10,"unit":"แคปซูล"}]'::jsonb
+  )
+`);
+const rollbackItem = await db.query(`
+  select id from public.prescription_items
+  where prescription_id='${rollbackPrescription.rows[0].prescription_id}'
+`);
+const rollbackRequest = await asUser(USER_PHARMACY, `
+  select * from public.create_production_request(
+    '${PRODUCTION_ROLLBACK_REQUEST_KEY}',
+    '${rollbackPrescription.rows[0].dispensing_order_id}',
+    '${rollbackItem.rows[0].id}',10,'แคปซูล',null,'normal','rollback test'
+  )
+`);
+const rollbackOrder = await asUser(USER_PRODUCTION, `
+  select * from public.open_production_order(
+    '${rollbackRequest.rows[0].id}','${productionFormula.rows[0].id}',null
+  )
+`);
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    select public.issue_production_materials_fefo('${rollbackOrder.rows[0].id}')
+  `),
+  'PRODUCTION_MATERIAL_INSUFFICIENT'
+);
+const rollbackEvidence = await db.query(`
+  select
+    (select count(*)::int from public.production_material_issues where production_order_id='${rollbackOrder.rows[0].id}') issues,
+    (select status from public.production_orders where id='${rollbackOrder.rows[0].id}') order_status,
+    (select current_quantity from public.inventory_lots where lot_number='RAW-LATE') remaining
+`);
+assert.deepEqual({
+  ...rollbackEvidence.rows[0],
+  remaining: Number(rollbackEvidence.rows[0].remaining)
+}, { issues: 0, order_status: 'planned', remaining: 0.4 });
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    insert into public.stock_movements(
+      inventory_lot_id,movement_type,quantity,direction
+    ) values ('${releasedProduction.rows[0].result.inventory_lot_id}','adjustment',1,'in')
+  `),
+  'permission denied'
+);
+
+const productionAudit = await db.query(`
+  select action,count(*)::int count
+  from public.audit_logs
+  where action in (
+    'create_production_request','open_production_order',
+    'issue_production_materials_fefo','complete_production_order',
+    'release_production_order','stage_production_import','commit_production_import'
+  )
+  group by action
+  order by action
+`);
+assert.deepEqual(productionAudit.rows, [
+  { action: 'commit_production_import', count: 1 },
+  { action: 'complete_production_order', count: 1 },
+  { action: 'create_production_request', count: 2 },
+  { action: 'issue_production_materials_fefo', count: 1 },
+  { action: 'open_production_order', count: 2 },
+  { action: 'release_production_order', count: 1 },
+  { action: 'stage_production_import', count: 2 }
+]);
+
 await expectDatabaseError(
   asUser(USER_PHARMACY, `
     select public.export_clinic_backup_domain(
@@ -784,6 +1125,10 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-27.2');
+assert.equal(backupPayload.rows[0].payload.data.production_orders.length, 2);
+assert.equal(backupPayload.rows[0].payload.data.finished_goods_receipts.length, 1);
+assert.equal(backupPayload.rows[0].payload.data.production_material_issues.length, 2);
 
 const backupSlot = '2026-08-27T20:00:00Z';
 const firstBackupLease = await asService(`
@@ -831,5 +1176,5 @@ for (const statement of [
 
 await db.close();
 console.log(
-  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, atomic handoffs, department/RLS boundaries, audited product/pharmacy RPCs, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
+  'PostgreSQL behavioral smoke passed: consent, HN, LINE identity, atomic clinical/billing/production handoffs, department/RLS boundaries, FEFO, QC release, idempotency, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
 );

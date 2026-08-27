@@ -80,7 +80,7 @@ assert.doesNotMatch(
   /\.from\(['"](?:products|pharmacy_counter_sales|pharmacy_counter_sale_items|pharmacy_counter_allocations)['"]\)\.(?:insert|update|delete|upsert)\s*\(/,
   'Pharmacy browser must not bypass controlled writes'
 );
-assert.match(production, /rpc\('upsert_product_master'/, 'Production product import must use the product RPC');
+assert.match(production, /rpc\('commit_production_import'/, 'Production import must commit through one server transaction');
 assert.doesNotMatch(
   production,
   /\.from\(['"]products['"]\)\.(?:insert|update|delete|upsert)\s*\(/,

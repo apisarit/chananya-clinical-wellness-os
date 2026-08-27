@@ -17,8 +17,11 @@
   let session;
   let profile;
   let persistenceReady = false;
+  let productionRequestKey = null;
+  let productionRequestAttempted = false;
   const data = {
-    products: [], sales: [], items: [], patients: [], prescriptions: [], dispensing: []
+    products: [], sales: [], items: [], patients: [], prescriptions: [], dispensing: [],
+    prescriptionItems: [], productionRequests: []
   };
 
   function toast(message) {
@@ -65,15 +68,23 @@
   }
 
   async function load() {
-    const [products, sales, items, patients, prescriptions, dispensing] = await Promise.all([
+    const [
+      products, sales, items, patients, prescriptions, dispensing,
+      prescriptionItems, productionRequests
+    ] = await Promise.all([
       query('products', '*', 'updated_at'),
       query('pharmacy_counter_sales', '*', 'created_at'),
       query('pharmacy_counter_sale_items'),
       query('patients'),
       query('prescriptions', '*', 'prescribed_at'),
-      query('dispensing_orders', '*', 'created_at')
+      query('dispensing_orders', '*', 'created_at'),
+      query('prescription_items'),
+      query('production_requests', '*', 'requested_at')
     ]);
-    Object.assign(data, { products, sales, items, patients, prescriptions, dispensing });
+    Object.assign(data, {
+      products, sales, items, patients, prescriptions, dispensing,
+      prescriptionItems, productionRequests
+    });
     render();
   }
 
@@ -121,6 +132,7 @@
 
     syncItemProduct();
     renderPrescriptionQueue();
+    renderProductionRequests();
     renderWalkin();
     renderProducts();
     renderHistory();
@@ -137,6 +149,118 @@
       return `<div class="item" data-dispensing-order-id="${esc(order.id)}"><div><b>${esc(order.queue_number || '-')} • ${esc(label)}</b><small>${esc(prescription?.prescription_no || '-')} • ${esc(order.status)}</small></div><span class="badge">${esc(order.status)}</span></div>`;
     }).join('');
     $('#rx-list').innerHTML = rows || '<p class="muted">ไม่มีคิวใบสั่งยาจากผู้รักษา</p>';
+  }
+
+  function prescription(id) {
+    return data.prescriptions.find(item => item.id === id);
+  }
+
+  function dispensingOrder(id) {
+    return data.dispensing.find(item => item.id === id);
+  }
+
+  function productionItem(id) {
+    return data.prescriptionItems.find(item => item.id === id);
+  }
+
+  function renderProductionRequests() {
+    const selectedOrder = $('#production-dispensing')?.value || '';
+    const eligibleOrders = data.dispensing.filter(order => ![
+      'submitted_to_billing', 'billed', 'cancelled', 'rejected'
+    ].includes(order.status));
+    $('#production-dispensing').innerHTML = options(
+      eligibleOrders,
+      order => {
+        const rx = prescription(order.prescription_id);
+        const linkedPatient = patient(rx?.patient_id);
+        return `${order.queue_number || '-'} — ${linkedPatient?.hn || '-'} ${patientName(linkedPatient)}`;
+      },
+      selectedOrder
+    );
+    syncProductionRequestItems();
+
+    const rows = data.productionRequests.map(request => {
+      const requestedProduct = product(request.requested_product_id);
+      const requiredBy = request.required_by
+        ? new Date(request.required_by).toLocaleString('th-TH')
+        : 'ไม่กำหนด';
+      return `<div class="item"><div><b>${esc(request.request_no)} • ${esc(requestedProduct?.name_th || '-')}</b><small>${num(request.requested_quantity)} ${esc(request.unit)} • ${esc(request.priority)} • ต้องการ ${esc(requiredBy)}</small></div><span class="badge">${esc(request.status)}</span></div>`;
+    }).join('');
+    $('#production-request-list').innerHTML = rows || '<p class="muted">ยังไม่มีคำขอผลิต</p>';
+  }
+
+  function syncProductionRequestItems() {
+    const selectedOrder = dispensingOrder($('#production-dispensing')?.value);
+    const rx = prescription(selectedOrder?.prescription_id);
+    const selectedItem = $('#production-item')?.value || '';
+    const items = data.prescriptionItems.filter(item => item.prescription_id === rx?.id);
+    $('#production-item').innerHTML = options(
+      items,
+      item => {
+        const linkedProduct = product(item.product_id);
+        const hasActiveRequest = data.productionRequests.some(request => (
+          request.prescription_item_id === item.id
+          && !['fulfilled', 'cancelled', 'rejected'].includes(request.status)
+        ));
+        return `${linkedProduct?.sku || '-'} — ${linkedProduct?.name_th || '-'} • ${num(item.quantity_prescribed)} ${item.unit}${hasActiveRequest ? ' • มีคำขอแล้ว' : ''}`;
+      },
+      selectedItem
+    );
+    syncProductionRequestProduct();
+    window.dispatchEvent(new CustomEvent('chananya:pharmacy-rendered'));
+  }
+
+  function syncProductionRequestProduct() {
+    const item = productionItem($('#production-item')?.value);
+    const linkedProduct = product(item?.product_id);
+    $('#production-unit').value = linkedProduct?.stock_unit || '';
+    if (item && linkedProduct) {
+      const sameUnit = String(item.unit || '').trim().toLocaleLowerCase('th-TH')
+        === String(linkedProduct.stock_unit || '').trim().toLocaleLowerCase('th-TH');
+      if (sameUnit && !$('#production-qty').value) {
+        $('#production-qty').value = item.quantity_prescribed;
+      }
+      $('#production-unit-note').textContent = sameUnit
+        ? `ใบสั่งยา ${num(item.quantity_prescribed)} ${item.unit}; ใช้หน่วย Stock เดียวกัน`
+        : `ใบสั่งยา ${num(item.quantity_prescribed)} ${item.unit}; กรุณาระบุจำนวนผลิตเป็น ${linkedProduct.stock_unit} ตาม Product Master`;
+    } else {
+      $('#production-unit-note').textContent = 'เลือก Product เพื่อดูหน่วยจาก Product Master';
+    }
+  }
+
+  function newRequestKey() {
+    if (!window.crypto?.randomUUID) {
+      throw new Error('เบราว์เซอร์นี้ไม่รองรับ secure request key กรุณาอัปเดตเบราว์เซอร์');
+    }
+    return window.crypto.randomUUID();
+  }
+
+  async function saveProductionRequest(event) {
+    event.preventDefault();
+    requirePersistence();
+    const item = productionItem($('#production-item').value);
+    const linkedProduct = product(item?.product_id);
+    if (!item || !linkedProduct) throw new Error('กรุณาเลือกรายการจากใบสั่งยา');
+    productionRequestKey ||= newRequestKey();
+    productionRequestAttempted = true;
+    const result = await db.rpc('create_production_request', {
+      p_request_key: productionRequestKey,
+      p_dispensing_order_id: $('#production-dispensing').value,
+      p_prescription_item_id: item.id,
+      p_requested_quantity: num($('#production-qty').value),
+      p_unit: linkedProduct.stock_unit,
+      p_required_by: $('#production-required').value
+        ? new Date($('#production-required').value).toISOString()
+        : null,
+      p_priority: $('#production-priority').value,
+      p_reason: $('#production-reason').value.trim() || 'out_of_stock'
+    });
+    if (result.error) throw result.error;
+    productionRequestKey = null;
+    productionRequestAttempted = false;
+    event.target.reset();
+    await load();
+    toast('ส่งคำขอผลิตแบบ idempotent และบันทึก Audit แล้ว');
   }
 
   function itemRows(sale) {
@@ -363,10 +487,24 @@
   });
   $('#sale-form').addEventListener('submit', event => saveSale(event).catch(fail));
   $('#item-form').addEventListener('submit', event => saveItem(event).catch(fail));
+  $('#production-request-form')?.addEventListener('submit', event => saveProductionRequest(event).catch(fail));
+  $('#production-request-form')?.addEventListener('input', () => {
+    if (!productionRequestAttempted) return;
+    productionRequestKey = null;
+    productionRequestAttempted = false;
+  });
   $('#product-form')?.addEventListener('submit', event => saveProduct(event).catch(fail));
   $('#product-cancel')?.addEventListener('click', resetProductForm);
   $('#sale-patient')?.addEventListener('change', syncSalePatient);
   $('#item-product')?.addEventListener('change', syncItemProduct);
+  $('#production-dispensing')?.addEventListener('change', () => {
+    $('#production-qty').value = '';
+    syncProductionRequestItems();
+  });
+  $('#production-item')?.addEventListener('change', () => {
+    $('#production-qty').value = '';
+    syncProductionRequestProduct();
+  });
   $('#product-master-search')?.addEventListener('input', renderProducts);
   $('#show-inactive-products')?.addEventListener('change', renderProducts);
   $('#logout').onclick = async () => {

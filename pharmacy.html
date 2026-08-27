@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Pharmacy Workstation</title>
-  <link rel="stylesheet" href="app.css?v=clinical-os-department1">
+  <link rel="stylesheet" href="app.css?v=clinical-os-production-atomic1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="auth-config.js?v=clinical-os-ia1"></script>
   <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
-  <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="pharmacy.js?v=clinical-os-department1"></script>
+  <script defer src="searchable-select.js?v=clinical-os-production-atomic1"></script>
+  <script defer src="pharmacy.js?v=clinical-os-production-atomic1"></script>
   <script defer src="pharmacy-sale-selector-fix.js?v=clinical-os-ia1"></script>
   <script defer src="pharmacy-labels.js?v=clinical-os-ia1"></script>
   <script defer src="pharmacy-v33-tools.js?v=clinical-os-ia1"></script>
@@ -34,7 +34,23 @@
       <main>
         <section class="view active" id="rx">
           <div class="hero"><h2>Prescription Queue</h2><p>Review → Prepare → Dispense FEFO → Print label → Submit Billing</p></div>
-          <section class="card space-top-md"><div id="rx-list" class="list"></div></section>
+          <div class="grid2 space-top-md">
+            <section class="card"><div class="section-heading"><span class="section-number">Rx</span><div><h2>คิวใบสั่งยา</h2><p>ข้อมูลผู้รับบริการอยู่เฉพาะ Clinical และ Pharmacy</p></div></div><div id="rx-list" class="list"></div></section>
+            <section class="card"><div class="section-heading"><span class="section-number">PR</span><div><h2>ขอผลิตเมื่อ Stock ไม่พอ</h2><p>ส่งเฉพาะ Product/Quantity ไป Production โดยไม่ส่งชื่อหรือ HN</p></div></div>
+              <form id="production-request-form" class="form">
+                <label class="full">Dispensing order<select id="production-dispensing" required></select></label>
+                <label class="full">รายการจากใบสั่งยา<select id="production-item" required></select></label>
+                <label>จำนวนที่ต้องผลิต<input id="production-qty" type="number" min="0.0001" step="0.0001" required></label>
+                <label>หน่วย Stock<input id="production-unit" readonly required></label>
+                <small class="muted full" id="production-unit-note">เลือก Product เพื่อดูหน่วยจาก Product Master</small>
+                <label>Priority<select id="production-priority"><option value="normal">normal</option><option value="urgent">urgent</option><option value="critical">critical</option></select></label>
+                <label>Required by<input id="production-required" type="datetime-local"></label>
+                <label class="full">เหตุผล<textarea id="production-reason" placeholder="Out of stock / stock not enough">out_of_stock</textarea></label>
+                <button class="btn primary full">ส่งคำขอผลิตและบันทึก Audit</button>
+              </form>
+            </section>
+          </div>
+          <section class="card"><h3>สถานะคำขอผลิตจาก Pharmacy</h3><div id="production-request-list" class="list"></div></section>
         </section>
 
         <section class="view" id="walkin">
@@ -89,6 +105,6 @@
       </main>
     </div>
   </div>
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

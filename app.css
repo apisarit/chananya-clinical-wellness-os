@@ -252,6 +252,25 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 .lock.show { display: grid; }
 .lock > div { text-align: center; }
 
+/* Audited workflow confirmations use native dialogs so keyboard focus and
+   mobile scrolling remain predictable. */
+.workflow-dialog {
+  overflow: auto;
+  width: min(680px, calc(100vw - 28px));
+  max-height: min(90vh, 840px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: clamp(16px, 3vw, 22px);
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-md);
+}
+.workflow-dialog::backdrop { background: rgba(8,25,20,.66); backdrop-filter: blur(4px); }
+.workflow-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.workflow-dialog-head h2 { margin: 2px 0 0; color: var(--forest-950); font-size: 1.2rem; }
+.workflow-dialog[open] { animation: workflow-dialog-in .16s ease-out; }
+@keyframes workflow-dialog-in { from { opacity: .4; transform: translateY(8px) scale(.99); } }
+
 /* Clinical workflow */
 .clinical-layout { display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); align-items: start; gap: 16px; }
 .encounter-rail { position: sticky; top: calc(var(--topbar-height) + 16px); display: grid; gap: 12px; }
