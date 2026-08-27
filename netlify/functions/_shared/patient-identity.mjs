@@ -91,22 +91,11 @@ export async function supabaseRpc({ url, serviceRoleKey, name, body, fetchImpl =
   return payload;
 }
 
-export function allowedRequestOrigin(request, configuredOrigins = []) {
+export function allowedRequestOrigin(request) {
   const requestOrigin = new URL(request.url).origin;
   const origin = request.headers.get('origin');
   if (!origin) return false;
-  const exact = new Set([requestOrigin, ...configuredOrigins.filter(Boolean)]);
-  return exact.has(origin);
-}
-
-export function parseConfiguredOrigins(value) {
-  return String(value || '')
-    .split(',')
-    .map(item => item.trim())
-    .filter(item => {
-      try { return new URL(item).origin === item; }
-      catch { return false; }
-    });
+  return origin === requestOrigin;
 }
 
 export async function readJsonBody(request, maxBytes = 16_384) {

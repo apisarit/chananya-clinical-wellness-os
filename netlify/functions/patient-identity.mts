@@ -5,7 +5,6 @@ import {
   hmacSha256,
   normalizeLinkCode,
   normalizePatientId,
-  parseConfiguredOrigins,
   publicError,
   readJsonBody,
   supabaseRpc,
@@ -77,7 +76,7 @@ async function consumeRateLimit(config, action, subjectHash, request, context) {
 }
 
 async function handlePatientAction(request, context, config) {
-  if (!allowedRequestOrigin(request, parseConfiguredOrigins(env('PATIENT_APP_ALLOWED_ORIGINS')))) {
+  if (!allowedRequestOrigin(request)) {
     return json({ ok: false, code: 'ORIGIN_NOT_ALLOWED' }, 403);
   }
 

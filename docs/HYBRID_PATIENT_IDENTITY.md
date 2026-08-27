@@ -71,6 +71,7 @@ Guardian verification requires a note. Search audit stores a query hash and resu
 - No application `super_admin` receives implicit cross-clinic PHI access. Support access must use an explicit clinic membership; a future break-glass workflow must be time-bound, reasoned, and separately audited.
 - Restrictive RLS policies are ANDed with existing role policies for PHI tables to prevent cross-clinic access.
 - Patient confirmation, QR consumption, Encounter creation, intake observations, verification, and audit are committed or rolled back together.
+- Identity lifecycle events, encounter identity evidence, and the canonical audit ledger are protected by append-only database triggers; corrections must add a new event rather than rewrite history.
 
 ## Runtime components
 
@@ -87,10 +88,9 @@ LINE_LOGIN_CHANNEL_ID
 PATIENT_IDENTITY_HMAC_SECRET
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
-PATIENT_APP_ALLOWED_ORIGINS   # optional exact-origin allowlist
 ```
 
-Do not put these server-only values into `auth-config.js`. `LINE_LIFF_ID` is public but is served through the configuration response so the patient surface has one activation gate.
+Do not put these server-only values into `auth-config.js`. `LINE_LIFF_ID` is public but is served through the configuration response so the patient surface has one activation gate. Patient POST requests are accepted only when the browser `Origin` exactly matches the Function origin; there is no cross-origin allowlist.
 
 `PATIENT_IDENTITY_HMAC_SECRET` is a long-lived identity key, not a routine application secret. Store it in the platform secret manager, restrict access, back it up through the approved operational process, and plan a versioned re-link migration before rotation. Replacing it without migration makes existing LINE links undiscoverable.
 

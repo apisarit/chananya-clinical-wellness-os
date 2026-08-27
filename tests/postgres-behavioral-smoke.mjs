@@ -10,6 +10,7 @@ const USER_A = '11111111-1111-4111-a111-111111111111';
 const USER_B = '22222222-2222-4222-a222-222222222222';
 const USER_C = '44444444-4444-4444-a444-444444444444';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
+const QR_TOKEN = 'A'.repeat(43);
 const db = new PGlite();
 
 // PGlite validates PostgreSQL DDL, PL/pgSQL, RLS, triggers, FKs and
@@ -142,7 +143,7 @@ await db.query(`
 `);
 const hashes = await db.query(`
   select
-    encode(digest('opaque-token','sha256'),'hex') token_hash,
+    encode(digest('${QR_TOKEN}','sha256'),'hex') token_hash,
     encode(digest('123456','sha256'),'hex') code_hash
 `);
 const { token_hash: tokenHash, code_hash: codeHash } = hashes.rows[0];
@@ -156,7 +157,7 @@ assert.equal(qrIssued.rows[0].patient_id, patientA.id);
 await db.exec('reset role;');
 
 const resolved = await asUser(USER_A, `
-  select * from public.resolve_patient_qr('CHANANYA:PT1:opaque-token',null)
+  select * from public.resolve_patient_qr('CHANANYA:PT1:${QR_TOKEN}',null)
 `);
 assert.equal(resolved.rows[0].patient_id, patientA.id);
 assert.equal(resolved.rows[0].active_allergies[0].name, 'penicillin');
@@ -299,7 +300,15 @@ assert.ok(
   auditEvents.rows.some(row => row.event_type === 'PATIENT_IDENTITY_CONFIRMED')
 );
 
+for (const statement of [
+  `delete from public.patient_identity_events where id=(select min(id) from public.patient_identity_events)`,
+  `update public.encounter_identity_verifications set verification_note='tampered' where encounter_id='${encounterA}'`,
+  `delete from public.audit_logs where entity_id='${encounterA}'`
+]) {
+  await expectDatabaseError(db.query(statement), 'APPEND_ONLY_RECORD_MUTATION_DENIED');
+}
+
 await db.close();
 console.log(
-  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, replay rejection, atomic intake/audit, no-phone fallback and tenant isolation'
+  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, replay rejection, atomic intake/audit, append-only evidence, no-phone fallback and tenant isolation'
 );

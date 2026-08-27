@@ -78,7 +78,7 @@
     if (digits.length === 6 && !trimmed.startsWith('CHANANYA:PT1:')) {
       return { p_token: null, p_display_code: digits };
     }
-    if (trimmed.startsWith('CHANANYA:PT1:') && trimmed.length > 32) {
+    if (/^CHANANYA:PT1:[A-Za-z0-9_-]{43}$/.test(trimmed)) {
       return { p_token: trimmed, p_display_code: null };
     }
     throw new Error('กรุณาสแกน QR ของ Chananya หรือกรอกรหัส 6 หลัก');

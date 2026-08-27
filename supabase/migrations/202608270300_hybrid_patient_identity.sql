@@ -739,6 +739,40 @@ using (public.is_clinic_member(clinic_id, array['owner','admin','practitioner','
 grant select on public.encounter_identity_verifications to authenticated;
 grant select on public.patient_identity_events to authenticated;
 
+-- Identity evidence and the canonical audit ledger are append-only. Corrections
+-- must be represented by a new event; privileged roles cannot silently rewrite
+-- or delete history through a browser or service-role client.
+create or replace function public.reject_append_only_mutation()
+returns trigger
+language plpgsql
+volatile
+security definer
+set search_path = pg_catalog
+as $$
+begin
+  raise exception 'APPEND_ONLY_RECORD_MUTATION_DENIED'
+    using errcode = '55000',
+      detail = tg_table_schema || '.' || tg_table_name;
+end;
+$$;
+
+revoke all on function public.reject_append_only_mutation() from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_patient_identity_events_append_only on public.patient_identity_events;
+create trigger trg_patient_identity_events_append_only
+before update or delete on public.patient_identity_events
+for each row execute function public.reject_append_only_mutation();
+
+drop trigger if exists trg_encounter_identity_verifications_append_only on public.encounter_identity_verifications;
+create trigger trg_encounter_identity_verifications_append_only
+before update or delete on public.encounter_identity_verifications
+for each row execute function public.reject_append_only_mutation();
+
+drop trigger if exists trg_audit_logs_append_only on public.audit_logs;
+create trigger trg_audit_logs_append_only
+before update or delete on public.audit_logs
+for each row execute function public.reject_append_only_mutation();
+
 -- ============================================================
 -- STAFF AND SERVICE RPCS
 -- ============================================================
@@ -1577,6 +1611,9 @@ begin
 
   if v_token like 'CHANANYA:PT1:%' then
     v_token := substr(v_token, length('CHANANYA:PT1:') + 1);
+  end if;
+  if v_token <> '' and v_token !~ '^[A-Za-z0-9_-]{43}$' then
+    raise exception 'QR_CREDENTIAL_FORMAT_INVALID';
   end if;
   if v_token = '' and length(v_code) <> 6 then
     raise exception 'QR_OR_SIX_DIGIT_CODE_REQUIRED';

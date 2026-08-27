@@ -5,7 +5,6 @@ import {
   hmacSha256,
   normalizeLinkCode,
   normalizePatientId,
-  parseConfiguredOrigins,
   publicError,
   readJsonBody,
   sha256,
@@ -106,18 +105,11 @@ const sameOrigin = new Request('https://patient.example/api/patient-identity', {
   headers: { origin: 'https://patient.example' }
 });
 assert.equal(allowedRequestOrigin(sameOrigin), true);
-const allowedPreview = new Request('https://patient.example/api/patient-identity', {
-  headers: { origin: 'https://preview.example' }
-});
-assert.equal(allowedRequestOrigin(allowedPreview, ['https://preview.example']), true);
 const foreignOrigin = new Request('https://patient.example/api/patient-identity', {
   headers: { origin: 'https://evil.example' }
 });
-assert.equal(allowedRequestOrigin(foreignOrigin, ['https://preview.example']), false);
-assert.deepEqual(
-  parseConfiguredOrigins('https://one.example, https://two.example/path,not-a-url,https://two.example'),
-  ['https://one.example', 'https://two.example']
-);
+assert.equal(allowedRequestOrigin(foreignOrigin), false);
+assert.equal(allowedRequestOrigin(new Request('https://patient.example/api/patient-identity')), false);
 
 assert.deepEqual(
   await readJsonBody(new Request('https://patient.example', { method: 'POST', body: '{"ok":true}' })),

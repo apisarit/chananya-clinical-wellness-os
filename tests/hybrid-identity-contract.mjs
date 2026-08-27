@@ -74,6 +74,10 @@ assert.match(sql, /create or replace function public\.start_manual_patient_encou
 assert.match(sql, /create or replace function public\.revoke_patient_identity_link/i, 'staff must be able to revoke a LINE identity link');
 assert.match(sql, /'LINE_IDENTITY_REVOKED'/i, 'identity revocation must append a lifecycle event');
 assert.match(sql, /'patient_identity_links'/i, 'identity revocation must append an audit record');
+assert.match(sql, /trg_patient_identity_events_append_only/i, 'identity lifecycle events must be append-only');
+assert.match(sql, /trg_encounter_identity_verifications_append_only/i, 'encounter identity evidence must be append-only');
+assert.match(sql, /trg_audit_logs_append_only/i, 'the canonical audit ledger must be append-only');
+assert.match(sql, /v_token !~ '\^\[A-Za-z0-9_-\]\{43\}\$'/i, 'QR resolution must reject malformed opaque credentials before lookup');
 assert.match(sql, /perform public\.apply_initial_encounter_intake\(v_encounter\.id, p_intake\)/g, 'both check-in paths must apply intake in the same transaction');
 assert.equal((sql.match(/'PATIENT_IDENTITY_CONFIRMED'/g) || []).length >= 2, true, 'both check-in paths must record identity confirmation');
 assert.equal((sql.match(/'create_verified_encounter'/g) || []).length >= 2, true, 'both check-in paths must write the canonical audit event');
@@ -83,7 +87,7 @@ const definerFunctions = [...sql.matchAll(/create or replace function[\s\S]*?\$\
   .filter(match => /security definer/i.test(match[0]));
 assert.ok(definerFunctions.length >= 10, 'identity migration should expose audited server-side operations');
 for (const definition of definerFunctions) {
-  assert.match(definition[0], /set search_path = public/i, 'every SECURITY DEFINER function must pin search_path');
+  assert.match(definition[0], /set search_path = (?:public|pg_catalog(?:, public, pg_temp)?)/i, 'every SECURITY DEFINER function must pin search_path');
 }
 
 assert.match(backend, /verifyLineIdToken/, 'patient backend must verify LINE tokens server-side');
