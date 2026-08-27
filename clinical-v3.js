@@ -16,6 +16,7 @@
   let encounters = [];
   let prescriptionCart = [];
   let hybridIdentityReady = false;
+  let atomicHandoffsReady = false;
 
   function toast(message) {
     const element = $('#toast');
@@ -36,6 +37,17 @@
 
   function optionRows(rows, label) {
     return '<option value="">เลือก</option>' + rows.map(item => `<option value="${item.id}">${esc(label(item))}</option>`).join('');
+  }
+
+  function syncPrescriptionUnit() {
+    const product = products.find(item => item.id === $('#rx-product').value);
+    $('#rx-unit').value = product?.dispense_unit || '';
+  }
+
+  function requireAtomicHandoffs() {
+    if (!atomicHandoffsReady) {
+      throw new Error('ฐานข้อมูลยังไม่เปิดใช้ Atomic Clinical/Financial Handoffs จึงหยุดการบันทึกเพื่อป้องกันข้อมูลครึ่งชุด');
+    }
   }
 
   function setStep(step) {
@@ -68,6 +80,7 @@
     $('#encounter').innerHTML = '<option value="">เลือก Encounter</option>' + encounters.map(item => `<option value="${item.id}">${esc(item.encounter_no || '-')} — ${esc(patientName(item.patient_id))} — ${esc(item.chief_complaint || '-')}</option>`).join('');
     $('#rx-encounter').innerHTML = optionRows(encounters, item => `${item.encounter_no || '-'} — ${patientName(item.patient_id)}`);
     $('#rx-product').innerHTML = optionRows(products, item => `${item.sku || '-'} — ${item.name_th}`);
+    syncPrescriptionUnit();
 
     if (preferredEncounter && encounters.some(item => item.id === preferredEncounter)) {
       $('#encounter').value = preferredEncounter;
@@ -154,6 +167,9 @@
 
   async function saveEncounter(event) {
     event.preventDefault();
+    if (!hybridIdentityReady) {
+      throw new Error('ฐานข้อมูลยังไม่เปิดใช้ Hybrid Patient Identity จึงหยุดการเปิด Encounter เพื่อป้องกันข้อมูลคัดกรองครึ่งชุด');
+    }
     if (!$('#enc-identity-confirmed').checked) throw new Error('กรุณาตรวจสอบตัวตนกับผู้รับบริการก่อนเปิด Encounter');
     const bp = bloodPressure();
     const intake = {
@@ -171,54 +187,17 @@
       diastolic_bp: bp.diastolic_bp,
       pain_before: num($('#enc-before').value)
     };
-    let encounterId;
-    if (hybridIdentityReady) {
-      const result = await db.rpc('start_manual_patient_encounter', {
-        p_patient_id: $('#enc-patient').value,
-        p_verification_method: $('#enc-verification-method').value,
-        p_patient_present_confirmed: true,
-        p_verification_note: $('#enc-verification-note').value.trim() || null,
-        p_chief_complaint: $('#enc-chief').value,
-        p_intake: intake
-      });
-      if (result.error) throw result.error;
-      const encounter = Array.isArray(result.data) ? result.data[0] : result.data;
-      encounterId = encounter?.encounter_id;
-    } else {
-      const result = await db.from('encounters').insert({
-        encounter_no: `ENC-${Date.now()}`,
-        patient_id: $('#enc-patient').value,
-        status: 'draft',
-        chief_complaint: intake.chief_complaint,
-        present_illness: intake.present_illness,
-        past_history: intake.past_history,
-        current_medications: intake.current_medications,
-        red_flags: intake.red_flags,
-        general_examination: intake.general_examination,
-        practitioner_id: session.user.id,
-        created_by: session.user.id
-      }).select().single();
-      if (result.error) throw result.error;
-      encounterId = result.data.id;
-      const vitalValues = [intake.temperature, intake.pulse, intake.respiration, intake.spo2, intake.systolic_bp, intake.diastolic_bp];
-      if (vitalValues.some(value => value != null)) {
-        const vitalResult = await db.from('vital_signs').insert({
-          encounter_id: encounterId,
-          temperature: intake.temperature,
-          pulse: intake.pulse,
-          respiration: intake.respiration,
-          spo2: intake.spo2,
-          systolic_bp: intake.systolic_bp,
-          diastolic_bp: intake.diastolic_bp,
-          recorded_by: session.user.id
-        });
-        if (vitalResult.error) throw vitalResult.error;
-      }
-      if (intake.pain_before != null) {
-        const painResult = await db.from('pain_assessments').insert({ encounter_id: encounterId, assessment_stage: 'before', score: intake.pain_before, assessed_by: session.user.id });
-        if (painResult.error) throw painResult.error;
-      }
-    }
+    const result = await db.rpc('start_manual_patient_encounter', {
+      p_patient_id: $('#enc-patient').value,
+      p_verification_method: $('#enc-verification-method').value,
+      p_patient_present_confirmed: true,
+      p_verification_note: $('#enc-verification-note').value.trim() || null,
+      p_chief_complaint: $('#enc-chief').value,
+      p_intake: intake
+    });
+    if (result.error) throw result.error;
+    const encounter = Array.isArray(result.data) ? result.data[0] : result.data;
+    const encounterId = encounter?.encounter_id;
     if (!encounterId) throw new Error('ไม่สามารถเปิด Encounter ได้');
     event.target.reset();
     syncVerificationNoteRequirement();
@@ -276,32 +255,34 @@
     if (!product) throw new Error('กรุณาเลือกยา/ผลิตภัณฑ์');
     prescriptionCart.push({
       product_id: product.id, product_name: product.name_th,
-      quantity_prescribed: Number($('#rx-qty').value), unit: $('#rx-unit').value,
+      quantity_prescribed: Number($('#rx-qty').value), unit: product.dispense_unit,
       dose: $('#rx-dose').value || null, frequency: $('#rx-frequency').value || null,
       duration: $('#rx-duration').value || null, route: $('#rx-route').value || null,
       instructions: $('#rx-instructions').value || null, status: 'ordered'
     });
     event.target.reset();
     $('#rx-route').value = 'oral';
+    syncPrescriptionUnit();
     renderPrescriptionCart();
   }
 
   async function sendPrescription(event) {
     event.preventDefault();
+    requireAtomicHandoffs();
     const encounterId = $('#rx-encounter').value;
     const encounter = encounters.find(item => item.id === encounterId);
     if (!encounter) throw new Error('กรุณาเลือก Encounter');
     if (!prescriptionCart.length) throw new Error('กรุณาเพิ่มรายการยาอย่างน้อย 1 รายการ');
-    const prescriptionResult = await db.from('prescriptions').insert({
-      prescription_no: `RX-${Date.now()}`, encounter_id: encounter.id, patient_id: encounter.patient_id,
-      prescriber_id: session.user.id, status: 'sent_to_pharmacy', clinical_notes: $('#rx-clinical-notes').value || null,
-      sent_to_pharmacy_at: new Date().toISOString()
-    }).select().single();
-    if (prescriptionResult.error) throw prescriptionResult.error;
-    const itemResult = await db.from('prescription_items').insert(prescriptionCart.map(item => ({ ...item, product_name: undefined, prescription_id: prescriptionResult.data.id })));
-    if (itemResult.error) throw itemResult.error;
-    const orderResult = await db.from('dispensing_orders').insert({ prescription_id: prescriptionResult.data.id, queue_number: `Q-${String(Date.now()).slice(-6)}`, status: 'waiting' });
-    if (orderResult.error) throw orderResult.error;
+    const requestKey = event.currentTarget.dataset.requestKey || crypto.randomUUID();
+    event.currentTarget.dataset.requestKey = requestKey;
+    const result = await db.rpc('create_atomic_prescription_handoff', {
+      p_request_key: requestKey,
+      p_encounter_id: encounter.id,
+      p_clinical_notes: $('#rx-clinical-notes').value.trim() || null,
+      p_items: prescriptionCart.map(({ product_name, status, ...item }) => item)
+    });
+    if (result.error) throw result.error;
+    delete event.currentTarget.dataset.requestKey;
     prescriptionCart = [];
     event.target.reset();
     $('#rx-encounter').value = currentEncounter || '';
@@ -323,6 +304,10 @@
       window.ChananyaShell?.mount({ profile, session, active: 'clinical' });
       const identityHealth = await db.rpc('hybrid_patient_identity_healthcheck');
       hybridIdentityReady = !identityHealth.error && Boolean((Array.isArray(identityHealth.data) ? identityHealth.data[0] : identityHealth.data)?.ready);
+      const handoffHealth = await db.rpc('clinical_financial_handoffs_healthcheck');
+      atomicHandoffsReady = !handoffHealth.error && Boolean((Array.isArray(handoffHealth.data) ? handoffHealth.data[0] : handoffHealth.data)?.ready);
+      $('#encounter-form button').disabled = !hybridIdentityReady;
+      $('#prescription-form button').disabled = !atomicHandoffsReady;
       const requested = new URL(location.href).searchParams.get('encounter');
       await loadReferences(requested);
       const requestedStep = new URL(location.href).searchParams.get('step');
@@ -337,6 +322,7 @@
 
   $$('[data-clinical-step]').forEach(button => button.addEventListener('click', () => setStep(button.dataset.clinicalStep)));
   $('#encounter').addEventListener('change', event => selectEncounter(event.target.value).catch(fail));
+  $('#rx-product').addEventListener('change', syncPrescriptionUnit);
   $('#enc-verification-method').addEventListener('change', syncVerificationNoteRequirement);
   $('#encounter-form').addEventListener('submit', event => saveEncounter(event).catch(fail));
   $('#exam-form').addEventListener('submit', event => saveExam(event).catch(fail));

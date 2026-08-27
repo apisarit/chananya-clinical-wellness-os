@@ -39,6 +39,10 @@ It installs both stabilization RPCs and prints the health check at the end.
    - Saves structured TTM diagnosis and Samutthan context in one database transaction.
 3. `202608251430_clinical_os_health_check.sql`
    - Read-only verification query; safe to run repeatedly and should be run last.
+4. `202608270300_hybrid_patient_identity.sql`
+   - Adds atomic patient registration and LINE QR / HN encounter creation.
+5. `202608270400_atomic_clinical_financial_handoffs.sql`
+   - Adds atomic prescription, invoice, and payment transitions with server numbering, idempotency, tenant roles, and audit.
 
 ## Frontend stabilization rules
 

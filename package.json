@@ -1,13 +1,13 @@
 {
   "name": "chananya-clinical-wellness-os",
-  "version": "3.5.0-preview.1",
+  "version": "3.5.0-preview.2",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/patient-identity-function.mjs && node tests/postgres-behavioral-smoke.mjs"
+    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/patient-identity-function.mjs && node tests/postgres-behavioral-smoke.mjs"
   },
   "dependencies": {
     "qrcode": "1.5.4"

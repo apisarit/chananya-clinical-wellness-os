@@ -96,7 +96,7 @@ Do not put these server-only values into `auth-config.js`. `LINE_LIFF_ID` is pub
 
 ## Activation and rollback
 
-The migration is additive and preserves legacy HN records. Until it is applied, the existing patient registration path remains available and identity buttons stay disabled. The patient function reports `enabled=false` until all required environment values exist.
+The migration is additive and preserves legacy HN records. Until it is applied, staff screens remain readable but patient registration and encounter creation fail closed; the browser does not fall back to unaudited multi-table writes. After activation, people without phones continue through HN/demographic/guardian verification using the same atomic encounter RPC. The patient function reports `enabled=false` until all required environment values exist.
 
 Activation order:
 

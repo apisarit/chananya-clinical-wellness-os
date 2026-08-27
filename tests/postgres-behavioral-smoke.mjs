@@ -10,6 +10,11 @@ const USER_A = '11111111-1111-4111-a111-111111111111';
 const USER_B = '22222222-2222-4222-a222-222222222222';
 const USER_C = '44444444-4444-4444-a444-444444444444';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
+const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
+const RX_BAD_REQUEST = '66666666-6666-4666-a666-666666666666';
+const PAYMENT_PARTIAL_REQUEST = '77777777-7777-4777-a777-777777777777';
+const PAYMENT_FINAL_REQUEST = '88888888-8888-4888-a888-888888888888';
+const PAYMENT_OVER_REQUEST = '99999999-9999-4999-a999-999999999999';
 const QR_TOKEN = 'A'.repeat(43);
 const db = new PGlite();
 
@@ -122,6 +127,23 @@ const createdA = await asUser(USER_A, `
 const patientA = createdA.rows[0];
 assert.match(patientA.hn, /^CHANANYA-\d{8,}$/);
 assert.ok(Number(patientA.hn.split('-').at(-1)) > 9999);
+await expectDatabaseError(
+  asUser(USER_A, `
+    update public.patients set first_name='Bypass' where id='${patientA.id}'
+  `),
+  'permission denied'
+);
+await expectDatabaseError(
+  asUser(USER_A, `
+    insert into public.audit_logs(
+      clinic_id,user_id,action,entity,metadata
+    ) values (
+      '00000000-0000-0000-0000-000000000001','${USER_A}',
+      'forged','patients','{}'::jsonb
+    )
+  `),
+  'permission denied'
+);
 
 const linkResult = await asUser(USER_A, `
   select * from public.issue_patient_line_link_code(
@@ -257,6 +279,201 @@ const manualEncounter = await asUser(USER_A, `
 `);
 assert.equal(manualEncounter.rows[0].patient_id, createdManual.rows[0].id);
 
+// Clinical -> Pharmacy is one transaction, server-numbered and idempotent.
+const productId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
+await db.exec(`
+  insert into public.products(
+    id,sku,name_th,category,stock_unit,dispense_unit
+  ) values (
+    '${productId}','TTM-TEST-001','ยาทดสอบ','medicine','ขวด','ขวด'
+  );
+`);
+const prescription = await asUser(USER_A, `
+  select * from public.create_atomic_prescription_handoff(
+    '${RX_REQUEST}',
+    '${manualEncounter.rows[0].encounter_id}',
+    'ทดสอบ atomic handoff',
+    '[{"product_id":"${productId}","quantity_prescribed":2,"unit":"ขวด","dose":"1 ขวด"}]'::jsonb
+  )
+`);
+assert.match(prescription.rows[0].prescription_no, /^RX-CHANANYA-\d{8}-\d{8}$/);
+assert.match(prescription.rows[0].queue_number, /^Q-CHANANYA-\d{8}-\d{6}$/);
+const prescriptionRetry = await asUser(USER_A, `
+  select * from public.create_atomic_prescription_handoff(
+    '${RX_REQUEST}',
+    '${manualEncounter.rows[0].encounter_id}',
+    'ทดสอบ atomic handoff',
+    '[{"product_id":"${productId}","quantity_prescribed":2,"unit":"ขวด","dose":"1 ขวด"}]'::jsonb
+  )
+`);
+assert.equal(prescriptionRetry.rows[0].prescription_id, prescription.rows[0].prescription_id);
+const handoffCounts = await db.query(`
+  select
+    (select count(*)::int from public.prescriptions where id='${prescription.rows[0].prescription_id}') prescriptions,
+    (select count(*)::int from public.prescription_items where prescription_id='${prescription.rows[0].prescription_id}') items,
+    (select count(*)::int from public.dispensing_orders where prescription_id='${prescription.rows[0].prescription_id}') orders
+`);
+assert.deepEqual(handoffCounts.rows[0], { prescriptions: 1, items: 1, orders: 1 });
+
+const prescriptionCountBeforeFailure = await db.query(`
+  select count(*)::int count from public.prescriptions
+`);
+await expectDatabaseError(
+  asUser(USER_A, `
+    select * from public.create_atomic_prescription_handoff(
+      '${RX_BAD_REQUEST}',
+      '${manualEncounter.rows[0].encounter_id}',
+      null,
+      '[
+        {"product_id":"${productId}","quantity_prescribed":1,"unit":"ขวด"},
+        {"product_id":"bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb","quantity_prescribed":1,"unit":"ขวด"}
+      ]'::jsonb
+    )
+  `),
+  'PRODUCT_NOT_AVAILABLE'
+);
+const prescriptionCountAfterFailure = await db.query(`
+  select count(*)::int count from public.prescriptions
+`);
+assert.equal(
+  prescriptionCountAfterFailure.rows[0].count,
+  prescriptionCountBeforeFailure.rows[0].count
+);
+await expectDatabaseError(
+  asUser(USER_A, `
+    insert into public.prescriptions(
+      prescription_no,encounter_id,patient_id,status
+    ) values (
+      'RX-BYPASS','${manualEncounter.rows[0].encounter_id}',
+      '${createdManual.rows[0].id}','draft'
+    )
+  `),
+  'permission denied'
+);
+
+// Pharmacy test fixture: the billing RPC independently derives medicine
+// totals from dispensed quantities/prices and never trusts browser totals.
+await db.exec(`
+  insert into public.dispensing_items(
+    dispensing_order_id,prescription_item_id,quantity_dispensed,unit,
+    unit_price,status
+  )
+  select
+    '${prescription.rows[0].dispensing_order_id}',pi.id,2,'ขวด',120,'dispensed'
+  from public.prescription_items pi
+  where pi.prescription_id='${prescription.rows[0].prescription_id}';
+  update public.dispensing_orders
+  set status='submitted_to_billing'
+  where id='${prescription.rows[0].dispensing_order_id}';
+`);
+
+const invoice = await asUser(USER_C, `
+  select * from public.issue_atomic_dispensing_invoice(
+    '${prescription.rows[0].dispensing_order_id}',300,50
+  )
+`);
+assert.match(invoice.rows[0].invoice_number, /^INV-CHANANYA-\d{8}-\d{8}$/);
+assert.equal(Number(invoice.rows[0].grand_total), 490);
+assert.equal(Number(invoice.rows[0].balance_due), 490);
+const invoiceRetry = await asUser(USER_C, `
+  select * from public.issue_atomic_dispensing_invoice(
+    '${prescription.rows[0].dispensing_order_id}',300,50
+  )
+`);
+assert.equal(invoiceRetry.rows[0].invoice_id, invoice.rows[0].invoice_id);
+await expectDatabaseError(
+  asUser(USER_C, `
+    select * from public.issue_atomic_dispensing_invoice(
+      '${prescription.rows[0].dispensing_order_id}',0,50
+    )
+  `),
+  'DISPENSING_ORDER_ALREADY_BILLED'
+);
+const invoiceEvidence = await db.query(`
+  select
+    (select count(*)::int from public.invoices where id='${invoice.rows[0].invoice_id}') invoices,
+    (select count(*)::int from public.invoice_items where invoice_id='${invoice.rows[0].invoice_id}') lines,
+    (select status from public.dispensing_orders where id='${prescription.rows[0].dispensing_order_id}') order_status
+`);
+assert.deepEqual(invoiceEvidence.rows[0], { invoices: 1, lines: 2, order_status: 'billed' });
+
+const partialPayment = await asUser(USER_C, `
+  select * from public.record_atomic_invoice_payment(
+    '${PAYMENT_PARTIAL_REQUEST}','${invoice.rows[0].invoice_id}',200,
+    'cash','receipt-test-1'
+  )
+`);
+assert.equal(partialPayment.rows[0].invoice_status, 'partially_paid');
+assert.equal(Number(partialPayment.rows[0].paid_amount), 200);
+assert.equal(Number(partialPayment.rows[0].balance_due), 290);
+assert.equal(partialPayment.rows[0].encounter_closed, false);
+const partialRetry = await asUser(USER_C, `
+  select * from public.record_atomic_invoice_payment(
+    '${PAYMENT_PARTIAL_REQUEST}','${invoice.rows[0].invoice_id}',200,
+    'cash','receipt-test-1'
+  )
+`);
+assert.equal(partialRetry.rows[0].payment_id, partialPayment.rows[0].payment_id);
+
+const paymentCountBeforeOverpay = await db.query(`
+  select count(*)::int count from public.payments
+  where invoice_id='${invoice.rows[0].invoice_id}'
+`);
+await expectDatabaseError(
+  asUser(USER_C, `
+    select * from public.record_atomic_invoice_payment(
+      '${PAYMENT_OVER_REQUEST}','${invoice.rows[0].invoice_id}',300,
+      'cash',null
+    )
+  `),
+  'PAYMENT_EXCEEDS_BALANCE'
+);
+const paymentCountAfterOverpay = await db.query(`
+  select count(*)::int count from public.payments
+  where invoice_id='${invoice.rows[0].invoice_id}'
+`);
+assert.equal(paymentCountAfterOverpay.rows[0].count, paymentCountBeforeOverpay.rows[0].count);
+
+const finalPayment = await asUser(USER_C, `
+  select * from public.record_atomic_invoice_payment(
+    '${PAYMENT_FINAL_REQUEST}','${invoice.rows[0].invoice_id}',290,
+    'qr','receipt-test-2'
+  )
+`);
+assert.equal(finalPayment.rows[0].invoice_status, 'paid');
+assert.equal(Number(finalPayment.rows[0].balance_due), 0);
+assert.equal(finalPayment.rows[0].encounter_closed, true);
+const closedEncounter = await db.query(`
+  select status,completed_at is not null completed
+  from public.encounters
+  where id='${manualEncounter.rows[0].encounter_id}'
+`);
+assert.deepEqual(closedEncounter.rows[0], { status: 'closed', completed: true });
+
+await expectDatabaseError(
+  asUser(USER_C, `
+    insert into public.payments(
+      invoice_id,payment_reference,channel,amount,status
+    ) values ('${invoice.rows[0].invoice_id}','PAY-BYPASS','cash',1,'paid')
+  `),
+  'permission denied'
+);
+
+const handoffAudit = await db.query(`
+  select action,count(*)::int count
+  from public.audit_logs
+  where action in (
+    'create_prescription_handoff','issue_dispensing_invoice','record_invoice_payment'
+  )
+  group by action
+  order by action
+`);
+assert.deepEqual(handoffAudit.rows, [
+  { action: 'create_prescription_handoff', count: 1 },
+  { action: 'issue_dispensing_invoice', count: 1 },
+  { action: 'record_invoice_payment', count: 2 }
+]);
+
 await db.exec(`
   insert into public.clinics(id,code,name_th)
   values ('${CLINIC_B}','CLINICB','คลินิกบี');
@@ -310,5 +527,5 @@ for (const statement of [
 
 await db.close();
 console.log(
-  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, replay rejection, atomic intake/audit, append-only evidence, no-phone fallback and tenant isolation'
+  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, atomic clinical-financial handoffs, idempotency, rollback/audit, no-phone fallback and tenant isolation'
 );

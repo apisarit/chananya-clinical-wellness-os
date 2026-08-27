@@ -18,6 +18,7 @@
   let editingPatientId = null;
   let hybridDatabaseReady = false;
   let lineIdentityReady = false;
+  let atomicHandoffsReady = false;
   let identityLinkPatientId = null;
   let latestIdentityLinkCode = '';
   let identityLinks = [];
@@ -53,14 +54,6 @@
   function product(id) { return data.products.find(item => item.id === id); }
   function prescriptionFor(order) { return data.prescriptions.find(item => item.id === order?.prescription_id); }
   function encounterFor(prescription) { return data.encounters.find(item => item.id === prescription?.encounter_id); }
-
-  async function audit(action, entity, entityId, metadata = {}) {
-    try {
-      await db.from('audit_logs').insert({ user_id: session.user.id, action, entity, entity_id: entityId || null, metadata: { ...metadata, role } });
-    } catch (error) {
-      console.warn('Audit write failed', error);
-    }
-  }
 
   async function query(table, select = '*', order) {
     let request = db.from(table).select(select);
@@ -202,23 +195,33 @@
 
   function applyIdentityMode() {
     const hn = $('#p-hn');
-    hn.readOnly = hybridDatabaseReady;
-    hn.required = !hybridDatabaseReady;
-    hn.placeholder = hybridDatabaseReady ? 'ระบบออกให้อัตโนมัติเมื่อบันทึก' : 'กรอก HN ตามระบบเดิม';
+    hn.readOnly = true;
+    hn.required = false;
+    hn.placeholder = hybridDatabaseReady ? 'ระบบออกให้อัตโนมัติเมื่อบันทึก' : 'ต้องเปิด Identity migration ก่อนบันทึก';
+    $('#patient-submit').disabled = !hybridDatabaseReady;
     $('#p-hn-note').textContent = hybridDatabaseReady
       ? 'HN ออกโดยฐานข้อมูลและไม่เปลี่ยนเมื่อแก้ไขข้อมูล'
-      : 'Identity migration ยังไม่เปิด: ใช้ HN เดิมได้ตามปกติ';
+      : 'Identity migration ยังไม่เปิด ระบบแสดงข้อมูลได้แต่หยุดการเขียนเพื่อป้องกัน Patient/Allergy ครึ่งชุด';
   }
 
   async function detectIdentityBackend() {
-    const [databaseResult, serviceResult] = await Promise.all([
+    const [databaseResult, serviceResult, handoffResult] = await Promise.all([
       db.rpc('hybrid_patient_identity_healthcheck'),
-      fetch('/api/patient-identity', { cache: 'no-store' }).then(response => response.json()).catch(() => null)
+      fetch('/api/patient-identity', { cache: 'no-store' }).then(response => response.json()).catch(() => null),
+      db.rpc('clinical_financial_handoffs_healthcheck')
     ]);
     hybridDatabaseReady = !databaseResult.error
       && Boolean((Array.isArray(databaseResult.data) ? databaseResult.data[0] : databaseResult.data)?.ready);
     lineIdentityReady = hybridDatabaseReady && serviceResult?.enabled === true;
+    atomicHandoffsReady = !handoffResult.error
+      && Boolean((Array.isArray(handoffResult.data) ? handoffResult.data[0] : handoffResult.data)?.ready);
     applyIdentityMode();
+  }
+
+  function requireAtomicHandoffs() {
+    if (!atomicHandoffsReady) {
+      throw new Error('ฐานข้อมูลยังไม่เปิดใช้ Atomic Clinical/Financial Handoffs จึงหยุดการบันทึกเพื่อป้องกันข้อมูลครึ่งชุด');
+    }
   }
 
   function beginPatientEdit(patientId) {
@@ -244,6 +247,9 @@
 
   async function savePatient(event) {
     event.preventDefault();
+    if (!hybridDatabaseReady) {
+      throw new Error('ฐานข้อมูลยังไม่เปิดใช้ Hybrid Patient Identity จึงหยุดการบันทึกเพื่อป้องกันข้อมูลครึ่งชุด');
+    }
     const payload = {
       hn: $('#p-hn').value.trim(), prefix: $('#p-prefix').value.trim() || null,
       first_name: $('#p-first').value.trim(), last_name: $('#p-last').value.trim(),
@@ -253,39 +259,23 @@
       emergency_contact_name: $('#p-emergency').value.trim() || null
     };
     const allergy = $('#p-allergy').value.trim();
-    let savedPatient;
-    if (hybridDatabaseReady) {
-      const result = await db.rpc('upsert_patient_registration', {
-        p_patient_id: editingPatientId,
-        p_prefix: payload.prefix,
-        p_first_name: payload.first_name,
-        p_last_name: payload.last_name,
-        p_national_id: payload.national_id,
-        p_gender: payload.gender,
-        p_date_of_birth: payload.date_of_birth,
-        p_phone: payload.phone,
-        p_address: payload.address,
-        p_payment_right: payload.payment_right,
-        p_emergency_contact_name: payload.emergency_contact_name,
-        p_allergy: allergy || null
-      });
-      if (result.error) throw result.error;
-      savedPatient = Array.isArray(result.data) ? result.data[0] : result.data;
-      if (!savedPatient?.id) throw new Error('ฐานข้อมูลไม่ส่งข้อมูลผู้รับบริการกลับมา');
-    } else {
-      if (!payload.hn) throw new Error('กรุณาระบุ HN ในโหมดระบบเดิม');
-      const result = editingPatientId
-        ? await db.from('patients').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingPatientId).select().single()
-        : await db.from('patients').insert({ ...payload, created_by: session.user.id }).select().single();
-      if (result.error) throw result.error;
-      savedPatient = result.data;
-      const alreadyRecorded = activeAllergies(savedPatient.id).some(item => String(item.allergen_name || '').toLowerCase() === allergy.toLowerCase());
-      if (allergy && !alreadyRecorded) {
-        const allergyResult = await db.from('patient_allergies').insert({ patient_id: savedPatient.id, allergen_type: 'other', allergen_name: allergy, status: 'active', created_by: session.user.id });
-        if (allergyResult.error) throw allergyResult.error;
-      }
-      await audit(editingPatientId ? 'update' : 'create', 'patients', savedPatient.id, { identityMode: 'legacy_hn' });
-    }
+    const result = await db.rpc('upsert_patient_registration', {
+      p_patient_id: editingPatientId,
+      p_prefix: payload.prefix,
+      p_first_name: payload.first_name,
+      p_last_name: payload.last_name,
+      p_national_id: payload.national_id,
+      p_gender: payload.gender,
+      p_date_of_birth: payload.date_of_birth,
+      p_phone: payload.phone,
+      p_address: payload.address,
+      p_payment_right: payload.payment_right,
+      p_emergency_contact_name: payload.emergency_contact_name,
+      p_allergy: allergy || null
+    });
+    if (result.error) throw result.error;
+    const savedPatient = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!savedPatient?.id) throw new Error('ฐานข้อมูลไม่ส่งข้อมูลผู้รับบริการกลับมา');
     const wasEditing = Boolean(editingPatientId);
     resetPatientForm();
     await loadAll();
@@ -405,53 +395,43 @@
   }
 
   async function createInvoice(orderId) {
+    requireAtomicHandoffs();
     const order = data.dispensing.find(item => item.id === orderId);
     const prescription = prescriptionFor(order);
     const encounter = encounterFor(prescription);
     if (!order || !prescription || !encounter) throw new Error('ข้อมูลใบสั่งยาหรือ Encounter ไม่ครบ');
     if (data.invoices.some(invoice => invoice.encounter_id === encounter.id && !['void', 'cancelled'].includes(invoice.status))) throw new Error('Encounter นี้มี Invoice แล้ว');
-    const dispensed = data.dispensingItems.filter(item => item.dispensing_order_id === orderId);
-    const medicine = dispensed.reduce((sum, item) => sum + num(item.quantity_dispensed) * num(item.unit_price), 0);
     const serviceFee = num(document.querySelector(`[data-service-fee="${CSS.escape(orderId)}"]`)?.value);
     const discount = num(document.querySelector(`[data-discount="${CSS.escape(orderId)}"]`)?.value);
-    const grand = Math.max(0, medicine + serviceFee - discount);
-    const invoiceResult = await db.from('invoices').insert({ invoice_number: `INV-${Date.now()}`, patient_id: prescription.patient_id, encounter_id: encounter.id, status: 'issued', subtotal: medicine + serviceFee, discount_total: discount, tax_total: 0, rounding: 0, grand_total: grand, paid_amount: 0, balance_due: grand, issued_at: new Date().toISOString(), created_by: session.user.id }).select().single();
-    if (invoiceResult.error) throw invoiceResult.error;
-    const lines = [];
-    if (serviceFee > 0) lines.push({ invoice_id: invoiceResult.data.id, item_type: 'service', description: 'ค่าตรวจและบริการรักษา', quantity: 1, unit_price: serviceFee, line_total: serviceFee });
-    for (const item of dispensed) {
-      const prescribed = data.rxItems.find(row => row.id === item.prescription_item_id);
-      lines.push({ invoice_id: invoiceResult.data.id, item_type: 'product', product_id: prescribed?.product_id || null, dispensing_item_id: item.id, description: product(prescribed?.product_id)?.name_th || 'ยา/สมุนไพร', quantity: item.quantity_dispensed, unit_price: item.unit_price, line_total: num(item.quantity_dispensed) * num(item.unit_price) });
-    }
-    if (lines.length) {
-      const lineResult = await db.from('invoice_items').insert(lines);
-      if (lineResult.error) throw lineResult.error;
-    }
-    const orderResult = await db.from('dispensing_orders').update({ status: 'billed' }).eq('id', orderId);
-    if (orderResult.error) throw orderResult.error;
-    await audit('create', 'invoices', invoiceResult.data.id, { orderId });
+    const result = await db.rpc('issue_atomic_dispensing_invoice', {
+      p_dispensing_order_id: orderId,
+      p_service_fee: serviceFee,
+      p_discount: discount
+    });
+    if (result.error) throw result.error;
     await loadAll();
     toast('สร้าง Invoice แล้ว');
   }
 
   async function savePayment(event) {
     event.preventDefault();
+    requireAtomicHandoffs();
     const invoice = data.invoices.find(item => item.id === $('#pay-invoice').value);
     const amount = num($('#pay-amount').value);
     if (!invoice) throw new Error('ไม่พบ Invoice');
-    if (amount > num(invoice.balance_due)) throw new Error('จำนวนรับชำระมากกว่ายอดคงเหลือ');
-    const paymentResult = await db.from('payments').insert({ invoice_id: invoice.id, payment_reference: `PAY-${Date.now()}`, provider: 'manual', channel: $('#pay-channel').value, amount, status: 'paid', gateway_transaction_id: $('#pay-note').value || null, paid_at: new Date().toISOString(), received_by: session.user.id }).select().single();
-    if (paymentResult.error) throw paymentResult.error;
-    const paid = num(invoice.paid_amount) + amount;
-    const balance = Math.max(0, num(invoice.grand_total) - paid);
-    const status = balance === 0 ? 'paid' : 'partially_paid';
-    let result = await db.from('invoices').update({ paid_amount: paid, balance_due: balance, status }).eq('id', invoice.id);
+    const requestKey = event.currentTarget.dataset.requestKey || crypto.randomUUID();
+    event.currentTarget.dataset.requestKey = requestKey;
+    const result = await db.rpc('record_atomic_invoice_payment', {
+      p_request_key: requestKey,
+      p_invoice_id: invoice.id,
+      p_amount: amount,
+      p_channel: $('#pay-channel').value,
+      p_reference_note: $('#pay-note').value.trim() || null
+    });
     if (result.error) throw result.error;
-    if (balance === 0 && invoice.encounter_id) {
-      result = await db.from('encounters').update({ status: 'closed' }).eq('id', invoice.encounter_id);
-      if (result.error) throw result.error;
-    }
-    await audit('payment', 'payments', paymentResult.data.id, { invoice: invoice.id, amount });
+    const payment = Array.isArray(result.data) ? result.data[0] : result.data;
+    const balance = num(payment?.balance_due);
+    delete event.currentTarget.dataset.requestKey;
     event.target.reset();
     await loadAll();
     toast(balance === 0 ? 'รับชำระและปิด Encounter แล้ว' : 'บันทึกชำระบางส่วนแล้ว');

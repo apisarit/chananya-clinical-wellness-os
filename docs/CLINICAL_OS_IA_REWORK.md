@@ -64,7 +64,9 @@ The clinical database boundaries in `CLINICAL_OS_STABILIZATION.md` are unchanged
 
 ## Known release gates
 
-- Initial encounter creation, patient-plus-allergy registration, prescription handoff, invoice creation, and payment closure still contain multi-table browser writes. They should move to transaction-safe RPCs before the release is treated as fully atomic.
+- Initial encounter creation and patient-plus-allergy registration now use the hybrid identity RPC boundary. Prescription handoff, invoice issuance, and payment closure now use `202608270400_atomic_clinical_financial_handoffs.sql`; see `ATOMIC_CLINICAL_FINANCIAL_HANDOFFS.md` for activation and rollback evidence.
+- Production request, material issue, QC release, finished-goods receipt, and remaining inventory transitions still require dedicated transaction-safe RPCs before the release is treated as fully atomic.
+- Product, supplier, inventory, production, and pricing masters are not yet clinic-scoped. Until tenant isolation is complete, commercial deployments require one isolated database/project per clinic.
 - Authenticated preview testing must use a dedicated test account and test patient because the Deploy Preview currently points at the production Supabase project.
 - Apply and verify the foundation migration in a non-production Supabase environment before enabling ontology-backed encounter bindings. The Preview fallback is read-only.
 - Verify desktop, tablet, and mobile layout, role visibility, and a signed-record lock before merging.

@@ -38,3 +38,7 @@ Chananya Clinical OS exists to give Thai traditional medicine practitioners and 
 ## Current identity decision
 
 The authoritative design and activation gates for LINE QR plus HN fallback are in [HYBRID_PATIENT_IDENTITY.md](./HYBRID_PATIENT_IDENTITY.md).
+
+## Current transaction decision
+
+Prescription, invoice, and payment state changes use the database boundary in [ATOMIC_CLINICAL_FINANCIAL_HANDOFFS.md](./ATOMIC_CLINICAL_FINANCIAL_HANDOFFS.md). Browser-side multi-table fallback is prohibited.
