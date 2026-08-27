@@ -18,6 +18,7 @@ No item may be called production-ready merely because dimensions 1 or 2 pass.
 | LINE QR and HN/manual fallback | Reception / Practitioner | `/check-in.html`, `/patient-card.html` | `ui-review.html#checkin` | Source present; LINE callback and staging pending |
 | Thai medicine knowledge foundation | Practitioner / permitted readers | `/foundation.html` | `ui-review.html#foundation` | Schema present; corpus incomplete; review pending |
 | Encounter, OPD, examination, diagnosis, treatment, prescription, sign-off | Practitioner | `/clinical-v3.html` | `ui-review.html#clinical` | Source present; authenticated staging pending |
+| Outcomes, pain before/after, follow-up and searchable timeline | Practitioner / Doctor; Super Admin override | `/outcomes.html` | `ui-review.html#outcomes` | Source restored as tenant-bound read-only RPCs; authenticated staging pending |
 | Prescription, Product Master, Walk-in Sale, Lot/FEFO, labels | Pharmacy | `/pharmacy.html` | `ui-review.html#pharmacy` | Source present; authenticated staging pending |
 | Formula, material issue, batch and stock movement | Production / Inventory | `/production.html` | `ui-review.html#production` | Source present; authenticated staging pending |
 | Independent batch review and release | Quality | `/quality.html` | `ui-review.html#quality` | Source present; independent-QC evidence pending |
@@ -53,3 +54,5 @@ The product must not be described as **Commercial Production ready 100%** until 
 - Netlify Deploy Preview, automated checks, review status and merge protection pass on the final commit.
 
 Until then, the release label is **Preview / production candidate under verification**.
+
+`release-readiness.json` is the machine-readable release claim. Its `commercialProductionReady` value must remain `false` and each required gate must remain `pending` until evidence tied to the exact release commit has been reviewed. A passing source/Preview test is not evidence that authenticated staging, LINE callback, restore drill or legal review has passed.

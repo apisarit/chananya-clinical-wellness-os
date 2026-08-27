@@ -7,6 +7,7 @@
     checkin: { kicker: 'Hybrid Identity', title: 'ยืนยันผู้รับบริการด้วย LINE / HN' },
     foundation: { kicker: 'Knowledge Foundation', title: 'รากวิชาและความครอบคลุมองค์ความรู้' },
     clinical: { kicker: 'Clinical Workspace', title: 'เวชระเบียนแพทย์แผนไทย' },
+    outcomes: { kicker: 'Clinical Outcomes', title: 'ผลลัพธ์และการติดตาม' },
     pharmacy: { kicker: 'Pharmacy', title: 'ห้องยาและ Product Master' },
     production: { kicker: 'Production', title: 'ผลิตและคลังวัตถุดิบ' },
     quality: { kicker: 'Independent Quality', title: 'ตรวจคุณภาพและปล่อยผ่าน' },

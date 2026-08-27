@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "releaseChannel": "preview",
+  "status": "production_candidate_under_verification",
+  "commercialProductionReady": false,
+  "claimPolicy": "Commercial Production 100% may be stated only when every required gate is passed and evidence is tied to the exact release commit.",
+  "requiredGates": [
+    {
+      "id": "authenticated_staging_all_roles",
+      "label": "Authenticated staging E2E for every role",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "line_callback",
+      "label": "LINE callback, consent, revoke, QR expiry and replay denial",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "encrypted_backup_restore_drill",
+      "label": "Encrypted backup and isolated restore drill",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "privacy_security_legal_review",
+      "label": "Privacy, security and applicable legal review",
+      "status": "pending",
+      "evidence": null
+    }
+  ]
+}

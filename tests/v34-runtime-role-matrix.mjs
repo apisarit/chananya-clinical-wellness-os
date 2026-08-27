@@ -89,7 +89,11 @@ for (const testCase of cases) {
 
 const superAdmin = { role: 'viewer', system_role: 'super_admin', access_context_ready: true };
 assert.equal(runtime.can(superAdmin, 'appointments_view'), true, 'super admin may inspect appointments');
+assert.equal(runtime.can(superAdmin, 'clinical_read'), true, 'super admin may inspect tenant-scoped clinical outcomes');
 assert.equal(runtime.can(superAdmin, 'appointments_operate'), true, 'super admin receives the explicit cross-workspace override');
+assert.equal(runtime.can({ role: 'practitioner', system_role: 'staff', access_context_ready: true }, 'clinical_read'), true, 'practitioner may inspect outcomes');
+assert.equal(runtime.can({ role: 'pharmacy', system_role: 'staff', access_context_ready: true }, 'clinical_read'), false, 'pharmacy must not inspect patient-linked outcomes');
+assert.equal(runtime.can({ role: 'viewer', system_role: 'admin', access_context_ready: true }, 'clinical_read'), false, 'governance admin must not inherit clinical outcome access');
 assert.equal(
   runtime.can({ role: 'viewer', system_role: 'admin', access_context_ready: true }, 'admin_center'),
   true,
@@ -159,6 +163,7 @@ const scriptsToParse = [
   'appointments.js',
   'check-in.js',
   'foundation.js',
+  'outcomes.js',
   'chananya-runtime.js',
   'clinical-v3.js',
   'clinical-context-guard.js',
@@ -195,7 +200,7 @@ assert.match(clinicalHtml, /data-stage="intake"/, 'Clinical page should expose t
 assert.match(clinicalHtml, /data-stage="signoff"/, 'Clinical workflow should end with sign-off');
 assert.match(read('clinical-signoff.js'), /fields\.inert=locked/, 'sign-off lock should disable the owned record boundary');
 
-for (const page of ['index.html', 'appointments.html', 'check-in.html', 'foundation.html', 'clinical-v3.html', 'pharmacy.html', 'production.html', 'quality.html', 'admin.html']) {
+for (const page of ['index.html', 'appointments.html', 'check-in.html', 'foundation.html', 'clinical-v3.html', 'outcomes.html', 'pharmacy.html', 'production.html', 'quality.html', 'admin.html']) {
   const html = read(page);
   const runtimeIndex = html.indexOf('chananya-runtime.js');
   const shellIndex = html.indexOf('app-shell.js');
@@ -210,5 +215,6 @@ assert.match(read('_redirects'), /^\/app\.html\s+\/\s+301!/m, 'Legacy localStora
 assert.match(read('app-shell.js'), /href: '\/foundation\.html'[\s\S]*?capability: 'knowledge_read'/, 'shared shell must expose the foundation as a canonical route');
 assert.match(read('app-shell.js'), /href: '\/check-in\.html'[\s\S]*?capability: 'patient_checkin'/, 'shared shell must expose hybrid patient check-in as a canonical route');
 assert.match(read('app-shell.js'), /href: '\/quality\.html'[\s\S]*?capability: 'quality_operate'/, 'shared shell must expose Quality as an independent department route');
+assert.match(read('app-shell.js'), /href: '\/outcomes\.html'[\s\S]*?capability: 'clinical_read'/, 'shared shell must expose Outcomes only through the clinical read boundary');
 
 console.log(`IA release checks passed: ${cases.length} role cases + ${scriptsToParse.length} syntax checks + shared shell/order assertions`);

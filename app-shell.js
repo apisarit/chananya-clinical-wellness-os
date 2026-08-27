@@ -8,6 +8,7 @@
     { key: 'checkin', href: '/check-in.html', icon: '▣', label: 'ยืนยันผู้รับบริการ', note: 'LINE QR หรือ HN', capability: 'patient_checkin' },
     { key: 'foundation', href: '/foundation.html', icon: 'ร', label: 'รากวิชา', note: 'คัมภีร์และองค์ความรู้', capability: 'knowledge_read' },
     { key: 'clinical', href: '/clinical-v3.html', icon: '✚', label: 'เวชระเบียน', note: 'ตรวจ วินิจฉัย รักษา', capability: 'clinical_read' },
+    { key: 'outcomes', href: '/outcomes.html', icon: '◎', label: 'ผลลัพธ์', note: 'Outcome และติดตามผล', capability: 'clinical_read' },
     { key: 'pharmacy', href: '/pharmacy.html', icon: 'Rx', label: 'ห้องยา', note: 'จ่ายยาและผลิตภัณฑ์', capability: 'pharmacy_operate' },
     { key: 'production', href: '/production.html', icon: '⚗', label: 'ผลิตและคลัง', note: 'สูตร Batch และวัตถุดิบ', capability: 'production_operate' },
     { key: 'quality', href: '/quality.html', icon: '✓', label: 'คุณภาพ', note: 'ตรวจ QC และปล่อยผ่าน', capability: 'quality_operate' },

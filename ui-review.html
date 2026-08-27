@@ -22,12 +22,13 @@
         <a href="#checkin" data-review-route="checkin"><span class="nav-icon">▣</span><span class="nav-copy"><b>ยืนยันผู้รับบริการ</b><small>LINE QR หรือ HN</small></span></a>
         <a href="#foundation" data-review-route="foundation"><span class="nav-icon">ร</span><span class="nav-copy"><b>รากวิชา</b><small>คัมภีร์และองค์ความรู้</small></span></a>
         <a href="#clinical" data-review-route="clinical"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
+        <a href="#outcomes" data-review-route="outcomes"><span class="nav-icon">◎</span><span class="nav-copy"><b>ผลลัพธ์</b><small>Outcome และติดตามผล</small></span></a>
         <a href="#pharmacy" data-review-route="pharmacy"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
         <a href="#production" data-review-route="production"><span class="nav-icon">⚗</span><span class="nav-copy"><b>ผลิตและคลัง</b><small>สูตร Batch และวัตถุดิบ</small></span></a>
         <a href="#quality" data-review-route="quality"><span class="nav-icon">✓</span><span class="nav-copy"><b>คุณภาพ</b><small>ตรวจ QC และปล่อยผ่าน</small></span></a>
         <a href="#admin" data-review-route="admin"><span class="nav-icon">⚙</span><span class="nav-copy"><b>ศูนย์ควบคุม</b><small>สิทธิ์ อนุมัติ Audit</small></span></a>
       </nav>
-      <div class="sidebar-foot">Platform review • 9 workspaces<br>No session • No patient data • No writes</div>
+      <div class="sidebar-foot">Platform review • 10 workspaces<br>No session • No patient data • No writes</div>
     </aside>
     <button class="sidebar-scrim" data-review-close aria-label="ปิดเมนู"></button>
     <div class="workspace">
@@ -36,13 +37,14 @@
         <div class="actions"><div class="identity-block"><small>ผู้ดูแลระบบตัวอย่าง</small></div><span class="badge">super_admin</span></div>
       </header>
       <main>
-        <div class="notice warning space-bottom-md"><b>Read-only Platform Review</b> — ทุก workspace ด้านล่างใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้ เมนูทั้งหมดแสดงเพราะเป็นตัวอย่าง <b>super_admin</b>; บัญชีทั่วไปเห็นเฉพาะแผนกของตน</div>
+        <div class="notice warning space-bottom-md"><b>Read-only Platform Review</b> — ทุก workspace ด้านล่างใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้ เมนูทั้งหมดแสดงเพราะเป็นตัวอย่าง <b>super_admin</b>; บัญชีทั่วไปเห็นเฉพาะแผนกของตน สถานะปัจจุบันคือ <b>Preview / production candidate under verification</b> ไม่ใช่ Commercial Production 100%</div>
         <nav class="module-nav review-module-nav" aria-label="เลือกหน้าสำหรับตรวจ UI">
           <a href="#operations" data-review-route="operations">ภาพรวม</a>
           <a href="#appointments" data-review-route="appointments">นัดหมาย</a>
           <a href="#checkin" data-review-route="checkin">LINE / HN</a>
           <a href="#foundation" data-review-route="foundation">รากวิชา</a>
           <a href="#clinical" data-review-route="clinical">เวชระเบียน</a>
+          <a href="#outcomes" data-review-route="outcomes">ผลลัพธ์</a>
           <a href="#pharmacy" data-review-route="pharmacy">ห้องยา</a>
           <a href="#production" data-review-route="production">ผลิต</a>
           <a href="#quality" data-review-route="quality">คุณภาพ</a>
@@ -72,6 +74,13 @@
 
         <section class="review-workspace" id="review-foundation" data-review-workspace="foundation" hidden>
           <section class="card foundation-root-card"><div class="section-heading"><span class="section-number">ร</span><div><h2>Knowledge Coverage ตามหลักฐานจริง</h2><p>แยกของที่ preserve แล้วออกจาก coverage target ที่ยังไม่บรรจุครบ</p></div></div><div class="coverage-grid"><div><b>กฎ TTM-DKR เดิมทุกแถว</b><span class="coverage-state ready">preserve/import อัตโนมัติ</span></div><div><b>ธาตุ 4 • ธาตุเจ้าเรือนเกิด/ปัจจุบัน • ปิตตะ/วาตะ/เสมหะ</b><span class="coverage-state review">seed แล้ว • ต้อง review</span></div><div><b>พิกัด 9 • กำเริบ/หย่อน/พิการ • สมุฏฐานหลัก</b><span class="coverage-state review">seed แล้ว • ต้อง review</span></div><div><b>ปิตตะ 42 / วาตะ 80 / เสมหะ 20</b><span class="coverage-state missing">เป็น target • ยังไม่บรรจุครบ</span></div><div><b>รูปธาตุ 42 / อวัยวะแผนไทย</b><span class="coverage-state missing">ยังไม่บรรจุครบ</span></div><div><b>โรค คัมภีร์ ตำรับ สมุนไพร รสยา เส้น และหัตถการ</b><span class="coverage-state missing">มี schema • dataset ยังไม่ครบ</span></div></div><div class="foundation-chain"><span>คัมภีร์ / Dataset</span><i>→</i><span>Concept</span><i>→</i><span>Relation</span><i>→</i><span>Encounter Evidence</span><i>→</i><span>Practitioner Confirmation</span></div><p class="notice warning space-top-sm"><b>หลักการ:</b> แพทย์แผนไทยเป็น primary ontology; ICD/WHO เป็น secondary mapping และ AI ห้ามวินิจฉัยแทนผู้ประกอบวิชาชีพ</p></section>
+        </section>
+
+        <section class="review-workspace" id="review-outcomes" data-review-workspace="outcomes" hidden>
+          <div class="hero outcomes-hero"><span class="page-kicker">MEASURE • REVIEW • IMPROVE</span><h2>ผลลัพธ์เดิมกลับมาเป็น timeline ที่ตรวจสอบได้</h2><p>ค้นด้วย HN ชื่อ Encounter ผู้รักษา วันที่ การวินิจฉัย วิธีรักษา Outcome และวันติดตาม โดยไม่สร้างฐานข้อมูลซ้ำในเบราว์เซอร์</p></div>
+          <div class="stats outcomes-stats"><div class="stat">Treatment sessions<strong>34</strong></div><div class="stat">มีคะแนนก่อน–หลัง<strong>29</strong></div><div class="stat">Pain เฉลี่ยก่อน<strong>6.4</strong></div><div class="stat">Pain เฉลี่ยหลัง<strong>3.1</strong></div><div class="stat">ดีขึ้น<strong>82.8%</strong></div><div class="stat">มี Follow-up<strong>18</strong></div></div>
+          <section class="card"><div class="section-heading"><span class="section-number">O</span><div><h2>Clinical outcome timeline</h2><p>ตัวอย่างข้อมูลสังเคราะห์—หน้าใช้งานจริงอ่านผ่าน tenant-bound RPC</p></div></div><div class="outcomes-list"><article class="outcome-card"><div class="outcome-main"><span class="page-kicker">ENC-DEMO-001</span><h3>HN-DEMO-001 • ผู้รับบริการตัวอย่าง</h3><p>ลมปลายปัตคาตบริเวณบ่าและสะบัก</p><small>27 สิงหาคม 2569 10:30 • พท. ตัวอย่าง</small><div class="identity-proof-row"><span>นวดราชสำนัก</span><span>ประคบสมุนไพร</span><span>Lot DEMO-LOT-001</span></div><p class="outcome-note"><b>Outcome:</b> เคลื่อนไหวคอได้ดีขึ้นและอาการปวดลดลง</p><p class="outcome-followup"><b>นัดติดตาม:</b> 3 กันยายน 2569 10:30 • improved</p></div><div class="outcome-score improved"><small>Pain</small><strong>7 → 3</strong><span>ดีขึ้น 4</span></div></article></div></section>
+          <p class="notice warning"><b>ขอบเขตสิทธิ์:</b> เฉพาะ Practitioner/Doctor และ Super Admin ใน tenant เดียว; Reception, Pharmacy, Production, Quality, Billing และ Governance Admin เข้าไม่ได้</p>
         </section>
 
         <section class="review-workspace" id="review-pharmacy" data-review-workspace="pharmacy" hidden>

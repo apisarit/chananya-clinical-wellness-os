@@ -231,6 +231,51 @@ const confirmed = await asUser(USER_A, `
 assert.equal(confirmed.rows[0].patient_id, patientA.id);
 const encounterA = confirmed.rows[0].encounter_id;
 assert.ok(encounterA);
+const outcomeSession = await db.query(`
+  insert into public.clinical_treatment_sessions(
+    encounter_id,session_no,treatment_modalities,treatment_detail,
+    pain_before,pain_after,outcome_summary,advice,practitioner_id
+  ) values (
+    '${encounterA}',1,array['นวดราชสำนัก','ประคบสมุนไพร'],
+    'รักษาตามสมุฏฐานที่ผู้ประกอบวิชาชีพยืนยัน',7,3,
+    'อาการปวดลดลงและเคลื่อนไหวดีขึ้น','ติดตามใน 7 วัน','${USER_A}'
+  ) returning *
+`);
+assert.equal(outcomeSession.rows[0].pain_before, 7);
+assert.equal(outcomeSession.rows[0].pain_after, 3);
+await db.query(`
+  insert into public.clinical_followup_notes(
+    encounter_id,followup_date,current_symptoms,change_from_previous,
+    outcome_status,next_appointment_at,recorded_by
+  ) values (
+    '${encounterA}',current_date,'ปวดลดลง','เคลื่อนไหวดีขึ้น',
+    'improved',now()+interval '7 days','${USER_A}'
+  )
+`);
+const outcomeSummary = await asUser(USER_A, `
+  select * from public.clinical_outcomes_summary(now()-interval '1 day',now()+interval '1 day')
+`);
+assert.equal(outcomeSummary.rows[0].total_sessions, 1);
+assert.equal(outcomeSummary.rows[0].measured_sessions, 1);
+assert.equal(outcomeSummary.rows[0].improved_sessions, 1);
+assert.equal(outcomeSummary.rows[0].followup_encounters, 1);
+const outcomePatient = await asUser(USER_A, `
+  select patient.hn
+  from public.encounters encounter
+  join public.patients patient on patient.id=encounter.patient_id
+  where encounter.id='${encounterA}'
+`);
+const outcomeHn = outcomePatient.rows[0].hn;
+const outcomeSearch = await asUser(USER_A, `
+  select * from public.search_clinical_outcomes(
+    '${outcomeHn}',now()-interval '1 day',now()+interval '1 day',100,0
+  )
+`);
+assert.equal(outcomeSearch.rows.length, 1);
+assert.equal(outcomeSearch.rows[0].encounter_id, encounterA);
+assert.equal(outcomeSearch.rows[0].pain_change, 4);
+assert.equal(outcomeSearch.rows[0].followup_status, 'improved');
+assert.ok(outcomeSearch.rows[0].next_followup_at instanceof Date);
 await expectDatabaseError(
   asUser(USER_A, `
     select * from public.confirm_patient_qr(
@@ -543,6 +588,12 @@ const crossSearch = await asUser(
   `select * from public.search_patients_for_checkin('ต่าง')`
 );
 assert.equal(crossSearch.rows.length, 0);
+const crossTenantOutcomes = await asUser(USER_B, `
+  select * from public.search_clinical_outcomes(
+    '${outcomeHn}',now()-interval '1 day',now()+interval '1 day',100,0
+  )
+`);
+assert.equal(crossTenantOutcomes.rows.length, 0, 'outcome search must not cross the active clinic boundary');
 
 // Department separation is enforced by both RPCs and restrictive RLS. An
 // account has one active department; only super_admin has the explicit
@@ -599,6 +650,14 @@ assert.deepEqual(pharmacyBoundaries.rows[0], {
   production: false,
   billing: false
 });
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `select * from public.clinical_outcomes_summary(null,null)`),
+  'PERMISSION_DENIED'
+);
+await expectDatabaseError(
+  asUser(USER_ADMIN, `select * from public.search_clinical_outcomes(null,null,null,100,0)`),
+  'PERMISSION_DENIED'
+);
 
 const productionBoundaries = await asUser(USER_PRODUCTION, `
   select
@@ -1236,5 +1295,5 @@ for (const statement of [
 
 await db.close();
 console.log(
-  'PostgreSQL behavioral smoke passed: consent, HN, LINE identity, atomic clinical/billing/production handoffs, department/RLS boundaries, FEFO, QC release, idempotency, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
+  'PostgreSQL behavioral smoke passed: consent, HN, LINE identity, clinical outcomes, atomic clinical/billing/production handoffs, department/RLS boundaries, FEFO, QC release, idempotency, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
 );

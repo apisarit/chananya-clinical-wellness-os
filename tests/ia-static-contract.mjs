@@ -16,6 +16,7 @@ const contracts = [
     page: 'clinical-v3.html',
     scripts: ['app-shell.js', 'clinical-v3.js', 'clinical-context-guard.js', 'body-pain-map.js', 'ttm-diagnosis-assistant.js', 'diagnosis-atomic-bridge.js', 'opd-workflow.js', 'clinical-signoff.js']
   },
+  { page: 'outcomes.html', scripts: ['app-shell.js', 'outcomes.js'] },
   { page: 'pharmacy.html', scripts: ['app-shell.js', 'pharmacy.js', 'pharmacy-sale-selector-fix.js', 'pharmacy-labels.js', 'pharmacy-v33-tools.js'] },
   { page: 'production.html', scripts: ['app-shell.js', 'production.js'] },
   { page: 'quality.html', scripts: ['app-shell.js', 'quality.js'] },
@@ -70,9 +71,9 @@ const platformReviewSource = read('ui-review.js');
 assert.doesNotThrow(() => new vm.Script(platformReviewSource, { filename: 'ui-review.js' }), 'platform review controller should parse');
 assert.doesNotMatch(platformReview, /<script(?![^>]*\bsrc=)[^>]*>/i, 'platform review must not contain inline scripts');
 assert.doesNotMatch(platformReview, /(?:src|href)=["'][^"']*(?:supabase|auth-config)/i, 'platform review must not connect to database or auth services');
-assert.doesNotMatch(platformReview, /href=["']\/(?:appointments|check-in|foundation|clinical-v3|pharmacy|production|quality|admin)(?:\.html)?["']/i, 'platform review navigation must not escape into database-locked operational routes');
+assert.doesNotMatch(platformReview, /href=["']\/(?:appointments|check-in|foundation|clinical-v3|outcomes|pharmacy|production|quality|admin)(?:\.html)?["']/i, 'platform review navigation must not escape into database-locked operational routes');
 assert.doesNotMatch(platformReviewSource, /fetch\s*\(|XMLHttpRequest|supabase|localStorage|sessionStorage/i, 'platform review controller must remain credential-free and read-only');
-for (const workspace of ['operations','appointments','checkin','foundation','clinical','pharmacy','production','quality','admin']) {
+for (const workspace of ['operations','appointments','checkin','foundation','clinical','outcomes','pharmacy','production','quality','admin']) {
   assert.match(platformReview, new RegExp(`data-review-workspace=["']${workspace}["']`), `platform review should expose ${workspace}`);
   assert.match(platformReview, new RegExp(`data-review-route=["']${workspace}["']`), `platform review should navigate to ${workspace}`);
 }
@@ -81,6 +82,7 @@ for (const gate of ['Authenticated staging ทุก role', 'LINE callback จ�
 }
 assert.match(platformReview, /ปิตตะ 42 \/ วาตะ 80 \/ เสมหะ 20[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must not claim complete disease coverage');
 assert.match(platformReview, /รูปธาตุ 42 \/ อวัยวะแผนไทย[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must disclose incomplete rupa-dhatu coverage');
+assert.match(platformReview, /Clinical outcome timeline/, 'platform review must expose the restored outcomes timeline');
 const platformReviewIds = [...platformReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(platformReviewIds).size, platformReviewIds.length, 'platform review should not contain duplicate IDs');
 const coverageManifest = read('docs/PLATFORM_COVERAGE_AND_RELEASE_GATES.md');
@@ -97,6 +99,7 @@ assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.clinical-layout \{ grid-
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.foundation-browser \{ grid-template-columns: 1fr; \}/, 'foundation browser must stack on narrow screens');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.identity-checkin-grid \{ grid-template-columns: 1fr; \}/, 'hybrid check-in must stack on narrow screens');
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.identity-review-grid \{ grid-template-columns: 1fr; \}/, 'identity review must stack on narrow screens');
+assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.outcome-card \{ grid-template-columns: 1fr; \}/, 'outcome timeline must stack on narrow screens');
 assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.identity-preview \{ grid-template-columns: 1fr; \}/, 'identity confirmation must become single-column on phones');
 assert.match(css, /\.workflow-nav \{ grid-template-columns: repeat\(7,minmax\(122px,1fr\)\); overflow-x: auto;/, 'clinical workflow must remain reachable with horizontal scrolling');
 assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.form, \.opd-grid, \.bm-grid, \.ttm-context-grid, \.checkgrid, \.opd-chipgrid \{ grid-template-columns: 1fr; \}/, 'clinical forms must become single-column on phones');

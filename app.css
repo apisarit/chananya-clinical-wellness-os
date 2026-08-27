@@ -458,6 +458,27 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 .release-gate-card { border-color: #e9c4bc; background: linear-gradient(135deg,#fff,#fff8f6); }
 .release-gate-card .section-number { color: var(--danger); border-color: #e9c4bc; background: var(--danger-soft); }
 
+/* Clinical outcomes */
+.outcomes-hero h2, .outcomes-hero p { position: relative; z-index: 1; }
+.outcomes-filter .toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+.outcomes-filter .toolbar > label:last-of-type { flex: 2 1 280px; }
+.outcomes-stats { margin: 16px 0; }
+.outcomes-list { display: grid; gap: 10px; }
+.outcome-card { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: #fff; }
+.outcome-main { min-width: 0; }
+.outcome-main h3 { margin: 4px 0 6px; color: var(--forest-950); font-size: 1rem; }
+.outcome-main p { margin: 4px 0; color: var(--muted); line-height: 1.55; }
+.outcome-main > small { color: var(--muted); }
+.outcome-note { overflow-wrap: anywhere; }
+.outcome-followup { padding: 8px 10px; border-radius: 10px; color: var(--forest-800) !important; background: var(--forest-50); }
+.outcome-score { display: grid; align-content: center; justify-items: center; gap: 4px; padding: 14px; border-radius: 13px; text-align: center; background: var(--surface-soft); }
+.outcome-score small { color: var(--muted); }
+.outcome-score strong { color: var(--forest-950); font-size: 1.35rem; }
+.outcome-score span { font-size: .73rem; font-weight: 850; }
+.outcome-score.improved { color: var(--success); background: var(--success-soft); }
+.outcome-score.worse { color: var(--danger); background: var(--danger-soft); }
+.outcome-score.neutral { color: var(--warning); background: var(--warning-soft); }
+
 .patient-card-page { min-height: 100vh; padding: max(16px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 80% 0%, rgba(182,146,78,.2), transparent 24rem), var(--cream); }
 .patient-card-shell { width: min(100%, 520px); margin: 0 auto; padding: 0; }
 .patient-card-brand { display: flex; align-items: center; gap: 12px; padding: 10px 3px 18px; }
@@ -512,6 +533,8 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
   .review-phone-card { position: static; width: min(100%,520px); justify-self: center; }
   .identity-preview { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .coverage-grid { grid-template-columns: 1fr; }
+  .outcome-card { grid-template-columns: 1fr; }
+  .outcome-score { justify-items: start; text-align: left; }
 }
 @media (max-width: 600px) {
   .top { padding: 11px 13px; }
