@@ -87,6 +87,7 @@
       $('#rx-encounter').value = preferredEncounter;
       await selectEncounter(preferredEncounter);
     }
+    window.dispatchEvent(new CustomEvent('chananya:clinical-references-rendered'));
   }
 
   async function selectEncounter(encounterId) {

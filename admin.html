@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Admin Task Center</title>
-  <link rel="stylesheet" href="app.css?v=clinical-os-ia1">
+  <link rel="stylesheet" href="app.css?v=clinical-os-department1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="auth-config.js?v=clinical-os-ia1"></script>
-  <script src="chananya-runtime.js?v=clinical-os-ia1"></script>
+  <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
-  <script defer src="admin.js?v=clinical-os-ia1"></script>
+  <script defer src="searchable-select.js?v=clinical-os-department1"></script>
+  <script defer src="admin.js?v=clinical-os-department1"></script>
   <script defer src="admin-clinical-audit.js?v=clinical-os-ia1"></script>
 </head>
 <body data-page="admin">
@@ -65,7 +66,7 @@
       <h3>กำหนด Role ปฏิบัติงาน</h3>
       <form id="staff-role-form" class="form">
         <label class="full">ผู้ใช้<select id="staff-user" required></select></label>
-        <label>Role<select id="staff-role"><option>practitioner</option><option>reception</option><option>pharmacy</option><option>production</option><option>inventory</option><option>billing</option><option>viewer</option></select></label>
+        <label>แผนก / Department role<select id="staff-role"><option value="practitioner">ผู้ประกอบวิชาชีพ — practitioner</option><option value="doctor">แพทย์ — doctor</option><option value="reception">ต้อนรับ — reception</option><option value="pharmacy">ห้องยา — pharmacy</option><option value="production">ผลิต — production</option><option value="inventory">คลัง — inventory</option><option value="billing">การเงิน — billing</option><option value="viewer">ดูอย่างเดียว — viewer</option></select></label>
         <label>เหตุผล<input id="staff-reason"></label>
         <button class="btn primary full">บันทึก Role</button>
       </form>

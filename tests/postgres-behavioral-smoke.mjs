@@ -9,6 +9,11 @@ const migrationsDir = path.join(root, 'supabase', 'migrations');
 const USER_A = '11111111-1111-4111-a111-111111111111';
 const USER_B = '22222222-2222-4222-a222-222222222222';
 const USER_C = '44444444-4444-4444-a444-444444444444';
+const USER_PHARMACY = 'aaaaaaaa-1111-4111-a111-111111111111';
+const USER_PRODUCTION = 'bbbbbbbb-2222-4222-a222-222222222222';
+const USER_RECEPTION = 'cccccccc-3333-4333-a333-333333333333';
+const USER_ADMIN = 'dddddddd-4444-4444-a444-444444444444';
+const USER_ROLE_TARGET = 'eeeeeeee-5555-4555-a555-555555555555';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
 const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
 const RX_BAD_REQUEST = '66666666-6666-4666-a666-666666666666';
@@ -101,6 +106,21 @@ async function asUser(userId, sql) {
       set_config('request.jwt.claim.sub','${userId}',false),
       set_config('request.jwt.claim.role','authenticated',false);
     set role authenticated;
+  `);
+  try {
+    return await db.query(sql);
+  } finally {
+    await db.exec('reset role;');
+  }
+}
+
+async function asService(sql) {
+  await db.exec(`
+    reset role;
+    select
+      set_config('request.jwt.claim.sub','',false),
+      set_config('request.jwt.claim.role','service_role',false);
+    set role service_role;
   `);
   try {
     return await db.query(sql);
@@ -282,11 +302,14 @@ assert.equal(manualEncounter.rows[0].patient_id, createdManual.rows[0].id);
 // Clinical -> Pharmacy is one transaction, server-numbered and idempotent.
 const productId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 await db.exec(`
+  select set_config('request.jwt.claim.role','service_role',false);
+  set role service_role;
   insert into public.products(
     id,sku,name_th,category,stock_unit,dispense_unit
   ) values (
     '${productId}','TTM-TEST-001','ยาทดสอบ','medicine','ขวด','ขวด'
   );
+  reset role;
 `);
 const prescription = await asUser(USER_A, `
   select * from public.create_atomic_prescription_handoff(
@@ -496,6 +519,15 @@ const visibleA = await asUser(
   `select count(*)::int count from public.patients where id='${createdB.rows[0].id}'`
 );
 assert.equal(visibleA.rows[0].count, 0);
+const oldTenantHiddenAfterSwitch = await asUser(
+  USER_B,
+  `select count(*)::int count from public.patients where id='${patientA.id}'`
+);
+assert.equal(
+  oldTenantHiddenAfterSwitch.rows[0].count,
+  0,
+  'only the primary active tenant may be visible even when another membership remains active'
+);
 const visibleToUnassignedSuperAdmin = await asUser(
   USER_C,
   `select count(*)::int count from public.patients where id='${createdB.rows[0].id}'`
@@ -506,6 +538,278 @@ const crossSearch = await asUser(
   `select * from public.search_patients_for_checkin('ต่าง')`
 );
 assert.equal(crossSearch.rows.length, 0);
+
+// Department separation is enforced by both RPCs and restrictive RLS. An
+// account has one active department; only super_admin has the explicit
+// cross-workspace override, still inside its active clinic tenant.
+await db.exec(`
+  insert into auth.users(id,email,raw_user_meta_data) values
+    ('${USER_PHARMACY}','pharmacy@example.test','{"full_name":"Pharmacist"}'),
+    ('${USER_PRODUCTION}','production@example.test','{"full_name":"Production"}'),
+    ('${USER_RECEPTION}','reception@example.test','{"full_name":"Reception"}'),
+    ('${USER_ADMIN}','admin@example.test','{"full_name":"Governance Admin"}'),
+    ('${USER_ROLE_TARGET}','role-target@example.test','{"full_name":"Role Target"}');
+  update public.profiles set role='pharmacy',system_role='staff' where id='${USER_PHARMACY}';
+  update public.profiles set role='production',system_role='staff' where id='${USER_PRODUCTION}';
+  update public.profiles set role='reception',system_role='staff' where id='${USER_RECEPTION}';
+  update public.profiles set role='viewer',system_role='admin' where id='${USER_ADMIN}';
+  update public.profiles set role='doctor',system_role='staff' where id='${USER_ROLE_TARGET}';
+  insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary) values
+    ('00000000-0000-0000-0000-000000000001','${USER_PHARMACY}','pharmacy',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_PRODUCTION}','production',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_RECEPTION}','reception',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_ADMIN}','viewer',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_ROLE_TARGET}','doctor',true);
+`);
+
+const governanceCapabilities = await asUser(USER_ADMIN, `
+  select
+    public.department_can('governance') governance,
+    public.department_can('clinical') clinical,
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('production') production
+`);
+assert.deepEqual(governanceCapabilities.rows[0], {
+  governance: true,
+  clinical: false,
+  pharmacy: false,
+  production: false
+});
+
+const pharmacyBoundaries = await asUser(USER_PHARMACY, `
+  select
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('product_write') product_write,
+    public.department_can('clinical') clinical,
+    public.department_can('production') production,
+    public.department_can('billing') billing
+`);
+assert.deepEqual(pharmacyBoundaries.rows[0], {
+  pharmacy: true,
+  product_write: true,
+  clinical: false,
+  production: false,
+  billing: false
+});
+
+const productionBoundaries = await asUser(USER_PRODUCTION, `
+  select
+    public.department_can('production') production,
+    public.department_can('product_write') product_write,
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('clinical') clinical,
+    public.department_can('billing') billing
+`);
+assert.deepEqual(productionBoundaries.rows[0], {
+  production: true,
+  product_write: true,
+  pharmacy: false,
+  clinical: false,
+  billing: false
+});
+
+const receptionBoundaries = await asUser(USER_RECEPTION, `
+  select
+    public.department_can('patient_registry') patient_registry,
+    public.department_can('clinical') clinical,
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('product_write') product_write
+`);
+assert.deepEqual(receptionBoundaries.rows[0], {
+  patient_registry: true,
+  clinical: false,
+  pharmacy: false,
+  product_write: false
+});
+
+const superAdminCapabilities = await asUser(USER_C, `
+  select
+    public.department_can('clinical') clinical,
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('production') production,
+    public.department_can('billing') billing
+`);
+assert.deepEqual(superAdminCapabilities.rows[0], {
+  clinical: true,
+  pharmacy: true,
+  production: true,
+  billing: true
+});
+
+const doctorLegacyPolicyCompatibility = await asUser(USER_ROLE_TARGET, `
+  select
+    public.current_department_role() department,
+    public.has_role(array['practitioner']) practitioner_compatible,
+    public.department_can('clinical') clinical,
+    public.department_can('pharmacy') pharmacy
+`);
+assert.deepEqual(doctorLegacyPolicyCompatibility.rows[0], {
+  department: 'doctor',
+  practitioner_compatible: true,
+  clinical: true,
+  pharmacy: false
+});
+
+await asUser(USER_ADMIN, `
+  select public.admin_assign_staff_role(
+    '${USER_ROLE_TARGET}','pharmacy','department boundary test'
+  )
+`);
+const assignedDepartment = await asUser(USER_ROLE_TARGET, `
+  select
+    public.current_department_role() department,
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('clinical') clinical
+`);
+assert.deepEqual(assignedDepartment.rows[0], {
+  department: 'pharmacy',
+  pharmacy: true,
+  clinical: false
+});
+await expectDatabaseError(
+  asUser(USER_ROLE_TARGET, `
+    select public.admin_assign_staff_role(
+      '${USER_ROLE_TARGET}','practitioner','self escalation attempt'
+    )
+  `),
+  'GOVERNANCE_DEPARTMENT_REQUIRED'
+);
+const assignmentAudit = await db.query(`
+  select count(*)::int count
+  from public.audit_logs
+  where action='assign_department_role'
+    and entity_id='${USER_ROLE_TARGET}'
+    and metadata->>'new_clinic_role'='pharmacy'
+`);
+assert.equal(assignmentAudit.rows[0].count, 1);
+
+await expectDatabaseError(
+  asUser(USER_A, `
+    select * from public.upsert_product_master(
+      null,'ROLE-DENIED','ห้ามสร้าง',null,'medicine',null,
+      'กล่อง','กล่อง','กล่อง',1,0,0,0
+    )
+  `),
+  'PRODUCT_DEPARTMENT_REQUIRED'
+);
+
+const departmentProduct = await asUser(USER_PHARMACY, `
+  select * from public.upsert_product_master(
+    null,'TTM-DEPT-001','ยาสำหรับทดสอบแผนก',null,'medicine','capsule',
+    'กล่อง','แคปซูล','แคปซูล',10,2.50,20,40
+  )
+`);
+assert.equal(departmentProduct.rows[0].clinic_id, '00000000-0000-0000-0000-000000000001');
+assert.equal(departmentProduct.rows[0].created_by, USER_PHARMACY);
+
+const updatedByProduction = await asUser(USER_PRODUCTION, `
+  select * from public.upsert_product_master(
+    '${departmentProduct.rows[0].id}','TTM-DEPT-001','ยาสำหรับทดสอบแผนก',null,
+    'medicine','capsule','กล่อง','แคปซูล','แคปซูล',10,2.75,25,45
+  )
+`);
+assert.equal(Number(updatedByProduction.rows[0].standard_cost), 2.75);
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    update public.products set name_th='DIRECT BYPASS' where id='${departmentProduct.rows[0].id}'
+  `),
+  'permission denied'
+);
+
+const receptionPatient = await asUser(USER_RECEPTION, `
+  select (public.upsert_patient_registration(
+    null,'นาง','ฝ่าย','ต้อนรับ',null,'female','1992-05-06',
+    '0800000000',null,null,null,null
+  )).*
+`);
+assert.ok(receptionPatient.rows[0].id);
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    select (public.upsert_patient_registration(
+      null,'นาย','ห้าม','ลงทะเบียน',null,'male',null,null,null,null,null,null
+    )).*
+  `),
+  'PERMISSION_DENIED'
+);
+
+const counterSale = await asUser(USER_PHARMACY, `
+  select * from public.create_pharmacy_counter_sale(
+    '${receptionPatient.rows[0].id}',null,null,'ปวดกล้ามเนื้อ',null,null,null,
+    'ประเมินแล้วไม่มี red flag','แนะนำติดตามอาการ'
+  )
+`);
+assert.match(counterSale.rows[0].sale_no, /^PS-CHANANYA-\d{8}-\d{8}$/);
+const counterItem = await asUser(USER_PHARMACY, `
+  select * from public.upsert_pharmacy_counter_sale_item(
+    null,'${counterSale.rows[0].id}','${departmentProduct.rows[0].id}',
+    2,15,'ครั้งละ 1 แคปซูล','วันละ 2 ครั้ง','3 วัน','หยุดใช้เมื่อมีอาการแพ้'
+  )
+`);
+assert.equal(counterItem.rows[0].unit, 'แคปซูล');
+const reviewedSale = await asUser(USER_PHARMACY, `
+  select * from public.transition_pharmacy_counter_sale(
+    '${counterSale.rows[0].id}','review',null
+  )
+`);
+assert.equal(reviewedSale.rows[0].status, 'reviewed');
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    select * from public.create_pharmacy_counter_sale(
+      null,'Bypass',null,'อาการ',null,null,null,'assessment',null
+    )
+  `),
+  'PHARMACY_DEPARTMENT_REQUIRED'
+);
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    insert into public.pharmacy_counter_sales(sale_no,presenting_symptoms,pharmacist_assessment)
+    values ('PS-BYPASS','อาการ','assessment')
+  `),
+  'permission denied'
+);
+
+await expectDatabaseError(
+  asUser(USER_PHARMACY, `
+    select public.export_clinic_backup_domain(
+      '00000000-0000-0000-0000-000000000001','patients'
+    )
+  `),
+  'permission denied'
+);
+const backupPayload = await asService(`
+  select public.export_clinic_backup_domain(
+    '00000000-0000-0000-0000-000000000001','products'
+  ) payload
+`);
+assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
+assert.equal(backupPayload.rows[0].payload.domain, 'products');
+assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
+
+const backupSlot = '2026-08-27T20:00:00Z';
+const firstBackupLease = await asService(`
+  select * from public.begin_backup_export_run(
+    '00000000-0000-0000-0000-000000000001','${backupSlot}','test-run-1'
+  )
+`);
+assert.equal(firstBackupLease.rows[0].acquired, true);
+const duplicateBackupLease = await asService(`
+  select * from public.begin_backup_export_run(
+    '00000000-0000-0000-0000-000000000001','${backupSlot}','test-run-2'
+  )
+`);
+assert.equal(duplicateBackupLease.rows[0].acquired, false);
+await asService(`
+  select public.complete_backup_export_run(
+    '${firstBackupLease.rows[0].run_id}','completed',
+    '{"products":2}'::jsonb,'[{"domain":"products","sha256":"test"}]'::jsonb,null
+  )
+`);
+const completedBackupLease = await asService(`
+  select * from public.begin_backup_export_run(
+    '00000000-0000-0000-0000-000000000001','${backupSlot}','test-run-3'
+  )
+`);
+assert.equal(completedBackupLease.rows[0].acquired, false);
 
 const auditEvents = await db.query(`
   select event_type,count(*)::int count
@@ -527,5 +831,5 @@ for (const statement of [
 
 await db.close();
 console.log(
-  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, atomic clinical-financial handoffs, idempotency, rollback/audit, no-phone fallback and tenant isolation'
+  'PostgreSQL behavioral smoke passed: consent, HN, LINE link/revocation, QR issue/resolve/consume, atomic handoffs, department/RLS boundaries, audited product/pharmacy RPCs, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
 );

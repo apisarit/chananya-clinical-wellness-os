@@ -85,6 +85,7 @@
     $('#patient-profile-section').classList.toggle('hidden', linkedProfiles.length === 0);
     if (linkedProfiles.length) status('บัญชีได้รับการยืนยันแล้ว เลือกผู้รับบริการเพื่อสร้าง QR');
     else status('กรอกรหัสจากเจ้าหน้าที่เพื่อเชื่อมบัญชี LINE กับประวัติผู้รับบริการ');
+    window.dispatchEvent(new CustomEvent('chananya:patient-card-rendered'));
   }
 
   async function loadProfiles() {

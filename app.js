@@ -28,7 +28,7 @@
   };
 
   const viewPermissions = {
-    super_admin: ['all'], admin: ['all'], practitioner: ['patients'], doctor: ['patients'],
+    super_admin: ['all'], admin: ['audit'], practitioner: ['patients'], doctor: ['patients'],
     reception: ['patients'], billing: ['billing'], pharmacy: [], production: [], inventory: [], viewer: []
   };
 
@@ -69,19 +69,34 @@
   }
 
   async function loadAll() {
+    const runtime = window.ChananyaRuntime;
+    const patientAccess = runtime.can(profile, 'patient_registry')
+      || runtime.can(profile, 'appointments_view')
+      || runtime.can(profile, 'clinical_read')
+      || runtime.can(profile, 'pharmacy_operate')
+      || runtime.can(profile, 'billing_operate');
+    const clinicalAccess = runtime.can(profile, 'clinical_read')
+      || runtime.can(profile, 'pharmacy_operate')
+      || runtime.can(profile, 'billing_operate');
+    const pharmacyAccess = runtime.can(profile, 'pharmacy_operate')
+      || runtime.can(profile, 'billing_operate');
+    const billingAccess = runtime.can(profile, 'billing_operate');
+    const onlyWhen = (allowed, table, select = '*', order) => allowed
+      ? optionalQuery(table, select, order)
+      : Promise.resolve([]);
     const rows = await Promise.all([
-      optionalQuery('patients', '*', 'created_at'),
-      optionalQuery('patient_allergies'),
-      optionalQuery('appointments'),
-      optionalQuery('encounters', '*', 'started_at'),
-      optionalQuery('prescriptions', '*', 'prescribed_at'),
-      optionalQuery('dispensing_orders', '*', 'created_at'),
-      optionalQuery('dispensing_items'),
-      optionalQuery('prescription_items'),
-      optionalQuery('products', '*'),
-      optionalQuery('invoices', '*', 'created_at'),
-      optionalQuery('payments'),
-      ['admin', 'super_admin'].includes(role) ? optionalQuery('audit_logs', '*', 'created_at') : Promise.resolve([])
+      onlyWhen(patientAccess, 'patients', '*', 'created_at'),
+      onlyWhen(runtime.can(profile, 'patient_registry') || runtime.can(profile, 'clinical_read') || runtime.can(profile, 'pharmacy_operate'), 'patient_allergies'),
+      onlyWhen(runtime.can(profile, 'appointments_view'), 'appointments'),
+      onlyWhen(clinicalAccess || billingAccess, 'encounters', '*', 'started_at'),
+      onlyWhen(clinicalAccess || pharmacyAccess || billingAccess, 'prescriptions', '*', 'prescribed_at'),
+      onlyWhen(pharmacyAccess || billingAccess, 'dispensing_orders', '*', 'created_at'),
+      onlyWhen(pharmacyAccess || billingAccess, 'dispensing_items'),
+      onlyWhen(clinicalAccess || pharmacyAccess || billingAccess, 'prescription_items'),
+      onlyWhen(clinicalAccess || pharmacyAccess || billingAccess, 'products'),
+      onlyWhen(billingAccess, 'invoices', '*', 'created_at'),
+      onlyWhen(billingAccess, 'payments'),
+      onlyWhen(['admin', 'super_admin'].includes(role), 'audit_logs', '*', 'created_at')
     ]);
     [data.patients, data.allergies, data.appointments, data.encounters, data.prescriptions, data.dispensing,
       data.dispensingItems, data.rxItems, data.products, data.invoices, data.payments, data.audit] = rows;
@@ -103,7 +118,7 @@
     $$('[data-perm]').forEach(element => element.classList.toggle('hidden', !canView(element.dataset.perm)));
     const titles = {
       super_admin: 'ภาพรวมทั้ง Clinical OS', admin: 'ภาพรวมและงานควบคุม', practitioner: 'งานคลินิกที่รอดำเนินการ',
-      doctor: 'งานคลินิกที่รอดำเนินการ', reception: 'ผู้รับบริการและคิวนัดหมาย', pharmacy: 'คิวห้องยาและการผลิต',
+      doctor: 'งานคลินิกที่รอดำเนินการ', reception: 'ผู้รับบริการและคิวนัดหมาย', pharmacy: 'คิวห้องยา',
       production: 'งานผลิตและวัตถุดิบ', inventory: 'คลังและวัตถุดิบ', billing: 'งานการเงินที่รอดำเนินการ', viewer: 'ภาพรวมแบบอ่านอย่างเดียว'
     };
     $('#workspace-title').textContent = titles[role] || titles.viewer;
@@ -123,6 +138,7 @@
     renderDashboard();
     renderAudit();
     bindActions();
+    window.dispatchEvent(new CustomEvent('chananya:operations-rendered'));
   }
 
   function activeAllergies(patientId) {

@@ -6,7 +6,8 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Clinical OS — Read-only UI Review</title>
-  <link rel="stylesheet" href="app.css?v=clinical-os-ia1">
+  <link rel="stylesheet" href="app.css?v=clinical-os-department1">
+  <script defer src="searchable-select.js?v=clinical-os-department1"></script>
 </head>
 <body data-page="clinical">
   <div class="app-frame">
@@ -15,9 +16,12 @@
       <nav class="global-nav">
         <a href="/"><span class="nav-icon">⌂</span><span class="nav-copy"><b>ศูนย์ปฏิบัติการ</b><small>ภาพรวม ผู้รับบริการ การเงิน</small></span></a>
         <a href="/appointments.html"><span class="nav-icon">◷</span><span class="nav-copy"><b>นัดหมาย</b><small>ตารางแพทย์และคิว</small></span></a>
+        <a href="/check-in.html"><span class="nav-icon">▣</span><span class="nav-copy"><b>ยืนยันผู้รับบริการ</b><small>LINE QR หรือ HN</small></span></a>
         <a href="/foundation.html"><span class="nav-icon">ร</span><span class="nav-copy"><b>รากวิชา</b><small>คัมภีร์และองค์ความรู้</small></span></a>
         <a href="/clinical-v3.html" aria-current="page"><span class="nav-icon">✚</span><span class="nav-copy"><b>เวชระเบียน</b><small>ตรวจ วินิจฉัย รักษา</small></span></a>
         <a href="/pharmacy.html"><span class="nav-icon">Rx</span><span class="nav-copy"><b>ห้องยา</b><small>จ่ายยาและผลิตภัณฑ์</small></span></a>
+        <a href="/production.html"><span class="nav-icon">⚗</span><span class="nav-copy"><b>ผลิตและคลัง</b><small>สูตร Batch และ QC</small></span></a>
+        <a href="/admin.html"><span class="nav-icon">⚙</span><span class="nav-copy"><b>ศูนย์ควบคุม</b><small>สิทธิ์ อนุมัติ Audit</small></span></a>
       </nav>
       <div class="sidebar-foot">Read-only visual review<br>No session • No patient data • No writes</div>
     </aside>
@@ -25,10 +29,10 @@
     <div class="workspace">
       <header class="top">
         <div class="actions"><button class="btn ghost menu-toggle" aria-label="เมนู">☰</button><div class="top-title"><span class="page-kicker">Clinical Workspace</span><h1>เวชระเบียนแพทย์แผนไทย</h1></div></div>
-        <div class="actions"><div class="identity-block"><small>ผู้ประกอบวิชาชีพตัวอย่าง</small></div><span class="badge">practitioner</span></div>
+        <div class="actions"><div class="identity-block"><small>ผู้ดูแลระบบตัวอย่าง</small></div><span class="badge">super_admin</span></div>
       </header>
       <main>
-        <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — หน้านี้ใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้</div>
+        <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — หน้านี้ใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้ เมนูทั้งหมดแสดงเพราะเป็นตัวอย่าง <b>super_admin</b>; บัญชีทั่วไปเห็นเฉพาะแผนกของตน</div>
         <section class="card foundation-root-card">
           <div class="section-heading"><span class="section-number">ร</span><div><h2>รากวิชาอยู่ก่อน Clinical Workflow</h2><p>คัมภีร์และ ontology เป็นฐานกลาง ส่วน Encounter 7 ขั้นคือการนำรากมาใช้กับผู้รับบริการหนึ่งราย</p></div></div>
           <div class="foundation-layers">
@@ -39,6 +43,20 @@
             <button class="foundation-layer" type="button"><span class="foundation-layer-index">ชั้น 5</span><b>หัตถการและเส้น</b><small>เส้นประธานสิบ จุด และวิธีรักษา</small><strong>05</strong></button>
           </div>
           <div class="foundation-chain"><span>คัมภีร์ / Dataset</span><i>→</i><span>Concept</span><i>→</i><span>Relation</span><i>→</i><span>Encounter Evidence</span><i>→</i><span>Practitioner Confirmation</span></div>
+        </section>
+        <section class="card space-top-md" id="pain-map-review">
+          <div class="section-heading"><span class="section-number">MAP</span><div><h2>Pain Map ใหม่</h2><p>ภาพสี่มุมที่อ่านง่ายขึ้น พร้อมจุดก่อน–หลังรักษา และช่องเลือกที่พิมพ์ค้นหาได้</p></div></div>
+          <div class="bm-grid">
+            <label>ช่วงประเมิน<select><option>ก่อนรักษา</option><option>หลังรักษา</option><option>ติดตามผล</option></select></label>
+            <label>ชนิดอาการ<select><option>ปวด</option><option>ชา</option><option>ตึง</option><option>แสบร้อน</option><option>บวม</option><option>อ่อนแรง</option></select></label>
+            <label>ด้าน<select><option>ไม่ระบุ</option><option>ซ้าย</option><option>ขวา</option><option>สองข้าง</option><option>กึ่งกลาง</option></select></label>
+            <label>คะแนน<input type="number" min="0" max="10" value="6" readonly></label>
+          </div>
+          <div class="bm-shell">
+            <div class="bm-labels"><span>ด้านหน้า</span><span>ด้านหลัง</span><span>ด้านซ้าย</span><span>ด้านขวา</span></div>
+            <div class="bm-canvas"><img src="/bodymap-figures.svg?v=clinical-os-department1" alt="ภาพบุคคลผู้ใหญ่สี่มุมสำหรับ Pain Map"><div class="bm-layer"><span class="bm-draft bm-review-draft"></span><button class="bm-marker bm-review-before" type="button" aria-label="จุดปวด 6 คะแนน">6</button><button class="bm-marker after bm-review-after" type="button" aria-label="หลังรักษา 2 คะแนน">2</button></div></div>
+          </div>
+          <div class="bm-status">ตัวอย่างเท่านั้น — ในระบบจริงทุกจุดผูกกับ Encounter และ Audit</div>
         </section>
         <div class="clinical-layout">
           <aside class="encounter-rail">

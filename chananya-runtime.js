@@ -21,16 +21,28 @@
   const normalizeRole = value => String(value || '').trim().toLowerCase();
 
   function rolesOf(profile) {
-    const operationalRole = normalizeRole(profile?.role) || 'viewer';
+    const membershipRole = normalizeRole(profile?.clinic_role || profile?.role) || 'viewer';
+    const operationalRole = membershipRole === 'owner' ? 'admin' : membershipRole;
     const systemRole = normalizeRole(profile?.system_role) || 'staff';
-    const effectiveRole = ['super_admin', 'admin'].includes(systemRole)
-      ? systemRole
-      : operationalRole;
-    const grantedRoles = [...new Set(
-      [effectiveRole, operationalRole, systemRole]
-        .filter(role => role && role !== 'staff')
-    )];
-    return Object.freeze({ operationalRole, systemRole, effectiveRole, grantedRoles });
+    const effectiveRole = systemRole === 'super_admin'
+      ? 'super_admin'
+      : systemRole === 'admin' || operationalRole === 'admin'
+        ? 'admin'
+        : operationalRole;
+
+    // One account has one active department. System admin is governance-only;
+    // it never inherits the underlying clinical/pharmacy/production role.
+    // Only super_admin receives the cross-workspace override.
+    const grantedRoles = Object.freeze([effectiveRole]);
+    return Object.freeze({
+      clinicId: profile?.clinic_id || null,
+      clinicRole: membershipRole,
+      operationalRole,
+      systemRole,
+      effectiveRole,
+      accessContextReady: profile?.access_context_ready === true,
+      grantedRoles
+    });
   }
 
   function roleOf(profile) {
@@ -38,19 +50,27 @@
   }
 
   const permissions = Object.freeze({
-    knowledge_read: ['super_admin','admin','practitioner','doctor','pharmacy','production','inventory'],
-    clinical_read: ['super_admin','admin','practitioner','doctor','pharmacy'],
-    clinical_write: ['super_admin','admin','practitioner','doctor'],
-    patient_checkin: ['super_admin','admin','practitioner','doctor','reception'],
-    patient_identity_link: ['super_admin','admin','practitioner','doctor','reception'],
-    appointments_operate: ['admin','reception'],
-    appointments_view: ['super_admin','admin','reception','practitioner','doctor'],
-    pharmacy_operate: ['super_admin','admin','pharmacy'],
-    production_operate: ['super_admin','admin','production','inventory','pharmacy'],
+    operations_view: ['super_admin','admin','practitioner','doctor','reception','pharmacy','production','inventory','billing','viewer'],
+    knowledge_read: ['super_admin','practitioner','doctor','pharmacy','production','inventory'],
+    clinical_read: ['super_admin','practitioner','doctor'],
+    clinical_write: ['super_admin','practitioner','doctor'],
+    patient_registry: ['super_admin','practitioner','doctor','reception'],
+    patient_checkin: ['super_admin','practitioner','doctor','reception'],
+    patient_identity_link: ['super_admin','practitioner','doctor','reception'],
+    appointments_operate: ['super_admin','reception'],
+    appointments_view: ['super_admin','reception','practitioner','doctor'],
+    pharmacy_operate: ['super_admin','pharmacy'],
+    product_master_write: ['super_admin','pharmacy','production','inventory'],
+    production_operate: ['super_admin','production','inventory'],
+    billing_operate: ['super_admin','billing'],
     admin_center: ['super_admin','admin']
   });
 
   function can(profile, capability) {
+    // Operational access is accepted only after the database returns the
+    // tenant + department context. A stale frontend role must never become an
+    // authorization fallback while a migration or RPC is unavailable.
+    if (profile?.access_context_ready !== true) return false;
     const allowed = permissions[capability] || [];
     return rolesOf(profile).grantedRoles.some(role => allowed.includes(role));
   }
@@ -67,7 +87,27 @@
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;
-    return data;
+    if (!data) return null;
+
+    const access = await getDb().rpc('current_access_context');
+    if (access.error) {
+      console.warn('Department access migration is not active; using fail-closed UI compatibility context');
+      return Object.freeze({ ...data, access_context_ready: false });
+    }
+    const row = Array.isArray(access.data) ? access.data[0] : access.data;
+    if (!row?.clinic_id || !row?.clinic_role) {
+      return Object.freeze({ ...data, role: 'viewer', access_context_ready: false });
+    }
+    return Object.freeze({
+      ...data,
+      role: row.clinic_role,
+      clinic_role: row.clinic_role,
+      clinic_id: row.clinic_id,
+      clinic_code: row.clinic_code,
+      clinic_name: row.clinic_name,
+      system_role: row.system_role || data.system_role,
+      access_context_ready: row.ready === true
+    });
   }
 
   window.ChananyaRuntime = Object.freeze({ getDb, getSession, getProfile, rolesOf, roleOf, can, permissions });

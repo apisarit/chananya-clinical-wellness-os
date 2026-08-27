@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let db,session,profile=null,role='viewer',preview={batchId:null,type:null,rows:[],valid:[]};
+let db,session,profile=null,role='viewer',persistenceReady=false,preview={batchId:null,type:null,rows:[],valid:[]};
 let data={products:[],lots:[],formulas:[],components:[],requests:[],orders:[],issues:[],qc:[],receipts:[],dispensing:[],prescriptions:[],rxItems:[],patients:[]};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),num=v=>Number(v||0),now=()=>new Date().toISOString();
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
@@ -23,6 +23,7 @@ function render(){
  $('#stat-released').textContent=data.orders.filter(o=>o.status==='released').length;
  $('#stat-low').textContent=data.products.filter(p=>data.lots.filter(l=>l.product_id===p.id).reduce((s,l)=>s+num(l.current_quantity),0)<=num(p.reorder_level)).length;
  renderRequests();renderOrders();renderFormulas();renderMaterials();bindActions();
+ window.dispatchEvent(new CustomEvent('chananya:production-rendered'));
 }
 function renderRequests(){$('#request-list').innerHTML=data.requests.map(r=>{const p=product(r.requested_product_id),o=data.orders.find(x=>x.production_request_id===r.id);return `<div class="item column"><div class="wide"><div class="row"><b>${esc(r.request_no)} • ${esc(p?.name_th||'-')}</b><span class="badge">${esc(r.status)}</span></div><small>${num(r.requested_quantity)} ${esc(r.unit)} • ${esc(r.priority)} • ${esc(r.reason||'')}</small><div class="right">${!o&&r.status==='requested'?`<button class="btn primary" data-act="open-order" data-id="${r.id}">Open Production Order</button>`:''}</div></div></div>`}).join('')||'<p class="muted">ยังไม่มีคำขอผลิต</p>'}
 function renderOrders(){$('#order-list').innerHTML=data.orders.map(o=>{const p=product(o.finished_product_id),f=data.formulas.find(x=>x.id===o.formula_id),iss=data.issues.filter(x=>x.production_order_id===o.id),buttons=[];if(o.status==='planned')buttons.push(`<button class="btn primary" data-act="issue" data-id="${o.id}">เบิก Raw Material FEFO</button>`);if(o.status==='materials_issued'||o.status==='in_process')buttons.push(`<button class="btn primary" data-act="complete" data-id="${o.id}">บันทึกผลผลิต</button>`);if(o.status==='awaiting_qc')buttons.push(`<button class="btn primary" data-act="release" data-id="${o.id}">QC Pass & Release</button><button class="btn danger" data-act="reject" data-id="${o.id}">QC Reject</button>`);return `<div class="item column"><div class="wide"><div class="row"><b>${esc(o.production_order_no)} • Batch ${esc(o.batch_number)}</b><span class="badge">${esc(o.status)}</span></div><small>${esc(p?.name_th||'-')} • Plan ${num(o.planned_quantity)} ${esc(o.planned_unit)} • Formula ${esc(f?.formula_code||'-')} Rev.${esc(f?.revision||'-')}</small><small>Issued materials: ${iss.length} lot line(s) • Actual ${num(o.actual_quantity)} • Yield ${num(o.yield_percent)}%</small><div class="right">${buttons.join('')}</div></div></div>`}).join('')||'<p class="muted">ยังไม่มี Production Order</p>'}
@@ -31,7 +32,7 @@ function renderMaterials(){$('#material-list').innerHTML=[...data.lots].sort((a,
 function bindActions(){$$('[data-act]').forEach(b=>b.onclick=()=>action(b.dataset.act,b.dataset.id))}
 async function action(a,id){try{if(a==='open-order')await openOrder(id);if(a==='issue')await issueMaterials(id);if(a==='complete')await completeOrder(id);if(a==='release')await releaseOrder(id);if(a==='reject')await rejectOrder(id)}catch(e){fail(e)}}
 async function createRequest(e){e.preventDefault();const orderId=$('#req-dispensing').value,itemId=$('#req-item').value,item=data.rxItems.find(x=>x.id===itemId);if(!item)throw new Error('กรุณาเลือกรายการยา');const r=await db.from('production_requests').insert({request_no:`PR-${Date.now()}`,source_type:'pharmacy',dispensing_order_id:orderId,prescription_item_id:itemId,requested_product_id:item.product_id,requested_quantity:num($('#req-qty').value),unit:$('#req-unit').value,required_by:$('#req-required').value?new Date($('#req-required').value).toISOString():null,priority:$('#req-priority').value,status:'requested',reason:$('#req-reason').value||'out_of_stock',requested_by:session.user.id}).select().single();if(r.error)throw r.error;await db.from('dispensing_orders').update({status:'out_of_stock'}).eq('id',orderId);e.target.reset();await load();toast('สร้าง Production Request แล้ว')}
-function loadRequestItems(){const o=data.dispensing.find(x=>x.id===$('#req-dispensing').value),rx=data.prescriptions.find(x=>x.id===o?.prescription_id),items=data.rxItems.filter(x=>x.prescription_id===rx?.id);$('#req-item').innerHTML=opts(items,i=>`${product(i.product_id)?.name_th||'-'} — ${i.quantity_prescribed} ${i.unit}`)}
+function loadRequestItems(){const o=data.dispensing.find(x=>x.id===$('#req-dispensing').value),rx=data.prescriptions.find(x=>x.id===o?.prescription_id),items=data.rxItems.filter(x=>x.prescription_id===rx?.id);$('#req-item').innerHTML=opts(items,i=>`${product(i.product_id)?.name_th||'-'} — ${i.quantity_prescribed} ${i.unit}`);window.dispatchEvent(new CustomEvent('chananya:production-rendered'))}
 async function saveFormula(e){e.preventDefault();const r=await db.from('formulas').insert({formula_code:$('#f-code').value.trim(),revision:$('#f-rev').value.trim(),name_th:$('#f-name').value.trim(),finished_product_id:$('#f-product').value,standard_batch_size:num($('#f-batch').value),batch_unit:$('#f-unit').value.trim(),expected_yield_percent:num($('#f-yield').value)||100,shelf_life_days:num($('#f-shelf').value)||null,manufacturing_instructions:$('#f-instructions').value||null,status:'approved',approved_by:session.user.id,approved_at:now(),created_by:session.user.id}).select().single();if(r.error)throw r.error;e.target.reset();await load();toast('บันทึก Formula แล้ว')}
 async function saveComponent(e){e.preventDefault();const r=await db.from('formula_components').insert({formula_id:$('#c-formula').value,material_product_id:$('#c-material').value,sequence_no:num($('#c-seq').value)||1,quantity_per_batch:num($('#c-qty').value),unit:$('#c-unit').value,process_stage:$('#c-stage').value||null});if(r.error)throw r.error;e.target.reset();await load();toast('เพิ่ม BOM Component แล้ว')}
 async function openOrder(requestId){const r=data.requests.find(x=>x.id===requestId),f=data.formulas.find(x=>x.finished_product_id===r.requested_product_id&&x.status==='approved');if(!f)throw new Error('ไม่พบ Formula approved สำหรับสินค้านี้');const planned=Math.max(num(r.requested_quantity),num(f.standard_batch_size));const o=await db.from('production_orders').insert({production_order_no:`PO-${Date.now()}`,production_request_id:r.id,formula_id:f.id,finished_product_id:r.requested_product_id,batch_number:`B${new Date().toISOString().slice(0,10).replaceAll('-','')}-${String(Date.now()).slice(-5)}`,planned_quantity:planned,planned_unit:f.batch_unit,planned_start_at:now(),status:'planned',created_by:session.user.id}).select().single();if(o.error)throw o.error;await db.from('production_requests').update({status:'planned'}).eq('id',r.id);await load();toast('เปิด Production Order แล้ว')}
@@ -46,10 +47,73 @@ function normalize(row){const out={};for(const [k,as] of Object.entries(aliases)
 function validate(type,n){const e=[];if(['products','raw_materials'].includes(type)){if(!n.sku)e.push('missing sku');if(!n.name_th)e.push('missing name');if(!n.stock_unit&&!n.unit)e.push('missing unit')}if(type==='suppliers'){if(!n.supplier_code)e.push('missing supplier_code');if(!n.supplier_name&&!n.name_th)e.push('missing supplier name')}if(type==='formulas'){if(!n.formula_code)e.push('missing formula_code');if(!n.finished_sku)e.push('missing finished_sku');if(!n.batch_size)e.push('missing batch_size')}if(type==='formula_components'){if(!n.formula_code)e.push('missing formula_code');if(!n.material_sku)e.push('missing material_sku');if(!n.quantity)e.push('missing quantity')}if(type==='inventory_lots'){if(!n.sku)e.push('missing sku');if(!n.lot_number)e.push('missing lot');if(!n.current_quantity)e.push('missing quantity')}return e}
 async function previewFile(e){e.preventDefault();const file=$('#import-file').files[0],type=$('#import-type').value;if(!file)throw new Error('กรุณาเลือกไฟล์');const buf=await file.arrayBuffer(),wb=XLSX.read(buf,{type:'array'}),sheet=wb.SheetNames[0],rows=XLSX.utils.sheet_to_json(wb.Sheets[sheet],{defval:''}),norm=rows.map((r,i)=>({row_number:i+2,raw:r,normalized:normalize(r)}));norm.forEach(x=>x.errors=validate(type,x.normalized));const b=await db.from('import_batches').insert({import_type:type,source_file_name:file.name,source_sheet_name:sheet,status:'validated',total_rows:norm.length,valid_rows:norm.filter(x=>!x.errors.length).length,invalid_rows:norm.filter(x=>x.errors.length).length,uploaded_by:session.user.id}).select().single();if(b.error)throw b.error;const staged=norm.map(x=>({import_batch_id:b.data.id,row_number:x.row_number,raw_data:x.raw,normalized_data:x.normalized,validation_status:x.errors.length?'invalid':'valid',validation_errors:x.errors,target_table:type==='raw_materials'?'products':type}));if(staged.length){const sr=await db.from('import_rows').insert(staged);if(sr.error)throw sr.error}preview={batchId:b.data.id,type,rows:norm,valid:norm.filter(x=>!x.errors.length)};renderPreview();toast('Preview และ Validate แล้ว')}
 function renderPreview(){const rows=preview.rows,keys=[...new Set(rows.flatMap(x=>Object.keys(x.normalized)))];$('#import-summary').innerHTML=`<p><b>${rows.length}</b> rows • Valid <b>${preview.valid.length}</b> • Invalid <b>${rows.length-preview.valid.length}</b></p>`;$('#preview-table').innerHTML=`<thead><tr><th>Row</th><th>Status</th>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,100).map(x=>`<tr><td>${x.row_number}</td><td>${x.errors.length?'<span class="error">'+esc(x.errors.join(', '))+'</span>':'OK'}</td>${keys.map(k=>`<td>${esc(x.normalized[k]??'')}</td>`).join('')}</tr>`).join('')}</tbody>`;$('#confirm-import').classList.toggle('hidden',!preview.valid.length)}
-async function confirmImport(){try{let count=0;for(const x of preview.valid){const n=x.normalized;let target=null;if(['products','raw_materials'].includes(preview.type)){const payload={sku:String(n.sku),name_th:String(n.name_th),category:preview.type==='raw_materials'?'raw_material':String(n.category||'finished_product'),purchase_unit:String(n.stock_unit||n.unit),stock_unit:String(n.stock_unit||n.unit),dispense_unit:String(n.dispense_unit||n.stock_unit||n.unit),active:true};const r=await db.from('products').upsert(payload,{onConflict:'sku'}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='suppliers'){const r=await db.from('suppliers').upsert({supplier_code:String(n.supplier_code),name:String(n.supplier_name||n.name_th),active:true},{onConflict:'supplier_code'}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='formulas'){const p=data.products.find(p=>p.sku===String(n.finished_sku));if(!p)throw new Error(`ไม่พบ finished SKU ${n.finished_sku}`);const r=await db.from('formulas').upsert({formula_code:String(n.formula_code),revision:String(n.revision||'00'),name_th:String(n.name_th||n.formula_code),finished_product_id:p.id,standard_batch_size:num(n.batch_size),batch_unit:String(n.batch_unit||n.unit||p.stock_unit),status:'approved',approved_by:session.user.id,approved_at:now(),created_by:session.user.id},{onConflict:'formula_code,revision'}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='formula_components'){const f=data.formulas.find(f=>f.formula_code===String(n.formula_code)&&f.revision===String(n.revision||'00')),p=data.products.find(p=>p.sku===String(n.material_sku));if(!f||!p)throw new Error(`หา Formula/Material ไม่พบ row ${x.row_number}`);const r=await db.from('formula_components').insert({formula_id:f.id,material_product_id:p.id,sequence_no:count+1,quantity_per_batch:num(n.quantity),unit:String(n.unit||p.stock_unit)}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='inventory_lots'){const p=data.products.find(p=>p.sku===String(n.sku));if(!p)throw new Error(`ไม่พบ SKU ${n.sku}`);const qty=num(n.current_quantity);const r=await db.from('inventory_lots').upsert({product_id:p.id,lot_number:String(n.lot_number),expiry_date:n.expiry_date?new Date(n.expiry_date).toISOString().slice(0,10):null,received_quantity:qty,current_quantity:0,unit:String(n.unit||p.stock_unit),storage_location:String(n.location||''),status:'active',created_by:session.user.id},{onConflict:'product_id,lot_number'}).select().single();if(r.error)throw r.error;await db.from('stock_movements').insert({inventory_lot_id:r.data.id,movement_type:'opening_balance',quantity:qty,direction:'in',reference_type:'import_batch',reference_id:preview.batchId,performed_by:session.user.id});target=r.data.id}await db.from('import_rows').update({validation_status:'imported',target_id:target,imported_at:now()}).eq('import_batch_id',preview.batchId).eq('row_number',x.row_number);count++}
-await db.from('import_batches').update({status:'completed',imported_rows:count,completed_at:now()}).eq('id',preview.batchId);await load();toast(`Import สำเร็จ ${count} rows`);$('#confirm-import').classList.add('hidden')}catch(e){fail(e)}}
+async function confirmImport(){
+ try{
+  if(!persistenceReady)throw new Error('ฐานข้อมูล Product persistence ยังไม่พร้อม');
+  let count=0;
+  for(const x of preview.valid){
+   const n=x.normalized;
+   let target=null;
+   if(['products','raw_materials'].includes(preview.type)){
+    const sku=String(n.sku).trim();
+    const existing=data.products.find(item=>item.sku===sku);
+    const r=await db.rpc('upsert_product_master',{
+     p_product_id:existing?.id||null,
+     p_sku:sku,
+     p_name_th:String(n.name_th).trim(),
+     p_name_en:null,
+     p_category:preview.type==='raw_materials'?'raw_material':String(n.category||'finished_product'),
+     p_dosage_form:null,
+     p_purchase_unit:String(n.stock_unit||n.unit),
+     p_stock_unit:String(n.stock_unit||n.unit),
+     p_dispense_unit:String(n.dispense_unit||n.stock_unit||n.unit),
+     p_conversion_factor:1,
+     p_standard_cost:0,
+     p_min_stock:0,
+     p_reorder_level:0
+    });
+    if(r.error)throw r.error;
+    const saved=Array.isArray(r.data)?r.data[0]:r.data;
+    target=saved.id;
+   }else if(preview.type==='suppliers'){
+    const r=await db.from('suppliers').upsert({supplier_code:String(n.supplier_code),name:String(n.supplier_name||n.name_th),active:true},{onConflict:'supplier_code'}).select().single();
+    if(r.error)throw r.error;
+    target=r.data.id;
+   }else if(preview.type==='formulas'){
+    const p=data.products.find(item=>item.sku===String(n.finished_sku));
+    if(!p)throw new Error(`ไม่พบ finished SKU ${n.finished_sku}`);
+    const r=await db.from('formulas').upsert({formula_code:String(n.formula_code),revision:String(n.revision||'00'),name_th:String(n.name_th||n.formula_code),finished_product_id:p.id,standard_batch_size:num(n.batch_size),batch_unit:String(n.batch_unit||n.unit||p.stock_unit),status:'approved',approved_by:session.user.id,approved_at:now(),created_by:session.user.id},{onConflict:'formula_code,revision'}).select().single();
+    if(r.error)throw r.error;
+    target=r.data.id;
+   }else if(preview.type==='formula_components'){
+    const f=data.formulas.find(item=>item.formula_code===String(n.formula_code)&&item.revision===String(n.revision||'00'));
+    const p=data.products.find(item=>item.sku===String(n.material_sku));
+    if(!f||!p)throw new Error(`หา Formula/Material ไม่พบ row ${x.row_number}`);
+    const r=await db.from('formula_components').insert({formula_id:f.id,material_product_id:p.id,sequence_no:count+1,quantity_per_batch:num(n.quantity),unit:String(n.unit||p.stock_unit)}).select().single();
+    if(r.error)throw r.error;
+    target=r.data.id;
+   }else if(preview.type==='inventory_lots'){
+    const p=data.products.find(item=>item.sku===String(n.sku));
+    if(!p)throw new Error(`ไม่พบ SKU ${n.sku}`);
+    const qty=num(n.current_quantity);
+    const r=await db.from('inventory_lots').upsert({product_id:p.id,lot_number:String(n.lot_number),expiry_date:n.expiry_date?new Date(n.expiry_date).toISOString().slice(0,10):null,received_quantity:qty,current_quantity:0,unit:String(n.unit||p.stock_unit),storage_location:String(n.location||''),status:'active',created_by:session.user.id},{onConflict:'product_id,lot_number'}).select().single();
+    if(r.error)throw r.error;
+    const movement=await db.from('stock_movements').insert({inventory_lot_id:r.data.id,movement_type:'opening_balance',quantity:qty,direction:'in',reference_type:'import_batch',reference_id:preview.batchId,performed_by:session.user.id});
+    if(movement.error)throw movement.error;
+    target=r.data.id;
+   }
+   const staged=await db.from('import_rows').update({validation_status:'imported',target_id:target,imported_at:now()}).eq('import_batch_id',preview.batchId).eq('row_number',x.row_number);
+   if(staged.error)throw staged.error;
+   count++;
+  }
+  const completed=await db.from('import_batches').update({status:'completed',imported_rows:count,completed_at:now()}).eq('id',preview.batchId);
+  if(completed.error)throw completed.error;
+  await load();
+  toast(`Import สำเร็จ ${count} rows`);
+  $('#confirm-import').classList.add('hidden');
+ }catch(e){fail(e)}
+}
 async function waitRuntime(){for(let i=0;i<50;i++){if(window.ChananyaRuntime)return window.ChananyaRuntime;await new Promise(r=>setTimeout(r,100))}throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน')}
-async function init(){try{const R=await waitRuntime();db=R.getDb();session=await R.getSession();if(!session){location.href='/login.html';return}profile=await R.getProfile(session.user.id);if(!profile)throw new Error('ไม่พบ Profile');role=R.roleOf(profile)||'viewer';if(!R.can(profile,'production_operate'))throw new Error('บัญชีนี้ไม่มีสิทธิ์ Production Workstation');window.ChananyaShell?.mount({profile,session,active:'production'});$('#boot').classList.add('hidden');$('#app').classList.remove('hidden');await load()}catch(e){$('#boot-error').textContent=e.message;console.error(e)}}
+async function init(){try{const R=await waitRuntime();db=R.getDb();session=await R.getSession();if(!session){location.href='/login.html';return}profile=await R.getProfile(session.user.id);if(!profile)throw new Error('ไม่พบ Profile');role=R.roleOf(profile)||'viewer';if(!R.can(profile,'production_operate'))throw new Error('บัญชีนี้ไม่มีสิทธิ์ Production Workstation — แต่ละบัญชีเข้าได้เฉพาะแผนกของตน');const health=await db.rpc('department_persistence_healthcheck'),row=Array.isArray(health.data)?health.data[0]:health.data;persistenceReady=!health.error&&row?.ready===true;if(!persistenceReady)throw new Error('ฐานข้อมูล Department/Product migration ยังไม่พร้อม ระบบหยุดการเขียนเพื่อป้องกันข้อมูลข้ามแผนก');window.ChananyaShell?.mount({profile,session,active:'production'});$('#boot').classList.add('hidden');$('#app').classList.remove('hidden');await load()}catch(e){$('#boot-error').textContent=e.message;console.error(e)}}
 $$('.nav button').forEach(b=>b.onclick=()=>{$$('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.view));$$('.nav button').forEach(x=>x.classList.toggle('active',x===b))});$('#logout').onclick=async()=>{await db.auth.signOut();location.href='/login.html'};$('#req-dispensing').onchange=loadRequestItems;$('#request-form').onsubmit=e=>createRequest(e).catch(fail);$('#formula-form').onsubmit=e=>saveFormula(e).catch(fail);$('#component-form').onsubmit=e=>saveComponent(e).catch(fail);$('#import-form').onsubmit=e=>previewFile(e).catch(fail);$('#confirm-import').onclick=confirmImport;init();
 })();
-

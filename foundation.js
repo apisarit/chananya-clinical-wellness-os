@@ -143,6 +143,7 @@
   function renderTypeOptions() {
     const types = [...new Set(state.concepts.map(concept => concept.concept_type).filter(Boolean))].sort();
     $('#foundation-type').innerHTML = '<option value="">ทุกชนิด</option>' + types.map(type => `<option value="${esc(type)}">${esc(TYPE_LABELS[type] || type)}</option>`).join('');
+    window.dispatchEvent(new CustomEvent('chananya:foundation-rendered'));
   }
 
   function visibleConcepts() {

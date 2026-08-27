@@ -30,8 +30,7 @@
 
   function markup() {
     return `<div id="bodymap-v31">
-      <h3>Interactive Pain Map / Sen Code</h3>
-      <p class="muted">แตะบนร่างกายเพื่อบันทึกตำแหน่งอาการ โดยข้อมูลจะผูกกับ Encounter เดิมโดยตรง</p>
+      <div class="section-heading"><span class="section-number">MAP</span><div><h3>แผนที่อาการและแนวเส้น</h3><p>แตะตำแหน่งบนร่างกายเพื่อบันทึกอาการก่อน–หลังรักษาใน Encounter เดียวกัน</p></div></div>
       <div class="bm-grid">
         <label>ช่วงประเมิน<select id="bm-stage"><option value="before">ก่อนรักษา</option><option value="after">หลังรักษา</option><option value="followup">ติดตามผล</option></select></label>
         <label>ชนิดอาการ<select id="bm-type"><option value="pain">ปวด</option><option value="numbness">ชา</option><option value="tightness">ตึง</option><option value="burning">แสบร้อน</option><option value="swelling">บวม</option><option value="weakness">อ่อนแรง</option><option value="other">อื่น ๆ</option></select></label>
@@ -45,9 +44,9 @@
       </div>
       <div class="bm-shell">
         <div class="bm-labels"><span>ด้านหน้า</span><span>ด้านหลัง</span><span>ด้านซ้าย</span><span>ด้านขวา</span></div>
-        <div class="bm-canvas" id="bm-canvas"><img src="/bodymap-figures.svg?v=1" alt="Body pain map"><div class="bm-layer" id="bm-layer"></div></div>
+        <div class="bm-canvas" id="bm-canvas"><img src="/bodymap-figures.svg?v=clinical-os-department1" alt="ภาพบุคคลผู้ใหญ่แบบสี่มุม ด้านหน้า ด้านหลัง ด้านซ้าย และด้านขวา สำหรับเลือกตำแหน่งอาการ"><div class="bm-layer" id="bm-layer"></div></div>
       </div>
-      <div id="bm-status" class="bm-status">แตะบนร่างกายเพื่อเลือกตำแหน่ง</div>
+      <div id="bm-status" class="bm-status" aria-live="polite">แตะบนร่างกายเพื่อเลือกตำแหน่ง</div>
       <div class="bm-actions"><button type="button" class="btn primary" id="bm-save">บันทึกจุด</button><button type="button" class="btn ghost" id="bm-cancel">ยกเลิก</button><button type="button" class="btn ghost" id="bm-print">พิมพ์ Pain Map</button></div>
       <div id="bm-list"></div>
     </div>`;
@@ -79,6 +78,7 @@
     });
 
     $('#bm-list').innerHTML = points.map(point => `<article class="bm-row"><div><b>${esc(stageNames[point.assessment_stage] || point.assessment_stage)} • ${esc(typeNames[point.symptom_type] || point.symptom_type)} ${point.pain_score == null ? '' : `(${point.pain_score}/10)`}</b><small>${esc(point.body_region || 'ไม่ระบุบริเวณ')} • ${esc(point.side || '')} • ${esc(point.sen_line_code || '')}</small><small class="bm-code">${esc(point.pain_pattern_code || codeFor(point))}</small></div><div class="actions"><button type="button" class="btn ghost" data-edit-point="${esc(point.id)}">แก้</button><button type="button" class="btn danger" data-delete-point="${esc(point.id)}">ลบ</button></div></article>`).join('') || '<p class="muted">ยังไม่มีจุดปวด</p>';
+    window.dispatchEvent(new CustomEvent('chananya:bodymap-rendered'));
   }
 
   function onCanvasClick(event) {

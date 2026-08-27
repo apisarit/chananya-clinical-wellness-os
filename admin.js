@@ -81,6 +81,7 @@
     renderTasks();
     renderUsers();
     renderActions();
+    window.dispatchEvent(new CustomEvent('chananya:admin-rendered'));
   }
 
   async function decide(taskId, action) {

@@ -25,6 +25,7 @@
 
   function renderPatients(rows) {
     $('#patient').innerHTML = '<option value="">เลือกผู้รับบริการ</option>' + rows.map(patient => `<option value="${patient.id}">${esc(patientLabel(patient))}</option>`).join('');
+    window.dispatchEvent(new CustomEvent('chananya:appointments-rendered'));
   }
 
   async function loadPatients() {

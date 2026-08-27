@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Pharmacy Workstation</title>
-  <link rel="stylesheet" href="app.css?v=clinical-os-ia1">
+  <link rel="stylesheet" href="app.css?v=clinical-os-department1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="auth-config.js?v=clinical-os-ia1"></script>
-  <script src="chananya-runtime.js?v=clinical-os-ia1"></script>
+  <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
-  <script defer src="pharmacy.js?v=clinical-os-ia1"></script>
+  <script defer src="searchable-select.js?v=clinical-os-department1"></script>
+  <script defer src="pharmacy.js?v=clinical-os-department1"></script>
   <script defer src="pharmacy-sale-selector-fix.js?v=clinical-os-ia1"></script>
   <script defer src="pharmacy-labels.js?v=clinical-os-ia1"></script>
   <script defer src="pharmacy-v33-tools.js?v=clinical-os-ia1"></script>
@@ -42,6 +43,7 @@
             <section class="card">
               <div class="section-heading"><span class="section-number">1</span><div><h2>เปิดรายการขาย</h2><p>บันทึกบริบทและ pharmacist assessment ก่อนเลือกยา</p></div></div>
               <form id="sale-form" class="form">
+                <label class="full">ผู้รับบริการในระบบ (ถ้ามี)<select id="sale-patient"><option value="">Walk-in / ยังไม่ผูก HN</option></select></label>
                 <label>ชื่อลูกค้า<input id="customer-name"></label><label>โทรศัพท์<input id="customer-phone"></label>
                 <label class="full">อาการสำคัญ<textarea id="symptoms" required></textarea></label><label class="full">ประวัติแพ้ยา/สมุนไพร<textarea id="allergies"></textarea></label>
                 <label class="full">ยาที่ใช้อยู่<textarea id="current-meds"></textarea></label><label class="full">ข้อห้าม/Red flags<textarea id="contra"></textarea></label>
@@ -53,9 +55,8 @@
               <div class="section-heading"><span class="section-number">2</span><div><h2>เพิ่มยา</h2><p>ผูกยากับรายการขายก่อน Review และ Dispense</p></div></div>
               <form id="item-form" class="form">
                 <label class="full">รายการขาย<select id="item-sale" required></select></label><div id="selected-sale-banner" class="full badge" hidden></div>
-                <label class="full">ค้นหายา/ผลิตภัณฑ์<input id="item-product-search" placeholder="พิมพ์ SKU หรือชื่อสินค้า"></label>
                 <label class="full">ยา/ผลิตภัณฑ์<select id="item-product" required></select></label>
-                <label>จำนวน<input id="item-qty" type="number" min="0.0001" step="0.0001" required></label><label>หน่วย<input id="item-unit" required></label>
+                <label>จำนวน<input id="item-qty" type="number" min="0.0001" step="0.0001" required></label><label>หน่วยจาก Product Master<input id="item-unit" readonly></label>
                 <label>ราคาต่อหน่วย<input id="item-price" type="number" min="0" step="0.01" required></label><label>ขนาด/วิธีใช้<input id="item-dose"></label>
                 <label>ความถี่<input id="item-frequency"></label><label>ระยะเวลา<input id="item-duration"></label>
                 <label class="full">คำเตือน/วิธีใช้<textarea id="item-instructions"></textarea></label><button class="btn primary full">เพิ่มรายการยา</button>

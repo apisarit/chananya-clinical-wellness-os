@@ -19,56 +19,56 @@ assert.equal(typeof runtime.rolesOf, 'function', 'runtime should expose rolesOf'
 const cases = [
   {
     label: 'practitioner can inspect the Thai medicine foundation',
-    profile: { role: 'practitioner', system_role: 'staff' },
+    profile: { role: 'practitioner', system_role: 'staff', access_context_ready: true },
     effective: 'practitioner',
     capability: 'knowledge_read',
     allowed: true
   },
   {
     label: 'pharmacy operational role is not masked by system staff',
-    profile: { role: 'pharmacy', system_role: 'staff' },
+    profile: { role: 'pharmacy', system_role: 'staff', access_context_ready: true },
     effective: 'pharmacy',
     capability: 'pharmacy_operate',
     allowed: true
   },
   {
     label: 'practitioner operational role is not masked by system staff',
-    profile: { role: 'practitioner', system_role: 'staff' },
+    profile: { role: 'practitioner', system_role: 'staff', access_context_ready: true },
     effective: 'practitioner',
     capability: 'clinical_write',
     allowed: true
   },
   {
     label: 'reception keeps appointment operation capability',
-    profile: { role: 'reception', system_role: 'staff' },
+    profile: { role: 'reception', system_role: 'staff', access_context_ready: true },
     effective: 'reception',
     capability: 'appointments_operate',
     allowed: true
   },
   {
     label: 'reception may perform hybrid patient check-in',
-    profile: { role: 'reception', system_role: 'staff' },
+    profile: { role: 'reception', system_role: 'staff', access_context_ready: true },
     effective: 'reception',
     capability: 'patient_checkin',
     allowed: true
   },
   {
     label: 'pharmacy may not perform patient identity check-in',
-    profile: { role: 'pharmacy', system_role: 'staff' },
+    profile: { role: 'pharmacy', system_role: 'staff', access_context_ready: true },
     effective: 'pharmacy',
     capability: 'patient_checkin',
     allowed: false
   },
   {
-    label: 'system admin overrides a viewer operational role',
-    profile: { role: 'viewer', system_role: 'admin' },
+    label: 'system admin remains governance-only',
+    profile: { role: 'viewer', system_role: 'admin', access_context_ready: true },
     effective: 'admin',
     capability: 'clinical_write',
-    allowed: true
+    allowed: false
   },
   {
     label: 'super admin retains production override',
-    profile: { role: 'viewer', system_role: 'super_admin' },
+    profile: { role: 'viewer', system_role: 'super_admin', access_context_ready: true },
     effective: 'super_admin',
     capability: 'production_operate',
     allowed: true
@@ -80,13 +80,62 @@ for (const testCase of cases) {
   assert.equal(runtime.can(testCase.profile, testCase.capability), testCase.allowed, testCase.label);
 }
 
-const superAdmin = { role: 'viewer', system_role: 'super_admin' };
+const superAdmin = { role: 'viewer', system_role: 'super_admin', access_context_ready: true };
 assert.equal(runtime.can(superAdmin, 'appointments_view'), true, 'super admin may inspect appointments');
-assert.equal(runtime.can(superAdmin, 'appointments_operate'), false, 'super admin appointment mode remains read-only');
+assert.equal(runtime.can(superAdmin, 'appointments_operate'), true, 'super admin receives the explicit cross-workspace override');
+assert.equal(
+  runtime.can({ role: 'viewer', system_role: 'admin', access_context_ready: true }, 'admin_center'),
+  true,
+  'system admin may use governance tools'
+);
+assert.equal(
+  runtime.can({ role: 'pharmacy', system_role: 'staff', access_context_ready: false }, 'pharmacy_operate'),
+  false,
+  'frontend role data must fail closed until the database confirms tenant and department context'
+);
 assert.deepEqual(
-  [...runtime.rolesOf({ role: 'pharmacy', system_role: 'staff' }).grantedRoles],
+  [...runtime.rolesOf({ role: 'pharmacy', system_role: 'staff', access_context_ready: true }).grantedRoles],
   ['pharmacy'],
   'staff must not become an operational grant'
+);
+
+const departmentCapabilities = [
+  'clinical_write',
+  'patient_registry',
+  'appointments_operate',
+  'pharmacy_operate',
+  'product_master_write',
+  'production_operate',
+  'billing_operate',
+  'admin_center'
+];
+const exactDepartmentGrants = {
+  practitioner: ['clinical_write', 'patient_registry'],
+  doctor: ['clinical_write', 'patient_registry'],
+  reception: ['patient_registry', 'appointments_operate'],
+  pharmacy: ['pharmacy_operate', 'product_master_write'],
+  production: ['product_master_write', 'production_operate'],
+  inventory: ['product_master_write', 'production_operate'],
+  billing: ['billing_operate'],
+  admin: ['admin_center'],
+  viewer: []
+};
+for (const [role, expected] of Object.entries(exactDepartmentGrants)) {
+  const profile = {
+    role: role === 'admin' ? 'viewer' : role,
+    system_role: role === 'admin' ? 'admin' : 'staff',
+    access_context_ready: true
+  };
+  assert.deepEqual(
+    departmentCapabilities.filter(capability => runtime.can(profile, capability)),
+    expected,
+    `${role} must receive only its declared department capabilities`
+  );
+}
+assert.deepEqual(
+  departmentCapabilities.filter(capability => runtime.can(superAdmin, capability)),
+  departmentCapabilities,
+  'super admin alone receives every department capability'
 );
 
 const scriptsToParse = [
@@ -111,7 +160,8 @@ const scriptsToParse = [
   'pharmacy-labels.js',
   'pharmacy-v33-tools.js',
   'production.js',
-  'patient-card.js'
+  'patient-card.js',
+  'searchable-select.js'
 ];
 for (const file of scriptsToParse) {
   assert.doesNotThrow(() => new vm.Script(read(file), { filename: file }), `${file} should parse`);

@@ -7,7 +7,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/patient-identity-function.mjs && node tests/postgres-behavioral-smoke.mjs"
+    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/department-persistence-contract.mjs && node tests/patient-identity-function.mjs && node tests/database-backup.mjs && node tests/postgres-behavioral-smoke.mjs",
+    "verify:backup": "node scripts/verify-backup.mjs"
   },
   "dependencies": {
     "qrcode": "1.5.4"
