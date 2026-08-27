@@ -2,6 +2,8 @@
 
 Status: preview implementation. Production activation requires the release gates at the end of this document.
 
+White-label customer setup, database-link validation and per-deployment branding are defined in [WHITE_LABEL_DEPLOYMENT.md](./WHITE_LABEL_DEPLOYMENT.md).
+
 ## Trust boundary
 
 Supabase PostgreSQL is the transactional source of truth. Google Drive is an encrypted off-site export destination only; it is not queried by the application and is never used as a live database.
@@ -15,7 +17,8 @@ The browser is not an authorization boundary. Navigation is filtered for usabili
 | `practitioner`, `doctor` | Patient registry, check-in, appointments view, Clinical, knowledge | Pharmacy, Production, Billing, Admin |
 | `reception` | Patient registry, check-in, appointment operation | Clinical write, Pharmacy, Production, Billing, Admin |
 | `pharmacy` | Pharmacy, product master, required patient read, knowledge | Patient registration, Clinical write, Production, Billing, Admin |
-| `production`, `inventory` | Production, inventory, product master, knowledge | Patient registry, Clinical, Pharmacy sale, Billing, Admin |
+| `production`, `inventory` | Production, inventory, product master, knowledge | Patient registry, Clinical, Pharmacy sale, Quality decision, Billing, Admin |
+| `quality` | Batch/Formula evidence, Quality result, independent release/reject | Patient, HN, Clinical, Pharmacy, Production execution, Product write, Billing, Admin |
 | `billing` | Billing and the minimum linked records required to bill | Patient registry, Clinical, Pharmacy operation, Production, Admin |
 | `admin` | Governance, staff assignment and audit | Every operational department |
 | `super_admin` | Explicit cross-workspace override inside the active clinic tenant | Cross-clinic PHI is not implicit |
@@ -28,7 +31,8 @@ The browser is not an authorization boundary. Navigation is filtered for usabili
 - Product create/update/activation uses `upsert_product_master()` and `set_product_master_active()`.
 - Pharmacy sale, item, review, dispense and billing handoff use controlled RPCs. FEFO allocation, stock movement and sale state commit or roll back together.
 - Pharmacy alone creates an idempotent `production_request`; Production receives Product/Quantity/Priority only and does not load HN, patient, prescription or dispensing tables.
-- Production order creation, FEFO material issue, completion, QC release/reject, finished-goods receipt and validated spreadsheet import use controlled RPCs. Each transition commits or rolls back as one PostgreSQL transaction.
+- Production owns order creation, FEFO material issue, completion and validated spreadsheet import. A separate Quality account alone owns QC release/reject and the atomic finished-goods receipt.
+- The database records `produced_by` and rejects a Quality decision when the approver is the same identity (`QC_INDEPENDENCE_REQUIRED`), including a super-admin override.
 - Browser `INSERT`, `UPDATE` and `DELETE` grants are revoked for protected product, pharmacy, production, inventory and import tables.
 - Composite tenant foreign keys prevent a sale item, allocation, formula, request, production order, issue, QC record, receipt, lot or movement from referencing another clinic.
 - Every controlled write appends non-editable audit evidence.
@@ -62,7 +66,8 @@ The run is recorded in `backup_export_runs` as `started`, `completed`, `partial`
    - `GOOGLE_DRIVE_MANIFESTS_FOLDER_ID`
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
-5. Apply `202608270500_department_persistence_and_drive_export.sql` and then `202608270600_atomic_production_execution.sql` before deploying the worker.
+   - `PATIENT_QR_ISSUER` (must equal the deployment's public `identity.qrIssuer`)
+5. Apply `202608270500_department_persistence_and_drive_export.sql`, `202608270600_atomic_production_execution.sql`, then `202608270700_independent_quality_release.sql` before deploying the worker.
 6. Run the function once, confirm three encrypted files and one manifest, and verify `backup_export_runs.status = 'completed'`.
 
 The Netlify deploy preview must not receive production backup secrets and must not run the scheduled exporter.
@@ -85,7 +90,7 @@ Initial target: daily RPO (maximum 24 hours). No commercial production claim sho
 - Authenticated E2E passes for every role and proves denied cross-department access.
 - Product, patient and pharmacy browser code contains no protected direct writes.
 - Production browser code loads no patient-domain tables and contains no protected direct writes; FEFO shortage and retry tests prove rollback and idempotency.
-- Commercial manufacturing release requires an approved SOP for independent QC review/approval (or a dedicated Quality role) instead of relying on one Production operator for both signatures.
+- Dedicated `quality` role, authenticated role E2E and an approved independent-QC SOP are required. Production must be denied both legacy release RPCs and the Quality workstation; producer/approver equality must fail in PostgreSQL.
 - Google service account and encryption key are present only in production Functions.
 - First backup completes and a separate restore-verification run passes.
 - Supabase managed backup/PITR policy is enabled independently; Drive export is defense in depth, not a replacement.

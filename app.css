@@ -89,9 +89,10 @@ a { color: inherit; text-decoration: none; }
   background: radial-gradient(circle at 50% 0%, rgba(182,146,78,.16), transparent 16rem), var(--forest-950);
 }
 .brand { display: grid; grid-template-columns: 46px minmax(0,1fr); align-items: center; gap: 12px; padding: 0 8px 22px; border-bottom: 1px solid rgba(255,255,255,.1); }
-.brand-mark { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(238,226,198,.5); border-radius: 50%; color: var(--gold-soft); font-family: Georgia, serif; font-size: 1.45rem; background: rgba(255,255,255,.04); }
+.brand-mark { width: 46px; height: 46px; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(238,226,198,.5); border-radius: 50%; color: var(--gold-soft); font-family: Georgia, serif; font-size: 1.45rem; background: rgba(255,255,255,.04); }
+.brand-mark img, .logo img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .brand strong { display: block; letter-spacing: .08em; font-family: Georgia, "Times New Roman", serif; }
-.brand small { display: block; margin-top: 2px; color: rgba(255,255,255,.6); font-size: .72rem; line-height: 1.35; }
+.brand small { display: block; margin-top: 2px; color: rgba(255,255,255,.6); font-size: .72rem; line-height: 1.35; white-space: pre-line; }
 .global-nav { display: grid; gap: 5px; margin: 20px 0; }
 .global-nav a { min-height: 46px; display: grid; grid-template-columns: 30px minmax(0,1fr); align-items: center; gap: 9px; padding: 9px 11px; border-radius: 13px; color: rgba(255,255,255,.72); transition: background .18s ease, color .18s ease, transform .18s ease; }
 .global-nav a:hover { color: #fff; background: rgba(255,255,255,.08); transform: translateX(2px); }
@@ -139,7 +140,7 @@ main { width: min(100%, 1440px); margin: 0 auto; padding: clamp(16px, 2.4vw, 30p
 .view { display: none; }
 .view.active { display: block; }
 .hero { position: relative; overflow: hidden; padding: clamp(22px, 4vw, 34px); border: 1px solid rgba(238,226,198,.55); border-radius: var(--radius-lg); color: #fff; background: radial-gradient(circle at 88% 12%, rgba(182,146,78,.35), transparent 14rem), linear-gradient(135deg, var(--forest-950), var(--forest-700)); box-shadow: var(--shadow-md); }
-.hero::after { content: "ชนัญญา"; position: absolute; right: 28px; bottom: -21px; color: rgba(255,255,255,.055); font-family: Georgia, serif; font-size: clamp(3rem, 8vw, 7rem); font-weight: 800; pointer-events: none; }
+.hero::after { content: attr(data-brand-watermark); position: absolute; right: 28px; bottom: -21px; color: rgba(255,255,255,.055); font-family: Georgia, serif; font-size: clamp(3rem, 8vw, 7rem); font-weight: 800; pointer-events: none; }
 .hero h2 { position: relative; z-index: 1; margin: 0 0 7px; font-size: clamp(1.55rem, 3vw, 2.35rem); }
 .hero p { position: relative; z-index: 1; max-width: 760px; margin: 0; color: rgba(255,255,255,.72); line-height: 1.65; }
 .stats { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px; margin: 16px 0; }

@@ -61,6 +61,7 @@ assert.match(runtime, /admin_center: \['super_admin','admin'\]/, 'admin is limit
 assert.match(runtime, /clinical_write: \['super_admin','practitioner','doctor'\]/);
 assert.match(runtime, /pharmacy_operate: \['super_admin','pharmacy'\]/);
 assert.match(runtime, /production_operate: \['super_admin','production','inventory'\]/);
+assert.match(runtime, /quality_operate: \['super_admin','quality'\]/);
 assert.match(runtime, /billing_operate: \['super_admin','billing'\]/);
 
 for (const rpc of [
@@ -93,7 +94,7 @@ assert.match(searchSelect, /Intl\.Collator\(\['th', 'en'\]/, 'searchable selecti
 assert.match(searchSelect, /select\.dispatchEvent\(new Event\('change'/, 'enhancement must preserve native change contracts');
 for (const page of [
   'index.html', 'appointments.html', 'check-in.html', 'foundation.html',
-  'clinical-v3.html', 'pharmacy.html', 'production.html', 'admin.html', 'patient-card.html'
+  'clinical-v3.html', 'pharmacy.html', 'production.html', 'quality.html', 'admin.html', 'patient-card.html'
 ]) {
   assert.match(read(page), /searchable-select\.js/, `${page} must enhance single-choice selects`);
 }

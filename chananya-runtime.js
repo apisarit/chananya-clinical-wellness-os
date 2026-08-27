@@ -3,15 +3,27 @@
   if (window.ChananyaRuntime) return;
 
   let db = null;
-  const cfg = () => window.CHANANYA_AUTH || {};
+  const deploymentConfig = () => window.CLINICAL_OS_CONFIG || {};
+  const cfg = () => {
+    const deployment = deploymentConfig();
+    const database = deployment.database || {};
+    const legacy = window.CHANANYA_AUTH || {};
+    return {
+      url: database.url || legacy.url || legacy.supabaseUrl,
+      publishableKey: database.publishableKey || legacy.publishableKey || legacy.anonKey
+    };
+  };
 
   function getDb() {
     if (db) return db;
+    if (deploymentConfig().safety?.previewLocked === true) {
+      throw new Error('Deploy Preview database access is locked; use the read-only UI review');
+    }
     if (!window.supabase) throw new Error('Supabase client library is not loaded');
     const c = cfg();
     const url = c.url || c.supabaseUrl;
-    const key = c.anonKey || c.publishableKey;
-    if (!url || !key) throw new Error('Chananya Supabase configuration is missing');
+    const key = c.publishableKey;
+    if (!url || !key) throw new Error('Clinical OS database configuration is missing');
     db = window.supabase.createClient(url, key, {
       auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true }
     });
@@ -50,7 +62,7 @@
   }
 
   const permissions = Object.freeze({
-    operations_view: ['super_admin','admin','practitioner','doctor','reception','pharmacy','production','inventory','billing','viewer'],
+    operations_view: ['super_admin','admin','practitioner','doctor','reception','pharmacy','production','inventory','quality','billing','viewer'],
     knowledge_read: ['super_admin','practitioner','doctor','pharmacy','production','inventory'],
     clinical_read: ['super_admin','practitioner','doctor'],
     clinical_write: ['super_admin','practitioner','doctor'],
@@ -62,6 +74,7 @@
     pharmacy_operate: ['super_admin','pharmacy'],
     product_master_write: ['super_admin','pharmacy','production','inventory'],
     production_operate: ['super_admin','production','inventory'],
+    quality_operate: ['super_admin','quality'],
     billing_operate: ['super_admin','billing'],
     admin_center: ['super_admin','admin']
   });
@@ -97,6 +110,22 @@
     const row = Array.isArray(access.data) ? access.data[0] : access.data;
     if (!row?.clinic_id || !row?.clinic_role) {
       return Object.freeze({ ...data, role: 'viewer', access_context_ready: false });
+    }
+    const expectedTenant = deploymentConfig().tenant || {};
+    const expectedClinicId = String(expectedTenant.expectedClinicId || '').toLowerCase();
+    const expectedClinicCode = String(expectedTenant.expectedClinicCode || '').toUpperCase();
+    const actualClinicId = String(row.clinic_id || '').toLowerCase();
+    const actualClinicCode = String(row.clinic_code || '').toUpperCase();
+    if ((expectedClinicId && expectedClinicId !== actualClinicId) || (expectedClinicCode && expectedClinicCode !== actualClinicCode)) {
+      console.error('Deployment tenant and database tenant do not match');
+      return Object.freeze({
+        ...data,
+        role: 'viewer',
+        clinic_id: row.clinic_id,
+        clinic_code: row.clinic_code,
+        access_context_ready: false,
+        tenant_mismatch: true
+      });
     }
     return Object.freeze({
       ...data,

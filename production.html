@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Production Workstation</title>
   <link rel="stylesheet" href="app.css?v=clinical-os-production-atomic1">
+  <script src="tenant-config.js?v=white-label1"></script>
+  <script src="tenant-brand.js?v=white-label1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="auth-config.js?v=clinical-os-ia1"></script>
@@ -24,7 +26,7 @@
 <nav class="nav"><button class="active" data-view="queue">Production Queue</button><button data-view="formulas">Formula / BOM</button><button data-view="materials">Raw Material</button><button data-view="import">Import Excel/CSV</button></nav>
 <main>
 <section class="view active" id="queue">
-<div class="hero"><h2>Request → Produce → QC → Finished Goods</h2><p>Production เห็นเฉพาะคำขอและข้อมูลการผลิตที่จำเป็น ไม่เห็นข้อมูลผู้รับบริการจาก Pharmacy</p></div>
+<div class="hero"><h2>Request → Produce → Independent Quality → Finished Goods</h2><p>Production เห็นเฉพาะคำขอและข้อมูลการผลิตที่จำเป็น ไม่เห็นข้อมูลผู้รับบริการ และไม่มีสิทธิ์ปล่อยผ่าน Batch ของตนเอง</p></div>
 <div class="stats"><div class="stat">คำขอผลิต<strong id="stat-requests">0</strong></div><div class="stat">กำลังผลิต<strong id="stat-orders">0</strong></div><div class="stat">รอ QC<strong id="stat-qc">0</strong></div><div class="stat">Released<strong id="stat-released">0</strong></div><div class="stat">Raw material ต่ำ<strong id="stat-low">0</strong></div></div>
 <div class="card"><div class="section-heading"><span class="section-number">1</span><div><h2>Production requests</h2><p>คำขอที่ Pharmacy ส่งมาโดยไม่เปิดเผยชื่อ HN หรือข้อมูลการรักษา</p></div></div><div id="request-list" class="list"></div></div>
 <div class="card"><h3>Production orders / Batch</h3><div id="order-list" class="list"></div></div>
@@ -42,25 +44,6 @@
     <label>Loss quantity<input id="complete-loss" type="number" min="0" step="0.0001" value="0" required></label>
     <label>Waste quantity<input id="complete-waste" type="number" min="0" step="0.0001" value="0" required></label>
     <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn primary">บันทึกและส่ง QC</button></div>
-  </form>
-</dialog>
-<dialog class="workflow-dialog" id="release-dialog">
-  <form class="form" id="release-form">
-    <div class="workflow-dialog-head full"><div><span class="page-kicker">Quality control</span><h2>QC Pass &amp; Release</h2></div><button class="btn ghost" type="button" data-close-dialog aria-label="ปิด">ปิด</button></div>
-    <p class="notice warning full">การยืนยันจะสร้าง Finished Goods Lot รับ Stock และเปิดคิว Pharmacy ภายใน transaction เดียว</p>
-    <label class="full">Result summary<textarea id="qc-summary" required minlength="3" placeholder="ผลการตรวจเทียบกับข้อกำหนด"></textarea></label>
-    <label>Sample reference<input id="qc-sample"></label><label>Appearance result<input id="qc-appearance"></label>
-    <label>Moisture result<input id="qc-moisture" type="number" min="0" step="0.0001"></label><label>Water activity<input id="qc-water-activity" type="number" min="0" step="0.0001"></label>
-    <label>Weight result<input id="qc-weight" type="number" min="0" step="0.0001"></label>
-    <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn primary">ยืนยัน QC Pass และ Release</button></div>
-  </form>
-</dialog>
-<dialog class="workflow-dialog" id="reject-dialog">
-  <form class="form" id="reject-form">
-    <div class="workflow-dialog-head full"><div><span class="page-kicker">Quality control</span><h2>บันทึก QC Reject</h2></div><button class="btn ghost" type="button" data-close-dialog aria-label="ปิด">ปิด</button></div>
-    <label class="full">Result summary<textarea id="reject-summary" required minlength="3">ไม่ผ่านข้อกำหนด</textarea></label>
-    <label class="full">เหตุผลที่ไม่ผ่าน<textarea id="reject-reason" required minlength="5"></textarea></label>
-    <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn danger">ยืนยัน Reject และ Audit</button></div>
   </form>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

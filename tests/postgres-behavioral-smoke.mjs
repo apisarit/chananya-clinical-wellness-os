@@ -11,6 +11,7 @@ const USER_B = '22222222-2222-4222-a222-222222222222';
 const USER_C = '44444444-4444-4444-a444-444444444444';
 const USER_PHARMACY = 'aaaaaaaa-1111-4111-a111-111111111111';
 const USER_PRODUCTION = 'bbbbbbbb-2222-4222-a222-222222222222';
+const USER_QUALITY = 'abababab-7777-4777-a777-777777777777';
 const USER_RECEPTION = 'cccccccc-3333-4333-a333-333333333333';
 const USER_ADMIN = 'dddddddd-4444-4444-a444-444444444444';
 const USER_ROLE_TARGET = 'eeeeeeee-5555-4555-a555-555555555555';
@@ -550,17 +551,20 @@ await db.exec(`
   insert into auth.users(id,email,raw_user_meta_data) values
     ('${USER_PHARMACY}','pharmacy@example.test','{"full_name":"Pharmacist"}'),
     ('${USER_PRODUCTION}','production@example.test','{"full_name":"Production"}'),
+    ('${USER_QUALITY}','quality@example.test','{"full_name":"Quality"}'),
     ('${USER_RECEPTION}','reception@example.test','{"full_name":"Reception"}'),
     ('${USER_ADMIN}','admin@example.test','{"full_name":"Governance Admin"}'),
     ('${USER_ROLE_TARGET}','role-target@example.test','{"full_name":"Role Target"}');
   update public.profiles set role='pharmacy',system_role='staff' where id='${USER_PHARMACY}';
   update public.profiles set role='production',system_role='staff' where id='${USER_PRODUCTION}';
+  update public.profiles set role='quality',system_role='staff' where id='${USER_QUALITY}';
   update public.profiles set role='reception',system_role='staff' where id='${USER_RECEPTION}';
   update public.profiles set role='viewer',system_role='admin' where id='${USER_ADMIN}';
   update public.profiles set role='doctor',system_role='staff' where id='${USER_ROLE_TARGET}';
   insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary) values
     ('00000000-0000-0000-0000-000000000001','${USER_PHARMACY}','pharmacy',true),
     ('00000000-0000-0000-0000-000000000001','${USER_PRODUCTION}','production',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_QUALITY}','quality',true),
     ('00000000-0000-0000-0000-000000000001','${USER_RECEPTION}','reception',true),
     ('00000000-0000-0000-0000-000000000001','${USER_ADMIN}','viewer',true),
     ('00000000-0000-0000-0000-000000000001','${USER_ROLE_TARGET}','doctor',true);
@@ -610,6 +614,24 @@ assert.deepEqual(productionBoundaries.rows[0], {
   pharmacy: false,
   clinical: false,
   billing: false
+});
+
+const qualityBoundaries = await asUser(USER_QUALITY, `
+  select
+    public.department_can('quality') quality,
+    public.department_can('production_read') production_read,
+    public.department_can('production') production,
+    public.department_can('product_write') product_write,
+    public.department_can('patient_read') patient_read,
+    public.department_can('pharmacy') pharmacy
+`);
+assert.deepEqual(qualityBoundaries.rows[0], {
+  quality: true,
+  production_read: true,
+  production: false,
+  product_write: false,
+  patient_read: false,
+  pharmacy: false
 });
 
 const receptionBoundaries = await asUser(USER_RECEPTION, `
@@ -1007,16 +1029,54 @@ const completedProductionRetry = await asUser(USER_PRODUCTION, `
 `);
 assert.equal(completedProductionRetry.rows[0].id, completedProduction.rows[0].id);
 
-const releasedProduction = await asUser(USER_PRODUCTION, `
-  select public.release_production_order(
+await db.exec(`
+  update public.production_orders
+  set produced_by='${USER_QUALITY}'
+  where id='${productionOrder.rows[0].id}'
+`);
+await expectDatabaseError(
+  asUser(USER_QUALITY, `
+    select public.quality_release_production_order(
+      '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
+      'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
+    )
+  `),
+  'QC_INDEPENDENCE_REQUIRED'
+);
+await db.exec(`
+  update public.production_orders
+  set produced_by='${USER_PRODUCTION}'
+  where id='${productionOrder.rows[0].id}'
+`);
+
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    select public.quality_release_production_order(
+      '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
+      'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
+    )
+  `),
+  'QUALITY_DEPARTMENT_REQUIRED'
+);
+await expectDatabaseError(
+  asUser(USER_PRODUCTION, `
+    select public.release_production_order(
+      '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
+      'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
+    )
+  `),
+  'permission denied'
+);
+const releasedProduction = await asUser(USER_QUALITY, `
+  select public.quality_release_production_order(
     '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
     'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
   ) result
 `);
 assert.equal(releasedProduction.rows[0].result.status, 'released');
 assert.equal(Number(releasedProduction.rows[0].result.received_quantity), 11.5);
-const releaseRetry = await asUser(USER_PRODUCTION, `
-  select public.release_production_order(
+const releaseRetry = await asUser(USER_QUALITY, `
+  select public.quality_release_production_order(
     '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
     'SAMPLE-001','ลักษณะปกติ',5.1,0.45,11.5
   ) result
@@ -1094,7 +1154,7 @@ const productionAudit = await db.query(`
   where action in (
     'create_production_request','open_production_order',
     'issue_production_materials_fefo','complete_production_order',
-    'release_production_order','stage_production_import','commit_production_import'
+    'quality_release_production_order','stage_production_import','commit_production_import'
   )
   group by action
   order by action
@@ -1105,7 +1165,7 @@ assert.deepEqual(productionAudit.rows, [
   { action: 'create_production_request', count: 2 },
   { action: 'issue_production_materials_fefo', count: 1 },
   { action: 'open_production_order', count: 2 },
-  { action: 'release_production_order', count: 1 },
+  { action: 'quality_release_production_order', count: 1 },
   { action: 'stage_production_import', count: 2 }
 ]);
 

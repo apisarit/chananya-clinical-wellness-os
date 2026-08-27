@@ -72,6 +72,13 @@ const cases = [
     effective: 'super_admin',
     capability: 'production_operate',
     allowed: true
+  },
+  {
+    label: 'quality role owns independent release only',
+    profile: { role: 'quality', system_role: 'staff', access_context_ready: true },
+    effective: 'quality',
+    capability: 'quality_operate',
+    allowed: true
   }
 ];
 
@@ -106,6 +113,7 @@ const departmentCapabilities = [
   'pharmacy_operate',
   'product_master_write',
   'production_operate',
+  'quality_operate',
   'billing_operate',
   'admin_center'
 ];
@@ -116,6 +124,7 @@ const exactDepartmentGrants = {
   pharmacy: ['pharmacy_operate', 'product_master_write'],
   production: ['product_master_write', 'production_operate'],
   inventory: ['product_master_write', 'production_operate'],
+  quality: ['quality_operate'],
   billing: ['billing_operate'],
   admin: ['admin_center'],
   viewer: []
@@ -139,6 +148,9 @@ assert.deepEqual(
 );
 
 const scriptsToParse = [
+  'tenant-config.js',
+  'brand-config.js',
+  'tenant-brand.js',
   'auth-config.js',
   'app-shell.js',
   'app.js',
@@ -160,6 +172,7 @@ const scriptsToParse = [
   'pharmacy-labels.js',
   'pharmacy-v33-tools.js',
   'production.js',
+  'quality.js',
   'patient-card.js',
   'searchable-select.js'
 ];
@@ -182,7 +195,7 @@ assert.match(clinicalHtml, /data-stage="intake"/, 'Clinical page should expose t
 assert.match(clinicalHtml, /data-stage="signoff"/, 'Clinical workflow should end with sign-off');
 assert.match(read('clinical-signoff.js'), /fields\.inert=locked/, 'sign-off lock should disable the owned record boundary');
 
-for (const page of ['index.html', 'appointments.html', 'check-in.html', 'foundation.html', 'clinical-v3.html', 'pharmacy.html', 'production.html', 'admin.html']) {
+for (const page of ['index.html', 'appointments.html', 'check-in.html', 'foundation.html', 'clinical-v3.html', 'pharmacy.html', 'production.html', 'quality.html', 'admin.html']) {
   const html = read(page);
   const runtimeIndex = html.indexOf('chananya-runtime.js');
   const shellIndex = html.indexOf('app-shell.js');
@@ -196,5 +209,6 @@ assert.doesNotMatch(read('pharmacy-v33-tools.js'), /MutationObserver/, 'Pharmacy
 assert.match(read('_redirects'), /^\/app\.html\s+\/\s+301!/m, 'Legacy localStorage prototype should redirect to the canonical operations route');
 assert.match(read('app-shell.js'), /href: '\/foundation\.html'[\s\S]*?capability: 'knowledge_read'/, 'shared shell must expose the foundation as a canonical route');
 assert.match(read('app-shell.js'), /href: '\/check-in\.html'[\s\S]*?capability: 'patient_checkin'/, 'shared shell must expose hybrid patient check-in as a canonical route');
+assert.match(read('app-shell.js'), /href: '\/quality\.html'[\s\S]*?capability: 'quality_operate'/, 'shared shell must expose Quality as an independent department route');
 
 console.log(`IA release checks passed: ${cases.length} role cases + ${scriptsToParse.length} syntax checks + shared shell/order assertions`);

@@ -196,8 +196,7 @@
         buttons.push(`<button class="btn primary" data-act="complete" data-id="${esc(item.id)}">บันทึกผลผลิต</button>`);
       }
       if (item.status === 'awaiting_qc') {
-        buttons.push(`<button class="btn primary" data-act="release" data-id="${esc(item.id)}">QC Pass &amp; Release</button>`);
-        buttons.push(`<button class="btn danger" data-act="reject" data-id="${esc(item.id)}">QC Reject</button>`);
+        buttons.push('<span class="notice">ส่งให้ Independent Quality แล้ว • ผู้ผลิตไม่สามารถอนุมัติ Batch ของตนเอง</span>');
       }
       return `<div class="item column"><div class="row"><div><b>${esc(item.production_order_no)} • Batch ${esc(item.batch_number)}</b><small>${esc(finished?.name_th || '-')} • Plan ${num(item.planned_quantity)} ${esc(item.planned_unit)} • Formula ${esc(linkedFormula?.formula_code || '-')} Rev.${esc(linkedFormula?.revision || '-')}</small><small>Issued ${issueLines} lot line(s) • Actual ${num(item.actual_quantity)} • Yield ${num(item.yield_percent)}%</small></div><span class="badge">${esc(item.status)}</span></div>${buttons.length ? `<div class="right">${buttons.join('')}</div>` : ''}</div>`;
     }).join('');
@@ -247,15 +246,6 @@
         toast('เบิกวัตถุดิบ FEFO แบบ transaction เดียวแล้ว');
       } else if (actionName === 'complete') {
         openCompleteDialog(id);
-      } else if (actionName === 'release') {
-        activeOrderId = id;
-        $('#release-form').reset();
-        $('#release-dialog').showModal();
-      } else if (actionName === 'reject') {
-        activeOrderId = id;
-        $('#reject-form').reset();
-        $('#reject-summary').value = 'ไม่ผ่านข้อกำหนด';
-        $('#reject-dialog').showModal();
       }
     } finally {
       if (button?.isConnected) button.disabled = false;
@@ -285,34 +275,6 @@
     $('#complete-dialog').close();
     await load();
     toast('บันทึกผลผลิตและส่ง QC พร้อม Audit แล้ว');
-  }
-
-  async function releaseCompletedOrder(event) {
-    event.preventDefault();
-    await rpc('release_production_order', {
-      p_production_order_id: activeOrderId,
-      p_result_summary: $('#qc-summary').value.trim(),
-      p_sample_reference: $('#qc-sample').value.trim() || null,
-      p_appearance_result: $('#qc-appearance').value.trim() || null,
-      p_moisture_result: optionalNumber($('#qc-moisture').value),
-      p_water_activity_result: optionalNumber($('#qc-water-activity').value),
-      p_weight_result: optionalNumber($('#qc-weight').value)
-    });
-    $('#release-dialog').close();
-    await load();
-    toast('QC Release, รับ Finished Goods และเปิดคิว Pharmacy ใน transaction เดียวแล้ว');
-  }
-
-  async function rejectCompletedOrder(event) {
-    event.preventDefault();
-    await rpc('reject_production_order', {
-      p_production_order_id: activeOrderId,
-      p_rejection_reason: $('#reject-reason').value.trim(),
-      p_result_summary: $('#reject-summary').value.trim()
-    });
-    $('#reject-dialog').close();
-    await load();
-    toast('บันทึก QC Reject และ Audit แล้ว');
   }
 
   async function saveFormula(event) {
@@ -491,8 +453,6 @@
   $('#component-form').addEventListener('submit', event => saveComponent(event).catch(fail));
   $('#import-form').addEventListener('submit', event => previewFile(event).catch(fail));
   $('#complete-form').addEventListener('submit', event => saveCompletedOrder(event).catch(fail));
-  $('#release-form').addEventListener('submit', event => releaseCompletedOrder(event).catch(fail));
-  $('#reject-form').addEventListener('submit', event => rejectCompletedOrder(event).catch(fail));
   $('#confirm-import').addEventListener('click', () => confirmImport().catch(fail));
   $('#f-product').addEventListener('change', syncFormulaUnit);
   $('#c-material').addEventListener('change', syncComponentUnit);

@@ -7,6 +7,8 @@
   <meta name="theme-color" content="#0d2d24">
   <title>Hybrid Patient Identity — Read-only Review</title>
   <link rel="stylesheet" href="app.css?v=clinical-os-department1">
+  <script src="brand-config.js?v=white-label1"></script>
+  <script src="tenant-brand.js?v=white-label1"></script>
 </head>
 <body data-page="checkin">
   <div class="app-frame">
@@ -32,7 +34,7 @@
           <article class="card review-phone-card">
             <div class="patient-card-brand"><span class="brand-mark">ช</span><div><strong>CHANANYA</strong><small>Digital Patient Card</small></div></div>
             <span class="page-kicker">หน้าจอผู้รับบริการใน LINE</span>
-            <div class="patient-qr-head"><div><small>ผู้รับบริการ</small><strong>ผู้รับบริการตัวอย่าง</strong></div><span class="badge">CHANANYA-00001234</span></div>
+            <div class="patient-qr-head"><div><small>ผู้รับบริการ</small><strong>ผู้รับบริการตัวอย่าง</strong></div><span class="badge" data-brand-demo-hn>CLINIC-00001234</span></div>
             <div class="review-qr-placeholder" role="img" aria-label="ตำแหน่ง QR ตัวอย่าง">▦</div>
             <div class="patient-display-code"><small>หากกล้องสแกนไม่ได้ แจ้งรหัส 6 หลัก</small><strong>123 456</strong></div>
             <p class="patient-qr-expiry">QR หมดอายุใน 64 วินาที • ใช้ได้ครั้งเดียว</p>
@@ -43,7 +45,7 @@
             <section class="card">
               <div class="section-heading"><span class="section-number">1</span><div><h2>เจ้าหน้าที่สแกนและตรวจสอบร่วมกัน</h2><p>QR ไม่มีชื่อ HN หรือข้อมูลสุขภาพ ผู้รักษาเห็นข้อมูลหลังผ่านสิทธิ์ของคลินิกเท่านั้น</p></div></div>
               <div class="identity-preview">
-                <div><small>HN</small><strong>CHANANYA-00001234</strong></div>
+                <div><small>HN</small><strong data-brand-demo-hn>CLINIC-00001234</strong></div>
                 <div><small>ชื่อ–นามสกุล</small><strong>ผู้รับบริการตัวอย่าง</strong></div>
                 <div><small>วันเกิด</small><strong>2 มกราคม 2533</strong></div>
                 <div><small>โทรศัพท์ 4 ตัวท้าย</small><strong>••••••5678</strong></div>
@@ -55,8 +57,8 @@
 
             <section class="card">
               <div class="section-heading"><span class="section-number">2</span><div><h2>ไม่มีมือถือ — ใช้ฐานข้อมูลเดียวกัน</h2><p>ค้น HN ชื่อ วันเกิด หรือโทรศัพท์ แล้วบันทึกวิธียืนยัน/ผู้ดูแลใน audit เดียวกับ QR</p></div></div>
-              <div class="form"><label class="full">ค้นหาผู้รับบริการ<input type="text" value="CHANANYA-00001234" disabled></label></div>
-              <article class="item identity-result"><span><b>CHANANYA-00001234 • ผู้รับบริการตัวอย่าง</b><small>1990-01-02 • โทรศัพท์ท้าย 5678</small></span><span class="badge">เลือก</span></article>
+              <div class="form"><label class="full">ค้นหาผู้รับบริการ<input type="text" value="CLINIC-00001234" data-brand-demo-hn-value disabled></label></div>
+              <article class="item identity-result"><span><b data-brand-demo-result>CLINIC-00001234 • ผู้รับบริการตัวอย่าง</b><small>1990-01-02 • โทรศัพท์ท้าย 5678</small></span><span class="badge">เลือก</span></article>
               <div class="identity-proof-row"><span>Manual HN</span><span>Demographic match</span><span>Guardian attestation</span></div>
             </section>
 

@@ -8,6 +8,8 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const migration = read('supabase/migrations/202608270600_atomic_production_execution.sql');
 const production = read('production.js');
 const productionHtml = read('production.html');
+const quality = read('quality.js');
+const qualityHtml = read('quality.html');
 const pharmacy = read('pharmacy.js');
 const pharmacyHtml = read('pharmacy.html');
 const uiReview = read('ui-review.html');
@@ -81,8 +83,6 @@ for (const rpc of [
   'open_production_order',
   'issue_production_materials_fefo',
   'complete_production_order',
-  'release_production_order',
-  'reject_production_order',
   'stage_production_import',
   'commit_production_import',
   'production_execution_healthcheck'
@@ -105,12 +105,16 @@ for (const patientDomain of ['patients', 'prescriptions', 'prescription_items', 
     `Production must not load patient-domain table ${patientDomain}`
   );
 }
-assert.match(productionHtml, /ไม่เห็นข้อมูลผู้รับบริการจาก Pharmacy/);
+assert.match(productionHtml, /ไม่เห็นข้อมูลผู้รับบริการ/);
 assert.match(productionHtml, /id="complete-dialog"/);
-assert.match(productionHtml, /id="release-dialog"/);
-assert.match(productionHtml, /id="reject-dialog"/);
+assert.doesNotMatch(productionHtml, /id="release-dialog"|id="reject-dialog"/, 'Production must not own Quality decisions');
+assert.doesNotMatch(production, /rpc\('(?:release_production_order|reject_production_order|quality_release_production_order|quality_reject_production_order)'/, 'Production browser cannot release or reject its own batch');
+assert.match(qualityHtml, /id="release-dialog"/);
+assert.match(qualityHtml, /id="reject-dialog"/);
+assert.match(quality, /rpc\('quality_release_production_order'/);
+assert.match(quality, /rpc\('quality_reject_production_order'/);
 assert.doesNotMatch(production, /prompt\(/, 'critical Production transitions must use validated forms');
-assert.match(uiReview, /Pharmacy → Production แบบแยกแผนก/);
+assert.match(uiReview, /Pharmacy → Production → Quality แบบแยกแผนก/);
 assert.match(uiReview, /ไม่แสดงชื่อ HN หรือ Diagnosis/);
 assert.doesNotMatch(uiReview, /supabase-js|auth-config\.js|chananya-runtime\.js/, 'read-only review must have no database runtime');
 

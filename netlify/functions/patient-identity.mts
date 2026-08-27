@@ -31,6 +31,7 @@ function configuration() {
     liffId: env('LINE_LIFF_ID'),
     lineChannelId: env('LINE_LOGIN_CHANNEL_ID'),
     identitySecret: env('PATIENT_IDENTITY_HMAC_SECRET'),
+    qrIssuer: env('PATIENT_QR_ISSUER') || 'CHANANYA',
     supabaseUrl: env('SUPABASE_URL'),
     serviceRoleKey: env('SUPABASE_SERVICE_ROLE_KEY')
   };
@@ -106,7 +107,7 @@ async function handlePatientAction(request, context, config) {
     let credential;
     let issued;
     for (let attempt = 0; attempt < 5 && !issued; attempt += 1) {
-      credential = createOneTimeCredential();
+      credential = createOneTimeCredential(config.qrIssuer);
       const expiresAt = new Date(Date.now() + 90_000).toISOString();
       try {
         issued = firstRow(await rpc(config, 'issue_patient_qr_for_subject', {

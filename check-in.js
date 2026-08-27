@@ -11,6 +11,8 @@
   let scanFrame = null;
   let lastDetectionAt = 0;
   let selected = null;
+  const qrIssuer = String(window.CLINICAL_OS_CONFIG?.identity?.qrIssuer || 'CHANANYA').trim().toUpperCase();
+  const qrPrefix = `${qrIssuer}:PT1:`;
 
   function toast(message) {
     const element = $('#toast');
@@ -75,13 +77,13 @@
   function credentialArguments(value) {
     const trimmed = String(value || '').trim();
     const digits = trimmed.replace(/\D/g, '');
-    if (digits.length === 6 && !trimmed.startsWith('CHANANYA:PT1:')) {
+    if (digits.length === 6 && !trimmed.startsWith(qrPrefix)) {
       return { p_token: null, p_display_code: digits };
     }
-    if (/^CHANANYA:PT1:[A-Za-z0-9_-]{43}$/.test(trimmed)) {
-      return { p_token: trimmed, p_display_code: null };
+    if (trimmed.startsWith(qrPrefix) && /^[A-Za-z0-9_-]{43}$/.test(trimmed.slice(qrPrefix.length))) {
+      return { p_token: trimmed.slice(qrPrefix.length), p_display_code: null };
     }
-    throw new Error('กรุณาสแกน QR ของ Chananya หรือกรอกรหัส 6 หลัก');
+    throw new Error('กรุณาสแกน QR ของคลินิกนี้ หรือกรอกรหัส 6 หลัก');
   }
 
   async function resolveCredential(value) {
@@ -172,7 +174,7 @@
       lastDetectionAt = timestamp;
       try {
         const codes = await detector.detect($('#scanner-video'));
-        const value = codes.find(code => String(code.rawValue || '').startsWith('CHANANYA:PT1:'))?.rawValue;
+        const value = codes.find(code => String(code.rawValue || '').startsWith(qrPrefix))?.rawValue;
         if (value) {
           await resolveCredential(value);
           return;

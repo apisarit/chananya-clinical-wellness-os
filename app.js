@@ -29,7 +29,7 @@
 
   const viewPermissions = {
     super_admin: ['all'], admin: ['audit'], practitioner: ['patients'], doctor: ['patients'],
-    reception: ['patients'], billing: ['billing'], pharmacy: [], production: [], inventory: [], viewer: []
+    reception: ['patients'], billing: ['billing'], pharmacy: [], production: [], inventory: [], quality: [], viewer: []
   };
 
   const canView = permission => (viewPermissions[role] || []).includes('all') || (viewPermissions[role] || []).includes(permission);
@@ -119,7 +119,7 @@
     const titles = {
       super_admin: 'ภาพรวมทั้ง Clinical OS', admin: 'ภาพรวมและงานควบคุม', practitioner: 'งานคลินิกที่รอดำเนินการ',
       doctor: 'งานคลินิกที่รอดำเนินการ', reception: 'ผู้รับบริการและคิวนัดหมาย', pharmacy: 'คิวห้องยา',
-      production: 'งานผลิตและวัตถุดิบ', inventory: 'คลังและวัตถุดิบ', billing: 'งานการเงินที่รอดำเนินการ', viewer: 'ภาพรวมแบบอ่านอย่างเดียว'
+      production: 'งานผลิตและวัตถุดิบ', inventory: 'คลังและวัตถุดิบ', quality: 'งานตรวจรับรองคุณภาพ', billing: 'งานการเงินที่รอดำเนินการ', viewer: 'ภาพรวมแบบอ่านอย่างเดียว'
     };
     $('#workspace-title').textContent = titles[role] || titles.viewer;
     show(role === 'billing' ? 'billing' : 'dashboard');
@@ -174,7 +174,7 @@
 
   function renderDashboard() {
     const shell = window.ChananyaShell?.mount({ profile, session, active: 'operations' });
-    const routeNames = { appointments: 'จัดการนัดหมาย', clinical: 'เปิดเวชระเบียน', pharmacy: 'ไปห้องยา', production: 'ดูงานผลิต', admin: 'ศูนย์ควบคุม' };
+    const routeNames = { appointments: 'จัดการนัดหมาย', clinical: 'เปิดเวชระเบียน', pharmacy: 'ไปห้องยา', production: 'ดูงานผลิต', quality: 'ตรวจและปล่อยผ่าน', admin: 'ศูนย์ควบคุม' };
     $('#quick-actions').innerHTML = (shell?.visibleRoutes || []).filter(route => route.key !== 'operations').map(route => `<a class="item" href="${route.href}"><div><b>${esc(routeNames[route.key] || route.label)}</b><small>${esc(route.note)}</small></div><span class="badge">เปิด →</span></a>`).join('') || '<p class="muted">ไม่มี workstation เพิ่มเติมสำหรับสิทธิ์นี้</p>';
 
     const work = [];

@@ -30,9 +30,11 @@ Chananya Clinical OS exists to give Thai traditional medicine practitioners and 
 
 ## Commercial boundary
 
+- The product is white-label by deployment: customer name, logo, color mask, OAuth origin, clinic code and browser-safe database endpoint are configuration, not forks of clinical code.
+- The default commercial unit is one customer Netlify site + one isolated Supabase project + one private encrypted backup destination. See [WHITE_LABEL_DEPLOYMENT.md](./WHITE_LABEL_DEPLOYMENT.md).
 - Until every operational master is tenant-scoped and verified, each licensed clinic uses an isolated database/project.
 - Patient LINE surfaces use a dedicated patient-only origin and never share browser storage with staff workstations.
-- Production data is never used in Deploy Preview. Preview uses a separate Supabase project, LINE Login/LIFF channel, test accounts, and synthetic records.
+- Production data is never used in Deploy Preview. Preview is database-locked unless an explicit separate Supabase project, LINE Login/LIFF channel, test accounts, and synthetic records are configured.
 - A release stays Draft until authenticated role E2E, mobile E2E, migration rehearsal, restore rehearsal, and observability gates pass.
 
 ## Current identity decision

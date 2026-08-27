@@ -99,7 +99,8 @@ assert.match(backend, /Cache-Control': 'no-store/, 'identity responses must neve
 assert.match(backend, /Date\.now\(\) \+ 90_000/, 'one-time QR credentials must expire after 90 seconds');
 assert.match(backend, /attempt < 5[\s\S]*?DISPLAY_CODE_COLLISION/, 'QR issuance must retry a six-digit collision safely');
 assert.match(helpers, /randomBytes\(32\)/, 'QR credentials must carry 256 bits of randomness');
-assert.match(helpers, /payload: `CHANANYA:PT1:\$\{token\}`/, 'QR payload must contain only the opaque credential');
+assert.match(helpers, /payload: `\$\{normalizedIssuer\}:PT1:\$\{token\}`/, 'QR payload must contain only the configured issuer and opaque credential');
+assert.match(backend, /PATIENT_QR_ISSUER/, 'patient backend must receive the per-deployment QR issuer from server config');
 assert.doesNotMatch(helpers.match(/payload:[^\n]+/)?.[0] || '', /hn|name|patientId/i, 'QR payload must not contain PHI');
 assert.match(helpers, /https:\/\/api\.line\.me\/oauth2\/v2\.1\/verify/, 'LINE ID tokens must use the official verification endpoint');
 

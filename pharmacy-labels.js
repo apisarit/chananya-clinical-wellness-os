@@ -12,6 +12,10 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[m]));
   const num = v => Number(v || 0);
+  const clinicBrand = () => {
+    const brand = window.CLINICAL_OS_CONFIG?.brand || {};
+    return brand.nameEn || brand.nameTh || brand.shortName || 'Clinical & Wellness OS';
+  };
 
   async function waitRuntime() {
     for (let i = 0; i < 50; i++) {
@@ -29,7 +33,7 @@
   }
 
   function labelHtml({ patientName, hn, medicine, quantity, unit, dose, frequency, duration, instructions, lot, expiry, reference, pharmacist }) {
-    return `<section class="label"><div class="clinic">CHANANYA THAI TRADITIONAL MEDICINE & WELLNESS CLINIC</div><div class="patient">${esc(patientName || 'ผู้รับบริการทั่วไป')} ${hn ? `• HN ${esc(hn)}` : ''}</div><div class="drug">${esc(medicine || 'ยา/สมุนไพร')}</div><div class="directions">จำนวน ${esc(quantity ?? '-')} ${esc(unit || '')}<br>${dose ? `ครั้งละ ${esc(dose)}` : ''} ${frequency ? `• ${esc(frequency)}` : ''} ${duration ? `• ${esc(duration)}` : ''}</div>${instructions ? `<div class="warning">${esc(instructions)}</div>` : ''}<div class="meta">Lot ${esc(lot || '-')} • EXP ${esc(expiry || '-')}<br>Ref ${esc(reference || '-')} • ผู้จ่าย ${esc(pharmacist || '-')}<br>วันที่ ${new Date().toLocaleDateString('th-TH')}</div></section>`;
+    return `<section class="label"><div class="clinic">${esc(clinicBrand())}</div><div class="patient">${esc(patientName || 'ผู้รับบริการทั่วไป')} ${hn ? `• HN ${esc(hn)}` : ''}</div><div class="drug">${esc(medicine || 'ยา/สมุนไพร')}</div><div class="directions">จำนวน ${esc(quantity ?? '-')} ${esc(unit || '')}<br>${dose ? `ครั้งละ ${esc(dose)}` : ''} ${frequency ? `• ${esc(frequency)}` : ''} ${duration ? `• ${esc(duration)}` : ''}</div>${instructions ? `<div class="warning">${esc(instructions)}</div>` : ''}<div class="meta">Lot ${esc(lot || '-')} • EXP ${esc(expiry || '-')}<br>Ref ${esc(reference || '-')} • ผู้จ่าย ${esc(pharmacist || '-')}<br>วันที่ ${new Date().toLocaleDateString('th-TH')}</div></section>`;
   }
 
   async function printDoctorLabels(orderId) {

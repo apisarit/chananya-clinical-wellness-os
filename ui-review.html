@@ -7,6 +7,8 @@
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Clinical OS — Read-only UI Review</title>
   <link rel="stylesheet" href="app.css?v=clinical-os-production-atomic1">
+  <script src="brand-config.js?v=white-label1"></script>
+  <script src="tenant-brand.js?v=white-label1"></script>
   <script defer src="searchable-select.js?v=clinical-os-production-atomic1"></script>
 </head>
 <body data-page="clinical">
@@ -34,12 +36,13 @@
       <main>
         <div class="notice warning space-bottom-md"><b>Read-only UI review</b> — หน้านี้ใช้ข้อมูลสมมติ ไม่เชื่อม Supabase และไม่สามารถบันทึกข้อมูลได้ เมนูทั้งหมดแสดงเพราะเป็นตัวอย่าง <b>super_admin</b>; บัญชีทั่วไปเห็นเฉพาะแผนกของตน</div>
         <section class="card">
-          <div class="section-heading"><span class="section-number">Tx</span><div><h2>Pharmacy → Production แบบแยกแผนก</h2><p>Pharmacy เห็นผู้รับบริการและใบสั่งยา ส่วน Production ได้รับเฉพาะข้อมูลที่จำเป็นต่อการผลิต</p></div></div>
+          <div class="section-heading"><span class="section-number">Tx</span><div><h2>Pharmacy → Production → Quality แบบแยกแผนก</h2><p>Pharmacy เห็นผู้รับบริการและใบสั่งยา, Production ได้รับเฉพาะข้อมูลผลิต และ Quality เป็นผู้ปล่อยผ่านอิสระ</p></div></div>
           <div class="grid2">
-            <div class="item column"><div class="row"><div><span class="page-kicker">Pharmacy only</span><b>Q-CHANANYA-000042 • HN-DEMO-001 ผู้รับบริการตัวอย่าง</b><small>RX-DEMO-001 • ยาสมุนไพรตัวอย่าง 12 แคปซูล</small></div><span class="badge">out_of_stock</span></div><label>ส่งคำขอผลิต<select><option>ยาสมุนไพรตัวอย่าง • 12 แคปซูล</option></select></label><div class="right"><button class="btn primary" type="button" disabled>ส่ง Request + Audit</button></div></div>
-            <div class="item column"><div class="row"><div><span class="page-kicker">Production only</span><b>PR-CHANANYA-00000042 • ยาสมุนไพรตัวอย่าง</b><small>12 แคปซูล • urgent • ไม่แสดงชื่อ HN หรือ Diagnosis</small></div><span class="badge">requested</span></div><label>Approved formula<select><option>FORM-TTM-001 Rev.00</option></select></label><div class="right"><button class="btn primary" type="button" disabled>เปิด Production Order</button></div></div>
+            <div class="item column"><div class="row"><div><span class="page-kicker">Pharmacy only</span><b data-brand-demo-queue>Q-CLINIC-000042 • HN-DEMO-001 ผู้รับบริการตัวอย่าง</b><small>RX-DEMO-001 • ยาสมุนไพรตัวอย่าง 12 แคปซูล</small></div><span class="badge">out_of_stock</span></div><label>ส่งคำขอผลิต<select><option>ยาสมุนไพรตัวอย่าง • 12 แคปซูล</option></select></label><div class="right"><button class="btn primary" type="button" disabled>ส่ง Request + Audit</button></div></div>
+            <div class="item column"><div class="row"><div><span class="page-kicker">Production only</span><b data-brand-demo-request>PR-CLINIC-00000042 • ยาสมุนไพรตัวอย่าง</b><small>12 แคปซูล • urgent • ไม่แสดงชื่อ HN หรือ Diagnosis</small></div><span class="badge">requested</span></div><label>Approved formula<select><option>FORM-TTM-001 Rev.00</option></select></label><div class="right"><button class="btn primary" type="button" disabled>เปิด Production Order</button></div></div>
+            <div class="item column"><div class="row"><div><span class="page-kicker">Quality only</span><b>Batch LOT-DEMO-00042 • Actual 12 แคปซูล</b><small>เห็น Formula และหลักฐานผลิต • ไม่เห็น HN หรือใบสั่งยา</small></div><span class="badge">awaiting_qc</span></div><div class="right"><button class="btn primary" type="button" disabled>QC Pass &amp; Release</button></div></div>
           </div>
-          <div class="foundation-chain"><span>Pharmacy Request</span><i>→</i><span>Batch + FEFO</span><i>→</i><span>QC</span><i>→</i><span>Finished Goods Lot</span><i>→</i><span>Pharmacy Queue</span></div>
+          <div class="foundation-chain"><span>Pharmacy Request</span><i>→</i><span>Batch + FEFO</span><i>→</i><span>Independent Quality</span><i>→</i><span>Finished Goods Lot</span><i>→</i><span>Pharmacy Queue</span></div>
           <p class="notice space-top-sm">ทุกลูกศรเป็น PostgreSQL transaction ที่ tenant-bound, idempotent และมี Audit; ถ้าวัตถุดิบไม่พอจะ rollback ทั้งชุด</p>
         </section>
         <section class="card foundation-root-card">

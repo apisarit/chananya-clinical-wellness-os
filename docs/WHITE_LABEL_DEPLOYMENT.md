@@ -1,0 +1,54 @@
+# White-label customer deployment
+
+Status: production foundation. Each licensed customer receives an isolated deployment and an isolated Supabase project. Branding is configuration; clinical, pharmacy and production code is shared and versioned.
+
+This is a white-label product boundary, not a collection of customer forks. A customer launch changes configuration and approved brand assets; it does not copy or hand-edit operational source files.
+
+## What changes per customer
+
+One validated tenant config controls:
+
+- company/clinic names in Thai and English;
+- short brand, mark or logo, browser title, printed pharmacy identity and color mask;
+- expected clinic UUID and code used for HN, prescription, invoice, pharmacy sale and production numbering;
+- browser-safe Supabase URL and publishable key;
+- OAuth redirect origin and QR issuer.
+
+Use `config/tenant.example.json` as the customer template. Never put `SUPABASE_SERVICE_ROLE_KEY`, Google service-account JSON, backup encryption keys, LINE channel secrets or any other server secret in this file. `scripts/generate-tenant-config.mjs` rejects obvious secret/service-role keys.
+
+## Isolation model
+
+The commercial default is one Netlify site + one Supabase project + one private Google Drive backup tree per customer. A customer database may contain branches/clinics under the same legal customer only after every operational table has passed tenant-isolation tests. It must never be used as a shortcut to host unrelated customers in the same trust boundary.
+
+The browser config contains `expectedClinicId` and `expectedClinicCode`. After login, the runtime compares both with `current_access_context()`. A site accidentally pointed to another customer's database fails closed: every operational capability remains disabled.
+
+## Customer provisioning
+
+1. Create an isolated Supabase project and apply all migrations in order.
+2. Copy `config/tenant.example.json` outside the repository and fill the customer's public branding/database values.
+3. Generate and review the one-time clinic bootstrap SQL:
+
+   ```sh
+   npm run tenant:bootstrap-sql -- /absolute/path/customer.json > /secure/path/customer-bootstrap.sql
+   ```
+
+4. Run that SQL once in the customer's isolated Supabase project. It changes the clinic code/name used by server-authoritative numbering.
+5. In the customer's Netlify site, set `CLINICAL_OS_TENANT_CONFIG_JSON` to the complete JSON or set `CLINICAL_OS_TENANT_CONFIG_PATH` to a committed non-secret config path.
+6. Configure the customer's OAuth allowlist and server-only function variables. Set `PATIENT_QR_ISSUER` to the same value as `identity.qrIssuer`.
+7. Share only the customer's four backup folders with that customer's Google service account.
+8. Run staging migrations, authenticated role E2E, encrypted export and isolated restore drill before promoting the site.
+
+For a routine new customer, the only customer-specific inputs are the validated JSON configuration, approved logo asset, isolated Supabase project, Netlify site/environment, OAuth/LINE credentials and private Drive folder IDs. No clinical workflow JavaScript, SQL function or role policy should be customized per customer.
+
+`npm run build` validates the config and generates `tenant-config.js` for staff/auth pages plus `brand-config.js` for public/read-only pages. The public brand file contains no database endpoint or key. The staff tenant file contains only browser-safe public configuration.
+
+Netlify Deploy Preview and branch deploy contexts are database-locked by default: the build removes the Supabase URL/key from the generated browser config, so only read-only synthetic review surfaces work. Authenticated staging E2E requires a dedicated staging config, `CLINICAL_OS_ALLOW_PREVIEW_DATABASE=true` and the explicit guard `CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY`; using the default production config is rejected by the build.
+
+## Release controls
+
+- Production and Deploy Preview use different Supabase projects and test identities.
+- A config/database tenant mismatch is a release failure, not a warning.
+- Customer branding changes must not modify clinical workflow files or database migrations.
+- Every customer release records source commit, migration set, config checksum, database project, Netlify site, backup destination key ID and restore evidence.
+- The release manifest also records the legal customer name, clinic UUID/code, QR issuer and the approved brand-asset checksum so the deployed mask is auditable.
+- Upgrades are promoted from the shared product branch into each customer deployment with the same migration and rollback procedure.

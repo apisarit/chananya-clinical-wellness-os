@@ -25,13 +25,15 @@ export function normalizePatientId(value) {
   return normalized;
 }
 
-export function createOneTimeCredential() {
+export function createOneTimeCredential(issuer = 'CHANANYA') {
+  const normalizedIssuer = String(issuer || '').trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_-]{1,23}$/.test(normalizedIssuer)) throw new Error('PATIENT_QR_ISSUER_INVALID');
   const token = randomBytes(32).toString('base64url');
   const displayCode = String(randomInt(0, 1_000_000)).padStart(6, '0');
   return Object.freeze({
     token,
     displayCode,
-    payload: `CHANANYA:PT1:${token}`,
+    payload: `${normalizedIssuer}:PT1:${token}`,
     tokenHash: sha256(token),
     displayCodeHash: sha256(displayCode)
   });

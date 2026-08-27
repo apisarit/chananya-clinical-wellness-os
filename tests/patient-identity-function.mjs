@@ -32,6 +32,9 @@ assert.equal(credential.payload, `CHANANYA:PT1:${credential.token}`);
 assert.equal(credential.tokenHash, sha256(credential.token));
 assert.equal(credential.displayCodeHash, sha256(credential.displayCode));
 assert.equal(Object.isFrozen(credential), true);
+const customerCredential = createOneTimeCredential('CUSTOMER');
+assert.equal(customerCredential.payload, `CUSTOMER:PT1:${customerCredential.token}`);
+assert.throws(() => createOneTimeCredential('bad issuer space'), /PATIENT_QR_ISSUER_INVALID/);
 
 const now = 1_800_000_000;
 const linePayload = {

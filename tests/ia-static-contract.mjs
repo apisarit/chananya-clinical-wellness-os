@@ -17,6 +17,7 @@ const contracts = [
   },
   { page: 'pharmacy.html', scripts: ['app-shell.js', 'pharmacy.js', 'pharmacy-sale-selector-fix.js', 'pharmacy-labels.js', 'pharmacy-v33-tools.js'] },
   { page: 'production.html', scripts: ['app-shell.js', 'production.js'] },
+  { page: 'quality.html', scripts: ['app-shell.js', 'quality.js'] },
   { page: 'admin.html', scripts: ['app-shell.js', 'admin.js', 'admin-clinical-audit.js'] }
 ];
 
@@ -55,7 +56,9 @@ const patientCardIds = [...patientCardHtml.matchAll(/\bid="([^"]+)"/g)].map(matc
 assert.equal(new Set(patientCardIds).size, patientCardIds.length, 'patient card should not contain duplicate IDs');
 
 const identityReview = read('identity-review.html');
-assert.doesNotMatch(identityReview, /<script/i, 'identity review must remain script-free');
+assert.doesNotMatch(identityReview, /<script(?![^>]*\bsrc=)[^>]*>/i, 'identity review must not contain inline scripts');
+const identityReviewScripts = [...identityReview.matchAll(/<script[^>]+src="([^"]+)"/gi)].map(match => match[1].split('?')[0]);
+assert.deepEqual(identityReviewScripts, ['brand-config.js', 'tenant-brand.js'], 'identity review may load only credential-free white-label presentation scripts');
 assert.doesNotMatch(identityReview, /(?:src|href)=["'][^"']*(?:supabase|auth-config)/i, 'identity review must not connect to production services');
 assert.match(identityReview, /Read-only UI review/, 'identity review must identify itself as non-operational');
 const identityReviewIds = [...identityReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
