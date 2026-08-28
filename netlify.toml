@@ -22,6 +22,13 @@
     X-Content-Type-Options = "nosniff"
 
 [[headers]]
+  for = "/deploy-manifest.json"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+    X-Content-Type-Options = "nosniff"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
   for = "/*"
   [headers.values]
     Referrer-Policy = "strict-origin-when-cross-origin"

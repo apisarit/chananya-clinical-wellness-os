@@ -46,6 +46,8 @@ Netlify Deploy Preview and branch deploy contexts are database-locked by default
 
 A dedicated staging Netlify site must set `CLINICAL_OS_STAGING_DEPLOYMENT=true`, even though Netlify labels that site's primary deploy as a `production` context. It remains database-locked until `CLINICAL_OS_ALLOW_STAGING_DATABASE=true`, `CLINICAL_OS_STAGING_DATABASE_ACK=STAGING_ONLY`, an explicit staging config and a Production denylist are all present. The build rejects a matching Production database, site origin, clinic UUID, clinic code or QR issuer.
 
+Manual staging uploads must carry `CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true` plus the exact `CLINICAL_OS_SOURCE_COMMIT`. The generated public `deploy-manifest.json` records commit, tenant identity and whether the browser database is locked. Run `npm run staging:smoke:locked` against the deployed HTTPS origin and retain its JSON result with the release evidence.
+
 The protected 11-role and ten-journey procedure is documented in `AUTHENTICATED_STAGING_RUNBOOK.md`. Its command-line guard independently rejects the Production database/site, matching Production clinic code or QR issuer, and any config without an explicit staging marker. The release gate remains pending until that workflow is executed and reviewed against the exact release commit.
 
 ## Release controls

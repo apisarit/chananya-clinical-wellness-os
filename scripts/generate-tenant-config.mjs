@@ -6,6 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hex = /^#[0-9a-f]{6}$/i;
 const clinicCode = /^[A-Z][A-Z0-9_-]{1,23}$/;
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
+const sourceRevision = /^[0-9a-f]{7,40}$/i;
 // Existing installations use a deterministic compatibility UUID whose version
 // nibble is zero, so validate the UUID shape without imposing RFC version bits.
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -122,6 +123,53 @@ export function renderBrandConfig(config) {
     `window.CLINICAL_OS_CONFIG = Object.freeze(${payload});\n`;
 }
 
+export function buildDeployManifest(config, env = process.env, now = new Date()) {
+  const commit = String(
+    env.CLINICAL_OS_SOURCE_COMMIT || env.COMMIT_REF || env.GITHUB_SHA || ''
+  ).trim().toLowerCase();
+  const tree = String(env.CLINICAL_OS_SOURCE_TREE || '').trim().toLowerCase();
+  if (commit && !sourceRevision.test(commit)) {
+    throw new Error('Source commit must be a 7-40 character hexadecimal Git revision');
+  }
+  if (tree && !sourceRevision.test(tree)) {
+    throw new Error('Source tree must be a 7-40 character hexadecimal Git revision');
+  }
+  if (env.CLINICAL_OS_REQUIRE_SOURCE_COMMIT === 'true' && !commit) {
+    throw new Error('This deployment requires an explicit source commit');
+  }
+  const timestamp = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(timestamp.getTime())) throw new Error('Deploy manifest timestamp is invalid');
+  const databaseLocked = config.safety?.previewLocked === true &&
+    config.database?.url === '' &&
+    config.database?.publishableKey === '';
+  return {
+    schemaVersion: 1,
+    deploymentId: config.deploymentId,
+    tenant: {
+      expectedClinicId: config.tenant.expectedClinicId,
+      expectedClinicCode: config.tenant.expectedClinicCode
+    },
+    identity: { qrIssuer: config.identity.qrIssuer },
+    source: {
+      commit: commit || null,
+      tree: tree || null,
+      verified: Boolean(commit)
+    },
+    build: {
+      context: String(env.CONTEXT || 'local').trim() || 'local',
+      timestamp: timestamp.toISOString()
+    },
+    safety: {
+      previewLocked: config.safety?.previewLocked === true,
+      databaseLocked
+    }
+  };
+}
+
+export function renderDeployManifest(manifest) {
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
 export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
   let config;
   if (env.CLINICAL_OS_TENANT_CONFIG_JSON) {
@@ -190,10 +238,14 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
 
 function main() {
   const config = loadTenantConfig();
+  const manifest = buildDeployManifest(config);
   const output = path.join(root, 'tenant-config.js');
   fs.writeFileSync(output, renderTenantConfig(config), { encoding: 'utf8', mode: 0o644 });
   fs.writeFileSync(path.join(root, 'brand-config.js'), renderBrandConfig(config), { encoding: 'utf8', mode: 0o644 });
-  process.stdout.write(`Tenant browser config generated for ${config.deploymentId} (${config.tenant.expectedClinicCode})\n`);
+  fs.writeFileSync(path.join(root, 'deploy-manifest.json'), renderDeployManifest(manifest), { encoding: 'utf8', mode: 0o644 });
+  process.stdout.write(
+    `Tenant browser config generated for ${config.deploymentId} (${config.tenant.expectedClinicCode}); source ${manifest.source.commit || 'unversioned'}\n`
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

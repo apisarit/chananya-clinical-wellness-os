@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadTenantConfig, renderBrandConfig, renderTenantConfig, validateTenantConfig } from '../scripts/generate-tenant-config.mjs';
+import {
+  buildDeployManifest,
+  loadTenantConfig,
+  renderBrandConfig,
+  renderDeployManifest,
+  renderTenantConfig,
+  validateTenantConfig
+} from '../scripts/generate-tenant-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
@@ -108,6 +115,24 @@ const enabledDedicatedStaging = loadTenantConfig({
 });
 assert.equal(enabledDedicatedStaging.safety.previewLocked, false);
 assert.equal(enabledDedicatedStaging.auth.redirectOrigin, 'https://customer-clinical-staging.example.net');
+const deployManifest = buildDeployManifest(
+  lockedDedicatedStaging,
+  {
+    CONTEXT: 'production',
+    CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+    CLINICAL_OS_SOURCE_TREE: 'b'.repeat(40),
+    CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true'
+  },
+  new Date('2026-08-28T00:00:00.000Z')
+);
+assert.equal(deployManifest.source.verified, true);
+assert.equal(deployManifest.source.commit, 'a'.repeat(40));
+assert.equal(deployManifest.safety.databaseLocked, true);
+assert.match(renderDeployManifest(deployManifest), /"databaseLocked": true/);
+assert.throws(
+  () => buildDeployManifest(lockedDedicatedStaging, { CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true' }),
+  /requires an explicit source commit/
+);
 assert.throws(
   () => loadTenantConfig({
     env: {
@@ -185,6 +210,7 @@ const netlify = read('netlify.toml');
 assert.match(netlify, /command = "npm run build"/);
 assert.match(netlify, /for = "\/tenant-config\.js"[\s\S]*Cache-Control = "no-store/);
 assert.match(netlify, /for = "\/brand-config\.js"[\s\S]*Cache-Control = "no-store/);
+assert.match(netlify, /for = "\/deploy-manifest\.json"[\s\S]*Cache-Control = "no-store/);
 assert.doesNotMatch(netlify, /SERVICE_ROLE|ENCRYPTION_KEY|SERVICE_ACCOUNT/);
 
 const docs = read('docs/WHITE_LABEL_DEPLOYMENT.md');

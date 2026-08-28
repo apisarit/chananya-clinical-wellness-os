@@ -43,6 +43,16 @@ The service-role key and password must not be configured in Netlify browser vari
 
 For a dedicated staging Netlify site, set `CLINICAL_OS_STAGING_DEPLOYMENT=true`. Its primary deploy is still treated as non-production by the application guard and remains database-locked until the staging database acknowledgement and Production config denylist are supplied.
 
+Every manual staging build must also set `CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true` and `CLINICAL_OS_SOURCE_COMMIT=<exact Git SHA>`. The build publishes a credential-free `deploy-manifest.json`; a missing or malformed required revision fails the build. After deployment, verify the public locked boundary before adding any database credential:
+
+```bash
+STAGING_SITE_URL=https://chananya-clinical-staging.netlify.app \
+EXPECTED_STAGING_SOURCE_COMMIT=<exact Git SHA> \
+npm run staging:smoke:locked
+```
+
+The locked smoke gate checks source provenance, tenant/database lock, security headers and all 11 public route shells. It is useful deployment evidence but does **not** satisfy the authenticated staging gate.
+
 ## What the workflow proves
 
 The manual workflow `.github/workflows/authenticated-staging-e2e.yml` performs:
