@@ -132,18 +132,26 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
     config = validateTenantConfig(JSON.parse(fs.readFileSync(target, 'utf8')));
   }
   const preview = env.CONTEXT === 'deploy-preview' || env.CONTEXT === 'branch-deploy';
-  if (preview && env.CLINICAL_OS_ALLOW_PREVIEW_DATABASE !== 'true') {
+  const dedicatedStaging = env.CLINICAL_OS_STAGING_DEPLOYMENT === 'true';
+  const guardedNonProduction = preview || dedicatedStaging;
+  const databaseAllowed = env.CLINICAL_OS_ALLOW_STAGING_DATABASE === 'true' ||
+    env.CLINICAL_OS_ALLOW_PREVIEW_DATABASE === 'true';
+  const databaseAck = env.CLINICAL_OS_STAGING_DATABASE_ACK || env.CLINICAL_OS_PREVIEW_DATABASE_ACK;
+  const nonProductionOrigin = dedicatedStaging
+    ? String(env.URL || config.auth.redirectOrigin).replace(/\/$/, '')
+    : String(env.DEPLOY_PRIME_URL || config.auth.redirectOrigin).replace(/\/$/, '');
+  if (guardedNonProduction && !databaseAllowed) {
     return {
       ...config,
       database: { provider: 'supabase', url: '', publishableKey: '' },
-      auth: { redirectOrigin: String(env.DEPLOY_PRIME_URL || config.auth.redirectOrigin).replace(/\/$/, '') },
+      auth: { redirectOrigin: nonProductionOrigin },
       safety: { previewLocked: true }
     };
   }
-  if (preview) {
+  if (guardedNonProduction) {
     const explicitStagingConfig = Boolean(env.CLINICAL_OS_TENANT_CONFIG_JSON || env.CLINICAL_OS_TENANT_CONFIG_PATH);
-    if (!explicitStagingConfig || env.CLINICAL_OS_PREVIEW_DATABASE_ACK !== 'STAGING_ONLY') {
-      throw new Error('Preview database access requires an explicit staging config and CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY');
+    if (!explicitStagingConfig || databaseAck !== 'STAGING_ONLY') {
+      throw new Error('Non-production database access requires an explicit staging config and STAGING_ONLY acknowledgement');
     }
     if (!env.CLINICAL_OS_PRODUCTION_CONFIG_JSON && !env.CLINICAL_OS_PRODUCTION_CONFIG_PATH) {
       throw new Error('Preview database access requires an explicit Production config denylist');
@@ -161,16 +169,19 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
     if (config.tenant.expectedClinicCode === production.tenant.expectedClinicCode) {
       throw new Error('Preview staging clinic code must differ from Production');
     }
+    if (config.tenant.expectedClinicId === production.tenant.expectedClinicId) {
+      throw new Error('Preview staging clinic UUID must differ from Production');
+    }
     if (config.identity.qrIssuer === production.identity.qrIssuer) {
       throw new Error('Preview staging QR issuer must differ from Production');
     }
-    const previewOrigin = env.DEPLOY_PRIME_URL ? validateOrigin(env.DEPLOY_PRIME_URL, 'DEPLOY_PRIME_URL') : config.auth.redirectOrigin;
-    if (previewOrigin === production.auth.redirectOrigin) {
+    const stagingOrigin = validateOrigin(nonProductionOrigin, dedicatedStaging ? 'URL' : 'DEPLOY_PRIME_URL');
+    if (stagingOrigin === production.auth.redirectOrigin) {
       throw new Error('Preview database access cannot use the Production site origin');
     }
     return {
       ...config,
-      auth: { redirectOrigin: previewOrigin },
+      auth: { redirectOrigin: stagingOrigin },
       safety: { previewLocked: false }
     };
   }

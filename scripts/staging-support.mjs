@@ -142,6 +142,9 @@ export function loadStagingTarget({ env = process.env, cwd = root } = {}) {
   if (config.tenant.expectedClinicCode === production.tenant.expectedClinicCode) {
     throw new Error('Staging clinic code must differ from the Production clinic code');
   }
+  if (config.tenant.expectedClinicId === production.tenant.expectedClinicId) {
+    throw new Error('Staging clinic UUID must differ from the Production clinic UUID');
+  }
   if (config.identity.qrIssuer === production.identity.qrIssuer) {
     throw new Error('Staging QR issuer must differ from the Production issuer');
   }

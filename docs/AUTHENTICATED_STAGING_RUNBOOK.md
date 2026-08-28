@@ -41,6 +41,8 @@ Create a GitHub environment named `staging` and require a reviewer. Configure:
 
 The service-role key and password must not be configured in Netlify browser variables or committed files. The staging Netlify deployment separately needs its browser-safe tenant config and the preview database guards described in `WHITE_LABEL_DEPLOYMENT.md`.
 
+For a dedicated staging Netlify site, set `CLINICAL_OS_STAGING_DEPLOYMENT=true`. Its primary deploy is still treated as non-production by the application guard and remains database-locked until the staging database acknowledgement and Production config denylist are supplied.
+
 ## What the workflow proves
 
 The manual workflow `.github/workflows/authenticated-staging-e2e.yml` performs:

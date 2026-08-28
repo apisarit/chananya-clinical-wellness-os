@@ -26,8 +26,22 @@ const target = loadStagingTarget({ env: baseEnv, cwd: root });
 assert.equal(target.config.deploymentId, 'chananya-clinical-staging');
 assert.notEqual(target.config.database.url, production.database.url);
 assert.notEqual(target.config.tenant.expectedClinicCode, production.tenant.expectedClinicCode);
+assert.notEqual(target.config.tenant.expectedClinicId, production.tenant.expectedClinicId);
 assert.notEqual(target.config.identity.qrIssuer, production.identity.qrIssuer);
 
+assert.throws(
+  () => loadStagingTarget({
+    env: {
+      ...baseEnv,
+      CLINICAL_OS_STAGING_CONFIG_JSON: JSON.stringify({
+        ...staging,
+        tenant: { ...staging.tenant, expectedClinicId: production.tenant.expectedClinicId }
+      })
+    },
+    cwd: root
+  }),
+  /clinic UUID/
+);
 assert.throws(
   () => loadStagingTarget({ env: { ...baseEnv, CLINICAL_OS_STAGING_ACK: '' }, cwd: root }),
   /STAGING_ONLY/

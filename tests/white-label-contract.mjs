@@ -54,7 +54,11 @@ assert.throws(
 const stagingExample = {
   ...example,
   deploymentId: 'customer-clinic-staging',
-  tenant: { ...example.tenant, expectedClinicCode: 'CUSTOMER-STG' },
+  tenant: {
+    ...example.tenant,
+    expectedClinicId: '10000000-0000-0000-0000-000000000002',
+    expectedClinicCode: 'CUSTOMER-STG'
+  },
   database: { ...example.database, url: 'https://customer-staging-project.supabase.co' },
   auth: { redirectOrigin: 'https://deploy-preview-7.example.net' },
   identity: { qrIssuer: 'CUSTOMER-STG' }
@@ -73,6 +77,56 @@ const stagingPreview = loadTenantConfig({
 assert.equal(stagingPreview.safety.previewLocked, false);
 assert.match(stagingPreview.database.url, /^https:/);
 assert.equal(stagingPreview.auth.redirectOrigin, 'https://deploy-preview-7.example.net');
+const lockedDedicatedStaging = loadTenantConfig({
+  env: {
+    CONTEXT: 'production',
+    URL: 'https://customer-clinical-staging.example.net',
+    CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+    CLINICAL_OS_TENANT_CONFIG_JSON: JSON.stringify({
+      ...stagingExample,
+      auth: { redirectOrigin: 'https://customer-clinical-staging.example.net' }
+    })
+  },
+  cwd: root
+});
+assert.equal(lockedDedicatedStaging.safety.previewLocked, true);
+assert.equal(lockedDedicatedStaging.database.url, '');
+const enabledDedicatedStaging = loadTenantConfig({
+  env: {
+    CONTEXT: 'production',
+    URL: 'https://customer-clinical-staging.example.net',
+    CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+    CLINICAL_OS_ALLOW_STAGING_DATABASE: 'true',
+    CLINICAL_OS_STAGING_DATABASE_ACK: 'STAGING_ONLY',
+    CLINICAL_OS_PRODUCTION_CONFIG_JSON: JSON.stringify(chananya),
+    CLINICAL_OS_TENANT_CONFIG_JSON: JSON.stringify({
+      ...stagingExample,
+      auth: { redirectOrigin: 'https://customer-clinical-staging.example.net' }
+    })
+  },
+  cwd: root
+});
+assert.equal(enabledDedicatedStaging.safety.previewLocked, false);
+assert.equal(enabledDedicatedStaging.auth.redirectOrigin, 'https://customer-clinical-staging.example.net');
+assert.throws(
+  () => loadTenantConfig({
+    env: {
+      CONTEXT: 'production',
+      URL: 'https://customer-clinical-staging.example.net',
+      CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+      CLINICAL_OS_ALLOW_STAGING_DATABASE: 'true',
+      CLINICAL_OS_STAGING_DATABASE_ACK: 'STAGING_ONLY',
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: JSON.stringify(chananya),
+      CLINICAL_OS_TENANT_CONFIG_JSON: JSON.stringify({
+        ...stagingExample,
+        tenant: { ...stagingExample.tenant, expectedClinicId: chananya.tenant.expectedClinicId },
+        auth: { redirectOrigin: 'https://customer-clinical-staging.example.net' }
+      })
+    },
+    cwd: root
+  }),
+  /clinic UUID/
+);
 assert.throws(
   () => loadTenantConfig({
     env: {

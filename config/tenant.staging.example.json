@@ -23,7 +23,7 @@
     }
   },
   "tenant": {
-    "expectedClinicId": "00000000-0000-0000-0000-000000000001",
+    "expectedClinicId": "00000000-0000-0000-0000-00000000a001",
     "expectedClinicCode": "CHANANYA-STG"
   },
   "database": {
@@ -32,7 +32,7 @@
     "publishableKey": "sb_publishable_REPLACE_WITH_STAGING_KEY"
   },
   "auth": {
-    "redirectOrigin": "https://replace-with-staging-site.example.com"
+    "redirectOrigin": "https://chananya-clinical-staging.netlify.app"
   },
   "identity": {
     "qrIssuer": "CHANANYA-STG"
