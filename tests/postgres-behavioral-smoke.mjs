@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,7 @@ const USER_QUALITY = 'abababab-7777-4777-a777-777777777777';
 const USER_RECEPTION = 'cccccccc-3333-4333-a333-333333333333';
 const USER_ADMIN = 'dddddddd-4444-4444-a444-444444444444';
 const USER_ROLE_TARGET = 'eeeeeeee-5555-4555-a555-555555555555';
+const USER_BILLING = 'f0f0f0f0-6666-4666-a666-666666666666';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
 const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
 const RX_BAD_REQUEST = '66666666-6666-4666-a666-666666666666';
@@ -54,6 +56,8 @@ await db.exec(`
       'authenticated'
     )::text
   $$;
+  grant usage on schema auth to authenticated, service_role;
+  grant execute on function auth.uid(), auth.role() to authenticated, service_role;
   create function public.gen_random_uuid() returns uuid language sql volatile as $$
     select (
       substr(x,1,8)||'-'||substr(x,9,4)||'-4'||substr(x,14,3)||
@@ -136,6 +140,11 @@ async function asService(sql) {
 
 async function expectDatabaseError(promise, code) {
   await assert.rejects(promise, error => String(error.message).includes(code));
+}
+
+function sqlQuote(value) {
+  if (value == null) return 'null';
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 await expectDatabaseError(
@@ -605,20 +614,23 @@ await db.exec(`
     ('${USER_QUALITY}','quality@example.test','{"full_name":"Quality"}'),
     ('${USER_RECEPTION}','reception@example.test','{"full_name":"Reception"}'),
     ('${USER_ADMIN}','admin@example.test','{"full_name":"Governance Admin"}'),
-    ('${USER_ROLE_TARGET}','role-target@example.test','{"full_name":"Role Target"}');
+    ('${USER_ROLE_TARGET}','role-target@example.test','{"full_name":"Role Target"}'),
+    ('${USER_BILLING}','billing@example.test','{"full_name":"Billing"}');
   update public.profiles set role='pharmacy',system_role='staff' where id='${USER_PHARMACY}';
   update public.profiles set role='production',system_role='staff' where id='${USER_PRODUCTION}';
   update public.profiles set role='quality',system_role='staff' where id='${USER_QUALITY}';
   update public.profiles set role='reception',system_role='staff' where id='${USER_RECEPTION}';
   update public.profiles set role='viewer',system_role='admin' where id='${USER_ADMIN}';
   update public.profiles set role='doctor',system_role='staff' where id='${USER_ROLE_TARGET}';
+  update public.profiles set role='billing',system_role='staff' where id='${USER_BILLING}';
   insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary) values
     ('00000000-0000-0000-0000-000000000001','${USER_PHARMACY}','pharmacy',true),
     ('00000000-0000-0000-0000-000000000001','${USER_PRODUCTION}','production',true),
     ('00000000-0000-0000-0000-000000000001','${USER_QUALITY}','quality',true),
     ('00000000-0000-0000-0000-000000000001','${USER_RECEPTION}','reception',true),
     ('00000000-0000-0000-0000-000000000001','${USER_ADMIN}','viewer',true),
-    ('00000000-0000-0000-0000-000000000001','${USER_ROLE_TARGET}','doctor',true);
+    ('00000000-0000-0000-0000-000000000001','${USER_ROLE_TARGET}','doctor',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_BILLING}','billing',true);
 `);
 
 const governanceCapabilities = await asUser(USER_ADMIN, `
@@ -705,6 +717,22 @@ assert.deepEqual(receptionBoundaries.rows[0], {
   clinical: false,
   pharmacy: false,
   product_write: false
+});
+
+const billingBoundaries = await asUser(USER_BILLING, `
+  select
+    public.department_can('billing') billing,
+    public.department_can('patient_read') patient_read,
+    public.department_can('clinical') clinical,
+    public.department_can('pharmacy') pharmacy,
+    public.department_can('production') production
+`);
+assert.deepEqual(billingBoundaries.rows[0], {
+  billing: true,
+  patient_read: true,
+  clinical: false,
+  pharmacy: false,
+  production: false
 });
 
 const superAdminCapabilities = await asUser(USER_C, `
@@ -1274,6 +1302,272 @@ const completedBackupLease = await asService(`
   )
 `);
 assert.equal(completedBackupLease.rows[0].acquired, false);
+
+// Ten fully synthetic account journeys exercise the exact operational handoff
+// the release candidate must support: Practitioner -> Pharmacy FEFO -> Billing
+// -> full payment/Encounter closure. No production or human data is used.
+const demoCases = [
+  { id:'DEMO-001', prefix:'นาง', first:'สาธิต', last:'ปวดเมื่อย', gender:'female', dob:'1991-01-11', symptom:'ปวดเมื่อยหลังทำงานหน้าคอม', diagnosis:'วาตะกำเริบ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตวาตะ A — ห้ามใช้รักษาจริง', qty:2, price:85, serviceFee:250, discount:0, channel:'qr' },
+  { id:'DEMO-002', prefix:'นาย', first:'สาธิต', last:'ท้องอืด', gender:'male', dob:'1986-02-12', symptom:'ท้องอืดหลังอาหาร', diagnosis:'เสมหะกำเริบ (ข้อมูลสาธิต)', dosha:'เสมหะกำเริบ', product:'ตำรับสาธิตเสมหะ B — ห้ามใช้รักษาจริง', qty:2, price:70, serviceFee:200, discount:20, channel:'cash' },
+  { id:'DEMO-003', prefix:'นางสาว', first:'สาธิต', last:'ไอแห้ง', gender:'female', dob:'1994-03-13', symptom:'ไอแห้งเล็กน้อย ไม่มี red flag', diagnosis:'วาตะร่วมเสมหะ (ข้อมูลสาธิต)', dosha:'วาตะร่วมเสมหะ', product:'ตำรับสาธิตระบบหายใจ C — ห้ามใช้รักษาจริง', qty:3, price:55, serviceFee:220, discount:0, channel:'bank_transfer' },
+  { id:'DEMO-004', prefix:'นาย', first:'สาธิต', last:'นอนไม่สนิท', gender:'male', dob:'1979-04-14', symptom:'นอนหลับไม่สนิทจากงาน', diagnosis:'หทัยวาตะกำเริบ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตผ่อนคลาย D — ห้ามใช้รักษาจริง', qty:1, price:120, serviceFee:300, discount:30, channel:'card' },
+  { id:'DEMO-005', prefix:'นาง', first:'สาธิต', last:'เวียนศีรษะ', gender:'female', dob:'1988-05-15', symptom:'เวียนศีรษะเมื่อเปลี่ยนท่า', diagnosis:'ลมอุทธังคมาวาตะ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตลม E — ห้ามใช้รักษาจริง', qty:2, price:95, serviceFee:280, discount:0, channel:'qr' },
+  { id:'DEMO-006', prefix:'นาย', first:'สาธิต', last:'ร้อนใน', gender:'male', dob:'1990-06-16', symptom:'รู้สึกร้อนในและกระหายน้ำ', diagnosis:'ปิตตะกำเริบ (ข้อมูลสาธิต)', dosha:'ปิตตะกำเริบ', product:'ตำรับสาธิตปิตตะ F — ห้ามใช้รักษาจริง', qty:2, price:65, serviceFee:240, discount:10, channel:'cash' },
+  { id:'DEMO-007', prefix:'นางสาว', first:'สาธิต', last:'แน่นท้อง', gender:'female', dob:'1996-07-17', symptom:'แน่นท้องหลังรับประทานอาหารเร็ว', diagnosis:'โกฏฐาสยาวาตะกำเริบ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตธาตุ G — ห้ามใช้รักษาจริง', qty:3, price:60, serviceFee:200, discount:0, channel:'bank_transfer' },
+  { id:'DEMO-008', prefix:'นาย', first:'สาธิต', last:'คอแห้ง', gender:'male', dob:'1983-08-18', symptom:'คอแห้งจากการใช้เสียง', diagnosis:'อาโปหย่อนร่วมวาตะ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตชุ่มคอ H — ห้ามใช้รักษาจริง', qty:2, price:75, serviceFee:180, discount:0, channel:'qr' },
+  { id:'DEMO-009', prefix:'นาง', first:'สาธิต', last:'ล้ากล้ามเนื้อ', gender:'female', dob:'1977-09-19', symptom:'ล้ากล้ามเนื้อหลังออกกำลังกาย', diagnosis:'วาโยธาตุพิการ (ข้อมูลสาธิต)', dosha:'วาตะพิการ', product:'ตำรับสาธิตกล้ามเนื้อ I — ห้ามใช้รักษาจริง', qty:1, price:140, serviceFee:320, discount:40, channel:'card' },
+  { id:'DEMO-010', prefix:'นาย', first:'สาธิต', last:'ถ่ายไม่ปกติ', gender:'male', dob:'1985-10-20', symptom:'การขับถ่ายเปลี่ยนจากกิจวัตร', diagnosis:'สมานวาตะหย่อน (ข้อมูลสาธิต)', dosha:'วาตะหย่อน', product:'ตำรับสาธิตสมานวาตะ J — ห้ามใช้รักษาจริง', qty:2, price:80, serviceFee:260, discount:0, channel:'cash' }
+];
+const uatResults = [];
+
+for (const [index, demo] of demoCases.entries()) {
+  const sku = `UAT-TTM-${String(index + 1).padStart(3, '0')}`;
+  const product = await asUser(USER_PHARMACY, `
+    select * from public.upsert_product_master(
+      null,${sqlQuote(sku)},${sqlQuote(demo.product)},null,'medicine','demo',
+      'ขวด','ขวด','ขวด',1,25,0,0
+    )
+  `);
+  const productId = product.rows[0].id;
+  const lots = await asService(`
+    insert into public.inventory_lots(
+      clinic_id,product_id,lot_number,expiry_date,received_quantity,
+      current_quantity,unit,purchase_cost,status
+    ) values
+      ('00000000-0000-0000-0000-000000000001','${productId}',${sqlQuote(`${demo.id}-FEFO-1`)},current_date+30,1,1,'ขวด',25,'active'),
+      ('00000000-0000-0000-0000-000000000001','${productId}',${sqlQuote(`${demo.id}-FEFO-2`)},current_date+180,20,20,'ขวด',25,'active')
+    returning id,lot_number,expiry_date,current_quantity
+  `);
+
+  const patient = await asUser(USER_A, `
+    select (public.upsert_patient_registration(
+      null,${sqlQuote(demo.prefix)},${sqlQuote(demo.first)},${sqlQuote(demo.last)},
+      null,${sqlQuote(demo.gender)},${sqlQuote(demo.dob)},null,null,null,null,
+      'ไม่มี — ข้อมูลสังเคราะห์'
+    )).*;
+  `);
+  const encounter = await asUser(USER_A, `
+    select * from public.start_manual_patient_encounter(
+      '${patient.rows[0].id}','manual_hn',true,null,${sqlQuote(demo.symptom)},
+      '{"pulse":72,"pain_before":3}'::jsonb
+    )
+  `);
+  await asUser(USER_A, `
+    select public.save_ttm_diagnosis_atomic(
+      p_encounter_id => '${encounter.rows[0].encounter_id}',
+      p_dhatu_samutthan => 'วาโย',
+      p_present_constitution => ${sqlQuote(demo.dosha)},
+      p_analysis_summary => ${sqlQuote(`Synthetic UAT ${demo.id}: ${demo.symptom}`)},
+      p_thai_diagnosis => ${sqlQuote(demo.diagnosis)},
+      p_dosha_state => ${sqlQuote(demo.dosha)},
+      p_practitioner_confirmed => true,
+      p_knowledge_version => 'TTM-DEMO-UAT-v1'
+    ) diagnosis_id
+  `);
+
+  const rxRequestKey = randomUUID();
+  const prescriptionPayload = JSON.stringify([{
+    product_id: productId,
+    quantity_prescribed: demo.qty,
+    unit: 'ขวด',
+    dose: 'ตามฉลากสาธิต',
+    frequency: 'demo only',
+    duration: 'demo only',
+    instructions: 'ข้อมูลสังเคราะห์ ห้ามใช้เป็นคำแนะนำการรักษา'
+  }]);
+  const prescription = await asUser(USER_A, `
+    select * from public.create_atomic_prescription_handoff(
+      '${rxRequestKey}','${encounter.rows[0].encounter_id}',
+      ${sqlQuote(`${demo.id} synthetic practitioner handoff`)},
+      ${sqlQuote(prescriptionPayload)}::jsonb
+    )
+  `);
+
+  if (index === 0) {
+    await expectDatabaseError(
+      asUser(USER_A, `
+        select public.transition_atomic_prescription_dispensing(
+          '${prescription.rows[0].dispensing_order_id}','review','[]'::jsonb,null
+        )
+      `),
+      'PHARMACY_DEPARTMENT_REQUIRED'
+    );
+  }
+
+  await asUser(USER_PHARMACY, `
+    select public.transition_atomic_prescription_dispensing(
+      '${prescription.rows[0].dispensing_order_id}','review','[]'::jsonb,
+      'Synthetic UAT pharmacist review'
+    )
+  `);
+  const prescriptionItems = await asUser(USER_PHARMACY, `
+    select id,product_id,quantity_prescribed,unit
+    from public.prescription_items
+    where prescription_id='${prescription.rows[0].prescription_id}'
+    order by created_at,id
+  `);
+  assert.equal(prescriptionItems.rows.length, 1);
+  const pricePayload = JSON.stringify([{
+    prescription_item_id: prescriptionItems.rows[0].id,
+    unit_price: demo.price
+  }]);
+  const dispensed = await asUser(USER_PHARMACY, `
+    select public.transition_atomic_prescription_dispensing(
+      '${prescription.rows[0].dispensing_order_id}','dispense',
+      ${sqlQuote(pricePayload)}::jsonb,'Synthetic UAT FEFO dispense'
+    ) result
+  `);
+  assert.equal(dispensed.rows[0].result.status, 'dispensed');
+  if (demo.qty > 1) assert.equal(dispensed.rows[0].result.allocation_count, 2);
+
+  const dispenseRetry = await asUser(USER_PHARMACY, `
+    select public.transition_atomic_prescription_dispensing(
+      '${prescription.rows[0].dispensing_order_id}','dispense',
+      ${sqlQuote(pricePayload)}::jsonb,'Synthetic UAT retry'
+    ) result
+  `);
+  assert.equal(dispenseRetry.rows[0].result.idempotent, true);
+
+  await asUser(USER_PHARMACY, `
+    select public.transition_atomic_prescription_dispensing(
+      '${prescription.rows[0].dispensing_order_id}','submit_billing',
+      '[]'::jsonb,'Synthetic UAT checkout handoff'
+    )
+  `);
+
+  if (index === 0) {
+    await expectDatabaseError(
+      asUser(USER_PHARMACY, `
+        select * from public.issue_atomic_dispensing_invoice(
+          '${prescription.rows[0].dispensing_order_id}',${demo.serviceFee},${demo.discount}
+        )
+      `),
+      'PERMISSION_DENIED'
+    );
+  }
+
+  const invoice = await asUser(USER_BILLING, `
+    select * from public.issue_atomic_dispensing_invoice(
+      '${prescription.rows[0].dispensing_order_id}',${demo.serviceFee},${demo.discount}
+    )
+  `);
+  const grandTotal = Number(invoice.rows[0].grand_total);
+  assert.equal(grandTotal, demo.qty * demo.price + demo.serviceFee - demo.discount);
+  const payment = await asUser(USER_BILLING, `
+    select * from public.record_atomic_invoice_payment(
+      '${randomUUID()}','${invoice.rows[0].invoice_id}',${grandTotal},
+      ${sqlQuote(demo.channel)},${sqlQuote(`${demo.id}-FULL-PAYMENT`)}
+    )
+  `);
+  assert.equal(payment.rows[0].invoice_status, 'paid');
+  assert.equal(payment.rows[0].encounter_closed, true);
+
+  const evidence = await db.query(`
+    select
+      p.hn,e.encounter_no,e.status encounter_status,
+      dx.thai_diagnosis,rx.prescription_no,d.queue_number,d.status dispensing_status,
+      i.invoice_number,i.grand_total,i.status invoice_status,
+      pay.payment_reference,pay.channel payment_channel,pay.amount payment_amount,
+      coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'lot_number',l.lot_number,
+          'expiry_date',l.expiry_date,
+          'quantity_dispensed',di.quantity_dispensed,
+          'unit_price',di.unit_price
+        ) order by l.expiry_date,l.lot_number)
+        from public.dispensing_items di
+        join public.inventory_lots l on l.id=di.inventory_lot_id
+        where di.dispensing_order_id=d.id
+      ),'[]'::jsonb) allocations,
+      coalesce((
+        select jsonb_agg(a.action order by a.occurred_at,a.id)
+        from public.audit_logs a
+        where a.entity_id in (
+          rx.id::text,d.id::text,i.id::text,pay.id::text
+        )
+      ),'[]'::jsonb) audit_actions
+    from public.patients p
+    join public.encounters e on e.patient_id=p.id
+    join public.ttm_structured_diagnoses dx on dx.encounter_id=e.id
+    join public.prescriptions rx on rx.encounter_id=e.id
+    join public.dispensing_orders d on d.prescription_id=rx.id
+    join public.invoices i on i.source_dispensing_order_id=d.id
+    join public.payments pay on pay.invoice_id=i.id
+    where p.id='${patient.rows[0].id}'
+      and e.id='${encounter.rows[0].encounter_id}'
+  `);
+  assert.equal(evidence.rows.length, 1);
+  assert.equal(evidence.rows[0].encounter_status, 'closed');
+  assert.equal(evidence.rows[0].dispensing_status, 'billed');
+  assert.equal(evidence.rows[0].invoice_status, 'paid');
+  assert.equal(evidence.rows[0].allocations.length, demo.qty > 1 ? 2 : 1);
+  assert.ok(evidence.rows[0].audit_actions.includes('create_prescription_handoff'));
+  assert.ok(evidence.rows[0].audit_actions.includes('dispense_prescription_order'));
+  assert.ok(evidence.rows[0].audit_actions.includes('record_invoice_payment'));
+
+  uatResults.push({
+    case_id: demo.id,
+    synthetic_only: true,
+    patient_name: `${demo.prefix}${demo.first} ${demo.last}`,
+    hn: evidence.rows[0].hn,
+    symptom: demo.symptom,
+    thai_diagnosis: evidence.rows[0].thai_diagnosis,
+    product_sku: sku,
+    product_name: demo.product,
+    quantity: demo.qty,
+    unit: 'ขวด',
+    unit_price: demo.price,
+    service_fee: demo.serviceFee,
+    discount: demo.discount,
+    expected_total: demo.qty * demo.price + demo.serviceFee - demo.discount,
+    practitioner_account: 'practitioner@example.test',
+    pharmacy_account: 'pharmacy@example.test',
+    billing_account: 'billing@example.test',
+    encounter_no: evidence.rows[0].encounter_no,
+    prescription_no: evidence.rows[0].prescription_no,
+    queue_number: evidence.rows[0].queue_number,
+    lot_allocations: evidence.rows[0].allocations,
+    invoice_number: evidence.rows[0].invoice_number,
+    grand_total: Number(evidence.rows[0].grand_total),
+    payment_reference: evidence.rows[0].payment_reference,
+    payment_channel: evidence.rows[0].payment_channel,
+    final_status: `${evidence.rows[0].encounter_status}/${evidence.rows[0].invoice_status}`,
+    audit_actions: evidence.rows[0].audit_actions
+  });
+}
+
+assert.equal(uatResults.length, 10);
+const uatReport = {
+  schema_version: 'chananya-synthetic-uat/v1',
+  generated_at: new Date().toISOString(),
+  source_revision: process.env.CHANANYA_SOURCE_REVISION || 'working-tree',
+  environment: 'isolated-pglite-postgresql-behavioral-test',
+  production_data_touched: false,
+  disclaimer: 'All identities, symptoms, diagnoses and products are synthetic. Medicines are test labels and are not clinical recommendations.',
+  workflow: ['practitioner','prescription','pharmacy_review','fefo_dispense','billing','full_payment','encounter_closed'],
+  role_denials_verified: ['practitioner_cannot_dispense','pharmacy_cannot_issue_invoice'],
+  summary: {
+    total_cases: uatResults.length,
+    passed_cases: uatResults.filter(item => item.final_status === 'closed/paid').length,
+    failed_cases: uatResults.filter(item => item.final_status !== 'closed/paid').length,
+    total_billed: uatResults.reduce((total,item) => total + item.grand_total,0)
+  },
+  cases: uatResults
+};
+assert.deepEqual(uatReport.summary, {
+  total_cases: 10,
+  passed_cases: 10,
+  failed_cases: 0,
+  total_billed: uatResults.reduce((total,item) => total + item.grand_total,0)
+});
+if (process.env.CHANANYA_UAT_REPORT_PATH) {
+  const reportPath = path.resolve(process.env.CHANANYA_UAT_REPORT_PATH);
+  await fs.mkdir(path.dirname(reportPath), { recursive: true });
+  await fs.writeFile(reportPath, `${JSON.stringify(uatReport,null,2)}\n`, 'utf8');
+}
+console.log(
+  `Synthetic 10-case Practitioner -> Pharmacy -> Checkout UAT passed: ${uatReport.summary.passed_cases}/10, billed THB ${uatReport.summary.total_billed.toFixed(2)}`
+);
 
 const auditEvents = await db.query(`
   select event_type,count(*)::int count

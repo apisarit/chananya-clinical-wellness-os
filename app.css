@@ -242,6 +242,8 @@ input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--f
 .status.danger, .notice.danger, .alert.danger { color: var(--danger); border-color: #e7bebe; background: var(--danger-soft); }
 .warning { color: var(--warning); border-color: #ead3a3; background: var(--warning-soft); }
 .drug { margin-top: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--forest-50); }
+.rx-price { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 180px); align-items: center; gap: 12px; margin-top: 10px; font-size: .88rem; color: var(--muted); }
+.rx-price input { margin: 0; text-align: right; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .table-wrap, .wide-table { max-width: 100%; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
 table { width: 100%; min-width: 760px; border-collapse: collapse; background: #fff; }
@@ -559,6 +561,11 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
   .foundation-chain { justify-content: flex-start; }
   .bm-labels, .bm-canvas { min-width: 720px; }
   .bm-shell::after { content: "เลื่อนซ้าย–ขวาเพื่อดูทุกมุม"; position: sticky; left: 0; display: block; width: fit-content; margin: 7px auto 0; padding: 5px 9px; border-radius: 999px; color: var(--muted); background: var(--surface-soft); font-size: .7rem; }
+}
+
+@media (max-width: 560px) {
+  .rx-price { grid-template-columns: 1fr; }
+  .rx-price input { text-align: left; }
 }
 @media (max-width: 410px) {
   .stats { grid-template-columns: 1fr; }

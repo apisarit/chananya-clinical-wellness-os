@@ -12,6 +12,7 @@ const controller = read('foundation.js');
 const shell = read('app-shell.js');
 const clinical = read('clinical-v3.html');
 const migration = read('supabase/migrations/202608270100_ttm_foundation_ontology.sql');
+const diagnosisHardening = read('supabase/migrations/202608270910_ttm_diagnosis_definer_hardening.sql');
 
 assert.doesNotThrow(() => new vm.Script(controller, { filename: 'foundation.js' }), 'foundation controller should parse');
 assert.match(shell, /key: 'foundation'/, 'foundation must be a first-class workspace');
@@ -25,6 +26,10 @@ assert.match(html, /คัมภีร์ \/ Dataset[\s\S]*?Concept[\s\S]*?Relat
 assert.match(html, /ปิตตะ 42 \/ วาตะ 80 \/ เสมหะ 20/, 'known diagnostic coverage targets must remain visible');
 assert.match(html, /ICD\/WHO เป็น secondary mapping เท่านั้น/, 'international mapping must remain secondary');
 assert.match(html, /AI ห้ามวินิจฉัยแทนผู้ประกอบวิชาชีพ/, 'AI must remain subordinate to practitioner authority');
+assert.match(diagnosisHardening, /security definer/i, 'diagnosis must remain callable after direct table writes are revoked');
+assert.match(diagnosisHardening, /e\.clinic_id = v_clinic_id/i, 'diagnosis must be tenant-bound inside the definer function');
+assert.match(diagnosisHardening, /not public\.department_can\('clinical'\)/i, 'diagnosis must require the Clinical department');
+assert.match(diagnosisHardening, /'save_ttm_diagnosis_atomic'/i, 'diagnosis write must append audit evidence');
 assert.match(clinical, /Clinical record ไม่ใช่ฐานความรู้/, 'clinical workflow must not pretend to be the knowledge foundation');
 
 for (const table of ['ttm_sources', 'ttm_concepts', 'ttm_concept_terms', 'ttm_concept_relations', 'ttm_encounter_concepts']) {

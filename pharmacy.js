@@ -21,7 +21,7 @@
   let productionRequestAttempted = false;
   const data = {
     products: [], sales: [], items: [], patients: [], prescriptions: [], dispensing: [],
-    prescriptionItems: [], productionRequests: []
+    prescriptionItems: [], dispensingItems: [], productionRequests: []
   };
 
   function toast(message) {
@@ -53,11 +53,22 @@
   }
 
   async function detectPersistence() {
-    const result = await db.rpc('department_persistence_healthcheck');
-    const row = Array.isArray(result.data) ? result.data[0] : result.data;
-    persistenceReady = !result.error && row?.ready === true;
+    const [departmentResult, prescriptionResult] = await Promise.all([
+      db.rpc('department_persistence_healthcheck'),
+      db.rpc('prescription_dispensing_healthcheck')
+    ]);
+    const department = Array.isArray(departmentResult.data)
+      ? departmentResult.data[0]
+      : departmentResult.data;
+    const prescription = Array.isArray(prescriptionResult.data)
+      ? prescriptionResult.data[0]
+      : prescriptionResult.data;
+    persistenceReady = !departmentResult.error
+      && !prescriptionResult.error
+      && department?.ready === true
+      && prescription?.ready === true;
     if (!persistenceReady) {
-      throw new Error('ฐานข้อมูล Department/Pharmacy migration ยังไม่พร้อม ระบบหยุดการเขียนเพื่อป้องกันข้อมูลข้ามแผนกหรือข้อมูลครึ่งชุด');
+      throw new Error('ฐานข้อมูล Department/Prescription Pharmacy migration ยังไม่พร้อม ระบบหยุดการเขียนเพื่อป้องกันข้อมูลข้ามแผนกหรือข้อมูลครึ่งชุด');
     }
   }
 
@@ -70,7 +81,7 @@
   async function load() {
     const [
       products, sales, items, patients, prescriptions, dispensing,
-      prescriptionItems, productionRequests
+      prescriptionItems, dispensingItems, productionRequests
     ] = await Promise.all([
       query('products', '*', 'updated_at'),
       query('pharmacy_counter_sales', '*', 'created_at'),
@@ -79,11 +90,12 @@
       query('prescriptions', '*', 'prescribed_at'),
       query('dispensing_orders', '*', 'created_at'),
       query('prescription_items'),
+      query('dispensing_items'),
       query('production_requests', '*', 'requested_at')
     ]);
     Object.assign(data, {
       products, sales, items, patients, prescriptions, dispensing,
-      prescriptionItems, productionRequests
+      prescriptionItems, dispensingItems, productionRequests
     });
     render();
   }
@@ -146,7 +158,30 @@
       const label = linkedPatient
         ? `${linkedPatient.hn || '-'} ${patientName(linkedPatient)}`
         : '-';
-      return `<div class="item" data-dispensing-order-id="${esc(order.id)}"><div><b>${esc(order.queue_number || '-')} • ${esc(label)}</b><small>${esc(prescription?.prescription_no || '-')} • ${esc(order.status)}</small></div><span class="badge">${esc(order.status)}</span></div>`;
+      const prescribed = data.prescriptionItems.filter(item => item.prescription_id === prescription?.id);
+      const allocations = data.dispensingItems.filter(item => item.dispensing_order_id === order.id);
+      const itemRows = prescribed.map(item => {
+        const linkedProduct = product(item.product_id);
+        const dispensed = allocations
+          .filter(allocation => allocation.prescription_item_id === item.id)
+          .reduce((total, allocation) => total + num(allocation.quantity_dispensed), 0);
+        const price = allocations.find(allocation => allocation.prescription_item_id === item.id)?.unit_price;
+        const priceControl = order.status === 'reviewed'
+          ? `<label class="rx-price">ราคาขายต่อ ${esc(item.unit)}<input data-rx-price="${esc(item.id)}" type="number" min="0" max="1000000" step="0.01" required></label>`
+          : `<small>จ่าย ${dispensed || 0}/${num(item.quantity_prescribed)} ${esc(item.unit)}${price == null ? '' : ` • ฿${money(price)}/${esc(item.unit)}`}</small>`;
+        return `<div class="drug"><b>${esc(linkedProduct?.sku || '-')} • ${esc(linkedProduct?.name_th || '-')}</b><small>สั่ง ${num(item.quantity_prescribed)} ${esc(item.unit)} • ${esc(item.dose || '')} ${esc(item.frequency || '')} ${esc(item.duration || '')}</small>${priceControl}</div>`;
+      }).join('');
+      const buttons = [];
+      if (['waiting', 'pending'].includes(order.status)) {
+        buttons.push(`<button class="btn primary" data-act="rx-review" data-id="${esc(order.id)}">เภสัชกร Review</button>`);
+      }
+      if (order.status === 'reviewed') {
+        buttons.push(`<button class="btn primary" data-act="rx-dispense" data-id="${esc(order.id)}">จ่ายยา FEFO</button>`);
+      }
+      if (order.status === 'dispensed') {
+        buttons.push(`<button class="btn primary" data-act="rx-billing" data-id="${esc(order.id)}">ส่ง Checkout / Billing</button>`);
+      }
+      return `<article class="item column" data-dispensing-order-id="${esc(order.id)}"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(label)}</b><small>${esc(prescription?.prescription_no || '-')}</small></div><span class="badge">${esc(order.status)}</span></div>${itemRows}<div class="right">${buttons.join('')}</div></article>`;
     }).join('');
     $('#rx-list').innerHTML = rows || '<p class="muted">ไม่มีคิวใบสั่งยาจากผู้รักษา</p>';
   }
@@ -316,23 +351,60 @@
   async function act(action, id) {
     requirePersistence();
     let result;
-    if (action === 'review') {
+    let successMessage = '';
+    if (action === 'rx-review') {
+      result = await db.rpc('transition_atomic_prescription_dispensing', {
+        p_dispensing_order_id: id,
+        p_action: 'review',
+        p_item_prices: [],
+        p_reason: null
+      });
+      successMessage = 'Review ใบสั่งยาและบันทึก Audit แล้ว';
+    } else if (action === 'rx-dispense') {
+      const order = dispensingOrder(id);
+      const rx = prescription(order?.prescription_id);
+      const prices = data.prescriptionItems
+        .filter(item => item.prescription_id === rx?.id)
+        .map(item => {
+          const input = document.querySelector(`[data-rx-price="${item.id}"]`);
+          const unitPrice = num(input?.value);
+          if (!input || input.value === '' || unitPrice < 0) {
+            throw new Error('กรุณาระบุราคาขายของยาทุกรายการ');
+          }
+          return { prescription_item_id: item.id, unit_price: unitPrice };
+        });
+      result = await db.rpc('transition_atomic_prescription_dispensing', {
+        p_dispensing_order_id: id,
+        p_action: 'dispense',
+        p_item_prices: prices,
+        p_reason: 'Dispensed from Pharmacy workstation'
+      });
+      successMessage = 'จ่ายยา FEFO ตัด Stock และบันทึก Audit แล้ว';
+    } else if (action === 'rx-billing') {
+      result = await db.rpc('transition_atomic_prescription_dispensing', {
+        p_dispensing_order_id: id,
+        p_action: 'submit_billing',
+        p_item_prices: [],
+        p_reason: null
+      });
+      successMessage = 'ส่ง Checkout / Billing และบันทึก Audit แล้ว';
+    } else if (action === 'review') {
       result = await db.rpc('transition_pharmacy_counter_sale', {
         p_sale_id: id, p_action: 'review', p_reason: null
       });
-      toast('Review และบันทึก Audit แล้ว');
+      successMessage = 'Review และบันทึก Audit แล้ว';
     } else if (action === 'dispense') {
       result = await db.rpc('dispense_pharmacy_counter_sale', { p_sale_id: id });
-      toast('จ่ายยาและตัด Stock แบบ FEFO แล้ว');
+      successMessage = 'จ่ายยาและตัด Stock แบบ FEFO แล้ว';
     } else if (action === 'billing') {
       result = await db.rpc('transition_pharmacy_counter_sale', {
         p_sale_id: id, p_action: 'submit_billing', p_reason: null
       });
-      toast('ส่งการเงินและบันทึก Audit แล้ว');
+      successMessage = 'ส่งการเงินและบันทึก Audit แล้ว';
     } else if (action === 'remove-item') {
       if (!confirm('ลบรายการยานี้หรือไม่?')) return;
       result = await db.rpc('remove_pharmacy_counter_sale_item', { p_sale_item_id: id });
-      toast('ลบรายการยาและบันทึก Audit แล้ว');
+      successMessage = 'ลบรายการยาและบันทึก Audit แล้ว';
     } else if (action === 'edit-product') {
       fillProductForm(id);
       return;
@@ -345,11 +417,12 @@
         p_active: active,
         p_reason: active ? 'เปิดใช้งานจาก Product Master' : 'ปิดใช้งานจาก Product Master'
       });
-      toast(active ? 'เปิดใช้งานผลิตภัณฑ์แล้ว' : 'ปิดใช้งานโดยรักษาประวัติเดิมไว้แล้ว');
+      successMessage = active ? 'เปิดใช้งานผลิตภัณฑ์แล้ว' : 'ปิดใช้งานโดยรักษาประวัติเดิมไว้แล้ว';
     } else {
       return;
     }
     if (result.error) throw result.error;
+    if (successMessage) toast(successMessage);
     await load();
   }
 
