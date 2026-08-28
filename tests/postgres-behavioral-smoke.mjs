@@ -1273,7 +1273,15 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
-assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-28.1');
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-28.2');
+for (const table of [
+  'services','price_lists','price_list_items','products','suppliers','inventory_lots',
+  'stock_movements','formulas','formula_components','production_requests',
+  'production_orders','production_material_issues','production_qc',
+  'finished_goods_receipts','import_batches','import_rows'
+]) {
+  assert.ok(Array.isArray(backupPayload.rows[0].payload.data[table]), `${table} must be exported as an array`);
+}
 assert.equal(backupPayload.rows[0].payload.data.production_orders.length, 2);
 assert.equal(backupPayload.rows[0].payload.data.finished_goods_receipts.length, 1);
 assert.equal(backupPayload.rows[0].payload.data.production_material_issues.length, 2);
@@ -1284,8 +1292,11 @@ const transactionBackup = await asService(`
   ) payload
 `);
 assert.equal(transactionBackup.rows[0].payload.domain, 'transactions');
-assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-28.1');
-for (const table of ['audit_logs', 'invoices', 'invoice_items', 'payments']) {
+assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-28.2');
+for (const table of [
+  'audit_logs','clinical_record_audit_events','appointment_events',
+  'patient_identity_events','invoices','invoice_items','payments'
+]) {
   assert.ok(Array.isArray(transactionBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
 }
 assert.ok(transactionBackup.rows[0].payload.data.audit_logs.length > 0);
@@ -1295,6 +1306,57 @@ assert.ok(
   ),
   'transaction audit export must not cross the active clinic tenant'
 );
+
+const patientBackup = await asService(`
+  select public.export_clinic_backup_domain(
+    '00000000-0000-0000-0000-000000000001','patients'
+  ) payload
+`);
+for (const table of [
+  'patients','patient_allergies','appointments','encounters','vital_signs',
+  'clinical_examination_findings','ttm_opd_histories','ttm_diagnostic_contexts',
+  'ttm_structured_diagnoses','ttm_encounter_concepts','body_pain_points',
+  'clinical_treatment_plans','treatment_orders','treatment_sessions',
+  'clinical_treatment_sessions','clinical_followup_notes','clinical_record_signoffs',
+  'patient_identity_links','encounter_identity_verifications'
+]) {
+  assert.ok(Array.isArray(patientBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
+}
+assert.deepEqual(
+  [...patientBackup.rows[0].payload.included_tables].sort(),
+  Object.keys(patientBackup.rows[0].payload.data).sort(),
+  'backup included_tables must exactly describe the encrypted payload'
+);
+assert.match(patientBackup.rows[0].payload.recovery_model.full_database_restore, /managed database backup or PITR required/i);
+
+const backupContract = await asUser(USER_C, `select * from public.backup_restore_contract_healthcheck()`);
+assert.equal(backupContract.rows[0].ready, true);
+assert.equal(backupContract.rows[0].schema_version, '2026-08-28.2');
+const restoreTrace = await asService(`
+  select public.verify_clinic_restore_trace(
+    '00000000-0000-0000-0000-000000000001'
+  ) trace
+`);
+assert.equal(restoreTrace.rows[0].trace.ready, true);
+assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-08-28.2');
+assert.equal(restoreTrace.rows[0].trace.referential_integrity_anomalies, 0);
+
+await asUser(USER_C, `
+  select public.admin_set_staff_membership_active(
+    '${USER_A}',false,'Behavioral account disable test'
+  )
+`);
+const disabledContext = await asUser(USER_A, `select * from public.current_access_context()`);
+assert.equal(disabledContext.rows.length, 0, 'disabled membership retained an access context');
+const disabledClinical = await asUser(USER_A, `select public.department_can('clinical') allowed`);
+assert.equal(disabledClinical.rows[0].allowed, false, 'existing JWT retained clinical access after membership disable');
+await asUser(USER_C, `
+  select public.admin_set_staff_membership_active(
+    '${USER_A}',true,'Restore synthetic practitioner membership'
+  )
+`);
+const restoredContext = await asUser(USER_A, `select * from public.current_access_context()`);
+assert.equal(restoredContext.rows[0].ready, true, 'synthetic practitioner was not reactivated');
 
 const backupSlot = '2026-08-27T20:00:00Z';
 const firstBackupLease = await asService(`

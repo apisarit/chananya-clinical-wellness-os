@@ -1,0 +1,51 @@
+name: Release candidate contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-database-contracts:
+    name: Source + PostgreSQL + release evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact candidate commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run source and PostgreSQL behavioral contracts
+        run: npm run check
+
+      - name: Generate exact-commit evidence
+        if: always()
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/release-evidence
+
+      - name: Retain exact-commit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-contracts-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/release-evidence/
+          if-no-files-found: error
+          retention-days: 90

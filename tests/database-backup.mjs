@@ -11,6 +11,7 @@ import {
   countDomainRows,
   createServiceAccountAssertion,
   decryptBackup,
+  downloadDriveFile,
   encryptBackup,
   parseBackupEnvironment,
   parseEncryptionKey,
@@ -61,6 +62,7 @@ assert.doesNotMatch(encrypted.bytes.toString('utf8'), /ข้อมูลทด�
 
 const tampered = { ...encrypted.envelope, ciphertext: `${encrypted.envelope.ciphertext.slice(0, -2)}AA` };
 assert.throws(() => decryptBackup(tampered, key), /INTEGRITY|authenticate/i);
+assert.throws(() => decryptBackup({ ...encrypted.envelope, key_id: '0000000000000000' }, key), /KEY_ID_MISMATCH/);
 assert.deepEqual(countDomainRows(payload), { patients: 1, patient_allergies: 1, encounters: 0 });
 assert.equal(
   backupFileName('CHANANYA', 'transactions', '2026-08-27T20:00:00.000Z', 'cdb.json.enc', 'staging'),
@@ -120,6 +122,25 @@ const updated = await upsertDriveFile({
 assert.equal(updated.operation, 'updated');
 assert.equal(updatedCalls[1].options.method, 'PATCH');
 assert.match(updatedCalls[1].url, /drive-existing/);
+
+const downloaded = await downloadDriveFile({
+  accessToken: 'access-token',
+  fileId: 'drive-existing',
+  fetchImpl: async (url, options) => {
+    assert.match(String(url), /drive-existing\?alt=media/);
+    assert.equal(options.headers.Authorization, 'Bearer access-token');
+    return new Response(encrypted.bytes, { status: 200 });
+  }
+});
+assert.deepEqual(downloaded, encrypted.bytes);
+await assert.rejects(
+  downloadDriveFile({
+    accessToken: 'access-token',
+    fileId: 'missing',
+    fetchImpl: async () => new Response('not found', { status: 404 })
+  }),
+  /DOWNLOAD_FAILED/
+);
 
 const worker = read('netlify/functions/database-backup.mts');
 assert.match(worker, /schedule:\s*'0 20 \* \* \*'/, 'backup must run daily at 03:00 Asia/Bangkok');

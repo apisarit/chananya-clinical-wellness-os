@@ -10,6 +10,77 @@ import {
 export const BACKUP_DOMAINS = Object.freeze(['patients', 'products', 'pharmacy', 'transactions']);
 export const BACKUP_ENVIRONMENTS = Object.freeze(['staging', 'production', 'restore-test']);
 export const BACKUP_FORMAT = 'chananya-encrypted-backup/v1';
+export const BACKUP_SCHEMA_VERSION = '2026-08-28.2';
+export const RESTORE_SET_FORMAT = 'chananya-restore-set-evidence/v1';
+export const BACKUP_REQUIRED_TABLES = Object.freeze({
+  patients: Object.freeze([
+    'patients',
+    'patient_allergies',
+    'patient_user_links',
+    'appointments',
+    'practitioner_schedules',
+    'clinic_appointments',
+    'encounters',
+    'vital_signs',
+    'pain_assessments',
+    'pain_markers',
+    'intermediate_care_assessments',
+    'barthel_assessments',
+    'clinical_examination_findings',
+    'ttm_opd_histories',
+    'ttm_diagnostic_contexts',
+    'ttm_structured_diagnoses',
+    'ttm_encounter_concepts',
+    'body_pain_points',
+    'clinical_treatment_plans',
+    'treatment_orders',
+    'treatment_sessions',
+    'clinical_treatment_sessions',
+    'followups',
+    'clinical_followup_notes',
+    'clinical_record_signoffs',
+    'patient_identity_links',
+    'patient_identity_link_requests',
+    'patient_qr_sessions',
+    'encounter_identity_verifications'
+  ]),
+  products: Object.freeze([
+    'services',
+    'price_lists',
+    'price_list_items',
+    'products',
+    'suppliers',
+    'inventory_lots',
+    'stock_movements',
+    'formulas',
+    'formula_components',
+    'production_requests',
+    'production_orders',
+    'production_material_issues',
+    'production_qc',
+    'finished_goods_receipts',
+    'import_batches',
+    'import_rows'
+  ]),
+  pharmacy: Object.freeze([
+    'counter_sales',
+    'counter_sale_items',
+    'counter_allocations',
+    'prescriptions',
+    'prescription_items',
+    'dispensing_orders',
+    'dispensing_items'
+  ]),
+  transactions: Object.freeze([
+    'audit_logs',
+    'clinical_record_audit_events',
+    'appointment_events',
+    'patient_identity_events',
+    'invoices',
+    'invoice_items',
+    'payments'
+  ])
+});
 
 const toBase64Url = value => Buffer.from(value)
   .toString('base64')
@@ -135,6 +206,7 @@ export function decryptBackup(envelope, key) {
     throw new Error('BACKUP_ENVELOPE_UNSUPPORTED');
   }
   if (!Buffer.isBuffer(key) || key.length !== 32) throw new Error('BACKUP_ENCRYPTION_KEY_MUST_BE_32_BYTES');
+  if (envelope.key_id !== sha256(key).slice(0, 16)) throw new Error('BACKUP_KEY_ID_MISMATCH');
   const aad = Buffer.from(JSON.stringify(envelope.metadata));
   if (sha256(aad) !== envelope.aad_sha256) throw new Error('BACKUP_AAD_INTEGRITY_FAILED');
   const ciphertext = Buffer.from(envelope.ciphertext, 'base64');
@@ -145,6 +217,108 @@ export function decryptBackup(envelope, key) {
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   if (sha256(plaintext) !== envelope.plaintext_sha256) throw new Error('BACKUP_PLAINTEXT_INTEGRITY_FAILED');
   return JSON.parse(plaintext.toString('utf8'));
+}
+
+function sortedUnique(values) {
+  return [...new Set(values.map(value => String(value)))].sort();
+}
+
+function assertRestoreSet(condition, code) {
+  if (!condition) throw new Error(code);
+}
+
+function validateDomainPayload(payload, metadata, domain) {
+  assertRestoreSet(payload?.format === 'chananya-domain-export/v1', 'RESTORE_SET_SOURCE_FORMAT_INVALID');
+  assertRestoreSet(payload?.schema_version === BACKUP_SCHEMA_VERSION, 'RESTORE_SET_SCHEMA_VERSION_INVALID');
+  assertRestoreSet(payload?.clinic_id === metadata.clinic_id, 'RESTORE_SET_PAYLOAD_CLINIC_MISMATCH');
+  assertRestoreSet(payload?.domain === domain, 'RESTORE_SET_PAYLOAD_DOMAIN_MISMATCH');
+  assertRestoreSet(payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data), 'RESTORE_SET_DATA_INVALID');
+
+  const dataTables = sortedUnique(Object.keys(payload.data));
+  const includedTables = sortedUnique(Array.isArray(payload.included_tables) ? payload.included_tables : []);
+  assertRestoreSet(JSON.stringify(dataTables) === JSON.stringify(includedTables), 'RESTORE_SET_INCLUDED_TABLES_MISMATCH');
+  for (const table of BACKUP_REQUIRED_TABLES[domain]) {
+    assertRestoreSet(Object.hasOwn(payload.data, table), `RESTORE_SET_REQUIRED_TABLE_MISSING_${table.toUpperCase()}`);
+    assertRestoreSet(Array.isArray(payload.data[table]), `RESTORE_SET_TABLE_NOT_ARRAY_${table.toUpperCase()}`);
+  }
+}
+
+export function verifyBackupSet(envelopes, key) {
+  assertRestoreSet(Array.isArray(envelopes), 'RESTORE_SET_INPUT_INVALID');
+  assertRestoreSet(envelopes.length === BACKUP_DOMAINS.length, 'RESTORE_SET_DOMAIN_COUNT_INVALID');
+
+  const byDomain = new Map();
+  const decrypted = new Map();
+  for (const envelope of envelopes) {
+    const domain = String(envelope?.metadata?.domain || '');
+    assertRestoreSet(BACKUP_DOMAINS.includes(domain), 'RESTORE_SET_DOMAIN_INVALID');
+    assertRestoreSet(!byDomain.has(domain), 'RESTORE_SET_DUPLICATE_DOMAIN');
+    const payload = decryptBackup(envelope, key);
+    validateDomainPayload(payload, envelope.metadata, domain);
+    byDomain.set(domain, envelope);
+    decrypted.set(domain, payload);
+  }
+  for (const domain of BACKUP_DOMAINS) {
+    assertRestoreSet(byDomain.has(domain), `RESTORE_SET_DOMAIN_MISSING_${domain.toUpperCase()}`);
+  }
+
+  const reference = byDomain.get(BACKUP_DOMAINS[0]);
+  const bindingFields = ['environment', 'deployment_id', 'source_revision', 'clinic_id', 'clinic_code', 'slot', 'schema_version'];
+  for (const envelope of byDomain.values()) {
+    assertRestoreSet(envelope.key_id === reference.key_id, 'RESTORE_SET_KEY_ID_MISMATCH');
+    for (const field of bindingFields) {
+      assertRestoreSet(envelope.metadata?.[field] === reference.metadata?.[field], `RESTORE_SET_${field.toUpperCase()}_MISMATCH`);
+    }
+  }
+
+  const domains = {};
+  let totalRows = 0;
+  for (const domain of BACKUP_DOMAINS) {
+    const envelope = byDomain.get(domain);
+    const payload = decrypted.get(domain);
+    const rowCounts = countDomainRows(payload);
+    totalRows += Object.values(rowCounts).reduce((sum, count) => sum + count, 0);
+    domains[domain] = {
+      plaintext_sha256: envelope.plaintext_sha256,
+      ciphertext_sha256: envelope.ciphertext_sha256,
+      exported_at: payload.exported_at,
+      row_counts: rowCounts,
+      filtered_tables: payload.filtered_tables || {},
+      excluded_tables: Array.isArray(payload.excluded_tables) ? payload.excluded_tables : []
+    };
+  }
+
+  const digestInput = {
+    environment: reference.metadata.environment,
+    deployment_id: reference.metadata.deployment_id,
+    source_revision: reference.metadata.source_revision,
+    clinic_id: reference.metadata.clinic_id,
+    clinic_code: reference.metadata.clinic_code,
+    slot: reference.metadata.slot,
+    schema_version: reference.metadata.schema_version,
+    key_id: reference.key_id,
+    domains: Object.fromEntries(BACKUP_DOMAINS.map(domain => [domain, {
+      plaintext_sha256: domains[domain].plaintext_sha256,
+      row_counts: domains[domain].row_counts
+    }]))
+  };
+
+  return Object.freeze({
+    valid: true,
+    format: RESTORE_SET_FORMAT,
+    environment: digestInput.environment,
+    deployment_id: digestInput.deployment_id,
+    source_revision: digestInput.source_revision,
+    clinic_id: digestInput.clinic_id,
+    clinic_code: digestInput.clinic_code,
+    slot: digestInput.slot,
+    schema_version: digestInput.schema_version,
+    key_id: digestInput.key_id,
+    total_rows: totalRows,
+    requires_managed_database_restore: true,
+    restore_set_sha256: sha256(JSON.stringify(digestInput)),
+    domains
+  });
 }
 
 function driveHeaders(accessToken, extra = {}) {
@@ -167,6 +341,16 @@ export async function findDriveFile({ accessToken, folderId, name, fetchImpl = f
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error('GOOGLE_DRIVE_LOOKUP_FAILED');
   return payload.files?.[0] || null;
+}
+
+export async function downloadDriveFile({ accessToken, fileId, fetchImpl = fetch }) {
+  if (!accessToken || !fileId) throw new Error('GOOGLE_DRIVE_DOWNLOAD_ARGUMENT_MISSING');
+  const response = await fetchImpl(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+    { headers: driveHeaders(accessToken) }
+  );
+  if (!response.ok) throw new Error('GOOGLE_DRIVE_DOWNLOAD_FAILED');
+  return Buffer.from(await response.arrayBuffer());
 }
 
 async function createDriveFile({ accessToken, folderId, name, mimeType, bytes, fetchImpl }) {

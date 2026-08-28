@@ -65,11 +65,40 @@ for (const name of [
   'clinical_financial_handoffs_healthcheck',
   'prescription_dispensing_healthcheck',
   'production_execution_healthcheck',
-  'quality_release_healthcheck'
+  'quality_release_healthcheck',
+  'backup_restore_contract_healthcheck'
 ]) {
   const result = rowOf(await rpc(target, superSession.access_token, name));
   assert.equal(result?.ready, true, `${name} is not ready on staging`);
   healthchecks[name] = result;
+}
+
+const disabledRole = 'practitioner';
+const disabledSession = sessions.get(disabledRole);
+const disabledRoleResult = roleResults.find(result => result.role === disabledRole);
+const accountDisableEvidence = { role: disabledRole, existingTokenDenied: false, reactivated: false };
+try {
+  await rpc(target, superSession.access_token, 'admin_set_staff_membership_active', {
+    p_user_id: disabledRoleResult.userId,
+    p_active: false,
+    p_reason: 'Authenticated staging account-disable verification'
+  });
+  const disabledContext = rowOf(await rpc(target, disabledSession.access_token, 'current_access_context'));
+  const disabledClinical = await rpc(target, disabledSession.access_token, 'department_can', {
+    p_capability: 'clinical'
+  });
+  assert.equal(disabledContext, undefined, 'disabled practitioner retained an active clinic context');
+  assert.equal(disabledClinical, false, 'disabled practitioner retained its clinical capability');
+  accountDisableEvidence.existingTokenDenied = true;
+} finally {
+  await rpc(target, superSession.access_token, 'admin_set_staff_membership_active', {
+    p_user_id: disabledRoleResult.userId,
+    p_active: true,
+    p_reason: 'Restore synthetic viewer after staging verification'
+  });
+  const restoredContext = rowOf(await rpc(target, disabledSession.access_token, 'current_access_context'));
+  assert.equal(restoredContext?.ready, true, 'synthetic practitioner was not restored after account-disable verification');
+  accountDisableEvidence.reactivated = true;
 }
 
 async function runBrowserMatrix() {
@@ -162,6 +191,7 @@ const evidence = {
   apiRoleCount: roleResults.length,
   apiMatrix: roleResults,
   healthchecks,
+  accountDisableEvidence,
   browserExecuted: browserEnabled,
   browserRoleCount: browserResults?.length || 0,
   browserMatrix: browserResults

@@ -23,7 +23,7 @@ The browser is not an authorization boundary. Navigation is filtered for usabili
 | `admin` | Governance, staff assignment and audit | Every operational department |
 | `super_admin` | Explicit cross-workspace override inside the active clinic tenant | Cross-clinic PHI is not implicit |
 
-`current_access_context()` must confirm the active clinic and department before the UI enables an operational route. Missing or stale access context fails closed. `admin_assign_staff_role()` updates `clinic_memberships`, which is the authorization source of truth, and writes an audit event.
+`current_access_context()` must confirm the active clinic and department before the UI enables an operational route. Missing or stale access context fails closed. `admin_assign_staff_role()` updates `clinic_memberships`, which is the authorization source of truth, and writes an audit event. `admin_set_staff_membership_active()` is the audited account-disable boundary: an existing JWT immediately loses clinic context and database capabilities when its membership becomes inactive. Only a Super Admin may disable a system admin; self-deactivation, the last clinic owner and Super Admin membership are protected.
 
 ## Transactional persistence
 
@@ -56,6 +56,10 @@ Each environment contains:
 
 The scheduled Netlify function runs daily at `20:00 UTC` (`03:00 Asia/Bangkok`) and writes four independent `.cdb.json.enc` files plus one non-PHI manifest per clinic. Stable environment-prefixed names and a database lease make retries idempotent. Each domain file is encrypted using AES-256-GCM with a unique IV and authenticated metadata binding the environment, deployment ID, source revision, clinic, domain and backup slot. The manifest stores file IDs, row counts, key ID and SHA-256 evidence, not record content.
 
+Backup schema `2026-08-28.2` closes the clinical recovery gap. The patient domain now includes the complete tenant-bound care record: appointments, encounters, vitals and assessments, examination, OPD history, Thai diagnosis/context/concepts, pain map, treatment plans/orders/sessions, outcomes/follow-up, sign-off, persistent LINE link and encounter identity verification. The transaction domain separately preserves clinical, appointment and identity audit events with invoices and payments. Product and Pharmacy retain their independent files.
+
+Active one-time credentials are intentionally not exported. Link requests are included only after claim/invalidation/expiry; QR sessions are included only after use/expiry; rate-limit buckets are excluded. The encrypted payload records these filters. This preserves historical proof without making a restored environment reactivate a live QR or link code.
+
 The run is recorded in `backup_export_runs` as `started`, `completed`, `partial` or `failed`. A failed or partial slot may be retried. A completed slot cannot be duplicated.
 
 ## Production configuration
@@ -76,7 +80,7 @@ The run is recorded in `backup_export_runs` as `started`, `completed`, `partial`
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `PATIENT_QR_ISSUER` (must equal the deployment's public `identity.qrIssuer`)
-5. Apply `202608270500_department_persistence_and_drive_export.sql`, `202608270600_atomic_production_execution.sql`, then `202608270700_independent_quality_release.sql` before deploying the worker.
+5. Apply migrations through `202608282000_complete_clinical_backup_and_restore_evidence.sql` in filename order before deploying the worker.
 6. Run the function once, confirm four encrypted files and one manifest, and verify `backup_export_runs.status = 'completed'`.
 
 ## Staging configuration
@@ -97,15 +101,38 @@ The Netlify deploy preview must not receive production backup secrets and must n
 
 ## Verification and restore drill
 
-Download one encrypted domain file to an isolated operator machine and run:
+One file can still be inspected independently:
 
 ```sh
 BACKUP_ENCRYPTION_KEY_BASE64='...' npm run verify:backup -- /absolute/path/PRODUCTION_CHANANYA_patients_....cdb.json.enc
 ```
 
-The verifier authenticates the GCM tag, AAD and both ciphertext/plaintext hashes, then prints only schema metadata and row counts. A full restore must be rehearsed into a new isolated Supabase project; never test restoration against production.
+The verifier authenticates the GCM tag, AAD and both ciphertext/plaintext hashes, then prints only schema metadata and row counts.
 
-Initial target: daily RPO (maximum 24 hours). No commercial production claim should be made until an isolated restore drill establishes and records the actual RTO, verifies relational counts, and confirms a sample HN → Encounter → Prescription → Dispense trace.
+Release evidence requires the complete four-file set. Download exactly one slot into a private directory and run:
+
+```sh
+BACKUP_ENCRYPTION_KEY_BASE64='...' \
+RESTORE_EVIDENCE_DIR='artifacts/restore-drill/evidence' \
+npm run restore:verify-set -- /absolute/path/to/one-backup-slot
+```
+
+The restore-set verifier fails when a domain/table is missing, ciphertext is modified, or environment, clinic, slot, key, schema or exact source commit differ. Its output contains hashes and counts only.
+
+The protected `Isolated managed restore drill` workflow is the executable isolated restore drill. It verifies a database that an operator restored from managed Supabase backup/PITR into a dedicated `restore-test` project. It downloads the matching Drive set, validates all four encrypted objects, compares core relational counts, checks referential integrity, requires a complete Patient → Encounter → Prescription → Dispense → Invoice → Payment chain when selected, and records measured RPO/RTO plus the reviewed restore change reference. It never imports JSON into Production and rejects the Production database origin.
+
+Drive JSON is off-site logical recovery evidence, not the full restore mechanism. Supabase Auth users, profiles, tenant/platform configuration and database internals require managed backup/PITR or an independently reviewed identity-mapping procedure.
+
+Initial target: daily RPO (maximum 24 hours). No commercial production claim should be made until the protected workflow succeeds against the exact candidate commit, establishes actual RPO/RTO, matches source/restore counts and confirms the complete clinical-financial trace.
+
+## Exact-commit CI and operational workflows
+
+- `Release candidate contracts` runs on every PR/push, executes all source and PostgreSQL behavioral contracts, hashes every tracked source file and ordered migration, and retains a 90-day exact-commit artifact.
+- `Authenticated staging E2E` remains protected and proves 11 role matrices, route denial, current-access health, synthetic end-to-end journeys and existing-token denial after audited account deactivation.
+- `Real LINE hybrid identity staging E2E` requires a current ID token from a dedicated LINE test account. It proves official LINE token verification, consent/link, card/QR, practitioner confirmation, replay denial, forced expiry denial, revoke and no-phone HN fallback.
+- `Isolated managed restore drill` requires the protected Drive, encryption and restore-project secrets described above.
+
+The workflows are executable harnesses, not evidence by themselves. Each commercial gate remains `pending` until its successful artifact is reviewed and tied to the exact release commit.
 
 ## Release gates
 

@@ -1,4 +1,4 @@
-name: Authenticated staging E2E
+name: Real LINE hybrid identity staging E2E
 
 on:
   workflow_dispatch:
@@ -7,14 +7,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: authenticated-staging-e2e
+  group: real-line-hybrid-identity-staging
   cancel-in-progress: false
 
 jobs:
-  verify-staging:
-    name: 11 roles + 10 synthetic journeys
+  verify-line-staging:
+    name: Consent + QR + expiry + replay + revoke + HN fallback
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     environment: staging
     env:
       CLINICAL_OS_STAGING_ACK: STAGING_ONLY
@@ -25,12 +25,12 @@ jobs:
       STAGING_TEST_EMAIL_DOMAIN: ${{ vars.STAGING_TEST_EMAIL_DOMAIN }}
       STAGING_TEST_EMAIL_PREFIX: clinical-os-e2e
       STAGING_TEST_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
-      STAGING_BROWSER_E2E: "true"
-      STAGING_SYNTHETIC_UAT_ACK: CREATE_SYNTHETIC_RECORDS
-      STAGING_UAT_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-      STAGING_EVIDENCE_DIR: artifacts/staging-e2e
+      STAGING_LINE_E2E_ACK: DEDICATED_TEST_LINE_ACCOUNT
+      STAGING_LINE_ID_TOKEN: ${{ secrets.STAGING_LINE_ID_TOKEN }}
+      STAGING_LINE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      STAGING_EVIDENCE_DIR: artifacts/line-staging
     steps:
-      - name: Check out exact release candidate
+      - name: Check out exact candidate commit
         uses: actions/checkout@v4
 
       - name: Set up Node
@@ -39,38 +39,29 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install locked application dependencies
+      - name: Install locked dependencies
         run: npm ci
 
-      - name: Install pinned browser runner
-        run: npm install --no-save --package-lock=false playwright@1.55.0
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run source and database behavioral contracts
+      - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
-      - name: Provision synthetic role identities
+      - name: Provision dedicated synthetic staff identities
         run: npm run staging:provision
 
-      - name: Verify authenticated role and workspace matrix
-        run: npm run staging:verify
-
-      - name: Run ten audited synthetic patient journeys
-        run: npm run staging:uat
+      - name: Exercise real LINE identity and hybrid HN flow
+        run: npm run staging:line
 
       - name: Generate exact-commit evidence
         if: always()
         run: npm run evidence:release
         env:
-          RELEASE_EVIDENCE_DIR: artifacts/staging-e2e/release
+          RELEASE_EVIDENCE_DIR: artifacts/line-staging/release
 
-      - name: Retain exact-commit evidence
+      - name: Retain exact-commit LINE evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: authenticated-staging-${{ github.sha }}-${{ github.run_id }}
-          path: artifacts/staging-e2e/
+          name: line-staging-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/line-staging/
           if-no-files-found: warn
           retention-days: 90
