@@ -41,21 +41,27 @@ The browser is not an authorization boundary. Navigation is filtered for usabili
 
 Private destination: [Chananya Clinical OS — Encrypted Backups](https://drive.google.com/drive/folders/1ynt2RvEEtNBlV2ba9TJxj9ye-dziWp-6)
 
-The destination is separated into:
+The destination is separated first by trust environment, then by encrypted data domain:
+
+- [`00-staging-environment`](https://drive.google.com/drive/folders/1eQLyI8f4YBI1spmk2ArueBptkvLl1h83)
+- [`10-production-environment`](https://drive.google.com/drive/folders/1FqEI5G6eJ-RsSwQI1egSGHuBf-NSjSVL)
+
+Each environment contains:
 
 - `01-patients`
 - `02-products-inventory` (Product Master, lots, movements, suppliers, formulas, Production/QC and import evidence)
 - `03-pharmacy`
+- `04-transaction-audit` (canonical append-only audit, invoices, invoice items and payments)
 - `99-manifests-and-restore-tests`
 
-The scheduled Netlify function runs daily at `20:00 UTC` (`03:00 Asia/Bangkok`) and writes three independent `.cdb.json.enc` files plus one non-PHI manifest per clinic. Stable names and a database lease make retries idempotent. Each domain file is encrypted using AES-256-GCM with a unique IV and authenticated metadata; the manifest stores file IDs, row counts, key ID and SHA-256 evidence, not record content.
+The scheduled Netlify function runs daily at `20:00 UTC` (`03:00 Asia/Bangkok`) and writes four independent `.cdb.json.enc` files plus one non-PHI manifest per clinic. Stable environment-prefixed names and a database lease make retries idempotent. Each domain file is encrypted using AES-256-GCM with a unique IV and authenticated metadata binding the environment, deployment ID, source revision, clinic, domain and backup slot. The manifest stores file IDs, row counts, key ID and SHA-256 evidence, not record content.
 
 The run is recorded in `backup_export_runs` as `started`, `completed`, `partial` or `failed`. A failed or partial slot may be retried. A completed slot cannot be duplicated.
 
 ## Production configuration
 
 1. Create a dedicated Google Cloud service account and enable the Google Drive API.
-2. Share only the four destination folders with the service-account email as Editor. Do not grant domain-wide Drive access.
+2. Share only the five destination folders inside the intended environment tree with the service-account email as Editor. Do not share the other environment and do not grant domain-wide Drive access.
 3. Generate a 32-byte backup key outside the repository, for example `openssl rand -base64 32`. Store a separately controlled recovery copy; never put the key in Drive.
 4. Set these Netlify environment variables only for the production Functions runtime:
    - `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`
@@ -63,12 +69,29 @@ The run is recorded in `backup_export_runs` as `started`, `completed`, `partial`
    - `GOOGLE_DRIVE_PATIENTS_FOLDER_ID`
    - `GOOGLE_DRIVE_PRODUCTS_FOLDER_ID`
    - `GOOGLE_DRIVE_PHARMACY_FOLDER_ID`
+   - `GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID`
    - `GOOGLE_DRIVE_MANIFESTS_FOLDER_ID`
+   - `BACKUP_ENVIRONMENT=production`
+   - `BACKUP_DEPLOYMENT_ID` (must not contain a staging marker)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `PATIENT_QR_ISSUER` (must equal the deployment's public `identity.qrIssuer`)
 5. Apply `202608270500_department_persistence_and_drive_export.sql`, `202608270600_atomic_production_execution.sql`, then `202608270700_independent_quality_release.sql` before deploying the worker.
-6. Run the function once, confirm three encrypted files and one manifest, and verify `backup_export_runs.status = 'completed'`.
+6. Run the function once, confirm four encrypted files and one manifest, and verify `backup_export_runs.status = 'completed'`.
+
+## Staging configuration
+
+Staging uses a different Supabase project, encryption key, service account access and all five Drive folder IDs. Set `BACKUP_ENVIRONMENT=staging`, `BACKUP_DEPLOYMENT_ID=chananya-clinical-staging` and `BACKUP_PRODUCTION_SUPABASE_URL` to the browser-safe Production origin used only as a denylist. The worker fails closed if the staging and Production Supabase origins match, if the deployment ID lacks a staging marker, or if any two domain folder IDs are the same.
+
+The current Staging folder IDs are:
+
+- patients: `15lIVkMJPzwApB_5j_fzTuyryenjK9VBR`
+- products/inventory: `1SD600SRH31rvxOZp5V0pgvAjjxrYK5yH`
+- pharmacy: `1t4JJt7IEEwhbpApmZ3zPKa6edpgg6_Yo`
+- transaction/audit: `1TjunPn8V-VnDQTHCAP-1uC77kgntwpBi`
+- manifests/restore: `1ueEtjq5GxvWzZnnA67HLzpqaQRjiqtgm`
+
+Folder IDs are destination identifiers, not credentials. The service-account JSON, service-role key and encryption key remain protected secrets and must never be committed or placed in browser configuration.
 
 The Netlify deploy preview must not receive production backup secrets and must not run the scheduled exporter.
 
@@ -77,7 +100,7 @@ The Netlify deploy preview must not receive production backup secrets and must n
 Download one encrypted domain file to an isolated operator machine and run:
 
 ```sh
-BACKUP_ENCRYPTION_KEY_BASE64='...' npm run verify:backup -- /absolute/path/CHANANYA_patients_....cdb.json.enc
+BACKUP_ENCRYPTION_KEY_BASE64='...' npm run verify:backup -- /absolute/path/PRODUCTION_CHANANYA_patients_....cdb.json.enc
 ```
 
 The verifier authenticates the GCM tag, AAD and both ciphertext/plaintext hashes, then prints only schema metadata and row counts. A full restore must be rehearsed into a new isolated Supabase project; never test restoration against production.

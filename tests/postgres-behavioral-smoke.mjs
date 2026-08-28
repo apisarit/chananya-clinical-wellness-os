@@ -1273,10 +1273,28 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
-assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-27.2');
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-28.1');
 assert.equal(backupPayload.rows[0].payload.data.production_orders.length, 2);
 assert.equal(backupPayload.rows[0].payload.data.finished_goods_receipts.length, 1);
 assert.equal(backupPayload.rows[0].payload.data.production_material_issues.length, 2);
+
+const transactionBackup = await asService(`
+  select public.export_clinic_backup_domain(
+    '00000000-0000-0000-0000-000000000001','transactions'
+  ) payload
+`);
+assert.equal(transactionBackup.rows[0].payload.domain, 'transactions');
+assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-28.1');
+for (const table of ['audit_logs', 'invoices', 'invoice_items', 'payments']) {
+  assert.ok(Array.isArray(transactionBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
+}
+assert.ok(transactionBackup.rows[0].payload.data.audit_logs.length > 0);
+assert.ok(
+  transactionBackup.rows[0].payload.data.audit_logs.every(
+    row => row.clinic_id === '00000000-0000-0000-0000-000000000001'
+  ),
+  'transaction audit export must not cross the active clinic tenant'
+);
 
 const backupSlot = '2026-08-27T20:00:00Z';
 const firstBackupLease = await asService(`

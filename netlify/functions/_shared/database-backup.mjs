@@ -7,7 +7,8 @@ import {
   sign as signBytes
 } from 'node:crypto';
 
-export const BACKUP_DOMAINS = Object.freeze(['patients', 'products', 'pharmacy']);
+export const BACKUP_DOMAINS = Object.freeze(['patients', 'products', 'pharmacy', 'transactions']);
+export const BACKUP_ENVIRONMENTS = Object.freeze(['staging', 'production', 'restore-test']);
 export const BACKUP_FORMAT = 'chananya-encrypted-backup/v1';
 
 const toBase64Url = value => Buffer.from(value)
@@ -75,6 +76,9 @@ export async function fetchGoogleAccessToken(serviceAccount, fetchImpl = fetch) 
 
 function envelopeMetadata(payload, metadata) {
   return Object.freeze({
+    environment: parseBackupEnvironment(metadata.environment),
+    deployment_id: String(metadata.deploymentId),
+    source_revision: String(metadata.sourceRevision),
     clinic_id: String(metadata.clinicId),
     clinic_code: String(metadata.clinicCode),
     domain: String(metadata.domain),
@@ -82,6 +86,14 @@ function envelopeMetadata(payload, metadata) {
     source_format: String(payload?.format || 'unknown'),
     schema_version: String(payload?.schema_version || 'unknown')
   });
+}
+
+export function parseBackupEnvironment(value) {
+  const environment = String(value || '').trim().toLowerCase();
+  if (!BACKUP_ENVIRONMENTS.includes(environment)) {
+    throw new Error('BACKUP_ENVIRONMENT_INVALID');
+  }
+  return environment;
 }
 
 export function encryptBackup(payload, key, metadata, options = {}) {
@@ -237,10 +249,11 @@ export function backupSlot(date = new Date()) {
   )).toISOString();
 }
 
-export function backupFileName(clinicCode, domain, slot, extension = 'cdb.json.enc') {
+export function backupFileName(clinicCode, domain, slot, extension = 'cdb.json.enc', environment = 'production') {
+  const safeEnvironment = parseBackupEnvironment(environment).toUpperCase().replace(/-/g, '_');
   const safeClinic = String(clinicCode || 'CLINIC').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40) || 'CLINIC';
   const stamp = String(slot).replace(/[-:]/g, '').replace(/\.000Z$/, 'Z');
-  return `${safeClinic}_${domain}_${stamp}.${extension}`;
+  return `${safeEnvironment}_${safeClinic}_${domain}_${stamp}.${extension}`;
 }
 
 export function countDomainRows(payload) {

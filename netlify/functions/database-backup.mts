@@ -5,6 +5,7 @@ import {
   countDomainRows,
   encryptBackup,
   fetchGoogleAccessToken,
+  parseBackupEnvironment,
   parseEncryptionKey,
   parseServiceAccount,
   supabaseRpc,
@@ -26,8 +27,15 @@ function env(name) {
 }
 
 function configuration() {
+  const environment = parseBackupEnvironment(env('BACKUP_ENVIRONMENT'));
+  const deploymentId = env('BACKUP_DEPLOYMENT_ID') || env('SITE_NAME');
+  const sourceRevision = env('CLINICAL_OS_SOURCE_COMMIT') || env('COMMIT_REF') || env('DEPLOY_ID');
   const config = {
+    environment,
+    deploymentId,
+    sourceRevision,
     supabaseUrl: env('SUPABASE_URL'),
+    productionSupabaseUrl: env('BACKUP_PRODUCTION_SUPABASE_URL'),
     serviceRoleKey: env('SUPABASE_SERVICE_ROLE_KEY'),
     serviceAccountValue: env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON'),
     encryptionKeyValue: env('BACKUP_ENCRYPTION_KEY_BASE64'),
@@ -35,11 +43,14 @@ function configuration() {
       patients: env('GOOGLE_DRIVE_PATIENTS_FOLDER_ID'),
       products: env('GOOGLE_DRIVE_PRODUCTS_FOLDER_ID'),
       pharmacy: env('GOOGLE_DRIVE_PHARMACY_FOLDER_ID'),
+      transactions: env('GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID'),
       manifests: env('GOOGLE_DRIVE_MANIFESTS_FOLDER_ID')
     }
   };
   const missing = [];
   if (!config.supabaseUrl) missing.push('SUPABASE_URL');
+  if (!config.deploymentId) missing.push('BACKUP_DEPLOYMENT_ID or SITE_NAME');
+  if (!config.sourceRevision) missing.push('CLINICAL_OS_SOURCE_COMMIT, COMMIT_REF or DEPLOY_ID');
   if (!config.serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   if (!config.serviceAccountValue) missing.push('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON');
   if (!config.encryptionKeyValue) missing.push('BACKUP_ENCRYPTION_KEY_BASE64');
@@ -49,6 +60,20 @@ function configuration() {
   if (missing.length) {
     console.error('database backup configuration is incomplete', { missing });
     throw new Error('BACKUP_CONFIGURATION_INCOMPLETE');
+  }
+  const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
+  if (config.environment === 'staging') {
+    if (!stagingMarker.test(config.deploymentId)) throw new Error('BACKUP_STAGING_DEPLOYMENT_ID_REQUIRED');
+    if (!config.productionSupabaseUrl) throw new Error('BACKUP_PRODUCTION_SUPABASE_URL_REQUIRED');
+    if (new URL(config.supabaseUrl).origin === new URL(config.productionSupabaseUrl).origin) {
+      throw new Error('BACKUP_STAGING_CANNOT_USE_PRODUCTION_DATABASE');
+    }
+  }
+  if (config.environment === 'production' && stagingMarker.test(config.deploymentId)) {
+    throw new Error('BACKUP_PRODUCTION_DEPLOYMENT_ID_INVALID');
+  }
+  if (new Set(Object.values(config.folderIds)).size !== Object.keys(config.folderIds).length) {
+    throw new Error('BACKUP_DRIVE_FOLDER_IDS_MUST_BE_UNIQUE');
   }
   return Object.freeze(config);
 }
@@ -101,12 +126,15 @@ async function backupClinic({
       });
       counts[domain] = countDomainRows(payload);
       const encrypted = encryptBackup(payload, encryptionKey, {
+        environment: config.environment,
+        deploymentId: config.deploymentId,
+        sourceRevision: config.sourceRevision,
         clinicId: clinic.clinic_id,
         clinicCode: clinic.clinic_code,
         domain,
         slot
       });
-      const name = backupFileName(clinic.clinic_code, domain, slot);
+      const name = backupFileName(clinic.clinic_code, domain, slot, 'cdb.json.enc', config.environment);
       const driveFile = await upsertDriveFile({
         accessToken,
         folderId: config.folderIds[domain],
@@ -115,6 +143,7 @@ async function backupClinic({
         bytes: encrypted.bytes
       });
       objects.push({
+        environment: config.environment,
         domain,
         file_id: driveFile.id,
         file_name: name,
@@ -138,7 +167,10 @@ async function backupClinic({
   }
 
   const manifest = {
-    format: 'chananya-backup-manifest/v1',
+    format: 'chananya-backup-manifest/v2',
+    environment: config.environment,
+    deployment_id: config.deploymentId,
+    source_revision: config.sourceRevision,
     clinic_id: clinic.clinic_id,
     clinic_code: clinic.clinic_code,
     slot,
@@ -158,7 +190,7 @@ async function backupClinic({
   };
 
   try {
-    const manifestName = backupFileName(clinic.clinic_code, 'manifest', slot, 'manifest.json');
+    const manifestName = backupFileName(clinic.clinic_code, 'manifest', slot, 'manifest.json', config.environment);
     const manifestFile = await upsertDriveFile({
       accessToken,
       folderId: config.folderIds.manifests,
@@ -168,6 +200,7 @@ async function backupClinic({
     });
     objects.push({
       domain: 'manifest',
+      environment: config.environment,
       file_id: manifestFile.id,
       file_name: manifestName,
       operation: manifestFile.operation
@@ -228,6 +261,8 @@ export default async (_request, context) => {
     const unhealthy = results.filter(result => !['completed', 'skipped'].includes(result.status));
     return json({
       ok: unhealthy.length === 0,
+      environment: config.environment,
+      deploymentId: config.deploymentId,
       slot,
       completed: results.filter(result => result.status === 'completed').length,
       skipped: results.filter(result => result.status === 'skipped').length,

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const migration = read('supabase/migrations/202608270500_department_persistence_and_drive_export.sql');
+const environmentBackup = read('supabase/migrations/202608281430_environment_transaction_drive_backup.sql');
 const runtime = read('chananya-runtime.js');
 const pharmacy = read('pharmacy.js');
 const production = read('production.js');
@@ -55,6 +56,13 @@ assert.match(migration, /revoke insert, update, delete on public\.products from 
 assert.match(migration, /revoke insert, update, delete on public\.pharmacy_counter_sales from authenticated/i);
 assert.match(migration, /pg_advisory_xact_lock/, 'backup lease must serialize concurrent runs');
 assert.match(migration, /backup_export_runs_clinic_slot_uidx/, 'backup slots must be unique per clinic');
+assert.match(environmentBackup, /^begin;/i, 'environment backup migration must be atomic');
+assert.match(environmentBackup, /elsif p_domain = 'transactions'/i, 'a separate transaction audit domain must exist');
+for (const table of ['audit_logs', 'invoices', 'invoice_items', 'payments']) {
+  assert.match(environmentBackup, new RegExp(`'${table}'`), `Transaction backup must include ${table}`);
+}
+assert.match(environmentBackup, /where a\.clinic_id=v_requested_clinic/i, 'audit export must be tenant scoped');
+assert.match(environmentBackup, /'schema_version','2026-08-28\.1'/);
 
 assert.match(runtime, /access_context_ready !== true\) return false/, 'UI capability checks must fail closed');
 assert.match(runtime, /admin_center: \['super_admin','admin'\]/, 'admin is limited to its governance capability');
@@ -107,6 +115,9 @@ assert.match(bodyFigure, /linearGradient id="skin"/, 'body map must use the poli
 
 assert.match(backupWorker, /schedule:\s*'0 20 \* \* \*'/, 'backup worker must run daily');
 assert.match(backupWorker, /GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON/);
+assert.match(backupWorker, /GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID/);
+assert.match(backupWorker, /BACKUP_ENVIRONMENT/);
+assert.match(backupWorker, /BACKUP_PRODUCTION_SUPABASE_URL/);
 assert.match(backupHelper, /createCipheriv\('aes-256-gcm'/, 'backup payload must use authenticated AES-256-GCM');
 assert.match(backupHelper, /plaintext_sha256/);
 assert.match(backupHelper, /ciphertext_sha256/);
