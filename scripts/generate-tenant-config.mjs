@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hex = /^#[0-9a-f]{6}$/i;
 const clinicCode = /^[A-Z][A-Z0-9_-]{1,23}$/;
+const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
 // Existing installations use a deterministic compatibility UUID whose version
 // nibble is zero, so validate the UUID shape without imposing RFC version bits.
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -144,6 +145,34 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
     if (!explicitStagingConfig || env.CLINICAL_OS_PREVIEW_DATABASE_ACK !== 'STAGING_ONLY') {
       throw new Error('Preview database access requires an explicit staging config and CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY');
     }
+    if (!env.CLINICAL_OS_PRODUCTION_CONFIG_JSON && !env.CLINICAL_OS_PRODUCTION_CONFIG_PATH) {
+      throw new Error('Preview database access requires an explicit Production config denylist');
+    }
+    const productionInput = env.CLINICAL_OS_PRODUCTION_CONFIG_JSON
+      ? JSON.parse(env.CLINICAL_OS_PRODUCTION_CONFIG_JSON)
+      : JSON.parse(fs.readFileSync(path.resolve(cwd, env.CLINICAL_OS_PRODUCTION_CONFIG_PATH), 'utf8'));
+    const production = validateTenantConfig(productionInput);
+    if (!stagingMarker.test(config.deploymentId)) {
+      throw new Error('Preview database access requires a staging/non-production deploymentId');
+    }
+    if (new URL(config.database.url).origin === new URL(production.database.url).origin) {
+      throw new Error('Preview database access cannot target the Production Supabase project');
+    }
+    if (config.tenant.expectedClinicCode === production.tenant.expectedClinicCode) {
+      throw new Error('Preview staging clinic code must differ from Production');
+    }
+    if (config.identity.qrIssuer === production.identity.qrIssuer) {
+      throw new Error('Preview staging QR issuer must differ from Production');
+    }
+    const previewOrigin = env.DEPLOY_PRIME_URL ? validateOrigin(env.DEPLOY_PRIME_URL, 'DEPLOY_PRIME_URL') : config.auth.redirectOrigin;
+    if (previewOrigin === production.auth.redirectOrigin) {
+      throw new Error('Preview database access cannot use the Production site origin');
+    }
+    return {
+      ...config,
+      auth: { redirectOrigin: previewOrigin },
+      safety: { previewLocked: false }
+    };
   }
   return config;
 }

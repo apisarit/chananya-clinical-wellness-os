@@ -53,6 +53,8 @@ The product must not be described as **Commercial Production ready 100%** until 
 - Managed database backup/PITR configuration is confirmed separately from Google Drive export.
 - Netlify Deploy Preview, automated checks, review status and merge protection pass on the final commit.
 
+The repository includes a protected authenticated-staging harness and runbook, but harness presence is not execution evidence. Until a successful exact-commit run is reviewed, the authenticated staging gate remains `pending`.
+
 Until then, the release label is **Preview / production candidate under verification**.
 
 `release-readiness.json` is the machine-readable release claim. Its `commercialProductionReady` value must remain `false` and each required gate must remain `pending` until evidence tied to the exact release commit has been reviewed. A passing source/Preview test is not evidence that authenticated staging, LINE callback, restore drill or legal review has passed.

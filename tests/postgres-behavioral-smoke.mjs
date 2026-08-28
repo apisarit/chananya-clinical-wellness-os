@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
+import { SYNTHETIC_UAT_CASES } from './fixtures/synthetic-uat-cases.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
@@ -1306,18 +1307,7 @@ assert.equal(completedBackupLease.rows[0].acquired, false);
 // Ten fully synthetic account journeys exercise the exact operational handoff
 // the release candidate must support: Practitioner -> Pharmacy FEFO -> Billing
 // -> full payment/Encounter closure. No production or human data is used.
-const demoCases = [
-  { id:'DEMO-001', prefix:'นาง', first:'สาธิต', last:'ปวดเมื่อย', gender:'female', dob:'1991-01-11', symptom:'ปวดเมื่อยหลังทำงานหน้าคอม', diagnosis:'วาตะกำเริบ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตวาตะ A — ห้ามใช้รักษาจริง', qty:2, price:85, serviceFee:250, discount:0, channel:'qr' },
-  { id:'DEMO-002', prefix:'นาย', first:'สาธิต', last:'ท้องอืด', gender:'male', dob:'1986-02-12', symptom:'ท้องอืดหลังอาหาร', diagnosis:'เสมหะกำเริบ (ข้อมูลสาธิต)', dosha:'เสมหะกำเริบ', product:'ตำรับสาธิตเสมหะ B — ห้ามใช้รักษาจริง', qty:2, price:70, serviceFee:200, discount:20, channel:'cash' },
-  { id:'DEMO-003', prefix:'นางสาว', first:'สาธิต', last:'ไอแห้ง', gender:'female', dob:'1994-03-13', symptom:'ไอแห้งเล็กน้อย ไม่มี red flag', diagnosis:'วาตะร่วมเสมหะ (ข้อมูลสาธิต)', dosha:'วาตะร่วมเสมหะ', product:'ตำรับสาธิตระบบหายใจ C — ห้ามใช้รักษาจริง', qty:3, price:55, serviceFee:220, discount:0, channel:'bank_transfer' },
-  { id:'DEMO-004', prefix:'นาย', first:'สาธิต', last:'นอนไม่สนิท', gender:'male', dob:'1979-04-14', symptom:'นอนหลับไม่สนิทจากงาน', diagnosis:'หทัยวาตะกำเริบ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตผ่อนคลาย D — ห้ามใช้รักษาจริง', qty:1, price:120, serviceFee:300, discount:30, channel:'card' },
-  { id:'DEMO-005', prefix:'นาง', first:'สาธิต', last:'เวียนศีรษะ', gender:'female', dob:'1988-05-15', symptom:'เวียนศีรษะเมื่อเปลี่ยนท่า', diagnosis:'ลมอุทธังคมาวาตะ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตลม E — ห้ามใช้รักษาจริง', qty:2, price:95, serviceFee:280, discount:0, channel:'qr' },
-  { id:'DEMO-006', prefix:'นาย', first:'สาธิต', last:'ร้อนใน', gender:'male', dob:'1990-06-16', symptom:'รู้สึกร้อนในและกระหายน้ำ', diagnosis:'ปิตตะกำเริบ (ข้อมูลสาธิต)', dosha:'ปิตตะกำเริบ', product:'ตำรับสาธิตปิตตะ F — ห้ามใช้รักษาจริง', qty:2, price:65, serviceFee:240, discount:10, channel:'cash' },
-  { id:'DEMO-007', prefix:'นางสาว', first:'สาธิต', last:'แน่นท้อง', gender:'female', dob:'1996-07-17', symptom:'แน่นท้องหลังรับประทานอาหารเร็ว', diagnosis:'โกฏฐาสยาวาตะกำเริบ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตธาตุ G — ห้ามใช้รักษาจริง', qty:3, price:60, serviceFee:200, discount:0, channel:'bank_transfer' },
-  { id:'DEMO-008', prefix:'นาย', first:'สาธิต', last:'คอแห้ง', gender:'male', dob:'1983-08-18', symptom:'คอแห้งจากการใช้เสียง', diagnosis:'อาโปหย่อนร่วมวาตะ (ข้อมูลสาธิต)', dosha:'วาตะกำเริบ', product:'ตำรับสาธิตชุ่มคอ H — ห้ามใช้รักษาจริง', qty:2, price:75, serviceFee:180, discount:0, channel:'qr' },
-  { id:'DEMO-009', prefix:'นาง', first:'สาธิต', last:'ล้ากล้ามเนื้อ', gender:'female', dob:'1977-09-19', symptom:'ล้ากล้ามเนื้อหลังออกกำลังกาย', diagnosis:'วาโยธาตุพิการ (ข้อมูลสาธิต)', dosha:'วาตะพิการ', product:'ตำรับสาธิตกล้ามเนื้อ I — ห้ามใช้รักษาจริง', qty:1, price:140, serviceFee:320, discount:40, channel:'card' },
-  { id:'DEMO-010', prefix:'นาย', first:'สาธิต', last:'ถ่ายไม่ปกติ', gender:'male', dob:'1985-10-20', symptom:'การขับถ่ายเปลี่ยนจากกิจวัตร', diagnosis:'สมานวาตะหย่อน (ข้อมูลสาธิต)', dosha:'วาตะหย่อน', product:'ตำรับสาธิตสมานวาตะ J — ห้ามใช้รักษาจริง', qty:2, price:80, serviceFee:260, discount:0, channel:'cash' }
-];
+const demoCases = SYNTHETIC_UAT_CASES;
 const uatResults = [];
 
 for (const [index, demo] of demoCases.entries()) {

@@ -42,7 +42,9 @@ For a routine new customer, the only customer-specific inputs are the validated 
 
 `npm run build` validates the config and generates `tenant-config.js` for staff/auth pages plus `brand-config.js` for public/read-only pages. The public brand file contains no database endpoint or key. The staff tenant file contains only browser-safe public configuration.
 
-Netlify Deploy Preview and branch deploy contexts are database-locked by default: the build removes the Supabase URL/key from the generated browser config, so only read-only synthetic review surfaces work. Authenticated staging E2E requires a dedicated staging config, `CLINICAL_OS_ALLOW_PREVIEW_DATABASE=true` and the explicit guard `CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY`; using the default production config is rejected by the build.
+Netlify Deploy Preview and branch deploy contexts are database-locked by default: the build removes the Supabase URL/key from the generated browser config, so only read-only synthetic review surfaces work. Authenticated staging E2E requires a dedicated staging config, `CLINICAL_OS_ALLOW_PREVIEW_DATABASE=true`, the explicit guard `CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY`, and an explicit customer-specific Production config denylist; using the Production target is rejected by the build.
+
+The protected 11-role and ten-journey procedure is documented in `AUTHENTICATED_STAGING_RUNBOOK.md`. Its command-line guard independently rejects the Production database/site, matching Production clinic code or QR issuer, and any config without an explicit staging marker. The release gate remains pending until that workflow is executed and reviewed against the exact release commit.
 
 ## Release controls
 

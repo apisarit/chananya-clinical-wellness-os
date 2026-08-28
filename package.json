@@ -1,6 +1,6 @@
 {
   "name": "chananya-clinical-wellness-os",
-  "version": "3.5.0-preview.3",
+  "version": "3.5.0-preview.4",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,8 +9,11 @@
   "scripts": {
     "build": "node scripts/generate-tenant-config.mjs",
     "tenant:bootstrap-sql": "node scripts/generate-tenant-bootstrap-sql.mjs",
-    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/clinical-outcomes-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/prescription-dispensing-contract.mjs && node tests/department-persistence-contract.mjs && node tests/atomic-production-contract.mjs && node tests/independent-quality-contract.mjs && node tests/white-label-contract.mjs && node tests/patient-identity-function.mjs && node tests/database-backup.mjs && node tests/commercial-release-gate.mjs && node tests/postgres-behavioral-smoke.mjs",
-    "verify:backup": "node scripts/verify-backup.mjs"
+    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/clinical-outcomes-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/prescription-dispensing-contract.mjs && node tests/department-persistence-contract.mjs && node tests/atomic-production-contract.mjs && node tests/independent-quality-contract.mjs && node tests/white-label-contract.mjs && node tests/staging-safety-contract.mjs && node tests/patient-identity-function.mjs && node tests/database-backup.mjs && node tests/commercial-release-gate.mjs && node tests/postgres-behavioral-smoke.mjs",
+    "verify:backup": "node scripts/verify-backup.mjs",
+    "staging:provision": "node scripts/provision-staging-users.mjs",
+    "staging:verify": "node scripts/verify-authenticated-staging.mjs",
+    "staging:uat": "node scripts/run-staging-synthetic-uat.mjs"
   },
   "dependencies": {
     "qrcode": "1.5.4"
