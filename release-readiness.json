@@ -13,7 +13,7 @@
     },
     {
       "id": "line_callback",
-      "label": "LINE callback, consent, revoke, QR expiry and replay denial",
+      "label": "LINE OA signed callback, consent, revoke, QR expiry and replay denial",
       "status": "pending",
       "evidence": null
     },

@@ -78,6 +78,8 @@ Guardian verification requires a note. Search audit stores a query hash and resu
 - `patient-card.html` / `patient-card.js`: patient LIFF surface.
 - `check-in.html` / `check-in.js`: practitioner/reception mobile scanner and HN fallback.
 - `netlify/functions/patient-identity.mts`: server-only LINE verification and QR issuance.
+- `netlify/functions/line-oa-webhook.mts`: signed LINE OA Messaging callback and privacy-safe Patient Card routing.
+- `supabase/migrations/202608292100_line_oa_messaging_gateway.sql`: callback idempotency, follow state and sanitized identity evidence.
 - `supabase/migrations/202608270300_hybrid_patient_identity.sql`: clinic boundary, HN generation, identity records, RLS, RPCs, and audit.
 
 ## Required Netlify environment
@@ -85,6 +87,9 @@ Guardian verification requires a note. Search audit stores a query hash and resu
 ```text
 LINE_LIFF_ID
 LINE_LOGIN_CHANNEL_ID
+LINE_MESSAGING_CHANNEL_ID
+LINE_MESSAGING_CHANNEL_SECRET
+LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
 PATIENT_IDENTITY_HMAC_SECRET
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
@@ -93,6 +98,8 @@ SUPABASE_SERVICE_ROLE_KEY
 Do not put these server-only values into `auth-config.js`. `LINE_LIFF_ID` is public but is served through the configuration response so the patient surface has one activation gate. Patient POST requests are accepted only when the browser `Origin` exactly matches the Function origin; there is no cross-origin allowlist.
 
 `PATIENT_IDENTITY_HMAC_SECRET` is a long-lived identity key, not a routine application secret. Store it in the platform secret manager, restrict access, back it up through the approved operational process, and plan a versioned re-link migration before rotation. Replacing it without migration makes existing LINE links undiscoverable.
+
+The LINE Official Account callback is `/api/line-oa-webhook`. Its Messaging API channel and the LINE Login/LIFF channel must belong to the same LINE Developers provider. The callback validates the official request signature before parsing, stores only keyed/hashes and sanitized action classifications, and never puts patient name, HN, allergy, diagnosis, medicine or appointment detail into chat. See [LINE OA Messaging Gateway](./LINE_OA_MESSAGING_GATEWAY.md).
 
 ## Activation and rollback
 

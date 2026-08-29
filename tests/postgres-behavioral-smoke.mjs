@@ -213,6 +213,65 @@ const qrIssued = await db.query(`
 assert.equal(qrIssued.rows[0].patient_id, patientA.id);
 await db.exec('reset role;');
 
+const lineOaChannelHash = 'b'.repeat(64);
+const lineOaEventHash = 'c'.repeat(64);
+const lineOaPayloadHash = 'd'.repeat(64);
+const lineOaClaim = await asService(`
+  select * from public.register_line_oa_webhook_event(
+    '${lineOaChannelHash}','${lineOaEventHash}','${subjectHash}',
+    'follow','none',now(),false,'${lineOaPayloadHash}'
+  )
+`);
+assert.equal(lineOaClaim.rows[0].accepted, true);
+assert.equal(lineOaClaim.rows[0].linked_count, 1);
+const lineOaFinalized = await asService(`
+  select public.finalize_line_oa_webhook_event(
+    '${lineOaChannelHash}','${lineOaEventHash}','processed','sent',null
+  ) finalized
+`);
+assert.equal(lineOaFinalized.rows[0].finalized, true);
+const lineOaDuplicate = await asService(`
+  select * from public.register_line_oa_webhook_event(
+    '${lineOaChannelHash}','${lineOaEventHash}','${subjectHash}',
+    'follow','none',now(),true,'${lineOaPayloadHash}'
+  )
+`);
+assert.equal(lineOaDuplicate.rows[0].accepted, false);
+const lineOaEvidence = await asService(`
+  select * from public.line_oa_webhook_evidence(now()-interval '1 hour')
+`);
+assert.deepEqual(
+  {
+    total: Number(lineOaEvidence.rows[0].total_events),
+    processed: Number(lineOaEvidence.rows[0].processed_events),
+    failed: Number(lineOaEvidence.rows[0].failed_events),
+    replied: Number(lineOaEvidence.rows[0].replied_events)
+  },
+  { total: 1, processed: 1, failed: 0, replied: 1 }
+);
+const lineOaStored = await db.query(`
+  select event_type,action_code,processing_status,reply_status,linked_patient_count
+  from public.line_oa_webhook_events
+  where event_id_hash='${lineOaEventHash}'
+`);
+assert.deepEqual(lineOaStored.rows[0], {
+  event_type: 'follow',
+  action_code: 'none',
+  processing_status: 'processed',
+  reply_status: 'sent',
+  linked_patient_count: 1
+});
+const lineOaIdentityAudit = await db.query(`
+  select count(*)::int count
+  from public.patient_identity_events
+  where patient_id='${patientA.id}' and event_type='LINE_OA_FOLLOWED'
+`);
+assert.equal(lineOaIdentityAudit.rows[0].count, 1);
+await expectDatabaseError(
+  asUser(USER_A, `select * from public.line_oa_webhook_evidence(now()-interval '1 hour')`),
+  'permission denied'
+);
+
 const resolved = await asUser(USER_A, `
   select * from public.resolve_patient_qr('CHANANYA:PT1:${QR_TOKEN}',null)
 `);
@@ -1659,5 +1718,5 @@ for (const statement of [
 
 await db.close();
 console.log(
-  'PostgreSQL behavioral smoke passed: consent, HN, LINE identity, clinical outcomes, atomic clinical/billing/production handoffs, department/RLS boundaries, FEFO, QC release, idempotency, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
+  'PostgreSQL behavioral smoke passed: consent, HN, LINE identity/OA callback, clinical outcomes, atomic clinical/billing/production handoffs, department/RLS boundaries, FEFO, QC release, idempotency, encrypted-export leases, rollback, no-phone fallback and tenant isolation'
 );

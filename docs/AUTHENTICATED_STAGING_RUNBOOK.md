@@ -82,4 +82,6 @@ Do not change `release-readiness.json` from `pending` based only on the presence
 
 LINE callback/replay tests, encrypted Google Drive backup + isolated restore drill, managed database backup/PITR confirmation, and privacy/security/legal review remain separate hard gates.
 
+The LINE gate must use the signed Messaging API callback described in `LINE_OA_MESSAGING_GATEWAY.md`, not only a locally supplied LINE ID token. The exact staging deploy must report `enabled=true` at `/api/line-oa-webhook`, pass LINE Developers **Verify**, receive a real event from the dedicated test account, and retain non-PHI `line_oa_webhook_evidence(...)` with the LIFF/QR/revoke/HN evidence.
+
 For the backup gate, use only the `00-staging-environment` Drive tree documented in `DEPARTMENT_ACCESS_AND_BACKUPS.md`. The transaction/audit export is a fourth encrypted domain, and its manifest must report `environment=staging`, the exact source revision and zero failed domains. Do not share or configure the Production Drive tree in the staging Netlify site.
