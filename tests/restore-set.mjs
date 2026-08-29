@@ -76,7 +76,10 @@ const missingTable = envelope('patients', 10, value => {
 });
 assert.throws(() => verifyBackupSet([missingTable, ...envelopes.slice(1)], key), /CLINICAL_RECORD_SIGNOFFS/);
 
-const migration = read('supabase/migrations/202608282000_complete_clinical_backup_and_restore_evidence.sql');
+const migration = [
+  'supabase/migrations/202608282000_complete_clinical_backup_and_restore_evidence.sql',
+  'supabase/migrations/202608291800_line_oa_operational_messaging.sql'
+].map(read).join('\n');
 for (const tables of Object.values(BACKUP_REQUIRED_TABLES)) {
   for (const table of tables) assert.match(migration, new RegExp(`'${table}'`), `${table} missing from backup migration`);
 }
@@ -100,13 +103,16 @@ assert.match(ciWorkflow, /evidence:release/);
 
 const lineWorkflow = read('.github/workflows/line-staging-e2e.yml');
 assert.match(lineWorkflow, /STAGING_LINE_ID_TOKEN/);
+assert.match(lineWorkflow, /STAGING_LINE_MESSAGING_CHANNEL_ACCESS_TOKEN/);
+assert.match(lineWorkflow, /DEDICATED_STAGING_OA_AND_SYNTHETIC_PUSH/);
 assert.match(lineWorkflow, /DEDICATED_TEST_LINE_ACCOUNT/);
 assert.match(lineWorkflow, /staging:line/);
 const lineScript = read('scripts/verify-line-staging.mjs');
 for (const proof of [
   'issue_patient_line_link_code','confirm_patient_qr','start_manual_patient_encounter',
   'revoke_patient_identity_link','used LINE credential was accepted again',
-  'expired LINE credential was accepted'
+  'expired LINE credential was accepted','\/v2\/bot\/channel\/webhook\/test',
+  'line_oa_notification_outbox','line_oa_delivery_events','operationalMessagingConsent'
 ]) assert.match(lineScript, new RegExp(proof));
 
 console.log('Restore-set checks passed: four encrypted domains, complete table contract, source binding, managed-restore evidence and exact-commit CI');

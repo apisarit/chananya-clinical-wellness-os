@@ -120,10 +120,12 @@ export function publicError(error) {
     'CONSENT_REQUIRED',
     'PATIENT_ID_INVALID',
     'PATIENT_IDENTITY_NOT_LINKED',
+    'LINE_OA_PREFERENCE_NOT_CONFIGURED',
     'RATE_LIMITED'
   ]);
   const code = known.has(error?.message) ? error.message : 'PATIENT_IDENTITY_REQUEST_FAILED';
   const status = code === 'RATE_LIMITED' ? 429
+    : code === 'LINE_OA_PREFERENCE_NOT_CONFIGURED' ? 503
     : code.includes('TOKEN') ? 401
       : code.includes('INVALID') || code.includes('LINKED') || code === 'CONSENT_REQUIRED' ? 400
         : 500;

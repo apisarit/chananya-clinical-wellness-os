@@ -5,6 +5,7 @@
   let idToken = '';
   let linkedProfiles = [];
   let expiryTimer = null;
+  let operationalMessagingAvailable = false;
 
   const messages = Object.freeze({
     LINK_CODE_FORMAT_INVALID: 'รูปแบบรหัสเชื่อมบัญชีไม่ถูกต้อง',
@@ -15,6 +16,7 @@
     LINE_ID_TOKEN_EXPIRED: 'การเข้าสู่ระบบ LINE หมดอายุ กรุณาเปิดใหม่อีกครั้ง',
     PATIENT_IDENTITY_NOT_LINKED: 'ยังไม่พบการเชื่อมบัญชีกับผู้รับบริการ',
     RATE_LIMITED: 'มีการเรียกใช้ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่',
+    LINE_OA_PREFERENCE_NOT_CONFIGURED: 'ระบบข้อความบริการผ่าน LINE OA ยังไม่เปิดใช้งาน',
     PATIENT_IDENTITY_NOT_CONFIGURED: 'บริการบัตรผู้รับบริการดิจิทัลยังไม่เปิดใช้งาน',
     PATIENT_IDENTITY_REQUEST_FAILED: 'ไม่สามารถดำเนินการได้ในขณะนี้ กรุณาใช้ HN หรือติดต่อเจ้าหน้าที่'
   });
@@ -83,6 +85,8 @@
     }
     $('#patient-link-section').classList.toggle('hidden', linkedProfiles.length > 0);
     $('#patient-profile-section').classList.toggle('hidden', linkedProfiles.length === 0);
+    $('#patient-notification-preference').classList.toggle('hidden', !operationalMessagingAvailable);
+    renderNotificationPreference();
     if (linkedProfiles.length) status('บัญชีได้รับการยืนยันแล้ว เลือกผู้รับบริการเพื่อสร้าง QR');
     else status('กรอกรหัสจากเจ้าหน้าที่เพื่อเชื่อมบัญชี LINE กับประวัติผู้รับบริการ');
     window.dispatchEvent(new CustomEvent('chananya:patient-card-rendered'));
@@ -91,7 +95,42 @@
   async function loadProfiles() {
     const result = await api('status');
     linkedProfiles = result.linked || [];
+    operationalMessagingAvailable = result.operationalMessagingAvailable === true;
     renderProfiles();
+  }
+
+  function selectedProfile() {
+    const patientId = $('#patient-profile-select').value;
+    return linkedProfiles.find(profile => profile.patient_id === patientId) || null;
+  }
+
+  function renderNotificationPreference() {
+    const profile = selectedProfile();
+    const enabled = profile?.operational_messaging_enabled === true;
+    $('#patient-notification-enabled').checked = enabled;
+    $('#patient-notification-note').textContent = enabled
+      ? 'เปิดรับข้อความการนัดหมายและบริการแล้ว • ไม่รวมข้อความการตลาด'
+      : 'ยังไม่รับข้อความแจ้งเตือน • บัตรผู้รับบริการและ HN ยังใช้งานได้ตามปกติ';
+  }
+
+  async function saveNotificationPreference() {
+    const profile = selectedProfile();
+    if (!profile) return;
+    setBusy(true);
+    try {
+      const enabled = $('#patient-notification-enabled').checked;
+      await api('preferences', { patientId: profile.patient_id, enabled });
+      profile.operational_messaging_enabled = enabled;
+      renderNotificationPreference();
+      status(enabled
+        ? 'บันทึกความยินยอมรับข้อความการนัดหมายและบริการแล้ว'
+        : 'ถอนความยินยอมรับข้อความบริการแล้ว');
+    } catch (error) {
+      renderNotificationPreference();
+      status(messages[error.message] || messages.PATIENT_IDENTITY_REQUEST_FAILED, 'danger');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function stopExpiryTimer() {
@@ -136,7 +175,8 @@
     try {
       await api('link', {
         linkCode: $('#patient-link-code').value,
-        consentConfirmed: $('#patient-link-consent').checked
+        consentConfirmed: $('#patient-link-consent').checked,
+        operationalMessagingConsent: $('#patient-notification-consent').checked
       });
       $('#patient-link-form').reset();
       await loadProfiles();
@@ -156,6 +196,7 @@
         status(messages.PATIENT_IDENTITY_NOT_CONFIGURED, 'danger');
         return;
       }
+      operationalMessagingAvailable = config.operationalMessagingAvailable === true;
       await loadLineSdk();
       if (!window.liff) throw new Error('LINE_SDK_UNAVAILABLE');
       await window.liff.init({ liffId: config.liffId });
@@ -175,6 +216,8 @@
   $('#patient-link-form').addEventListener('submit', linkIdentity);
   $('#patient-generate-card').addEventListener('click', generateCard);
   $('#patient-refresh-card').addEventListener('click', generateCard);
+  $('#patient-profile-select').addEventListener('change', renderNotificationPreference);
+  $('#patient-save-notification').addEventListener('click', saveNotificationPreference);
   window.addEventListener('pagehide', stopExpiryTimer);
   init();
 })();

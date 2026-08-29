@@ -1,4 +1,4 @@
-name: Real LINE hybrid identity staging E2E
+name: Real LINE OA + hybrid identity staging E2E
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   verify-line-staging:
-    name: Consent + QR + expiry + replay + revoke + HN fallback
+    name: Official webhook + encrypted push + consent + QR + HN fallback
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: staging
@@ -26,7 +26,9 @@ jobs:
       STAGING_TEST_EMAIL_PREFIX: clinical-os-e2e
       STAGING_TEST_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
       STAGING_LINE_E2E_ACK: DEDICATED_TEST_LINE_ACCOUNT
+      STAGING_LINE_OA_E2E_ACK: DEDICATED_STAGING_OA_AND_SYNTHETIC_PUSH
       STAGING_LINE_ID_TOKEN: ${{ secrets.STAGING_LINE_ID_TOKEN }}
+      STAGING_LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: ${{ secrets.STAGING_LINE_MESSAGING_CHANNEL_ACCESS_TOKEN }}
       STAGING_LINE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
       STAGING_EVIDENCE_DIR: artifacts/line-staging
     steps:

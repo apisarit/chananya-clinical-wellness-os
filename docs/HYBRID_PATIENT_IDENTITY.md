@@ -72,13 +72,19 @@ Guardian verification requires a note. Search audit stores a query hash and resu
 - Restrictive RLS policies are ANDed with existing role policies for PHI tables to prevent cross-clinic access.
 - Patient confirmation, QR consumption, Encounter creation, intake observations, verification, and audit are committed or rolled back together.
 - Identity lifecycle events, encounter identity evidence, and the canonical audit ledger are protected by append-only database triggers; corrections must add a new event rather than rewrite history.
+- LINE OA operational-message consent is separate from identity-link consent. Refusing or withdrawing messaging never disables the Patient Card, QR or HN route.
+- Messaging API user IDs are stored only as environment-bound AES-256-GCM ciphertext; the HMAC subject is used for patient linkage. Free-text chat, reply tokens and webhook bodies are not persisted.
 
 ## Runtime components
 
 - `patient-card.html` / `patient-card.js`: patient LIFF surface.
 - `check-in.html` / `check-in.js`: practitioner/reception mobile scanner and HN fallback.
 - `netlify/functions/patient-identity.mts`: server-only LINE verification and QR issuance.
+- `netlify/functions/line-oa-webhook.mts`: signature-first Messaging API webhook and idempotent OA replies.
+- `netlify/functions/line-oa-dispatch.mts`: five-minute operational-notification outbox worker.
 - `supabase/migrations/202608270300_hybrid_patient_identity.sql`: clinic boundary, HN generation, identity records, RLS, RPCs, and audit.
+- `supabase/migrations/202608291800_line_oa_operational_messaging.sql`: OA contacts, revocable consent, webhook dedupe, appointment outbox, retry and Drive recovery evidence.
+- `docs/LINE_OA_IMPLEMENTATION.md`: activation, secret and exact-commit staging runbook.
 
 ## Required Netlify environment
 
@@ -89,6 +95,8 @@ PATIENT_IDENTITY_HMAC_SECRET
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 ```
+
+LINE OA adds protected Messaging API and recipient-encryption variables documented in [LINE_OA_IMPLEMENTATION.md](./LINE_OA_IMPLEMENTATION.md). The LINE Login and Messaging API channels must be under the same LINE provider; otherwise their user IDs cannot be joined safely.
 
 Do not put these server-only values into `auth-config.js`. `LINE_LIFF_ID` is public but is served through the configuration response so the patient surface has one activation gate. Patient POST requests are accepted only when the browser `Origin` exactly matches the Function origin; there is no cross-origin allowlist.
 
@@ -101,7 +109,7 @@ The migration is additive and preserves legacy HN records. Until it is applied, 
 Activation order:
 
 1. Apply and test the migration in a non-production Supabase project.
-2. Configure a separate non-production LINE Login/LIFF channel.
+2. Configure separate non-production LINE Login/LIFF and Messaging API channels under the same provider.
 3. Deploy the Patient Card + Function to a dedicated non-production patient origin, separate from every staff workstation origin, then configure Preview-only Netlify environment values.
 4. Test self-link, guardian-link, QR replay, expiry, wrong-clinic access, no-phone search, allergy warning, and encounter rollback.
 5. Perform practitioner/reception mobile E2E on iOS and Android.

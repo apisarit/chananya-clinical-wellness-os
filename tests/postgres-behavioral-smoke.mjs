@@ -190,14 +190,205 @@ assert.match(linkCode, /^[0-9A-F]{12}$/);
 
 await db.exec(`
   select set_config('request.jwt.claim.sub','',false);
-  set role service_role;
+  select set_config('request.jwt.claim.role','service_role',false);
 `);
 const subjectHash = 'a'.repeat(64);
-await db.query(`
-  select * from public.complete_patient_line_link(
-    '${linkCode}','${subjectHash}','line-channel',true
+const lineOaChannelHash = 'b'.repeat(64);
+await expectDatabaseError(db.query(`
+  select * from public.complete_patient_line_link_with_oa_consent(
+    '${linkCode}','${subjectHash}','line-channel',true,'${CLINIC_B}',
+    'staging','chananya-line-oa-staging','${lineOaChannelHash}'
+  )
+`), 'LINE_OA_CLINIC_MISMATCH');
+const linkedWithLineOa = await db.query(`
+  select * from public.complete_patient_line_link_with_oa_consent(
+    '${linkCode}','${subjectHash}','line-channel',true,
+    '00000000-0000-0000-0000-000000000001',
+    'staging','chananya-line-oa-staging','${lineOaChannelHash}'
   )
 `);
+assert.equal(linkedWithLineOa.rows[0].patient_id, patientA.id, 'atomic OA consent link consumed the wrong patient');
+assert.equal((await db.query(`
+  select operational_enabled from public.line_oa_notification_preferences
+  where patient_id='${patientA.id}' and environment='staging'
+    and deployment_id='chananya-line-oa-staging' and channel_hash='${lineOaChannelHash}'
+`)).rows[0].operational_enabled, true);
+await expectDatabaseError(db.query(`
+  select * from public.set_line_oa_notification_preference_for_subject(
+    '${subjectHash}','${patientA.id}','${CLINIC_B}',
+    'staging','chananya-line-oa-staging','${lineOaChannelHash}',true
+  )
+`), 'PATIENT_IDENTITY_NOT_LINKED');
+const lineOaClaim = await db.query(`
+  select * from public.claim_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000001','follow',now(),false,'active',
+    '${subjectHash}','active','Y2lwaGVydGV4dA==','aXYtaXYtaXYtaXY=','YXV0aC10YWc=',
+    'line-oa-staging-v1','{"source_type":"user","message_type":null,"intent":null}'::jsonb
+  )
+`);
+assert.equal(lineOaClaim.rows[0].claimed, true);
+assert.equal(lineOaClaim.rows[0].linked_patient_count, 1);
+const lineOaDuplicate = await db.query(`
+  select * from public.claim_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000001','follow',now(),true,'active',
+    '${subjectHash}','active','Y2lwaGVydGV4dA==','aXYtaXYtaXYtaXY=','YXV0aC10YWc=',
+    'line-oa-staging-v1','{"source_type":"user","message_type":null,"intent":null}'::jsonb
+  )
+`);
+assert.equal(lineOaDuplicate.rows[0].claimed, false, 'duplicate webhook was claimed while the first lease was active');
+assert.equal((await db.query(`
+  select public.finish_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000001','reply_sent',null,false
+  ) finished
+`)).rows[0].finished, true);
+await expectDatabaseError(
+  asUser(USER_A, `select * from public.line_oa_contacts`),
+  'permission denied'
+);
+await db.exec(`
+  select set_config('request.jwt.claim.sub','',false);
+  select set_config('request.jwt.claim.role','service_role',false);
+`);
+
+const lineSchedule = (await db.query(`
+  insert into public.practitioner_schedules(
+    practitioner_id,title,starts_at,ends_at,max_patients,booking_status,created_by
+  ) values (
+    '${USER_A}','LINE OA synthetic appointment',now()+interval '2 days',
+    now()+interval '2 days 30 minutes',1,'open','${USER_A}'
+  ) returning *
+`)).rows[0];
+const lineAppointment = (await db.query(`
+  insert into public.clinic_appointments(
+    appointment_no,patient_id,schedule_id,practitioner_id,queue_number,
+    scheduled_start,scheduled_end,status,booking_source,created_by
+  ) values (
+    'APT-LINE-OA-SYNTHETIC','${patientA.id}','${lineSchedule.id}','${USER_A}',1,
+    now()+interval '2 days',now()+interval '2 days 30 minutes',
+    'booked','staff','${USER_A}'
+  ) returning *
+`)).rows[0];
+const lineOutbox = await db.query(`
+  select notification_type,status,count(*)::integer count
+  from public.line_oa_notification_outbox
+  where appointment_id='${lineAppointment.id}'
+  group by notification_type,status
+  order by notification_type
+`);
+assert.deepEqual(lineOutbox.rows, [
+  { notification_type: 'APPOINTMENT_BOOKED', status: 'pending', count: 1 },
+  { notification_type: 'APPOINTMENT_REMINDER', status: 'pending', count: 1 }
+]);
+const claimedNotification = await db.query(`
+  select * from public.claim_line_oa_notification_batch(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','behavior-worker',8
+  )
+`);
+assert.equal(claimedNotification.rows.length, 1);
+assert.equal(claimedNotification.rows[0].notification_type, 'APPOINTMENT_BOOKED');
+assert.equal((await db.query(`
+  select public.finish_line_oa_notification(
+    '${claimedNotification.rows[0].notification_id}','behavior-worker','sent',200,null,'line-request-synthetic'
+  ) finished
+`)).rows[0].finished, true);
+assert.equal((await db.query(`
+  select count(*)::integer count from public.line_oa_delivery_events
+  where notification_id='${claimedNotification.rows[0].notification_id}' and outcome='sent'
+`)).rows[0].count, 1);
+await db.query(`
+  update public.clinic_appointments
+  set scheduled_start=scheduled_start+interval '1 hour',
+      scheduled_end=scheduled_end+interval '1 hour'
+  where id='${lineAppointment.id}'
+`);
+assert.equal((await db.query(`
+  select count(*)::integer count from public.line_oa_notification_outbox
+  where appointment_id='${lineAppointment.id}'
+    and notification_type='APPOINTMENT_RESCHEDULED' and status='pending'
+`)).rows[0].count, 1, 'reschedule notification was not queued after the prior reminder was cancelled');
+assert.equal((await db.query(`
+  select count(*)::integer count from public.line_oa_notification_outbox
+  where appointment_id='${lineAppointment.id}'
+    and notification_type='APPOINTMENT_REMINDER' and status='pending'
+`)).rows[0].count, 1, 'rescheduled appointment did not receive exactly one current reminder');
+await db.query(`
+  select * from public.set_line_oa_notification_preference_for_subject(
+    '${subjectHash}','${patientA.id}','00000000-0000-0000-0000-000000000001',
+    'staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}',false
+  )
+`);
+assert.equal((await db.query(`
+  select count(*)::integer count from public.line_oa_notification_outbox
+  where appointment_id='${lineAppointment.id}' and status='cancelled'
+`)).rows[0].count, 3, 'consent withdrawal did not cancel every pending appointment notification');
+await db.query(`
+  select * from public.set_line_oa_notification_preference_for_subject(
+    '${subjectHash}','${patientA.id}','00000000-0000-0000-0000-000000000001',
+    'staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}',true
+  )
+`);
+assert.equal((await db.query(`
+  select count(*)::integer count from public.line_oa_notification_outbox
+  where appointment_id='${lineAppointment.id}'
+    and notification_type='APPOINTMENT_REMINDER' and status='pending'
+`)).rows[0].count, 1, 're-consent did not safely reactivate the current appointment reminder');
+
+const lineOaUnfollow = await db.query(`
+  select * from public.claim_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000002','unfollow',now()+interval '1 second',false,'active',
+    '${subjectHash}','blocked',null,null,null,null,
+    '{"source_type":"user","message_type":null,"intent":null}'::jsonb
+  )
+`);
+assert.equal(lineOaUnfollow.rows[0].claimed, true);
+await db.query(`
+  select public.finish_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000002','contact_blocked',null,false
+  )
+`);
+assert.deepEqual((await db.query(`
+  select friend_status,user_id_ciphertext is null ciphertext_purged
+  from public.line_oa_contacts
+  where clinic_id='00000000-0000-0000-0000-000000000001'
+    and environment='staging' and deployment_id='chananya-line-oa-staging'
+    and channel_hash='${lineOaChannelHash}' and subject_hash='${subjectHash}'
+`)).rows[0], { friend_status: 'blocked', ciphertext_purged: true });
+assert.equal((await db.query(`
+  select operational_enabled from public.line_oa_notification_preferences
+  where patient_id='${patientA.id}' and environment='staging'
+    and deployment_id='chananya-line-oa-staging' and channel_hash='${lineOaChannelHash}'
+`)).rows[0].operational_enabled, false, 'unfollow did not withdraw operational messaging');
+
+const staleLineOaFollow = await db.query(`
+  select * from public.claim_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000003','follow',now()-interval '1 minute',true,'active',
+    '${subjectHash}','active','c3RhbGUtY2lwaGVydGV4dA==','c3RhbGUtaXYtMTI=','c3RhbGUtYXV0aC10YWc=',
+    'line-oa-staging-v1','{"source_type":"user","message_type":null,"intent":null}'::jsonb
+  )
+`);
+assert.equal(staleLineOaFollow.rows[0].claimed, true);
+await db.query(`
+  select public.finish_line_oa_webhook_event(
+    '00000000-0000-0000-0000-000000000001','staging','chananya-line-oa-staging',
+    '${lineOaChannelHash}','01JLINEOABEHAVIOR000000003','reply_sent',null,false
+  )
+`);
+assert.equal((await db.query(`
+  select friend_status from public.line_oa_contacts
+  where clinic_id='00000000-0000-0000-0000-000000000001'
+    and environment='staging' and deployment_id='chananya-line-oa-staging'
+    and channel_hash='${lineOaChannelHash}' and subject_hash='${subjectHash}'
+`)).rows[0].friend_status, 'blocked', 'stale redelivery reversed a newer unfollow event');
+
 const hashes = await db.query(`
   select
     encode(digest('${QR_TOKEN}','sha256'),'hex') token_hash,
@@ -1273,7 +1464,7 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
-assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-28.2');
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-29.1');
 for (const table of [
   'services','price_lists','price_list_items','products','suppliers','inventory_lots',
   'stock_movements','formulas','formula_components','production_requests',
@@ -1292,10 +1483,11 @@ const transactionBackup = await asService(`
   ) payload
 `);
 assert.equal(transactionBackup.rows[0].payload.domain, 'transactions');
-assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-28.2');
+assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-29.1');
 for (const table of [
   'audit_logs','clinical_record_audit_events','appointment_events',
-  'patient_identity_events','invoices','invoice_items','payments'
+  'patient_identity_events','line_oa_webhook_events','line_oa_notification_outbox',
+  'line_oa_delivery_events','invoices','invoice_items','payments'
 ]) {
   assert.ok(Array.isArray(transactionBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
 }
@@ -1318,7 +1510,8 @@ for (const table of [
   'ttm_structured_diagnoses','ttm_encounter_concepts','body_pain_points',
   'clinical_treatment_plans','treatment_orders','treatment_sessions',
   'clinical_treatment_sessions','clinical_followup_notes','clinical_record_signoffs',
-  'patient_identity_links','encounter_identity_verifications'
+  'patient_identity_links','encounter_identity_verifications',
+  'line_oa_contacts','line_oa_notification_preferences'
 ]) {
   assert.ok(Array.isArray(patientBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
 }
@@ -1331,14 +1524,14 @@ assert.match(patientBackup.rows[0].payload.recovery_model.full_database_restore,
 
 const backupContract = await asUser(USER_C, `select * from public.backup_restore_contract_healthcheck()`);
 assert.equal(backupContract.rows[0].ready, true);
-assert.equal(backupContract.rows[0].schema_version, '2026-08-28.2');
+assert.equal(backupContract.rows[0].schema_version, '2026-08-29.1');
 const restoreTrace = await asService(`
   select public.verify_clinic_restore_trace(
     '00000000-0000-0000-0000-000000000001'
   ) trace
 `);
 assert.equal(restoreTrace.rows[0].trace.ready, true);
-assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-08-28.2');
+assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-08-29.1');
 assert.equal(restoreTrace.rows[0].trace.referential_integrity_anomalies, 0);
 
 await asUser(USER_C, `

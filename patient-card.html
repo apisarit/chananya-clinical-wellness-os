@@ -40,6 +40,7 @@
           <input id="patient-link-code" type="text" inputmode="text" autocomplete="one-time-code" maxlength="14" placeholder="เช่น A1B2-C3D4-E5F6" required>
         </label>
         <label class="full check-row"><input id="patient-link-consent" type="checkbox" required> ฉันยินยอมเชื่อมบัญชี LINE นี้กับประวัติผู้รับบริการตามที่เจ้าหน้าที่ระบุ และทราบว่าสามารถขอยกเลิกการเชื่อมได้</label>
+        <label class="full check-row"><input id="patient-notification-consent" type="checkbox"> ฉันยินยอมรับข้อความยืนยัน เตือน หรือเปลี่ยนแปลงนัดหมายผ่าน LINE OA (ไม่รวมโฆษณา) และสามารถถอนความยินยอมได้ทุกเวลา</label>
         <button class="btn primary full" type="submit">ยืนยันการเชื่อมบัญชี</button>
       </form>
     </section>
@@ -50,6 +51,11 @@
         <div><h2>เลือกผู้รับบริการ</h2><p>บัญชีผู้ดูแลสามารถเลือกบุคคลที่ได้รับความยินยอมให้ดูแล</p></div>
       </div>
       <label>โปรไฟล์ผู้รับบริการ<select id="patient-profile-select"></select></label>
+      <div id="patient-notification-preference" class="notice space-top-sm">
+        <label class="check-row"><input id="patient-notification-enabled" type="checkbox"> รับข้อความการนัดหมายและบริการผ่าน LINE OA (ไม่รวมการตลาด)</label>
+        <button class="btn ghost wide space-top-sm" id="patient-save-notification" type="button">บันทึกความยินยอมข้อความบริการ</button>
+        <small id="patient-notification-note">การเชื่อมบัตรผู้รับบริการยังใช้งานได้ แม้ไม่รับข้อความแจ้งเตือน</small>
+      </div>
       <button class="btn primary wide space-top-sm" id="patient-generate-card" type="button">สร้าง QR สำหรับเข้ารับบริการ</button>
     </section>
 

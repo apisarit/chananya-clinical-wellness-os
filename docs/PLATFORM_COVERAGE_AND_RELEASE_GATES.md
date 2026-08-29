@@ -15,7 +15,7 @@ No item may be called production-ready merely because dimensions 1 or 2 pass.
 |---|---|---|---|---|
 | Dashboard, patient registry, billing, audit | Operations / Reception / Billing / Admin | `/` | `ui-review.html#operations` | Source present; authenticated staging pending |
 | Appointment capacity and booking | Reception; practitioner read | `/appointments.html` | `ui-review.html#appointments` | Source present; authenticated staging pending |
-| LINE QR and HN/manual fallback | Reception / Practitioner | `/check-in.html`, `/patient-card.html` | `ui-review.html#checkin` | Source present; LINE callback and staging pending |
+| LINE OA, QR and HN/manual fallback | Patient / Reception / Practitioner | `/api/line/webhook`, `/patient-card.html`, `/check-in.html` | `ui-review.html#checkin` | OA webhook/outbox source present; real callback, push and staging evidence pending |
 | Thai medicine knowledge foundation | Practitioner / permitted readers | `/foundation.html` | `ui-review.html#foundation` | Schema present; corpus incomplete; review pending |
 | Encounter, OPD, examination, diagnosis, treatment, prescription, sign-off | Practitioner | `/clinical-v3.html` | `ui-review.html#clinical` | Source present; authenticated staging pending |
 | Outcomes, pain before/after, follow-up and searchable timeline | Practitioner / Doctor; Super Admin override | `/outcomes.html` | `ui-review.html#outcomes` | Source restored as tenant-bound read-only RPCs; authenticated staging pending |
@@ -45,7 +45,7 @@ Thai Traditional Medicine remains the primary ontology. ICD/WHO is a secondary m
 The product must not be described as **Commercial Production ready 100%** until all evidence below is recorded against the exact release commit:
 
 - Authenticated staging E2E passes for every role, including cross-department denials and Super Admin boundaries.
-- LINE callback, consent, link/revoke, QR issue/expiry/replay denial and HN/manual fallback pass on the staging tenant.
+- LINE webhook signature/dedupe, separate operational-message consent/withdrawal, encrypted recipient handling, outbox retry, follow/unfollow, callback, link/revoke, QR issue/expiry/replay denial and HN/manual fallback pass on the staging tenant.
 - The first encrypted Google Drive export completes and an isolated restore drill passes with measured RPO/RTO and integrity verification.
 - Privacy, security and applicable Thai health-data/legal review are approved with unresolved blockers at zero.
 - Required migrations are applied to an isolated staging project and migration/rollback evidence is retained.

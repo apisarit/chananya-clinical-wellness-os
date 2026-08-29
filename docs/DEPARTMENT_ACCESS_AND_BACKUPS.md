@@ -56,7 +56,7 @@ Each environment contains:
 
 The scheduled Netlify function runs daily at `20:00 UTC` (`03:00 Asia/Bangkok`) and writes four independent `.cdb.json.enc` files plus one non-PHI manifest per clinic. Stable environment-prefixed names and a database lease make retries idempotent. Each domain file is encrypted using AES-256-GCM with a unique IV and authenticated metadata binding the environment, deployment ID, source revision, clinic, domain and backup slot. The manifest stores file IDs, row counts, key ID and SHA-256 evidence, not record content.
 
-Backup schema `2026-08-28.2` closes the clinical recovery gap. The patient domain now includes the complete tenant-bound care record: appointments, encounters, vitals and assessments, examination, OPD history, Thai diagnosis/context/concepts, pain map, treatment plans/orders/sessions, outcomes/follow-up, sign-off, persistent LINE link and encounter identity verification. The transaction domain separately preserves clinical, appointment and identity audit events with invoices and payments. Product and Pharmacy retain their independent files.
+Backup schema `2026-08-29.1` closes the clinical and LINE OA recovery gap. The patient domain includes the complete tenant-bound care record plus encrypted OA contacts and revocable operational-message preferences. The transaction domain separately preserves clinical, appointment and identity audit events, LINE webhook/outbox/delivery evidence, invoices and payments. Raw chat text and LINE credentials are never exported because they are never persisted. Product and Pharmacy retain their independent files.
 
 Active one-time credentials are intentionally not exported. Link requests are included only after claim/invalidation/expiry; QR sessions are included only after use/expiry; rate-limit buckets are excluded. The encrypted payload records these filters. This preserves historical proof without making a restored environment reactivate a live QR or link code.
 
@@ -129,7 +129,7 @@ Initial target: daily RPO (maximum 24 hours). No commercial production claim sho
 
 - `Release candidate contracts` runs on every PR/push, executes all source and PostgreSQL behavioral contracts, hashes every tracked source file and ordered migration, and retains a 90-day exact-commit artifact.
 - `Authenticated staging E2E` remains protected and proves 11 role matrices, route denial, current-access health, synthetic end-to-end journeys and existing-token denial after audited account deactivation.
-- `Real LINE hybrid identity staging E2E` requires a current ID token from a dedicated LINE test account. It proves official LINE token verification, consent/link, card/QR, practitioner confirmation, replay denial, forced expiry denial, revoke and no-phone HN fallback.
+- `Real LINE hybrid identity staging E2E` requires a current ID token from a dedicated LINE test account. It proves official LINE token verification, consent/link, card/QR, practitioner confirmation, replay denial, forced expiry denial, revoke and no-phone HN fallback. The expanded OA gate additionally requires signed webhook, follow/unfollow, encrypted recipient, appointment push, retry/dead-letter and consent-withdrawal evidence described in `LINE_OA_IMPLEMENTATION.md`.
 - `Isolated managed restore drill` requires the protected Drive, encryption and restore-project secrets described above.
 
 The workflows are executable harnesses, not evidence by themselves. Each commercial gate remains `pending` until its successful artifact is reviewed and tied to the exact release commit.

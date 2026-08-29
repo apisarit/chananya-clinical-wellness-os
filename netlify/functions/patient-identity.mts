@@ -10,6 +10,7 @@ import {
   supabaseRpc,
   verifyLineIdToken
 } from './_shared/patient-identity.mjs';
+import { sha256 as lineOaSha256, validateLineOaConfig } from './_shared/line-oa.mjs';
 
 const noStoreHeaders = Object.freeze({
   'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
@@ -30,6 +31,11 @@ function configuration() {
   const config = {
     liffId: env('LINE_LIFF_ID'),
     lineChannelId: env('LINE_LOGIN_CHANNEL_ID'),
+    lineMessagingChannelId: env('LINE_MESSAGING_CHANNEL_ID'),
+    lineOaEnvironment: env('LINE_OA_ENVIRONMENT').toLowerCase(),
+    lineOaDeploymentId: env('LINE_OA_DEPLOYMENT_ID'),
+    lineOaClinicId: env('LINE_OA_CLINIC_ID'),
+    lineOaEnabled: env('LINE_OA_ENABLED') === 'true',
     identitySecret: env('PATIENT_IDENTITY_HMAC_SECRET'),
     qrIssuer: env('PATIENT_QR_ISSUER') || 'CHANANYA',
     supabaseUrl: env('SUPABASE_URL'),
@@ -42,7 +48,31 @@ function configuration() {
     && config.supabaseUrl
     && config.serviceRoleKey
   );
-  return Object.freeze({ ...config, enabled });
+  let operationalMessagingAvailable = false;
+  if (config.lineOaEnabled) {
+    try {
+      validateLineOaConfig({
+        environment: config.lineOaEnvironment,
+        activationAck: env('LINE_OA_ACTIVATION_ACK'),
+        deploymentId: config.lineOaDeploymentId,
+        clinicId: config.lineOaClinicId,
+        patientCardUrl: env('LINE_PATIENT_CARD_URL'),
+        channelId: config.lineMessagingChannelId,
+        botUserId: env('LINE_MESSAGING_BOT_USER_ID'),
+        channelSecret: env('LINE_MESSAGING_CHANNEL_SECRET'),
+        accessToken: env('LINE_MESSAGING_CHANNEL_ACCESS_TOKEN'),
+        identitySecret: config.identitySecret,
+        encryptionKey: env('LINE_OA_ENCRYPTION_KEY_BASE64'),
+        encryptionKeyId: env('LINE_OA_ENCRYPTION_KEY_ID'),
+        supabaseUrl: config.supabaseUrl,
+        serviceRoleKey: config.serviceRoleKey
+      });
+      operationalMessagingAvailable = true;
+    } catch {
+      operationalMessagingAvailable = false;
+    }
+  }
+  return Object.freeze({ ...config, enabled, operationalMessagingAvailable });
 }
 
 async function rpc(config, name, body) {
@@ -65,7 +95,8 @@ async function consumeRateLimit(config, action, subjectHash, request, context) {
     preauth: { count: 60, seconds: 60 },
     link: { count: 8, seconds: 300 },
     status: { count: 30, seconds: 60 },
-    card: { count: 12, seconds: 60 }
+    card: { count: 12, seconds: 60 },
+    preferences: { count: 8, seconds: 300 }
   };
   const limit = limits[action] || { count: 6, seconds: 60 };
   const allowed = await rpc(config, 'consume_patient_identity_rate_limit', {
@@ -83,7 +114,7 @@ async function handlePatientAction(request, context, config) {
 
   const body = await readJsonBody(request);
   const action = String(body.action || 'status');
-  if (!['link', 'status', 'card'].includes(action)) {
+  if (!['link', 'status', 'card', 'preferences'].includes(action)) {
     return json({ ok: false, code: 'ACTION_NOT_ALLOWED' }, 400);
   }
 
@@ -92,14 +123,46 @@ async function handlePatientAction(request, context, config) {
   const subjectHash = hmacSha256(lineIdentity.subject, config.identitySecret);
   await consumeRateLimit(config, action, subjectHash, request, context);
 
+  const channelHash = config.operationalMessagingAvailable
+    ? lineOaSha256(config.lineMessagingChannelId)
+    : null;
+
   if (action === 'link') {
     const linkCode = normalizeLinkCode(body.linkCode);
-    await rpc(config, 'complete_patient_line_link', {
-      p_link_code: linkCode,
+    const operationalConsent = config.operationalMessagingAvailable
+      && body.operationalMessagingConsent === true;
+    await rpc(config, operationalConsent
+      ? 'complete_patient_line_link_with_oa_consent'
+      : 'complete_patient_line_link', operationalConsent ? {
+        p_link_code: linkCode,
+        p_subject_hash: subjectHash,
+        p_provider_channel: config.lineChannelId,
+        p_subject_consent_confirmed: body.consentConfirmed === true,
+        p_clinic_id: config.lineOaClinicId,
+        p_environment: config.lineOaEnvironment,
+        p_deployment_id: config.lineOaDeploymentId,
+        p_channel_hash: channelHash
+      } : {
+        p_link_code: linkCode,
+        p_subject_hash: subjectHash,
+        p_provider_channel: config.lineChannelId,
+        p_subject_consent_confirmed: body.consentConfirmed === true
+      });
+  }
+
+  if (action === 'preferences') {
+    if (!config.operationalMessagingAvailable) throw new Error('LINE_OA_PREFERENCE_NOT_CONFIGURED');
+    const patientId = normalizePatientId(body.patientId);
+    await rpc(config, 'set_line_oa_notification_preference_for_subject', {
       p_subject_hash: subjectHash,
-      p_provider_channel: config.lineChannelId,
-      p_subject_consent_confirmed: body.consentConfirmed === true
+      p_patient_id: patientId,
+      p_clinic_id: config.lineOaClinicId,
+      p_environment: config.lineOaEnvironment,
+      p_deployment_id: config.lineOaDeploymentId,
+      p_channel_hash: channelHash,
+      p_enabled: body.enabled === true
     });
+    return json({ ok: true, patientId, operationalMessagingEnabled: body.enabled === true });
   }
 
   if (action === 'card') {
@@ -147,7 +210,29 @@ async function handlePatientAction(request, context, config) {
   const patients = await rpc(config, 'list_line_linked_patients', {
     p_subject_hash: subjectHash
   });
-  return json({ ok: true, linked: Array.isArray(patients) ? patients : [] });
+  let preferences = [];
+  if (config.operationalMessagingAvailable) {
+    preferences = await rpc(config, 'list_line_oa_notification_preferences_for_subject', {
+      p_subject_hash: subjectHash,
+      p_clinic_id: config.lineOaClinicId,
+      p_environment: config.lineOaEnvironment,
+      p_deployment_id: config.lineOaDeploymentId,
+      p_channel_hash: channelHash
+    });
+  }
+  const preferenceByPatient = new Map((Array.isArray(preferences) ? preferences : []).map(item => [
+    item.patient_id,
+    item.operational_messaging_enabled === true
+  ]));
+  const linked = (Array.isArray(patients) ? patients : []).map(patient => ({
+    ...patient,
+    operational_messaging_enabled: preferenceByPatient.get(patient.patient_id) === true
+  }));
+  return json({
+    ok: true,
+    linked,
+    operationalMessagingAvailable: config.operationalMessagingAvailable
+  });
 }
 
 export default async (request, context) => {
@@ -158,7 +243,8 @@ export default async (request, context) => {
       enabled: config.enabled,
       liffId: config.enabled ? config.liffId : null,
       qrTtlSeconds: 90,
-      digitalOptional: true
+      digitalOptional: true,
+      operationalMessagingAvailable: config.enabled && config.operationalMessagingAvailable
     });
   }
 
