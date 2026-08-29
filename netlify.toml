@@ -31,7 +31,24 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.line-scdn.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.line.me https://*.line-scdn.net; frame-src https://*.line.me; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests"
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+    Referrer-Policy = "no-referrer"
+    Strict-Transport-Security = "max-age=31536000"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
+    X-Permitted-Cross-Domain-Policies = "none"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
     Permissions-Policy = "camera=(self), geolocation=(), microphone=()"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "private, no-store, max-age=0"
+    Pragma = "no-cache"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "private, no-store, max-age=0"
+    Pragma = "no-cache"

@@ -28,8 +28,10 @@
   function labelWindow(title, labels) {
     const w = window.open('', '_blank', 'width=850,height=900');
     if (!w) { alert('Browser ปิดกั้นหน้าต่างพิมพ์ กรุณาอนุญาต Pop-up'); return; }
-    w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:60mm 40mm;margin:1.5mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,"Noto Sans Thai",sans-serif;color:#111}.label{width:57mm;min-height:37mm;border:1px solid #222;padding:2.2mm;page-break-after:always;position:relative;overflow:hidden}.label:last-of-type{page-break-after:auto}.clinic{font-size:10pt;font-weight:800;border-bottom:1px solid #333;padding-bottom:1mm;margin-bottom:1mm}.patient{font-size:9pt;font-weight:700}.drug{font-size:12pt;font-weight:800;margin:1mm 0}.directions{font-size:9pt;line-height:1.25}.meta{font-size:7.2pt;line-height:1.2;margin-top:1mm}.warning{font-size:7.5pt;font-weight:700;margin-top:1mm}button{margin:10px;padding:8px 16px}@media print{button{display:none}}</style></head><body>${labels.join('')}<button onclick="print()">พิมพ์ฉลาก</button></body></html>`);
+    w.opener = null;
+    w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:60mm 40mm;margin:1.5mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,"Noto Sans Thai",sans-serif;color:#111}.label{width:57mm;min-height:37mm;border:1px solid #222;padding:2.2mm;page-break-after:always;position:relative;overflow:hidden}.label:last-of-type{page-break-after:auto}.clinic{font-size:10pt;font-weight:800;border-bottom:1px solid #333;padding-bottom:1mm;margin-bottom:1mm}.patient{font-size:9pt;font-weight:700}.drug{font-size:12pt;font-weight:800;margin:1mm 0}.directions{font-size:9pt;line-height:1.25}.meta{font-size:7.2pt;line-height:1.2;margin-top:1mm}.warning{font-size:7.5pt;font-weight:700;margin-top:1mm}button{margin:10px;padding:8px 16px}@media print{button{display:none}}</style></head><body>${labels.join('')}<button type="button" data-print-labels>พิมพ์ฉลาก</button></body></html>`);
     w.document.close();
+    w.document.querySelector('[data-print-labels]')?.addEventListener('click', () => w.print());
   }
 
   function labelHtml({ patientName, hn, medicine, quantity, unit, dose, frequency, duration, instructions, lot, expiry, reference, pharmacist }) {
