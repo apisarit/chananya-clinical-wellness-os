@@ -53,19 +53,28 @@ npm run staging:smoke:locked
 
 The locked smoke gate checks source provenance, tenant/database lock, security headers and all 11 public route shells. It is useful deployment evidence but does **not** satisfy the authenticated staging gate.
 
+After the isolated database config has been enabled on staging, run the read-only preflight before provisioning any account or synthetic record:
+
+```bash
+npm run staging:preflight
+```
+
+The preflight stops the workflow before its first write unless all protected inputs are present, the staging site/database/clinic/issuer differ from Production, the remote browser config matches the protected config, `databaseLocked=false`, the deployed source commit is the exact release candidate, and the service-role key authenticates against that isolated Supabase project. Its JSON evidence contains only presence booleans, identifiers and hashes; it never stores the service-role key, test password, publishable key or session data.
+
 ## What the workflow proves
 
 The manual workflow `.github/workflows/authenticated-staging-e2e.yml` performs:
 
 1. the complete source and embedded Postgres behavioral suite;
-2. provisioning of 11 synthetic identities: Practitioner, Doctor, Reception, Pharmacy, Production, Inventory, Quality, Billing, Admin, Super Admin and Viewer;
-3. exact `current_access_context()` tenant/role verification for each identity;
-4. the complete `department_can()` allow/deny matrix, including the rule that only Super Admin receives cross-workspace access;
-5. all 10 workspace routes in mobile Chromium for every role, including denied-route behavior and visible navigation;
-6. migration health checks for hybrid identity, clinical/financial handoffs, prescription dispensing, production and independent Quality;
-7. ten synthetic patient journeys through registration, manual-HN identity fallback, Encounter, Thai medicine diagnosis, prescription, Pharmacy review, FEFO lot allocation, Billing, payment and Encounter closure;
-8. negative segregation checks and required audit actions;
-9. JSON evidence and failure screenshots retained against the exact Git commit for 90 days.
+2. a read-only isolated-target, exact-deploy and service-role preflight;
+3. provisioning of 11 synthetic identities: Practitioner, Doctor, Reception, Pharmacy, Production, Inventory, Quality, Billing, Admin, Super Admin and Viewer;
+4. exact `current_access_context()` tenant/role verification for each identity;
+5. the complete `department_can()` allow/deny matrix, including the rule that only Super Admin receives cross-workspace access;
+6. all 10 workspace routes in mobile Chromium for every role, including denied-route behavior and visible navigation;
+7. migration health checks for hybrid identity, clinical/financial handoffs, prescription dispensing, production and independent Quality;
+8. ten synthetic patient journeys through registration, manual-HN identity fallback, Encounter, Thai medicine diagnosis, prescription, Pharmacy review, FEFO lot allocation, Billing, payment and Encounter closure;
+9. negative segregation checks and required audit actions;
+10. JSON evidence and failure screenshots retained against the exact Git commit for 90 days.
 
 The workflow intentionally creates synthetic staging records. Run it only after the protected environment reviewer confirms the target project and site.
 
@@ -73,6 +82,7 @@ The workflow intentionally creates synthetic staging records. Run it only after 
 
 A successful run produces:
 
+- `authenticated-staging-preflight.json`;
 - `staging-user-provisioning.json`;
 - `authenticated-staging-matrix.json`;
 - `authenticated-staging-synthetic-uat.json`;

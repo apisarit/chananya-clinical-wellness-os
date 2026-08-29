@@ -42,14 +42,17 @@ jobs:
       - name: Install locked application dependencies
         run: npm ci
 
+      - name: Run source and database behavioral contracts
+        run: npm run check
+
+      - name: Preflight isolated authenticated staging without writes
+        run: npm run staging:preflight
+
       - name: Install pinned browser runner
         run: npm install --no-save --package-lock=false playwright@1.55.0
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Run source and database behavioral contracts
-        run: npm run check
 
       - name: Provision synthetic role identities
         run: npm run staging:provision

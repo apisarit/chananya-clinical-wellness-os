@@ -96,6 +96,7 @@ for (const role of STAGING_ROLES.filter(role => role !== 'super_admin')) {
 
 for (const file of [
   'scripts/staging-support.mjs',
+  'scripts/verify-authenticated-staging-preflight.mjs',
   'scripts/provision-staging-users.mjs',
   'scripts/verify-authenticated-staging.mjs',
   'scripts/run-staging-synthetic-uat.mjs'
@@ -120,5 +121,11 @@ assert.doesNotMatch(workflow, /pull_request:|push:/, 'credentialed staging must 
 assert.match(workflow, /environment: staging/);
 assert.match(workflow, /CLINICAL_OS_PRODUCTION_CONFIG_JSON/);
 assert.match(workflow, /STAGING_SYNTHETIC_UAT_ACK: CREATE_SYNTHETIC_RECORDS/);
+assert.match(workflow, /npm run staging:preflight[\s\S]*npm run staging:provision/);
 
-console.log('Staging safety contracts passed: Production rejection, 11 roles, browser matrix and 10 synthetic audited flows');
+const preflight = read('scripts/verify-authenticated-staging-preflight.mjs');
+assert.match(preflight, /databaseLocked/);
+assert.match(preflight, /service-role probe/);
+assert.match(preflight, /readOnly: true/);
+
+console.log('Staging safety contracts passed: Production rejection, read-only preflight, 11 roles, browser matrix and 10 synthetic audited flows');
