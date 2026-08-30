@@ -1,14 +1,20 @@
-# Chananya Thai Medicine Foundation
+# Chananya TTM Foundation v0.2
 
 ## Why this exists
 
 The Clinical OS must not reduce Thai Traditional Medicine to a handful of form fields. Patient records consume a reviewed knowledge foundation; they do not own or replace that foundation.
 
-The canonical direction is:
+The provenance direction is:
 
 `Canon / Dataset → Concept → Relation → Encounter Evidence → Practitioner Confirmation`
 
 This keeps provenance, meaning, patient-specific assertions, and professional accountability separate.
+
+The person-specific reasoning direction is:
+
+`Person → Separate context lenses → Structured findings → Clinical hypothesis → Practitioner confirmation → Therapeutic review`
+
+Context is not diagnosis. Birth constitution, age Samutthan, Kala Samutthan, season, zodiac, and location may be displayed as separate contextual weights, but they may not create a clinical hypothesis. Only an `approved` rule whose explicit role is `finding_to_hypothesis` and whose metadata allows clinical inference may open a candidate. Unstructured symptom text is never silently converted into a score.
 
 ## Five layers
 
@@ -54,11 +60,41 @@ The staging-only importer `scripts/import-pikad-staging.mjs` is fail-closed. It 
 
 All imported concepts and relations start as `review_required`. The original worksheet and cell references remain in metadata/qualifiers. Values without a stated unit remain `unit_status=not_specified`; eleven Excel date serials that display as `1/2` or `1/4` are stored as ambiguous source evidence, not converted to doses. ICD/WHO mapping is deliberately excluded from this import.
 
+Therapeutic claims such as `has_traditional_claim_for` are traversed only after a practitioner selects an axis to review. A formula claim is not inverted into a patient diagnosis, and it is never a prescription or dose.
+
+## Complete DKR import and reasoning graph
+
+`data/ttm/ttm-dkr-v1-complete-20260830.json.gz` is the source-preserving extraction of all 113 rows in `TTM_Diagnostic_Knowledge_Review_v1.xlsx`: 25 source-derived rows and 88 image-transcribed rows across 15 domains. The workbook review columns were blank, so every extracted row remains `review_required` unless a later human decision already exists in staging.
+
+`scripts/import-ttm-dkr-staging.mjs` is a one-time, staging-only, production-denied importer. It keeps the flat rules for compatibility, creates typed rule concepts, and adds four edge types:
+
+- `context_supports_axis`
+- `context_points_to_element`
+- `source_record_for_coordinate`
+- `registry_target_for`
+
+Re-import preserves existing `approved` and `rejected` human decisions. The imported rule metadata sets `clinical_inference_allowed=false`; these 113 rows are context and reference knowledge, not finding-to-hypothesis rules.
+
+`ttm-reasoning.js` is a pure, read-only client engine. It calculates age and weekday, matches midnight-spanning time ranges, keeps age/time lenses separate, exposes boundary conflicts, and fails closed when approved structured clinical rules are absent.
+
+## Asymmetric body registry
+
+The owner-confirmed body-model targets are deliberately asymmetric:
+
+| Registry | Target |
+| --- | ---: |
+| Pitta | 4 |
+| Vata | 6 |
+| Semha | 12 |
+| Pathavi | 20 |
+
+The total is 42. These targets create registry containers only; missing member names must not be guessed or forced into a symmetric model. Named members require an approved source and review.
+
 ## Coverage debt that remains visible
 
 - Canon registry with edition and page/verse-level citations.
-- Pitta 42, Vata 80, and Semha 20 disease/symptom sets.
-- Rupa-dhatu 42 and Thai medicine organ model.
+- Approved structured finding → hypothesis rules for Pitta, Vata, and Semha, including กำเริบ/หย่อน/พิการ and coordinate links.
+- Reviewed named members for the asymmetric Pitta 4, Vata 6, Semha 12, and Pathavi 20 body registry.
 - Formula, ingredient, amount, unit, taste, indication, contraindication, and revision links.
 - Named Sen Prathan Sip, treatment points, procedure indications, contraindications, and outcomes.
 - Practitioner review workflow for every `review_required` concept and relation.
