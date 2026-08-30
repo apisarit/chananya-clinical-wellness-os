@@ -63,7 +63,10 @@
       sources: sourceResult.data || [],
       relations: relationResult.data || []
     };
-    setMode('Ontology foundation • source-traceable');
+    const pikadImported = state.sources.some(source => source.source_code === 'OWNER-PIKAD-YA-20260830');
+    setMode(pikadImported
+      ? 'Ontology foundation • พิกัดยา imported • review required'
+      : 'Ontology foundation • source-traceable');
   }
 
   async function loadLegacy() {
@@ -154,7 +157,8 @@
       if (type && concept.concept_type !== type) return false;
       if (!search) return true;
       const source = sourceOf(concept);
-      const haystack = [concept.preferred_term_th, concept.preferred_term_en, concept.definition, concept.concept_code, source?.title_th, source?.citation, concept.metadata?.domain, concept.metadata?.element].filter(Boolean).join(' ').toLocaleLowerCase('th');
+      const metadataText = concept.metadata ? JSON.stringify(concept.metadata) : '';
+      const haystack = [concept.preferred_term_th, concept.preferred_term_en, concept.definition, concept.concept_code, source?.title_th, source?.citation, metadataText].filter(Boolean).join(' ').toLocaleLowerCase('th');
       return haystack.includes(search);
     });
   }

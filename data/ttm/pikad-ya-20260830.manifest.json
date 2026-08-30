@@ -1,0 +1,165 @@
+{
+  "source": {
+    "source_code": "OWNER-PIKAD-YA-20260830",
+    "title_th": "พิกัดยา.xlsx — ชุดข้อมูลองค์ความรู้จากเจ้าของโครงการ",
+    "title_en": "Pikad Ya owner-supplied knowledge workbook",
+    "source_type": "owner_workbook",
+    "citation": "ไฟล์ พิกัดยา.xlsx ส่งมอบ 2026-08-30; SHA-256 d5832b06110a5827e26ef28eec19f153c25256adde2bf11c4e6edc8a1fd77d5f",
+    "provenance": "owner_dataset",
+    "review_status": "review_required",
+    "version": "1",
+    "metadata": {
+      "dataset_version": "PIKAD-YA-20260830-v1",
+      "received_on": "2026-08-30",
+      "workbook_file_name": "พิกัดยา.xlsx",
+      "workbook_sha256": "d5832b06110a5827e26ef28eec19f153c25256adde2bf11c4e6edc8a1fd77d5f",
+      "worksheet_names": [
+        "พิกัดตรี",
+        "พิกัดจตุ",
+        "พิกัดเบญ",
+        "พิกัดสัตตะ",
+        "พิกัดนวะ",
+        "มหาพิกัดตรี",
+        "มหาพิกัดเบญจะ",
+        "มหาพิกัดทั่วไป",
+        "ชีต9"
+      ],
+      "import_policy": "Thai Traditional Medicine primary ontology; exact source cells preserved; no automatic clinical approval",
+      "unit_policy": "Unlabeled numeric values remain unit_status=not_specified",
+      "warning_count": 13
+    }
+  },
+  "summary": {
+    "sheets": 9,
+    "nonempty_rows": 351,
+    "concepts": 565,
+    "formula_concepts": 143,
+    "materia_medica_concepts": 405,
+    "context_concepts": 17,
+    "relations": 1548,
+    "matrix_ingredient_relations": 560,
+    "dosha_claim_relations": 55,
+    "warnings": 13
+  },
+  "safety": {
+    "review_status": "review_required",
+    "primary_ontology": "Thai Traditional Medicine",
+    "secondary_mapping": "ICD/WHO not applied in this import",
+    "practitioner_authority": "No imported statement may diagnose or prescribe without practitioner confirmation"
+  },
+  "warnings": [
+    {
+      "severity": "review_required",
+      "code": "NUMERIC_OUTLIER_GT_100",
+      "source_ref": "ชีต9!R8",
+      "raw_value": 131,
+      "note": "ค่ามากกว่า 100 ในตารางที่ไม่ได้ระบุหน่วย ต้องตรวจต้นฉบับก่อนใช้"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y9",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y12",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "NUMERIC_OUTLIER_GT_100",
+      "source_ref": "ชีต9!B34",
+      "raw_value": 183,
+      "note": "ค่ามากกว่า 100 ในตารางที่ไม่ได้ระบุหน่วย ต้องตรวจต้นฉบับก่อนใช้"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y55",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y82",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y83",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!E123",
+      "raw_value": 46113,
+      "display_value": "1/4",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y175",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y176",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y177",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y178",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    },
+    {
+      "severity": "review_required",
+      "code": "EXCEL_DATE_SERIAL_AMBIGUITY",
+      "source_ref": "ชีต9!Y179",
+      "raw_value": 46054,
+      "display_value": "1/2",
+      "number_format": "d/m",
+      "note": "เก็บค่าดิบและค่าที่แสดง แต่ไม่แปลงเป็นสัดส่วนหรือขนาดยาอัตโนมัติ"
+    }
+  ]
+}

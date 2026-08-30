@@ -46,6 +46,14 @@ Patient-specific use of a foundation concept. It records the usage role, asserti
 
 If the migration is not installed, `foundation.js` falls back read-only to `ttm_diagnostic_knowledge` and `sen_line_master`. The UI labels this state `Legacy bridge`; it must not imply that the full ontology is complete.
 
+## Owner workbook import: พิกัดยา
+
+The immutable dataset `data/ttm/pikad-ya-20260830.json.gz` preserves the owner-supplied workbook with SHA-256 `d5832b06110a5827e26ef28eec19f153c25256adde2bf11c4e6edc8a1fd77d5f`. Its companion manifest records nine worksheets, 565 normalized concepts, 1,548 source-backed relations and 13 cells that require specific numeric review.
+
+The staging-only importer `scripts/import-pikad-staging.mjs` is fail-closed. It runs only when `CLINICAL_OS_STAGING_KNOWLEDGE_IMPORT=PIKAD-YA-20260830-v1`, the dedicated staging database is explicitly enabled and acknowledged, the runtime database matches the staging tenant config, and the Production Supabase origin is present as a denylist and differs from the target. It uses immutable versioned identifiers and ignores existing rows so a rerun cannot downgrade a curator's later approval.
+
+All imported concepts and relations start as `review_required`. The original worksheet and cell references remain in metadata/qualifiers. Values without a stated unit remain `unit_status=not_specified`; eleven Excel date serials that display as `1/2` or `1/4` are stored as ambiguous source evidence, not converted to doses. ICD/WHO mapping is deliberately excluded from this import.
+
 ## Coverage debt that remains visible
 
 - Canon registry with edition and page/verse-level citations.
