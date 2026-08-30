@@ -24,18 +24,22 @@ Use `config/tenant.staging.example.json` as the public configuration template. R
 npm run tenant:bootstrap-sql -- /absolute/path/tenant.staging.json
 ```
 
-Verify that `current_access_context()` returns the staging clinic UUID/code before provisioning identities.
+The bootstrap is idempotent: it creates the configured clinic UUID on a fresh database or updates that same UUID, fails on a clinic-code collision, and never re-keys the canonical clinic row seeded by the migrations. A successful run returns `CHANANYA_TENANT_BOOTSTRAP_READY` with the staging deployment and clinic identifiers.
+
+After the clinic bootstrap succeeds, provision the 11 synthetic staging identities. Then verify that `current_access_context()` returns the staging clinic UUID/code for each identity.
 
 ### One-time migration ledger recovery
 
-If the schema was installed manually before the Supabase CLI migration history was initialized, do not simply mark filenames as applied. First apply every genuinely missing migration, then generate the guarded recovery SQL from the exact release candidate:
+If the schema was installed manually before the Supabase CLI migration history was initialized, do not simply mark filenames as applied. First apply every genuinely missing migration, run the tenant bootstrap, and provision the 11 synthetic identities. Only then generate the guarded recovery SQL from the exact release candidate:
 
 ```sh
 CLINICAL_OS_SOURCE_COMMIT=<exact Git SHA> \
 npm run --silent migration:ledger-repair-sql -- /absolute/path/tenant.staging.json > /secure/path/staging-ledger-repair.sql
 ```
 
-The generated transaction fails closed unless the staging clinic and active membership match, transactional patient/Encounter/invoice/payment tables are empty, the complete schema and RLS fingerprint is present, all final database health checks pass, and the ledger has no conflicting rows. It then initializes the canonical `supabase_migrations.schema_migrations(version, statements, name)` shape and records every ordered migration with a source-file SHA-256 evidence statement. A successful run must return `CHANANYA_STAGING_MIGRATION_LEDGER_READY` with the repository migration count and exact first/last versions.
+The generated transaction fails closed unless the staging clinic, active membership and Super Admin created by provisioning all match; transactional patient/Encounter/invoice/payment tables are empty; the complete schema and RLS fingerprint is present; all final database health checks pass; and the ledger has no conflicting rows. It then initializes the canonical `supabase_migrations.schema_migrations(version, statements, name)` shape and records every ordered migration with a source-file SHA-256 evidence statement. A successful run must return `CHANANYA_STAGING_MIGRATION_LEDGER_READY` with the repository migration count and exact first/last versions.
+
+Required first-time order: ordered migrations → tenant bootstrap → 11-role provisioning → migration-ledger recovery → authenticated E2E. Do not run the ledger repair before provisioning; its membership and Super Admin guards will reject that sequence.
 
 This recovery is staging-only. Never run it against Production, never use it to conceal a failed migration, and never backfill history after real patient or transactional data has been introduced.
 

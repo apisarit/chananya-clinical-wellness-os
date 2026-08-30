@@ -7,6 +7,7 @@ import {
   buildMigrationLedgerRepairSql,
   loadMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
+import { buildTenantBootstrapSql } from '../scripts/generate-tenant-bootstrap-sql.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
@@ -23,6 +24,14 @@ const recoverySql = buildMigrationLedgerRepairSql({
   entries,
   sourceRevision: 'a'.repeat(40)
 });
+const bootstrapSql = buildTenantBootstrapSql(config);
+assert.match(bootstrapSql, /insert into public\.clinics/i);
+assert.match(bootstrapSql, /on conflict \(id\) do update/i);
+assert.match(bootstrapSql, /TENANT_BOOTSTRAP_CLINIC_CODE_CONFLICT/);
+assert.match(bootstrapSql, /TENANT_BOOTSTRAP_CLINIC_ID_CONFLICT/);
+assert.match(bootstrapSql, /where clinics\.code = excluded\.code/i);
+assert.match(bootstrapSql, /CHANANYA_TENANT_BOOTSTRAP_READY/);
+assert.doesNotMatch(bootstrapSql, /^update public\.clinics/im);
 assert.match(recoverySql, /STAGING_LEDGER_RECOVERY_REQUIRES_EMPTY_TRANSACTIONAL_DATA/);
 assert.match(recoverySql, /STAGING_SCHEMA_RELATIONS_MISSING/);
 assert.match(recoverySql, /STAGING_SECURITY_DEFINERS_MISSING/);
@@ -86,6 +95,49 @@ for (const entry of entries) {
   await db.exec(source);
 }
 
+const LEGACY_CLINIC_ID = '00000000-0000-0000-0000-000000000001';
+const legacyClinicBefore = await db.query(`
+  select id,code,name_th,name_en,active
+  from public.clinics where id='${LEGACY_CLINIC_ID}'
+`);
+assert.equal(legacyClinicBefore.rows.length, 1);
+
+await db.exec(`
+  insert into public.clinics(id,code,name_th,name_en)
+  values ('00000000-0000-4000-8000-00000000b002','${config.tenant.expectedClinicCode}','ชนกัน','Collision');
+`);
+await assert.rejects(db.exec(bootstrapSql), /TENANT_BOOTSTRAP_CLINIC_CODE_CONFLICT/);
+await db.exec('rollback;');
+assert.equal((await db.query(`select count(*)::int count from public.clinics where id='${config.tenant.expectedClinicId}'`)).rows[0].count, 0);
+await db.exec(`delete from public.clinics where id='00000000-0000-4000-8000-00000000b002'`);
+
+await db.exec(`
+  insert into public.clinics(id,code,name_th,name_en)
+  values ('${config.tenant.expectedClinicId}','OTHER-STG','ชนกัน','Collision');
+`);
+await assert.rejects(db.exec(bootstrapSql), /TENANT_BOOTSTRAP_CLINIC_ID_CONFLICT/);
+await db.exec('rollback;');
+assert.equal((await db.query(`select code from public.clinics where id='${config.tenant.expectedClinicId}'`)).rows[0].code, 'OTHER-STG');
+await db.exec(`delete from public.clinics where id='${config.tenant.expectedClinicId}'`);
+
+await db.exec(bootstrapSql);
+await db.exec(bootstrapSql);
+const stagingClinic = await db.query(`
+  select id,code,active
+  from public.clinics
+  where id='${config.tenant.expectedClinicId}'
+`);
+assert.deepEqual(stagingClinic.rows, [{
+  id: config.tenant.expectedClinicId,
+  code: config.tenant.expectedClinicCode,
+  active: true
+}]);
+assert.deepEqual(
+  (await db.query(`select id,code,name_th,name_en,active from public.clinics where id='${LEGACY_CLINIC_ID}'`)).rows,
+  legacyClinicBefore.rows,
+  'additive bootstrap must not mutate or re-key the canonical migration seed'
+);
+
 const ADMIN_ID = '33333333-3333-4333-a333-333333333333';
 await db.exec(`
   insert into auth.users(id,email,raw_user_meta_data)
@@ -93,13 +145,6 @@ await db.exec(`
   update public.profiles
   set role='viewer',system_role='super_admin'
   where id='${ADMIN_ID}';
-  insert into public.clinics(id,code,name_th,name_en)
-  values (
-    '${config.tenant.expectedClinicId}',
-    '${config.tenant.expectedClinicCode}',
-    'ระบบทดสอบ',
-    'Isolated Staging'
-  );
   insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary)
   values ('${config.tenant.expectedClinicId}','${ADMIN_ID}','owner',true);
 `);
