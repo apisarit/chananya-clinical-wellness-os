@@ -26,6 +26,19 @@ npm run tenant:bootstrap-sql -- /absolute/path/tenant.staging.json
 
 Verify that `current_access_context()` returns the staging clinic UUID/code before provisioning identities.
 
+### One-time migration ledger recovery
+
+If the schema was installed manually before the Supabase CLI migration history was initialized, do not simply mark filenames as applied. First apply every genuinely missing migration, then generate the guarded recovery SQL from the exact release candidate:
+
+```sh
+CLINICAL_OS_SOURCE_COMMIT=<exact Git SHA> \
+npm run --silent migration:ledger-repair-sql -- /absolute/path/tenant.staging.json > /secure/path/staging-ledger-repair.sql
+```
+
+The generated transaction fails closed unless the staging clinic and active membership match, transactional patient/Encounter/invoice/payment tables are empty, the complete schema and RLS fingerprint is present, all final database health checks pass, and the ledger has no conflicting rows. It then initializes the canonical `supabase_migrations.schema_migrations(version, statements, name)` shape and records every ordered migration with a source-file SHA-256 evidence statement. A successful run must return `CHANANYA_STAGING_MIGRATION_LEDGER_READY` with the repository migration count and exact first/last versions.
+
+This recovery is staging-only. Never run it against Production, never use it to conceal a failed migration, and never backfill history after real patient or transactional data has been introduced.
+
 ## Protected GitHub environment
 
 Create a GitHub environment named `staging` and require a reviewer. Configure:
