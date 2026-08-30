@@ -27,6 +27,13 @@
   let selectedLayer = 'all';
   let state = { mode: 'loading', concepts: [], sources: [], relations: [] };
 
+  function toast(message) {
+    const element = $('#toast');
+    element.textContent = message;
+    element.classList.add('show');
+    setTimeout(() => element.classList.remove('show'), 2200);
+  }
+
   function sourceOf(concept) {
     return state.sources.find(source => source.id === concept.source_id || source.source_code === concept.source_code) || null;
   }
@@ -165,13 +172,39 @@
 
   function renderConcepts() {
     const concepts = visibleConcepts();
-    $('#foundation-result-meta').textContent = `พบ ${concepts.length} จาก ${state.concepts.length} แนวคิด`;
+    const layerLabel = selectedLayer === 'all' ? 'ทุกชั้น' : `ชั้น ${selectedLayer}`;
+    $('#foundation-result-meta').textContent = `${layerLabel} • พบ ${concepts.length} จาก ${state.concepts.length} แนวคิด`;
     $('#foundation-results').innerHTML = concepts.map(concept => {
       const source = sourceOf(concept);
       const status = concept.review_status === 'approved' ? 'รับรองแล้ว' : 'รอทบทวน';
       return `<button type="button" class="foundation-concept" data-foundation-concept="${esc(concept.id)}"><span class="foundation-concept-main"><small>ชั้น ${layerOf(concept)} • ${esc(TYPE_LABELS[concept.concept_type] || concept.concept_type)}</small><b>${esc(concept.preferred_term_th)}</b><span>${esc(concept.definition || 'ยังไม่มีคำอธิบายที่รับรอง')}</span></span><span class="foundation-concept-side"><em class="${concept.review_status === 'approved' ? 'approved' : 'review'}">${status}</em><small>${esc(source?.title_th || concept.version || 'ไม่ระบุ source')}</small></span></button>`;
     }).join('') || '<div class="status">ไม่พบแนวคิดตามตัวกรองนี้</div>';
     $$('[data-foundation-concept]').forEach(button => button.addEventListener('click', () => showDetail(button.dataset.foundationConcept)));
+  }
+
+  function syncLayerButtons() {
+    $$('[data-foundation-layer]').forEach(button => {
+      const active = button.dataset.foundationLayer === selectedLayer;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+      const action = button.querySelector('[data-layer-action]');
+      if (action) action.textContent = active ? 'กำลังแสดงรายการ ✓' : 'แตะเพื่อดูรายการ ↓';
+    });
+  }
+
+  function selectLayer(layer, moveToResults = true) {
+    selectedLayer = layer;
+    syncLayerButtons();
+    renderConcepts();
+    if (!moveToResults) return;
+    const concepts = visibleConcepts();
+    const layerLabel = selectedLayer === 'all' ? 'ทุกชั้น' : `ชั้น ${selectedLayer}`;
+    toast(`เลือก${layerLabel}แล้ว • ${concepts.length} แนวคิด`);
+    const target = $('#foundation-browser');
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+    target.classList.remove('filter-arrived');
+    window.requestAnimationFrame(() => target.classList.add('filter-arrived'));
   }
 
   function showDetail(conceptId) {
@@ -195,17 +228,12 @@
     $('#foundation-search').addEventListener('input', renderConcepts);
     $('#foundation-type').addEventListener('change', renderConcepts);
     $('#foundation-reset').addEventListener('click', () => {
-      selectedLayer = 'all';
       $('#foundation-search').value = '';
       $('#foundation-type').value = '';
-      $$('[data-foundation-layer]').forEach(button => button.classList.toggle('active', button.dataset.foundationLayer === 'all'));
-      renderConcepts();
+      selectLayer('all', false);
+      toast('ล้างตัวกรองแล้ว • แสดงทุกชั้น');
     });
-    $$('[data-foundation-layer]').forEach(button => button.addEventListener('click', () => {
-      selectedLayer = button.dataset.foundationLayer;
-      $$('[data-foundation-layer]').forEach(item => item.classList.toggle('active', item === button));
-      renderConcepts();
-    }));
+    $$('[data-foundation-layer]').forEach(button => button.addEventListener('click', () => selectLayer(button.dataset.foundationLayer)));
   }
 
   async function init() {

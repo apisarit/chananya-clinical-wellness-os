@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Thai Medicine Foundation</title>
-  <link rel="stylesheet" href="app.css?v=clinical-os-department1">
+  <link rel="stylesheet" href="app.css?v=clinical-os-foundation2">
   <script src="tenant-config.js?v=white-label1"></script>
   <script src="tenant-brand.js?v=white-label1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
@@ -13,7 +13,7 @@
   <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-foundation1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="foundation.js?v=clinical-os-department1"></script>
+  <script defer src="foundation.js?v=clinical-os-foundation2"></script>
 </head>
 <body data-page="foundation">
   <div id="boot"><div><div class="spinner"></div><h2>กำลังเปิดรากวิชาแพทย์แผนไทย</h2><p id="boot-error">กำลังตรวจสอบแหล่งอ้างอิงและ ontology</p></div></div>
@@ -58,19 +58,19 @@
         <section class="card foundation-root-card">
           <div class="section-heading"><span class="section-number">ร</span><div><h2>โครงราก 5 ชั้น</h2><p>กดเลือกชั้นเพื่อกรองแนวคิดที่อยู่ในฐานจริง ไม่ใช่เมนูตกแต่ง</p></div></div>
           <div class="foundation-layers" id="foundation-layers">
-            <button class="foundation-layer active" data-foundation-layer="all"><span class="foundation-layer-index">ทั้งหมด</span><b>แผนที่องค์ความรู้รวม</b><small>เห็นเส้นทางจาก source ถึง clinical use</small><strong id="layer-count-all">0</strong></button>
-            <button class="foundation-layer" data-foundation-layer="1"><span class="foundation-layer-index">ชั้น 1</span><b>โลก–มนุษย์–ธาตุ</b><small>ธาตุ 4 ธาตุเจ้าเรือน และแบบจำลองมนุษย์</small><strong id="layer-count-1">0</strong></button>
-            <button class="foundation-layer" data-foundation-layer="2"><span class="foundation-layer-index">ชั้น 2</span><b>วินิจฉัยเชิงหน้าที่</b><small>สมุฏฐาน พิกัด กำเริบ–หย่อน–พิการ และอวัยวะ</small><strong id="layer-count-2">0</strong></button>
-            <button class="foundation-layer" data-foundation-layer="3"><span class="foundation-layer-index">ชั้น 3</span><b>โรคและคัมภีร์เฉพาะ</b><small>โรค อาการ กลไก และองค์ความรู้เฉพาะสาขา</small><strong id="layer-count-3">0</strong></button>
-            <button class="foundation-layer" data-foundation-layer="4"><span class="foundation-layer-index">ชั้น 4</span><b>เภสัชและการรักษา</b><small>หลักรักษา ตำรับ สมุนไพร รสยา และข้อควรระวัง</small><strong id="layer-count-4">0</strong></button>
-            <button class="foundation-layer" data-foundation-layer="5"><span class="foundation-layer-index">ชั้น 5</span><b>หัตถการและเส้น</b><small>นวดไทย เส้นประธานสิบ จุด และหัตถการ</small><strong id="layer-count-5">0</strong></button>
+            <button type="button" class="foundation-layer active" data-foundation-layer="all" aria-pressed="true" aria-controls="foundation-results"><span class="foundation-layer-index">ทั้งหมด</span><b>แผนที่องค์ความรู้รวม</b><small>เห็นเส้นทางจาก source ถึง clinical use</small><span class="foundation-layer-action" data-layer-action>กำลังแสดงรายการ ✓</span><strong id="layer-count-all">0</strong></button>
+            <button type="button" class="foundation-layer" data-foundation-layer="1" aria-pressed="false" aria-controls="foundation-results"><span class="foundation-layer-index">ชั้น 1</span><b>โลก–มนุษย์–ธาตุ</b><small>ธาตุ 4 ธาตุเจ้าเรือน และแบบจำลองมนุษย์</small><span class="foundation-layer-action" data-layer-action>แตะเพื่อดูรายการ ↓</span><strong id="layer-count-1">0</strong></button>
+            <button type="button" class="foundation-layer" data-foundation-layer="2" aria-pressed="false" aria-controls="foundation-results"><span class="foundation-layer-index">ชั้น 2</span><b>วินิจฉัยเชิงหน้าที่</b><small>สมุฏฐาน พิกัด กำเริบ–หย่อน–พิการ และอวัยวะ</small><span class="foundation-layer-action" data-layer-action>แตะเพื่อดูรายการ ↓</span><strong id="layer-count-2">0</strong></button>
+            <button type="button" class="foundation-layer" data-foundation-layer="3" aria-pressed="false" aria-controls="foundation-results"><span class="foundation-layer-index">ชั้น 3</span><b>โรคและคัมภีร์เฉพาะ</b><small>โรค อาการ กลไก และองค์ความรู้เฉพาะสาขา</small><span class="foundation-layer-action" data-layer-action>แตะเพื่อดูรายการ ↓</span><strong id="layer-count-3">0</strong></button>
+            <button type="button" class="foundation-layer" data-foundation-layer="4" aria-pressed="false" aria-controls="foundation-results"><span class="foundation-layer-index">ชั้น 4</span><b>เภสัชและการรักษา</b><small>หลักรักษา ตำรับ สมุนไพร รสยา และข้อควรระวัง</small><span class="foundation-layer-action" data-layer-action>แตะเพื่อดูรายการ ↓</span><strong id="layer-count-4">0</strong></button>
+            <button type="button" class="foundation-layer" data-foundation-layer="5" aria-pressed="false" aria-controls="foundation-results"><span class="foundation-layer-index">ชั้น 5</span><b>หัตถการและเส้น</b><small>นวดไทย เส้นประธานสิบ จุด และหัตถการ</small><span class="foundation-layer-action" data-layer-action>แตะเพื่อดูรายการ ↓</span><strong id="layer-count-5">0</strong></button>
           </div>
           <div class="foundation-chain" aria-label="สายสืบย้อนองค์ความรู้">
             <span>คัมภีร์ / Dataset</span><i>→</i><span>Concept</span><i>→</i><span>Relation</span><i>→</i><span>Encounter Evidence</span><i>→</i><span>Practitioner Confirmation</span>
           </div>
         </section>
 
-        <div class="foundation-browser">
+        <div class="foundation-browser" id="foundation-browser">
           <section class="card">
             <div class="section-heading"><span class="section-number">K</span><div><h2>ค้นองค์ความรู้</h2><p>ค้นชื่อ แนวคิด คำอธิบาย หรือแหล่งอ้างอิง</p></div></div>
             <div class="toolbar foundation-toolbar">
@@ -78,7 +78,7 @@
               <label>ชนิดแนวคิด<select id="foundation-type"><option value="">ทุกชนิด</option></select></label>
               <button class="btn ghost" id="foundation-reset" type="button">ล้างตัวกรอง</button>
             </div>
-            <div class="foundation-result-meta" id="foundation-result-meta">กำลังโหลด</div>
+            <div class="foundation-result-meta" id="foundation-result-meta" role="status" aria-live="polite">กำลังโหลด</div>
             <div class="foundation-concepts" id="foundation-results"></div>
           </section>
 

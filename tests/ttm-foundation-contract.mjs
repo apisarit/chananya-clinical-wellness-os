@@ -23,6 +23,12 @@ for (const layer of ['โลก–มนุษย์–ธาตุ', 'วิน
 }
 
 assert.match(html, /คัมภีร์ \/ Dataset[\s\S]*?Concept[\s\S]*?Relation[\s\S]*?Encounter Evidence[\s\S]*?Practitioner Confirmation/, 'foundation must show the provenance chain');
+assert.match(html, /id="foundation-browser"/, 'layer filtering must expose a concrete result scroll target');
+assert.match(html, /id="foundation-result-meta"[^>]*role="status"[^>]*aria-live="polite"/, 'layer filtering must announce its result on mobile and assistive technology');
+assert.match(html, /data-foundation-layer="1"[^>]*aria-pressed="false"[^>]*aria-controls="foundation-results"/, 'layer controls must expose their pressed state and target');
+assert.match(html, /แตะเพื่อดูรายการ ↓/, 'layer cards must communicate their mobile interaction');
+assert.match(controller, /function selectLayer\([\s\S]*?scrollIntoView\(/, 'layer selection must move the user to the filtered results');
+assert.match(controller, /setAttribute\('aria-pressed', String\(active\)\)/, 'layer selection must synchronize its accessible state');
 assert.match(html, /ปิตตะ 42 \/ วาตะ 80 \/ เสมหะ 20/, 'known diagnostic coverage targets must remain visible');
 assert.match(html, /ICD\/WHO เป็น secondary mapping เท่านั้น/, 'international mapping must remain secondary');
 assert.match(html, /AI ห้ามวินิจฉัยแทนผู้ประกอบวิชาชีพ/, 'AI must remain subordinate to practitioner authority');
