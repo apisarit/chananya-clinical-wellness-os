@@ -14,7 +14,7 @@ const migrationsDir = path.join(root, 'supabase', 'migrations');
 const config = JSON.parse(await fs.readFile(path.join(root, 'config', 'tenant.staging.example.json'), 'utf8'));
 const entries = loadMigrationEntries(root);
 
-assert.equal(entries.length, 30);
+assert.equal(entries.length, 31);
 assert.deepEqual(entries, [...entries].sort((a, b) => a.file.localeCompare(b.file)));
 assert.equal(config.tenant.expectedClinicId, '00000000-0000-4000-8000-00000000a001');
 assert.ok(entries.every(entry => /^[0-9a-f]{64}$/.test(entry.sha256)));

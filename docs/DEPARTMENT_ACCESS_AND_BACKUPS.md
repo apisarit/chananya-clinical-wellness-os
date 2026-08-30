@@ -60,7 +60,7 @@ Backup schema `2026-08-28.2` closes the clinical recovery gap. The patient domai
 
 Active one-time credentials are intentionally not exported. Link requests are included only after claim/invalidation/expiry; QR sessions are included only after use/expiry; rate-limit buckets are excluded. The encrypted payload records these filters. This preserves historical proof without making a restored environment reactivate a live QR or link code.
 
-LINE OA transport telemetry (`line_oa_webhook_events`, contact delivery state, reply tokens and message payloads) is not a clinical record and is excluded from logical restore. Raw user IDs, message text, reply tokens and payloads are never stored. Significant actions for an already-linked identity append sanitized `patient_identity_events`, which are retained in the encrypted transaction/audit domain.
+LINE OA gateway transport telemetry (`line_oa_gateway_webhook_events`, gateway contact delivery state, reply tokens and message payloads) is not a clinical record and is excluded from logical restore. Raw user IDs, message text, reply tokens and payloads are never stored. The operational notification tables (`line_oa_contacts`, `line_oa_notification_preferences`, `line_oa_webhook_events`, `line_oa_notification_outbox`, and `line_oa_delivery_events`) remain in the encrypted clinic backup domain. Significant gateway actions for an already-linked identity append sanitized `patient_identity_events`, which are retained in the encrypted transaction/audit domain.
 
 The run is recorded in `backup_export_runs` as `started`, `completed`, `partial` or `failed`. A failed or partial slot may be retried. A completed slot cannot be duplicated.
 

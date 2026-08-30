@@ -3,7 +3,7 @@ begin;
 -- LINE OA transport state contains keyed subject hashes and sanitized action
 -- classifications only. Raw LINE user IDs, message text, reply tokens and
 -- webhook payloads are deliberately never persisted.
-create table if not exists public.line_oa_contact_states (
+create table if not exists public.line_oa_gateway_contact_states (
   id uuid primary key default gen_random_uuid(),
   provider_channel_hash text not null check (provider_channel_hash ~ '^[0-9a-f]{64}$'),
   subject_hash text not null check (subject_hash ~ '^[0-9a-f]{64}$'),
@@ -17,7 +17,7 @@ create table if not exists public.line_oa_contact_states (
   unique (provider_channel_hash, subject_hash)
 );
 
-create table if not exists public.line_oa_webhook_events (
+create table if not exists public.line_oa_gateway_webhook_events (
   id bigint generated always as identity primary key,
   provider_channel_hash text not null check (provider_channel_hash ~ '^[0-9a-f]{64}$'),
   event_id_hash text not null check (event_id_hash ~ '^[0-9a-f]{64}$'),
@@ -44,17 +44,17 @@ create table if not exists public.line_oa_webhook_events (
   unique (provider_channel_hash, event_id_hash)
 );
 
-create index if not exists line_oa_webhook_events_status_idx
-  on public.line_oa_webhook_events(processing_status, last_attempt_at desc);
-create index if not exists line_oa_webhook_events_subject_idx
-  on public.line_oa_webhook_events(subject_hash, created_at desc)
+create index if not exists line_oa_gateway_webhook_events_status_idx
+  on public.line_oa_gateway_webhook_events(processing_status, last_attempt_at desc);
+create index if not exists line_oa_gateway_webhook_events_subject_idx
+  on public.line_oa_gateway_webhook_events(subject_hash, created_at desc)
   where subject_hash is not null;
 
-alter table public.line_oa_contact_states enable row level security;
-alter table public.line_oa_webhook_events enable row level security;
+alter table public.line_oa_gateway_contact_states enable row level security;
+alter table public.line_oa_gateway_webhook_events enable row level security;
 
-revoke all on public.line_oa_contact_states from public, anon, authenticated, service_role;
-revoke all on public.line_oa_webhook_events from public, anon, authenticated, service_role;
+revoke all on public.line_oa_gateway_contact_states from public, anon, authenticated, service_role;
+revoke all on public.line_oa_gateway_webhook_events from public, anon, authenticated, service_role;
 
 create or replace function public.register_line_oa_webhook_event(
   p_provider_channel_hash text,
@@ -91,7 +91,7 @@ begin
     raise exception 'LINE_OA_EVENT_INVALID';
   end if;
 
-  insert into public.line_oa_webhook_events (
+  insert into public.line_oa_gateway_webhook_events (
     provider_channel_hash,event_id_hash,subject_hash,event_type,action_code,
     payload_hash,event_timestamp,is_redelivery,processing_status,reply_status,
     attempt_count,last_attempt_at
@@ -102,19 +102,19 @@ begin
   )
   on conflict (provider_channel_hash,event_id_hash)
   do update set
-    is_redelivery = public.line_oa_webhook_events.is_redelivery or excluded.is_redelivery,
+    is_redelivery = public.line_oa_gateway_webhook_events.is_redelivery or excluded.is_redelivery,
     processing_status = 'processing',
     reply_status = 'pending',
-    attempt_count = public.line_oa_webhook_events.attempt_count + 1,
+    attempt_count = public.line_oa_gateway_webhook_events.attempt_count + 1,
     error_code = null,
     processed_at = null,
     last_attempt_at = now()
-  where public.line_oa_webhook_events.attempt_count < 5
+  where public.line_oa_gateway_webhook_events.attempt_count < 5
     and (
-      public.line_oa_webhook_events.processing_status = 'failed'
+      public.line_oa_gateway_webhook_events.processing_status = 'failed'
       or (
-        public.line_oa_webhook_events.processing_status = 'processing'
-        and public.line_oa_webhook_events.last_attempt_at < now() - interval '2 minutes'
+        public.line_oa_gateway_webhook_events.processing_status = 'processing'
+        and public.line_oa_gateway_webhook_events.last_attempt_at < now() - interval '2 minutes'
       )
     )
   returning id into v_event_row_id;
@@ -125,7 +125,7 @@ begin
   end if;
 
   if p_subject_hash is not null then
-    insert into public.line_oa_contact_states (
+    insert into public.line_oa_gateway_contact_states (
       provider_channel_hash,subject_hash,status,followed_at,unfollowed_at,last_seen_at
     ) values (
       p_provider_channel_hash,
@@ -144,15 +144,15 @@ begin
       status = case
         when p_event_type = 'follow' then 'followed'
         when p_event_type = 'unfollow' then 'unfollowed'
-        else public.line_oa_contact_states.status
+        else public.line_oa_gateway_contact_states.status
       end,
       followed_at = case
         when p_event_type = 'follow' then now()
-        else public.line_oa_contact_states.followed_at
+        else public.line_oa_gateway_contact_states.followed_at
       end,
       unfollowed_at = case
         when p_event_type = 'unfollow' then now()
-        else public.line_oa_contact_states.unfollowed_at
+        else public.line_oa_gateway_contact_states.unfollowed_at
       end,
       last_seen_at = now(),
       updated_at = now();
@@ -194,7 +194,7 @@ begin
     end if;
   end if;
 
-  update public.line_oa_webhook_events
+  update public.line_oa_gateway_webhook_events
   set linked_patient_count = v_linked_count
   where id = v_event_row_id;
 
@@ -231,7 +231,7 @@ begin
     raise exception 'LINE_OA_FINALIZATION_INVALID';
   end if;
 
-  update public.line_oa_webhook_events
+  update public.line_oa_gateway_webhook_events
   set
     processing_status = p_processing_status,
     reply_status = p_reply_status,
@@ -273,16 +273,16 @@ as $$
     count(*) filter (where processing_status = 'failed')::bigint,
     count(*) filter (where reply_status = 'sent')::bigint,
     max(created_at)
-  from public.line_oa_webhook_events
+  from public.line_oa_gateway_webhook_events
   where created_at >= greatest(coalesce(p_since,now() - interval '1 hour'),now() - interval '7 days');
 $$;
 
 revoke all on function public.line_oa_webhook_evidence(timestamptz) from public, anon, authenticated;
 grant execute on function public.line_oa_webhook_evidence(timestamptz) to service_role;
 
-comment on table public.line_oa_webhook_events is
+comment on table public.line_oa_gateway_webhook_events is
   'Sanitized LINE OA delivery/idempotency telemetry. Excludes raw user IDs, message text, reply tokens and payloads.';
-comment on table public.line_oa_contact_states is
+comment on table public.line_oa_gateway_contact_states is
   'Keyed LINE OA follow state used to fail closed before any future proactive notification.';
 
 commit;

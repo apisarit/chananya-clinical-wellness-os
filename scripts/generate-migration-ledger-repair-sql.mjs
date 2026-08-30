@@ -29,8 +29,13 @@ const requiredRelations = [
   'public.clinic_memberships',
   'public.patient_identity_links',
   'public.backup_export_runs',
-  'public.line_oa_contact_states',
+  'public.line_oa_contacts',
+  'public.line_oa_notification_preferences',
   'public.line_oa_webhook_events',
+  'public.line_oa_notification_outbox',
+  'public.line_oa_delivery_events',
+  'public.line_oa_gateway_contact_states',
+  'public.line_oa_gateway_webhook_events',
   'public.user_access_summary',
   'public.admin_task_summary',
   'public.v_clinical_herbal_traceability',
@@ -54,6 +59,7 @@ const requiredFunctions = [
   'prescription_dispensing_healthcheck',
   'backup_restore_contract_healthcheck',
   'export_clinic_backup_domain',
+  'line_oa_operational_healthcheck',
   'register_line_oa_webhook_event',
   'finalize_line_oa_webhook_event',
   'line_oa_webhook_evidence'
@@ -78,7 +84,10 @@ const requiredColumns = [
   'patients.clinic_id',
   'encounters.clinic_id',
   'products.clinic_id',
-  'inventory_lots.clinic_id'
+  'inventory_lots.clinic_id',
+  'line_oa_webhook_events.locked_until',
+  'line_oa_notification_outbox.next_attempt_at',
+  'line_oa_gateway_webhook_events.last_attempt_at'
 ];
 
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
@@ -179,17 +188,21 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `      and code=${quote(target.tenant.expectedClinicCode)} and active\n` +
     `  ) then raise exception 'STAGING_CLINIC_MISMATCH'; end if;\n` +
     `  if not exists (\n` +
-    `    select 1 from public.clinic_memberships\n` +
-    `    where clinic_id=${quote(target.tenant.expectedClinicId)}::uuid and active\n` +
+    `    select 1 from public.clinic_memberships m\n` +
+    `    join public.profiles p on p.id=m.profile_id\n` +
+    `    where m.clinic_id=${quote(target.tenant.expectedClinicId)}::uuid\n` +
+    `      and m.active and p.system_role='super_admin'\n` +
     `  ) then raise exception 'STAGING_ACTIVE_MEMBERSHIP_REQUIRED'; end if;\n` +
     `  if not exists (select 1 from public.profiles where system_role='super_admin') then\n` +
     `    raise exception 'STAGING_SUPER_ADMIN_REQUIRED';\n` +
     `  end if;\n` +
     `  perform set_config(\n` +
     `    'request.jwt.claim.sub',\n` +
-    `    (select profile_id::text from public.clinic_memberships\n` +
-    `     where clinic_id=${quote(target.tenant.expectedClinicId)}::uuid and active\n` +
-    `     order by is_primary desc,joined_at limit 1),\n` +
+    `    (select m.profile_id::text from public.clinic_memberships m\n` +
+    `     join public.profiles p on p.id=m.profile_id\n` +
+    `     where m.clinic_id=${quote(target.tenant.expectedClinicId)}::uuid\n` +
+    `       and m.active and p.system_role='super_admin'\n` +
+    `     order by m.is_primary desc,m.joined_at limit 1),\n` +
     `    true\n` +
     `  );\n` +
     `  perform set_config('request.jwt.claim.role','authenticated',true);\n` +
@@ -207,7 +220,10 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `    raise exception 'STAGING_PRODUCTS_READ_POLICY_MISSING';\n` +
     `  end if;\n` +
     `  if not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='line_oa_webhook_events' and c.relrowsecurity) then\n` +
-    `    raise exception 'STAGING_LINE_OA_RLS_MISSING';\n` +
+    `    raise exception 'STAGING_LINE_OA_OPERATIONAL_RLS_MISSING';\n` +
+    `  end if;\n` +
+    `  if not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='line_oa_gateway_webhook_events' and c.relrowsecurity) then\n` +
+    `    raise exception 'STAGING_LINE_OA_GATEWAY_RLS_MISSING';\n` +
     `  end if;\n` +
     `\n` +
     `  if not exists (select 1 from public.hybrid_patient_identity_healthcheck() where ready) then raise exception 'HYBRID_IDENTITY_HEALTHCHECK_FAILED'; end if;\n` +
@@ -217,6 +233,7 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `  if not exists (select 1 from public.quality_release_healthcheck() where ready) then raise exception 'QUALITY_RELEASE_HEALTHCHECK_FAILED'; end if;\n` +
     `  if not exists (select 1 from public.prescription_dispensing_healthcheck() where ready) then raise exception 'PRESCRIPTION_DISPENSING_HEALTHCHECK_FAILED'; end if;\n` +
     `  if not exists (select 1 from public.backup_restore_contract_healthcheck() where ready) then raise exception 'BACKUP_RESTORE_HEALTHCHECK_FAILED'; end if;\n` +
+    `  if not exists (select 1 from public.line_oa_operational_healthcheck() where ready) then raise exception 'LINE_OA_OPERATIONAL_HEALTHCHECK_FAILED'; end if;\n` +
     `end\n` +
     `$ledger_guard$;\n` +
     `\n` +

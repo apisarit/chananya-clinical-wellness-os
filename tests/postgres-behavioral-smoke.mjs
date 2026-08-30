@@ -251,7 +251,7 @@ assert.deepEqual(
 );
 const lineOaStored = await db.query(`
   select event_type,action_code,processing_status,reply_status,linked_patient_count
-  from public.line_oa_webhook_events
+  from public.line_oa_gateway_webhook_events
   where event_id_hash='${lineOaEventHash}'
 `);
 assert.deepEqual(lineOaStored.rows[0], {
@@ -1332,7 +1332,7 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
-assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-28.2');
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-29.1');
 for (const table of [
   'services','price_lists','price_list_items','products','suppliers','inventory_lots',
   'stock_movements','formulas','formula_components','production_requests',
@@ -1351,7 +1351,7 @@ const transactionBackup = await asService(`
   ) payload
 `);
 assert.equal(transactionBackup.rows[0].payload.domain, 'transactions');
-assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-28.2');
+assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-29.1');
 for (const table of [
   'audit_logs','clinical_record_audit_events','appointment_events',
   'patient_identity_events','invoices','invoice_items','payments'
@@ -1390,14 +1390,14 @@ assert.match(patientBackup.rows[0].payload.recovery_model.full_database_restore,
 
 const backupContract = await asUser(USER_C, `select * from public.backup_restore_contract_healthcheck()`);
 assert.equal(backupContract.rows[0].ready, true);
-assert.equal(backupContract.rows[0].schema_version, '2026-08-28.2');
+assert.equal(backupContract.rows[0].schema_version, '2026-08-29.1');
 const restoreTrace = await asService(`
   select public.verify_clinic_restore_trace(
     '00000000-0000-0000-0000-000000000001'
   ) trace
 `);
 assert.equal(restoreTrace.rows[0].trace.ready, true);
-assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-08-28.2');
+assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-08-29.1');
 assert.equal(restoreTrace.rows[0].trace.referential_integrity_anomalies, 0);
 
 await asUser(USER_C, `

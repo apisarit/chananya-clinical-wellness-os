@@ -58,8 +58,8 @@ In Netlify, scope all secrets to Functions runtime. Staging and Production must 
 
 Migration `202608292100_line_oa_messaging_gateway.sql` adds:
 
-- `line_oa_webhook_events`: hashed event/payload identifiers, sanitized action code, processing/reply state, retry count, and no message content;
-- `line_oa_contact_states`: keyed subject/channel hashes and followed/unfollowed state;
+- `line_oa_gateway_webhook_events`: hashed event/payload identifiers, sanitized action code, processing/reply state, retry count, and no message content;
+- `line_oa_gateway_contact_states`: keyed subject/channel hashes and followed/unfollowed state;
 - `register_line_oa_webhook_event(...)`: atomic claim, stale/failed retry, duplicate suppression, and linked identity evidence;
 - `finalize_line_oa_webhook_event(...)`: processed/ignored/failed outcome;
 - `line_oa_webhook_evidence(...)`: non-PHI staging evidence counts.
