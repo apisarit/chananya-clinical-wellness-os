@@ -5,6 +5,16 @@
   const status = document.getElementById('status');
   const error = document.getElementById('error');
 
+  function postAuthDestination() {
+    try {
+      const candidate = sessionStorage.getItem('cnyos:post_auth_path');
+      sessionStorage.removeItem('cnyos:post_auth_path');
+      return candidate === '/owner-control.html' ? candidate : '/';
+    } catch {
+      return '/';
+    }
+  }
+
   function showError(cause, retryable = true) {
     const message = cause?.message || String(cause || 'เข้าสู่ระบบไม่สำเร็จ');
     if (button) button.disabled = !retryable;
@@ -53,7 +63,7 @@
     const sessionResult = await client.auth.getSession();
     if (sessionResult.error) throw sessionResult.error;
     if (sessionResult.data.session) {
-      location.replace('/');
+      location.replace(postAuthDestination());
       return;
     }
 

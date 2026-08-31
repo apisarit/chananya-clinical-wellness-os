@@ -6,6 +6,12 @@
   "claimPolicy": "Commercial Production 100% may be stated only when every required gate is passed and evidence is tied to the exact release commit.",
   "requiredGates": [
     {
+      "id": "owner_subscription_database_enforcement",
+      "label": "CNYOS Owner subscription ON/OFF enforced by database authorization",
+      "status": "pending",
+      "evidence": null
+    },
+    {
       "id": "authenticated_staging_all_roles",
       "label": "Authenticated staging E2E for every role",
       "status": "pending",

@@ -21,6 +21,18 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
 
+/owner-control.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  X-Robots-Tag: noindex, nofollow, noarchive
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+/api/owner-subscription
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
 /patient-card.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
   X-Robots-Tag: noindex, nofollow, noarchive

@@ -27,6 +27,7 @@ jobs:
       STAGING_TEST_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
       STAGING_BROWSER_E2E: "true"
       STAGING_SYNTHETIC_UAT_ACK: CREATE_SYNTHETIC_RECORDS
+      STAGING_OWNER_CONTROL_ACK: TOGGLE_STAGING_SUBSCRIPTION
       STAGING_UAT_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
       STAGING_EVIDENCE_DIR: artifacts/staging-e2e
     steps:

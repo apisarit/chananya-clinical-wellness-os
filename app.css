@@ -729,3 +729,30 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 @media (max-width: 410px) {
   .foundation-stats-v2 { grid-template-columns: 1fr; }
 }
+
+/* CNYOS owner control plane. This console intentionally does not inherit a
+   customer white-label identity because it governs subscription enforcement. */
+.owner-console-page { min-height: 100vh; background: linear-gradient(145deg,#061913,#0d2d24 52%,#123b2e); color: #17352c; }
+.owner-console { min-height: 100vh; background: #f4f7f5; }
+.owner-console-header { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding: 28px clamp(20px,5vw,72px); background: #071d18; color: #f7fffb; border-bottom: 4px solid #d8a62a; }
+.owner-console-header h1 { margin: .2rem 0 .45rem; font-size: clamp(1.7rem,4vw,2.7rem); }
+.owner-console-header p { margin: 0; color: #bcd5cb; max-width: 760px; }
+.owner-identity { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.owner-console-main { padding: 28px clamp(16px,5vw,72px) 56px; max-width: 1440px; margin: auto; }
+.owner-safety-banner { display: grid; gap: 7px; background: #fff6df; border: 1px solid #e5c265; border-left: 5px solid #b77900; border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; }
+.owner-safety-banner code { font-size: .9em; }
+.owner-console-grid { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(320px,.8fr); gap: 20px; margin-top: 18px; }
+.owner-clinic-list { display: grid; gap: 10px; margin-top: 15px; }
+.owner-clinic-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid #dce7e2; border-radius: 11px; background: #f9fcfa; }
+.owner-clinic-row > div:first-child { display: grid; gap: 3px; }
+.owner-clinic-row span { color: #61776e; }
+.owner-clinic-meta { display: grid; justify-items: end; gap: 5px; }
+.owner-state { display: inline-flex; min-width: 52px; justify-content: center; border-radius: 999px; padding: 5px 10px; font-weight: 800; letter-spacing: .08em; }
+.owner-state.on { background: #dff4e9; color: #12643e; }
+.owner-state.off { background: #ffe4df; color: #9b2d20; }
+.owner-control-form textarea { min-height: 112px; }
+@media (max-width: 900px) {
+  .owner-console-header { align-items: flex-start; flex-direction: column; }
+  .owner-identity { justify-content: flex-start; }
+  .owner-console-grid { grid-template-columns: 1fr; }
+}

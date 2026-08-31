@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071d18">
+  <title>CNYOS Owner Control Console</title>
+  <link rel="stylesheet" href="app.css?v=cnyos-owner1">
+  <script src="tenant-config.js?v=white-label1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
+  <script src="auth-config.js?v=cnyos-owner1"></script>
+  <script src="chananya-runtime.js?v=cnyos-owner1"></script>
+  <script defer src="owner-control.js?v=cnyos-owner1"></script>
+</head>
+<body class="owner-console-page">
+<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด CNYOS Owner Control</h2><p id="boot-error">กำลังตรวจ Google session และสิทธิ์ Owner</p></div></div>
+
+<div id="owner-app" class="owner-console hidden">
+  <header class="owner-console-header">
+    <div>
+      <span class="page-kicker">CNYOS CONTROL PLANE</span>
+      <h1>Subscription Safety Console</h1>
+      <p>การ ON/OFF มีผลที่ Supabase database และ RLS ทันที ไม่ใช่การซ่อนหน้าเว็บ</p>
+    </div>
+    <div class="owner-identity">
+      <small id="owner-email">—</small>
+      <button class="btn ghost" id="owner-logout" type="button">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <main class="owner-console-main">
+    <section class="owner-safety-banner" aria-label="ขอบเขตความปลอดภัย">
+      <strong>Database-enforced kill switch</strong>
+      <span>เมื่อ OFF ระบบจะเปลี่ยน <code>subscription_state='suspended'</code> ใน transaction ที่บันทึก audit ทำให้ <code>current_clinic_id()</code> และ tenant RLS ปฏิเสธการเข้าถึงข้อมูล แม้ session เดิมยังไม่หมดอายุ โดยงานสำรองข้อมูลยังทำต่อได้</span>
+    </section>
+
+    <div id="owner-status" class="status">กำลังโหลดสถานะ subscription…</div>
+
+    <section class="owner-console-grid">
+      <div class="card">
+        <div class="section-heading"><span class="section-number">1</span><div><h2>Tenant status</h2><p>สถานะจริงจาก Supabase</p></div></div>
+        <div id="owner-clinic-list" class="owner-clinic-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-heading"><span class="section-number">2</span><div><h2>เปลี่ยน Subscription</h2><p>ต้องยืนยัน Clinic code และระบุเหตุผลทุกครั้ง</p></div></div>
+        <form id="owner-control-form" class="form owner-control-form">
+          <label class="full">Clinic
+            <select id="owner-clinic" required></select>
+          </label>
+          <label>สถานะใหม่
+            <select id="owner-state" required>
+              <option value="on">ON — เปิดใช้งาน</option>
+              <option value="off">OFF — ระงับฐานข้อมูล</option>
+            </select>
+          </label>
+          <label>พิมพ์ Clinic code เพื่อยืนยัน
+            <input id="owner-confirm-code" autocomplete="off" required>
+          </label>
+          <label class="full">เหตุผล (8–500 ตัวอักษร)
+            <textarea id="owner-reason" minlength="8" maxlength="500" required></textarea>
+          </label>
+          <button class="btn danger full" id="owner-submit" type="submit">ยืนยันการเปลี่ยนสถานะที่ฐานข้อมูล</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="owner-toast" role="status" aria-live="polite"></div>
+</body>
+</html>

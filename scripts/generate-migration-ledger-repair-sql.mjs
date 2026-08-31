@@ -36,6 +36,7 @@ const requiredRelations = [
   'public.line_oa_delivery_events',
   'public.line_oa_gateway_contact_states',
   'public.line_oa_gateway_webhook_events',
+  'public.clinic_subscription_control_events',
   'public.user_access_summary',
   'public.admin_task_summary',
   'public.v_clinical_herbal_traceability',
@@ -62,7 +63,9 @@ const requiredFunctions = [
   'line_oa_operational_healthcheck',
   'register_line_oa_webhook_event',
   'finalize_line_oa_webhook_event',
-  'line_oa_webhook_evidence'
+  'line_oa_webhook_evidence',
+  'list_owner_subscription_clinics',
+  'set_clinic_subscription_state'
 ];
 
 const requiredSecurityDefiners = [
@@ -70,7 +73,9 @@ const requiredSecurityDefiners = [
   'export_clinic_backup_domain',
   'register_line_oa_webhook_event',
   'finalize_line_oa_webhook_event',
-  'line_oa_webhook_evidence'
+  'line_oa_webhook_evidence',
+  'list_owner_subscription_clinics',
+  'set_clinic_subscription_state'
 ];
 
 const requiredColumns = [
@@ -87,7 +92,9 @@ const requiredColumns = [
   'inventory_lots.clinic_id',
   'line_oa_webhook_events.locked_until',
   'line_oa_notification_outbox.next_attempt_at',
-  'line_oa_gateway_webhook_events.last_attempt_at'
+  'line_oa_gateway_webhook_events.last_attempt_at',
+  'clinics.subscription_state',
+  'clinics.subscription_version'
 ];
 
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
@@ -185,7 +192,7 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `  if not exists (\n` +
     `    select 1 from public.clinics\n` +
     `    where id=${quote(target.tenant.expectedClinicId)}::uuid\n` +
-    `      and code=${quote(target.tenant.expectedClinicCode)} and active\n` +
+    `      and code=${quote(target.tenant.expectedClinicCode)} and active and subscription_state='active'\n` +
     `  ) then raise exception 'STAGING_CLINIC_MISMATCH'; end if;\n` +
     `  if not exists (\n` +
     `    select 1 from public.clinic_memberships m\n` +
@@ -224,6 +231,9 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `  end if;\n` +
     `  if not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='line_oa_gateway_webhook_events' and c.relrowsecurity) then\n` +
     `    raise exception 'STAGING_LINE_OA_GATEWAY_RLS_MISSING';\n` +
+    `  end if;\n` +
+    `  if not exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='clinic_subscription_control_events' and c.relrowsecurity) then\n` +
+    `    raise exception 'STAGING_OWNER_SUBSCRIPTION_RLS_MISSING';\n` +
     `  end if;\n` +
     `\n` +
     `  if not exists (select 1 from public.hybrid_patient_identity_healthcheck() where ready) then raise exception 'HYBRID_IDENTITY_HEALTHCHECK_FAILED'; end if;\n` +

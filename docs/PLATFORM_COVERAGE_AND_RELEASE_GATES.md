@@ -23,6 +23,7 @@ No item may be called production-ready merely because dimensions 1 or 2 pass.
 | Formula, material issue, batch and stock movement | Production / Inventory | `/production.html` | `ui-review.html#production` | Source present; authenticated staging pending |
 | Independent batch review and release | Quality | `/quality.html` | `ui-review.html#quality` | Source present; independent-QC evidence pending |
 | Role administration, approvals, audit and amendment | Admin / Super Admin | `/admin.html` | `ui-review.html#admin` | Source present; authenticated staging pending |
+| CNYOS subscription ON/OFF and audit | CNYOS Owner only | `/owner-control.html`, `/api/owner-subscription` | None — control plane is never a synthetic preview | Source present; migration, Google Owner login and live database enforcement evidence pending |
 
 Deploy Preview intentionally strips database credentials. Operational routes therefore fail closed. Review navigation must remain inside `ui-review.html` so reviewers can inspect all workspaces without a session, patient data or writes.
 
@@ -44,6 +45,7 @@ Thai Traditional Medicine remains the primary ontology. ICD/WHO is a secondary m
 
 The product must not be described as **Commercial Production ready 100%** until all evidence below is recorded against the exact release commit:
 
+- CNYOS Owner subscription OFF removes the tenant from `current_clinic_id()`/RLS for an already-issued staff session, and ON restores only the original tenant/department boundary; the audited service-role RPC and exact target guards must pass.
 - Authenticated staging E2E passes for every role, including cross-department denials and Super Admin boundaries.
 - LINE OA signed Messaging callback, consent, link/revoke, QR issue/expiry/replay denial and HN/manual fallback pass on the staging tenant.
 - The first encrypted Google Drive export completes and an isolated restore drill passes with measured RPO/RTO and integrity verification.
@@ -53,8 +55,8 @@ The product must not be described as **Commercial Production ready 100%** until 
 - Managed database backup/PITR configuration is confirmed separately from Google Drive export.
 - Netlify Deploy Preview, automated checks, review status and merge protection pass on the final commit.
 
-The repository includes protected authenticated-staging, real-LINE and isolated managed-restore harnesses plus exact-commit CI evidence. Harness presence is not execution evidence. Until successful exact-commit artifacts are reviewed, the authenticated staging, LINE and restore gates remain `pending`.
+The repository includes database-enforced Owner control plus protected authenticated-staging, real-LINE and isolated managed-restore harnesses and exact-commit CI evidence. Source/harness presence is not execution evidence. Until successful exact-commit artifacts are reviewed, the Owner control, authenticated staging, LINE and restore gates remain `pending`.
 
 Until then, the release label is **Preview / production candidate under verification**.
 
-`release-readiness.json` is the machine-readable release claim. Its `commercialProductionReady` value must remain `false` and each required gate must remain `pending` until evidence tied to the exact release commit has been reviewed. A passing source/Preview test is not evidence that authenticated staging, LINE callback, restore drill or legal review has passed.
+`release-readiness.json` is the machine-readable release claim. Its `commercialProductionReady` value must remain `false` and each required gate must remain `pending` until evidence tied to the exact release commit has been reviewed. A passing source/Preview test is not evidence that Owner suspension, authenticated staging, LINE callback, restore drill or legal review has passed.

@@ -14,7 +14,7 @@ const migrationsDir = path.join(root, 'supabase', 'migrations');
 const config = JSON.parse(await fs.readFile(path.join(root, 'config', 'tenant.staging.example.json'), 'utf8'));
 const entries = loadMigrationEntries(root);
 
-assert.equal(entries.length, 31);
+assert.equal(entries.length, 32);
 assert.deepEqual(entries, [...entries].sort((a, b) => a.file.localeCompare(b.file)));
 assert.equal(config.tenant.expectedClinicId, '00000000-0000-4000-8000-00000000a001');
 assert.ok(entries.every(entry => /^[0-9a-f]{64}$/.test(entry.sha256)));
@@ -31,7 +31,9 @@ assert.match(bootstrapSql, /TENANT_BOOTSTRAP_CLINIC_CODE_CONFLICT/);
 assert.match(bootstrapSql, /TENANT_BOOTSTRAP_CLINIC_ID_CONFLICT/);
 assert.match(bootstrapSql, /where clinics\.code = excluded\.code/i);
 assert.match(bootstrapSql, /CHANANYA_TENANT_BOOTSTRAP_READY/);
+assert.match(bootstrapSql, /TENANT_BOOTSTRAP_SUBSCRIPTION_SUSPENDED/);
 assert.doesNotMatch(bootstrapSql, /^update public\.clinics/im);
+assert.doesNotMatch(bootstrapSql, /`  active = true,/);
 assert.match(recoverySql, /STAGING_LEDGER_RECOVERY_REQUIRES_EMPTY_TRANSACTIONAL_DATA/);
 assert.match(recoverySql, /STAGING_SCHEMA_RELATIONS_MISSING/);
 assert.match(recoverySql, /STAGING_SECURITY_DEFINERS_MISSING/);
@@ -160,6 +162,74 @@ assert.deepEqual(ledger.rows.map(row => row.version), entries.map(entry => entry
 assert.deepEqual(ledger.rows.map(row => row.name), entries.map(entry => entry.name));
 assert.ok(ledger.rows.every(row => Array.isArray(row.statements) && row.statements.length === 1));
 assert.ok(ledger.rows.every((row, index) => row.statements[0].includes(entries[index].sha256)));
+
+await db.exec(`select set_config('request.jwt.claim.role','service_role',false)`);
+const offRequestId = '44444444-4444-4444-a444-444444444444';
+const onRequestId = '55555555-5555-4555-a555-555555555555';
+const offSql = `
+  select public.set_clinic_subscription_state(
+    '${offRequestId}'::uuid,
+    '${config.tenant.expectedClinicId}'::uuid,
+    '${config.tenant.expectedClinicCode}',
+    false,
+    'Reviewed synthetic staging suspension',
+    '${ADMIN_ID}'::uuid,
+    'staging-admin@example.test'
+  ) result
+`;
+await db.query(offSql);
+await db.query(offSql);
+assert.deepEqual(
+  (await db.query(`select active,subscription_state,subscription_version from public.clinics where id='${config.tenant.expectedClinicId}'`)).rows,
+  [{ active: true, subscription_state: 'suspended', subscription_version: 2 }]
+);
+assert.equal(
+  (await db.query(`select count(*)::int count from public.clinic_subscription_control_events where request_id='${offRequestId}'`)).rows[0].count,
+  1,
+  'retrying the same Owner request must be idempotent'
+);
+
+await assert.rejects(db.exec(bootstrapSql), /TENANT_BOOTSTRAP_SUBSCRIPTION_SUSPENDED/);
+await db.exec('rollback;');
+assert.equal(
+  (await db.query(`select subscription_state from public.clinics where id='${config.tenant.expectedClinicId}'`)).rows[0].subscription_state,
+  'suspended',
+  'tenant bootstrap must never reactivate a suspended subscription'
+);
+
+await db.exec(`
+  select set_config('request.jwt.claim.role','authenticated',false);
+  select set_config('request.jwt.claim.sub','${ADMIN_ID}',false);
+`);
+assert.equal((await db.query('select public.current_clinic_id() clinic_id')).rows[0].clinic_id, null);
+assert.equal(
+  (await db.query(`select public.is_clinic_member('${config.tenant.expectedClinicId}'::uuid) allowed`)).rows[0].allowed,
+  false,
+  'an already-issued staff identity must lose database tenant access while OFF'
+);
+
+await db.exec(`select set_config('request.jwt.claim.role','service_role',false)`);
+await db.query(`
+  select public.set_clinic_subscription_state(
+    '${onRequestId}'::uuid,
+    '${config.tenant.expectedClinicId}'::uuid,
+    '${config.tenant.expectedClinicCode}',
+    true,
+    'Reviewed synthetic staging reactivation',
+    '${ADMIN_ID}'::uuid,
+    'staging-admin@example.test'
+  ) result
+`);
+await db.exec(`select set_config('request.jwt.claim.role','authenticated',false)`);
+assert.equal(
+  (await db.query('select public.current_clinic_id() clinic_id')).rows[0].clinic_id,
+  config.tenant.expectedClinicId,
+  'ON must restore only the original active membership boundary'
+);
+assert.equal(
+  (await db.query(`select count(*)::int count from public.clinic_subscription_control_events where clinic_id='${config.tenant.expectedClinicId}'`)).rows[0].count,
+  2
+);
 
 await db.close();
 console.log(`Migration ledger contract passed: ${entries.length} exact migrations, staging guards, schema fingerprint and non-null SHA-256 evidence`);

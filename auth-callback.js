@@ -4,6 +4,16 @@
   const status = document.getElementById('status');
   const error = document.getElementById('error');
 
+  function consumePostAuthDestination() {
+    try {
+      const candidate = sessionStorage.getItem('cnyos:post_auth_path');
+      sessionStorage.removeItem('cnyos:post_auth_path');
+      return candidate === '/owner-control.html' ? candidate : '/';
+    } catch {
+      return '/';
+    }
+  }
+
   async function exchangeAuthorizationCode() {
     const config = window.CHANANYA_AUTH || {};
     const url = config.url || config.supabaseUrl;
@@ -26,7 +36,7 @@
 
     history.replaceState({}, document.title, '/auth-callback.html');
     status.textContent = 'เข้าสู่ระบบสำเร็จ';
-    location.replace('/');
+    location.replace(consumePostAuthDestination());
   }
 
   exchangeAuthorizationCode().catch(cause => {

@@ -27,7 +27,7 @@ for (const file of htmlFiles) {
   assert.doesNotMatch(html, /@supabase\/supabase-js@2(?:["'/]|$)/, `${file} must pin the complete Supabase browser SDK version`);
 }
 
-for (const file of ['auth-login.js', 'auth-callback.js', 'pharmacy-labels.js', 'pharmacy-v33-tools.js']) {
+for (const file of ['auth-login.js', 'auth-callback.js', 'owner-control.js', 'pharmacy-labels.js', 'pharmacy-v33-tools.js']) {
   const source = read(file);
   assert.doesNotThrow(() => new vm.Script(source, { filename: file }), `${file} must parse as browser JavaScript`);
   assert.doesNotMatch(source, /onclick\s*=/i, `${file} must bind events without inline handlers`);
@@ -68,6 +68,7 @@ vm.runInNewContext(read('auth-login.js'), {
   document: { getElementById: id => loginElements[id] || null },
   location: loginLocation,
   fetch: async () => ({ ok: true, async json() { return { external: { google: true } }; } }),
+  sessionStorage: { getItem() { return null; }, removeItem() {} },
   console,
   String
 });
@@ -88,6 +89,7 @@ vm.runInNewContext(read('auth-login.js'), {
   document: { getElementById: id => disabledProviderElements[id] || null },
   location: loginLocation,
   fetch: async () => ({ ok: true, async json() { return { external: { google: false } }; } }),
+  sessionStorage: { getItem() { return null; }, removeItem() {} },
   console,
   String
 });
@@ -117,6 +119,7 @@ vm.runInNewContext(read('auth-callback.js'), {
   location: callbackLocation,
   history: { replaceState(_state, _title, url) { sanitizedCallbackUrl = url; } },
   URLSearchParams,
+  sessionStorage: { getItem() { return null; }, removeItem() {} },
   setTimeout,
   console,
   String

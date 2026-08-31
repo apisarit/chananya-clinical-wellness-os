@@ -82,7 +82,8 @@ The manual workflow `.github/workflows/authenticated-staging-e2e.yml` performs:
 6. migration health checks for hybrid identity, clinical/financial handoffs, prescription dispensing, production and independent Quality;
 7. ten synthetic patient journeys through registration, manual-HN identity fallback, Encounter, Thai medicine diagnosis, prescription, Pharmacy review, FEFO lot allocation, Billing, payment and Encounter closure;
 8. negative segregation checks and required audit actions;
-9. JSON evidence and failure screenshots retained against the exact Git commit for 90 days.
+9. reversible subscription OFF/ON proof: an already-issued Practitioner session loses `current_clinic_id()` and Clinical capability while OFF, then regains only its original tenant/department boundary after ON;
+10. JSON evidence and failure screenshots retained against the exact Git commit for 90 days.
 
 The workflow intentionally creates synthetic staging records. Run it only after the protected environment reviewer confirms the target project and site.
 
@@ -98,6 +99,8 @@ A successful run produces:
 Do not change `release-readiness.json` from `pending` based only on the presence of this harness. The authenticated staging gate may move to `passed` only after a reviewer checks the successful workflow URL, exact source commit, staging project ref, tenant code, role count, route matrix, ten journey results and unresolved failures at zero.
 
 LINE callback/replay tests, encrypted Google Drive backup + isolated restore drill, managed database backup/PITR confirmation, and privacy/security/legal review remain separate hard gates.
+
+The workflow's database proof exercises the service-role-only RPC directly and always restores a clinic that was verified ON at the start. The browser Owner route has an additional confirmed-Google-email allowlist and exact project/clinic guards. Activate and test that boundary separately using `docs/CNYOS_OWNER_CONTROL.md`; a source-only console does not pass the Owner commercial gate.
 
 The LINE gate must use the signed Messaging API callback described in `LINE_OA_MESSAGING_GATEWAY.md`, not only a locally supplied LINE ID token. The exact staging deploy must report `enabled=true` at `/api/line-oa-webhook`, pass LINE Developers **Verify**, receive a real event from the dedicated test account, and retain non-PHI `line_oa_webhook_evidence(...)` with the LIFF/QR/revoke/HN evidence.
 

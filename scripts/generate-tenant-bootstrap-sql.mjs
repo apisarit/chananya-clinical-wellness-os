@@ -37,11 +37,16 @@ export function buildTenantBootstrapSql(input) {
     `  code = excluded.code,\n` +
     `  name_th = excluded.name_th,\n` +
     `  name_en = excluded.name_en,\n` +
-    `  active = true,\n` +
     `  updated_at = now()\n` +
     `where clinics.code = excluded.code;\n` +
     `do $tenant_bootstrap_guard$\n` +
     `begin\n` +
+    `  if exists (\n` +
+    `    select 1 from public.clinics\n` +
+    `    where id = ${clinicId}::uuid\n` +
+    `      and code = ${clinicCode}\n` +
+    `      and (not active or subscription_state = 'suspended')\n` +
+    `  ) then raise exception 'TENANT_BOOTSTRAP_SUBSCRIPTION_SUSPENDED'; end if;\n` +
     `  if not exists (\n` +
     `    select 1 from public.clinics\n` +
     `    where id = ${clinicId}::uuid\n` +

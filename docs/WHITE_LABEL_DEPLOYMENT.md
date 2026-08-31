@@ -53,7 +53,8 @@ The browser config contains `expectedClinicId` and `expectedClinicCode`. After l
 5. In the customer's Netlify site, set `CLINICAL_OS_TENANT_CONFIG_JSON` to the complete JSON or set `CLINICAL_OS_TENANT_CONFIG_PATH` to a committed non-secret config path.
 6. Configure the customer's OAuth allowlist and server-only function variables. Set `PATIENT_QR_ISSUER` to the same value as `identity.qrIssuer`.
 7. Share only the customer's five environment-specific backup folders with that customer's Google service account.
-8. Run staging migrations, authenticated role E2E, encrypted export and isolated restore drill before promoting the site.
+8. Configure the CNYOS Owner allowlist, exact project ref and clinic-code allowlist with Functions-only scope, then prove subscription OFF/ON at the database boundary as documented in `CNYOS_OWNER_CONTROL.md`.
+9. Run staging migrations, authenticated role E2E, encrypted export and isolated restore drill before promoting the site.
 
 For a routine new customer, the only customer-specific inputs are the validated JSON configuration, approved logo asset, isolated Supabase project, Netlify site/environment, OAuth/LINE credentials and private Drive folder IDs. No clinical workflow JavaScript, SQL function or role policy should be customized per customer.
 
@@ -71,6 +72,7 @@ The protected 11-role and ten-journey procedure is documented in `AUTHENTICATED_
 
 - Production and Deploy Preview use different Supabase projects and test identities.
 - A config/database tenant mismatch is a release failure, not a warning.
+- Subscription suspension is controlled only through the audited service-role RPC. Tenant bootstrap and customer Admin access cannot reactivate a suspended clinic.
 - Customer branding changes must not modify clinical workflow files or database migrations.
 - Every customer release records source commit, migration set, config checksum, database project, Netlify site, backup environment, destination tree, key ID and restore evidence.
 - The release manifest also records the legal customer name, clinic UUID/code, QR issuer and the approved brand-asset checksum so the deployed mask is auditable.

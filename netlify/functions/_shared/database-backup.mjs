@@ -10,7 +10,7 @@ import {
 export const BACKUP_DOMAINS = Object.freeze(['patients', 'products', 'pharmacy', 'transactions']);
 export const BACKUP_ENVIRONMENTS = Object.freeze(['staging', 'production', 'restore-test']);
 export const BACKUP_FORMAT = 'chananya-encrypted-backup/v1';
-export const BACKUP_SCHEMA_VERSION = '2026-08-28.2';
+export const BACKUP_SCHEMA_VERSION = '2026-08-31.1';
 export const RESTORE_SET_FORMAT = 'chananya-restore-set-evidence/v1';
 export const BACKUP_REQUIRED_TABLES = Object.freeze({
   patients: Object.freeze([
@@ -42,7 +42,9 @@ export const BACKUP_REQUIRED_TABLES = Object.freeze({
     'patient_identity_links',
     'patient_identity_link_requests',
     'patient_qr_sessions',
-    'encounter_identity_verifications'
+    'encounter_identity_verifications',
+    'line_oa_contacts',
+    'line_oa_notification_preferences'
   ]),
   products: Object.freeze([
     'services',
@@ -78,7 +80,11 @@ export const BACKUP_REQUIRED_TABLES = Object.freeze({
     'patient_identity_events',
     'invoices',
     'invoice_items',
-    'payments'
+    'payments',
+    'line_oa_webhook_events',
+    'line_oa_notification_outbox',
+    'line_oa_delivery_events',
+    'clinic_subscription_control_events'
   ])
 });
 

@@ -37,7 +37,13 @@ const countBindings = Object.freeze({
   audit_logs: ['transactions', 'audit_logs'],
   invoices: ['transactions', 'invoices'],
   invoice_items: ['transactions', 'invoice_items'],
-  payments: ['transactions', 'payments']
+  payments: ['transactions', 'payments'],
+  line_oa_contacts: ['patients', 'line_oa_contacts'],
+  line_oa_notification_preferences: ['patients', 'line_oa_notification_preferences'],
+  line_oa_webhook_events: ['transactions', 'line_oa_webhook_events'],
+  line_oa_notification_outbox: ['transactions', 'line_oa_notification_outbox'],
+  line_oa_delivery_events: ['transactions', 'line_oa_delivery_events'],
+  clinic_subscription_control_events: ['transactions', 'clinic_subscription_control_events']
 });
 
 function safeCode(error) {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   DATABASE_CAPABILITIES,
@@ -7,14 +8,18 @@ import {
   STAGING_ROLES,
   WORKSPACE_ROUTES,
   evidenceDirectory,
+  loadStagingCredentials,
   loadStagingTarget,
+  requestJson,
   rpc,
   signInStagingRole,
   sourceCommit,
+  supabaseUrl,
   writeEvidence
 } from './staging-support.mjs';
 
 const target = loadStagingTarget();
+const credentials = loadStagingCredentials();
 const sessions = new Map();
 const roleResults = [];
 
@@ -99,6 +104,77 @@ try {
   const restoredContext = rowOf(await rpc(target, disabledSession.access_token, 'current_access_context'));
   assert.equal(restoredContext?.ready, true, 'synthetic practitioner was not restored after account-disable verification');
   accountDisableEvidence.reactivated = true;
+}
+
+if (process.env.STAGING_OWNER_CONTROL_ACK !== 'TOGGLE_STAGING_SUBSCRIPTION') {
+  throw new Error('STAGING_OWNER_CONTROL_ACK=TOGGLE_STAGING_SUBSCRIPTION is required');
+}
+const ownerActor = roleResults.find(result => result.role === 'super_admin');
+const subscriptionSession = sessions.get('practitioner');
+const subscriptionControlEvidence = {
+  clinicCode: target.config.tenant.expectedClinicCode,
+  offRequestId: randomUUID(),
+  onRequestId: randomUUID(),
+  existingTokenDenied: false,
+  restoredOriginalBoundary: false,
+  databaseEnforced: false
+};
+async function serviceRpc(name, body) {
+  return requestJson(supabaseUrl(target, `/rest/v1/rpc/${name}`), {
+    key: credentials.serviceRoleKey,
+    bearer: credentials.serviceRoleKey,
+    method: 'POST',
+    body
+  });
+}
+const initialSubscriptionRows = await serviceRpc('list_owner_subscription_clinics', {});
+const initialSubscription = initialSubscriptionRows.find(row => row.clinic_id === target.config.tenant.expectedClinicId);
+assert.equal(initialSubscription?.enabled, true, 'staging subscription must start ON before the reversible enforcement proof');
+let subscriptionChangeAttempted = false;
+try {
+  subscriptionChangeAttempted = true;
+  await serviceRpc('set_clinic_subscription_state', {
+    p_request_id: subscriptionControlEvidence.offRequestId,
+    p_clinic_id: target.config.tenant.expectedClinicId,
+    p_expected_clinic_code: target.config.tenant.expectedClinicCode,
+    p_enabled: false,
+    p_reason: 'Authenticated staging database suspension proof',
+    p_actor_user_id: ownerActor.userId,
+    p_actor_email: ownerActor.email
+  });
+  await serviceRpc('set_clinic_subscription_state', {
+    p_request_id: subscriptionControlEvidence.offRequestId,
+    p_clinic_id: target.config.tenant.expectedClinicId,
+    p_expected_clinic_code: target.config.tenant.expectedClinicCode,
+    p_enabled: false,
+    p_reason: 'Authenticated staging database suspension proof',
+    p_actor_user_id: ownerActor.userId,
+    p_actor_email: ownerActor.email
+  });
+  const suspendedContext = rowOf(await rpc(target, subscriptionSession.access_token, 'current_access_context'));
+  const suspendedClinical = await rpc(target, subscriptionSession.access_token, 'department_can', {
+    p_capability: 'clinical'
+  });
+  assert.equal(suspendedContext, undefined, 'existing practitioner token retained tenant context while subscription was OFF');
+  assert.equal(suspendedClinical, false, 'existing practitioner token retained Clinical capability while subscription was OFF');
+  subscriptionControlEvidence.existingTokenDenied = true;
+  subscriptionControlEvidence.databaseEnforced = true;
+} finally {
+  if (subscriptionChangeAttempted) {
+    await serviceRpc('set_clinic_subscription_state', {
+      p_request_id: subscriptionControlEvidence.onRequestId,
+      p_clinic_id: target.config.tenant.expectedClinicId,
+      p_expected_clinic_code: target.config.tenant.expectedClinicCode,
+      p_enabled: true,
+      p_reason: 'Restore staging subscription after enforcement proof',
+      p_actor_user_id: ownerActor.userId,
+      p_actor_email: ownerActor.email
+    });
+    const restoredContext = rowOf(await rpc(target, subscriptionSession.access_token, 'current_access_context'));
+    assert.equal(restoredContext?.clinic_id, target.config.tenant.expectedClinicId, 'subscription ON did not restore the original clinic boundary');
+    assert.equal(restoredContext?.clinic_role, 'practitioner', 'subscription ON widened or changed the original department role');
+    subscriptionControlEvidence.restoredOriginalBoundary = true;
+  }
 }
 
 async function runBrowserMatrix() {
@@ -192,6 +268,7 @@ const evidence = {
   apiMatrix: roleResults,
   healthchecks,
   accountDisableEvidence,
+  subscriptionControlEvidence,
   browserExecuted: browserEnabled,
   browserRoleCount: browserResults?.length || 0,
   browserMatrix: browserResults
