@@ -77,5 +77,6 @@ assert.match(importer, /source_record_for_coordinate/);
 assert.match(importer, /registry_target_for/);
 assert.match(importer, /clinical_inference_allowed: false/);
 assert.match(importer, /\['approved', 'rejected'\]\.includes\(existing\?\.review_status\)/, 'human review decisions must survive re-import');
+assert.equal((importer.match(/expected: \[200, 201\]/g) || []).length, 4, 'idempotent upserts must accept both insert and update responses');
 
 console.log('TTM-DKR contracts passed: 113 source-preserving rules, asymmetric 42-body targets and staging-only typed graph import');

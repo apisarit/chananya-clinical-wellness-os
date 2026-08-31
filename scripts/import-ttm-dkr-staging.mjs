@@ -263,7 +263,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
     };
   });
   await batches(knowledgeRows, 60, batch => request(target, 'ttm_diagnostic_knowledge?on_conflict=domain,rule_key,input_key,version', {
-    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [201]
+    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [200, 201]
   }));
 
   const existingConceptQuery = new URLSearchParams({ select: '*', version: 'eq.TTM-DKR-v1', limit: '1000' });
@@ -287,7 +287,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
     };
   });
   await batches(conceptRows, 60, batch => request(target, 'ttm_concepts?on_conflict=concept_code,version', {
-    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [201]
+    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [200, 201]
   }));
 
   const bodyConceptRows = dataset.body_model.groups.map(group => ({
@@ -309,7 +309,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
     }
   }));
   await request(target, 'ttm_concepts?on_conflict=concept_code,version', {
-    method: 'POST', body: bodyConceptRows, prefer: 'resolution=merge-duplicates,return=minimal', expected: [201]
+    method: 'POST', body: bodyConceptRows, prefer: 'resolution=merge-duplicates,return=minimal', expected: [200, 201]
   });
 
   const queries = [
@@ -361,7 +361,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
     });
   }
   await batches(relationRows, 60, batch => request(target, 'ttm_concept_relations?on_conflict=subject_concept_id,predicate,object_concept_id,source_id,version', {
-    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [201]
+    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [200, 201]
   }));
 
   const [knowledgeCount, conceptCount, relationCount, bodyGroupCount] = await Promise.all([
