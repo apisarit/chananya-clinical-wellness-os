@@ -3,6 +3,7 @@
   "deploymentId": "chananya-clinical-staging",
   "brand": {
     "shortName": "CHANANYA STAGING",
+    "browserTitle": "CNYOS",
     "nameTh": "ชนัญญา คลินิก — ระบบทดสอบ",
     "nameEn": "Chananya Clinic — Isolated Staging",
     "productName": "Clinical & Wellness OS",

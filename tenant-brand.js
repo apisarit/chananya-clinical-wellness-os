@@ -59,7 +59,9 @@
     document.querySelectorAll('.hero').forEach(hero => { hero.dataset.brandWatermark = brand.nameTh || brand.shortName || ''; });
 
     const oldTitle = document.title;
-    if (brand.shortName && oldTitle) {
+    if (brand.browserTitle) {
+      document.title = brand.browserTitle;
+    } else if (brand.shortName && oldTitle) {
       document.title = oldTitle
         .replace(/Chananya Clinical OS/gi, `${brand.shortName} ${brand.productName || 'Clinical OS'}`)
         .replace(/Chananya/gi, brand.shortName);

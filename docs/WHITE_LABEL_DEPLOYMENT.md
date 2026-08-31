@@ -9,7 +9,7 @@ This is a white-label product boundary, not a collection of customer forks. A cu
 One validated tenant config controls:
 
 - company/clinic names in Thai and English;
-- short brand, mark or logo, browser title, printed pharmacy identity and color mask;
+- short brand, mark or logo, exact browser title (`brand.browserTitle`), printed pharmacy identity and color mask;
 - expected clinic UUID and code used for HN, prescription, invoice, pharmacy sale and production numbering;
 - browser-safe Supabase URL and publishable key;
 - OAuth redirect origin and QR issuer.

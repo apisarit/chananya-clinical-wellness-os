@@ -17,6 +17,12 @@ function requiredString(value, field, max = 180) {
   return clean;
 }
 
+function optionalString(value, field, max = 180) {
+  const clean = String(value ?? '').trim();
+  if (clean.length > max) throw new Error(`${field} must be <= ${max} characters`);
+  return clean;
+}
+
 function validateUrl(value, field, { allowRelative = false } = {}) {
   const clean = String(value ?? '').trim();
   if (allowRelative && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(clean)) return clean;
@@ -77,12 +83,14 @@ export function validateTenantConfig(input) {
   const redirectOrigin = validateOrigin(input.auth?.redirectOrigin, 'auth.redirectOrigin');
   const logoRaw = String(input.brand?.logoUrl ?? '').trim();
   const logoUrl = logoRaw ? validateUrl(logoRaw, 'brand.logoUrl', { allowRelative: true }) : '';
+  const browserTitle = optionalString(input.brand?.browserTitle, 'brand.browserTitle', 80);
 
   return {
     schemaVersion: 1,
     deploymentId: requiredString(input.deploymentId, 'deploymentId', 80),
     brand: {
       shortName: requiredString(input.brand?.shortName, 'brand.shortName', 60),
+      ...(browserTitle ? { browserTitle } : {}),
       nameTh: requiredString(input.brand?.nameTh, 'brand.nameTh', 160),
       nameEn: requiredString(input.brand?.nameEn, 'brand.nameEn', 160),
       productName: requiredString(input.brand?.productName, 'brand.productName', 80),

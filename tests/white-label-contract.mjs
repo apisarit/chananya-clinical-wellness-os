@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import {
   buildDeployManifest,
@@ -19,6 +20,7 @@ const chananya = JSON.parse(read('config/tenant.chananya.json'));
 const customer = validateTenantConfig(example);
 assert.equal(customer.tenant.expectedClinicCode, 'CUSTOMER');
 assert.equal(customer.brand.shortName, 'CUSTOMER CLINIC');
+assert.equal(customer.brand.browserTitle, 'CUSTOMER CLINIC OS');
 assert.match(customer.database.url, /^https:\/\//);
 assert.match(renderTenantConfig(customer), /window\.CLINICAL_OS_CONFIG = Object\.freeze/);
 assert.doesNotMatch(renderBrandConfig(customer), /"database"|publishableKey|supabase\.co/i);
@@ -44,6 +46,10 @@ assert.throws(
 assert.throws(
   () => validateTenantConfig({ ...example, tenant: { ...example.tenant, expectedClinicCode: 'bad code' } }),
   /expectedClinicCode/
+);
+assert.throws(
+  () => validateTenantConfig({ ...example, brand: { ...example.brand, browserTitle: 'x'.repeat(81) } }),
+  /brand\.browserTitle/
 );
 
 const generated = read('tenant-config.js');
@@ -196,6 +202,7 @@ assert.match(runtime, /access_context_ready: false/);
 
 const brand = read('tenant-brand.js');
 assert.match(brand, /brand\.logoUrl/);
+assert.match(brand, /brand\.browserTitle/);
 assert.match(brand, /--forest-950/);
 assert.match(brand, /brandWatermark/);
 assert.match(brand, /data-brand-demo-hn/);
@@ -205,6 +212,30 @@ assert.match(read('pharmacy-labels.js'), /CLINICAL_OS_CONFIG\?\.brand/);
 assert.match(read('pharmacy-v33-tools.js'), /clinicBrand/);
 assert.doesNotMatch(read('auth.html'), /qptxnrldzzinlcabudjv|sb_publishable_/);
 assert.doesNotMatch(read('login-v3.html'), /qptxnrldzzinlcabudjv|sb_publishable_/);
+
+const titleDocument = {
+  title: 'เข้าสู่ระบบ — Chananya Clinical OS',
+  readyState: 'complete',
+  documentElement: { style: { setProperty() {} }, dataset: {} },
+  querySelectorAll() { return []; },
+  createElement() { return {}; }
+};
+const titleWindow = {
+  CLINICAL_OS_CONFIG: {
+    deploymentId: 'chananya-clinical-staging',
+    brand: { browserTitle: 'CNYOS' },
+    tenant: { expectedClinicCode: 'CHANANYA-STG' }
+  },
+  dispatchEvent() {}
+};
+vm.runInNewContext(brand, {
+  window: titleWindow,
+  document: titleDocument,
+  CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
+  Object,
+  String
+});
+assert.equal(titleDocument.title, 'CNYOS', 'an explicit browser title must override the legacy page title');
 
 const netlify = read('netlify.toml');
 assert.match(netlify, /command = "npm run build"/);

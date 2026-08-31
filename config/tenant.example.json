@@ -3,6 +3,7 @@
   "deploymentId": "customer-clinic-production",
   "brand": {
     "shortName": "CUSTOMER CLINIC",
+    "browserTitle": "CUSTOMER CLINIC OS",
     "nameTh": "ชื่อลูกค้า คลินิกการแพทย์แผนไทย",
     "nameEn": "Customer Thai Traditional Medicine Clinic",
     "productName": "Clinical & Wellness OS",
