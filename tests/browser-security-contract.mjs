@@ -67,6 +67,7 @@ vm.runInNewContext(read('auth-login.js'), {
   window: loginWindow,
   document: { getElementById: id => loginElements[id] || null },
   location: loginLocation,
+  fetch: async () => ({ ok: true, async json() { return { external: { google: true } }; } }),
   console,
   String
 });
@@ -77,6 +78,22 @@ assert.equal(typeof loginEvents.click, 'function', 'login must bind its OAuth ac
 await loginEvents.click();
 assert.equal(oauthOptions.provider, 'google');
 assert.equal(oauthOptions.options.redirectTo, 'https://staging.example.test/auth-callback.html');
+
+const disabledProviderElements = {
+  'google-login': { disabled: false, addEventListener() { throw new Error('disabled provider must not bind OAuth'); } },
+  status: { textContent: '', classList: { add() {}, remove() {} } }
+};
+vm.runInNewContext(read('auth-login.js'), {
+  window: loginWindow,
+  document: { getElementById: id => disabledProviderElements[id] || null },
+  location: loginLocation,
+  fetch: async () => ({ ok: true, async json() { return { external: { google: false } }; } }),
+  console,
+  String
+});
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(disabledProviderElements['google-login'].disabled, true);
+assert.match(disabledProviderElements.status.textContent, /Google Login.*ยังไม่ได้เปิดใช้งาน/);
 
 let exchangedCode;
 let sanitizedCallbackUrl;

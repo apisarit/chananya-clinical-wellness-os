@@ -16,6 +16,21 @@
     else if (status) status.textContent = message;
   }
 
+  async function googleProviderStatus(url, key) {
+    try {
+      const response = await fetch(`${String(url).replace(/\/$/, '')}/auth/v1/settings`, {
+        headers: { apikey: key }
+      });
+      if (!response.ok) return null;
+      const settings = await response.json();
+      return settings?.external?.google === true;
+    } catch {
+      // A settings probe must not block login when the provider endpoint is
+      // temporarily unavailable. The OAuth request remains authoritative.
+      return null;
+    }
+  }
+
   async function start() {
     if (!button || !status) throw new Error('Login controls are unavailable');
     const config = window.CHANANYA_AUTH || {};
@@ -35,6 +50,14 @@
     if (sessionResult.error) throw sessionResult.error;
     if (sessionResult.data.session) {
       location.replace('/');
+      return;
+    }
+
+    const providerEnabled = await googleProviderStatus(url, key);
+    if (providerEnabled === false) {
+      button.disabled = true;
+      status.classList.add('error');
+      status.textContent = 'Google Login ของ CNYOS Staging ยังไม่ได้เปิดใช้งาน';
       return;
     }
 

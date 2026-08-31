@@ -217,9 +217,10 @@ const titleDocument = {
   title: 'เข้าสู่ระบบ — Chananya Clinical OS',
   readyState: 'complete',
   documentElement: { style: { setProperty() {} }, dataset: {} },
-  querySelectorAll() { return []; },
+  querySelectorAll(selector) { return selector === '[data-brand-app-name]' ? [appNameElement] : []; },
   createElement() { return {}; }
 };
+const appNameElement = { textContent: '' };
 const titleWindow = {
   CLINICAL_OS_CONFIG: {
     deploymentId: 'chananya-clinical-staging',
@@ -236,6 +237,7 @@ vm.runInNewContext(brand, {
   String
 });
 assert.equal(titleDocument.title, 'CNYOS', 'an explicit browser title must override the legacy page title');
+assert.equal(appNameElement.textContent, 'CNYOS', 'an explicit browser title must also be the visible app name');
 
 const netlify = read('netlify.toml');
 assert.match(netlify, /command = "npm run build"/);
