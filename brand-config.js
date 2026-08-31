@@ -3,6 +3,7 @@ window.CLINICAL_OS_CONFIG = Object.freeze({
   "schemaVersion": 1,
   "deploymentId": "chananya-clinical-production",
   "brand": {
+    "appName": "CHANANYA Clinical & Wellness OS",
     "shortName": "CHANANYA",
     "nameTh": "ชนัญญา คลินิกการแพทย์แผนไทยและสุขภาวะ",
     "nameEn": "Chananya Thai Traditional Medicine & Wellness Clinic",

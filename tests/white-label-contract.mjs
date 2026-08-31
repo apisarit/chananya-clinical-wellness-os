@@ -4,6 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import {
+  applyTenantEnvOverrides,
   buildDeployManifest,
   loadTenantConfig,
   renderBrandConfig,
@@ -19,8 +20,10 @@ const chananya = JSON.parse(read('config/tenant.chananya.json'));
 
 const customer = validateTenantConfig(example);
 assert.equal(customer.tenant.expectedClinicCode, 'CUSTOMER');
+assert.equal(customer.brand.appName, 'CUSTOMER CLINIC OS');
 assert.equal(customer.brand.shortName, 'CUSTOMER CLINIC');
 assert.equal(customer.brand.browserTitle, 'CUSTOMER CLINIC OS');
+assert.equal(customer.auth.provider, 'google');
 assert.match(customer.database.url, /^https:\/\//);
 assert.match(renderTenantConfig(customer), /window\.CLINICAL_OS_CONFIG = Object\.freeze/);
 assert.doesNotMatch(renderBrandConfig(customer), /"database"|publishableKey|supabase\.co/i);
@@ -51,6 +54,21 @@ assert.throws(
   () => validateTenantConfig({ ...example, brand: { ...example.brand, browserTitle: 'x'.repeat(81) } }),
   /brand\.browserTitle/
 );
+assert.throws(
+  () => validateTenantConfig({ ...example, auth: { ...example.auth, provider: 'Google OAuth' } }),
+  /auth\.provider/
+);
+const overriddenInput = applyTenantEnvOverrides(example, {
+  CLINICAL_OS_APP_NAME: 'CNYOS',
+  CLINICAL_OS_BRAND_SHORT_NAME: 'CNYOS',
+  CLINICAL_OS_BROWSER_TITLE: 'CNYOS',
+  CLINICAL_OS_AUTH_PROVIDER: 'google'
+});
+const overriddenCustomer = validateTenantConfig(overriddenInput);
+assert.equal(overriddenCustomer.brand.appName, 'CNYOS');
+assert.equal(overriddenCustomer.brand.shortName, 'CNYOS');
+assert.equal(overriddenCustomer.brand.browserTitle, 'CNYOS');
+assert.equal(overriddenCustomer.auth.provider, 'google');
 
 const generated = read('tenant-config.js');
 const validatedDefault = validateTenantConfig(chananya);
@@ -224,7 +242,7 @@ const appNameElement = { textContent: '' };
 const titleWindow = {
   CLINICAL_OS_CONFIG: {
     deploymentId: 'chananya-clinical-staging',
-    brand: { browserTitle: 'CNYOS' },
+    brand: { appName: 'CNYOS', browserTitle: 'CNYOS' },
     tenant: { expectedClinicCode: 'CHANANYA-STG' }
   },
   dispatchEvent() {}

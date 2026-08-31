@@ -49,7 +49,7 @@
     text('[data-brand-name-th]', brand.nameTh);
     text('[data-brand-name-en]', brand.nameEn);
     text('[data-brand-product]', brand.productName);
-    const appName = brand.browserTitle || [brand.shortName, brand.productName].filter(Boolean).join(' ');
+    const appName = brand.appName || brand.browserTitle || [brand.shortName, brand.productName].filter(Boolean).join(' ');
     text('[data-brand-app-name]', appName);
     const demoHn = `${config.tenant?.expectedClinicCode || 'CLINIC'}-00001234`;
     text('[data-brand-demo-hn]', demoHn);

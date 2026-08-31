@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "deploymentId": "customer-clinic-production",
   "brand": {
+    "appName": "CUSTOMER CLINIC OS",
     "shortName": "CUSTOMER CLINIC",
     "browserTitle": "CUSTOMER CLINIC OS",
     "nameTh": "ชื่อลูกค้า คลินิกการแพทย์แผนไทย",
@@ -33,7 +34,8 @@
     "publishableKey": "sb_publishable_REPLACE_WITH_CUSTOMER_KEY"
   },
   "auth": {
-    "redirectOrigin": "https://customer-clinic.example.com"
+    "redirectOrigin": "https://customer-clinic.example.com",
+    "provider": "google"
   },
   "identity": {
     "qrIssuer": "CUSTOMER"

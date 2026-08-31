@@ -3,6 +3,7 @@ window.CLINICAL_OS_CONFIG = Object.freeze({
   "schemaVersion": 1,
   "deploymentId": "chananya-clinical-production",
   "brand": {
+    "appName": "CHANANYA Clinical & Wellness OS",
     "shortName": "CHANANYA",
     "nameTh": "ชนัญญา คลินิกการแพทย์แผนไทยและสุขภาวะ",
     "nameEn": "Chananya Thai Traditional Medicine & Wellness Clinic",
@@ -33,7 +34,8 @@ window.CLINICAL_OS_CONFIG = Object.freeze({
     "publishableKey": "sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ"
   },
   "auth": {
-    "redirectOrigin": "https://chananya.netlify.app"
+    "redirectOrigin": "https://chananya.netlify.app",
+    "provider": "google"
   },
   "identity": {
     "qrIssuer": "CHANANYA"

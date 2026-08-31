@@ -23,6 +23,34 @@ function optionalString(value, field, max = 180) {
   return clean;
 }
 
+function envString(env, key, fallback) {
+  const value = String(env?.[key] ?? '').trim();
+  return value || fallback;
+}
+
+export function applyTenantEnvOverrides(input, env = process.env) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  return {
+    ...input,
+    brand: {
+      ...(input.brand || {}),
+      appName: envString(env, 'CLINICAL_OS_APP_NAME', input.brand?.appName),
+      shortName: envString(env, 'CLINICAL_OS_BRAND_SHORT_NAME', input.brand?.shortName),
+      browserTitle: envString(env, 'CLINICAL_OS_BROWSER_TITLE', input.brand?.browserTitle),
+      nameTh: envString(env, 'CLINICAL_OS_BRAND_NAME_TH', input.brand?.nameTh),
+      nameEn: envString(env, 'CLINICAL_OS_BRAND_NAME_EN', input.brand?.nameEn),
+      productName: envString(env, 'CLINICAL_OS_PRODUCT_NAME', input.brand?.productName),
+      descriptor: envString(env, 'CLINICAL_OS_BRAND_DESCRIPTOR', input.brand?.descriptor),
+      mark: envString(env, 'CLINICAL_OS_BRAND_MARK', input.brand?.mark),
+      logoUrl: envString(env, 'CLINICAL_OS_BRAND_LOGO_URL', input.brand?.logoUrl)
+    },
+    auth: {
+      ...(input.auth || {}),
+      provider: envString(env, 'CLINICAL_OS_AUTH_PROVIDER', input.auth?.provider || 'google')
+    }
+  };
+}
+
 function validateUrl(value, field, { allowRelative = false } = {}) {
   const clean = String(value ?? '').trim();
   if (allowRelative && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(clean)) return clean;
@@ -84,16 +112,24 @@ export function validateTenantConfig(input) {
   const logoRaw = String(input.brand?.logoUrl ?? '').trim();
   const logoUrl = logoRaw ? validateUrl(logoRaw, 'brand.logoUrl', { allowRelative: true }) : '';
   const browserTitle = optionalString(input.brand?.browserTitle, 'brand.browserTitle', 80);
+  const shortName = requiredString(input.brand?.shortName, 'brand.shortName', 60);
+  const productName = requiredString(input.brand?.productName, 'brand.productName', 80);
+  const appName = optionalString(input.brand?.appName, 'brand.appName', 80) || `${shortName} ${productName}`;
+  const authProvider = optionalString(input.auth?.provider, 'auth.provider', 40).toLowerCase() || 'google';
+  if (!/^[a-z][a-z0-9_-]{1,39}$/.test(authProvider)) {
+    throw new Error('auth.provider must be a lowercase OAuth provider identifier');
+  }
 
   return {
     schemaVersion: 1,
     deploymentId: requiredString(input.deploymentId, 'deploymentId', 80),
     brand: {
-      shortName: requiredString(input.brand?.shortName, 'brand.shortName', 60),
+      appName,
+      shortName,
       ...(browserTitle ? { browserTitle } : {}),
       nameTh: requiredString(input.brand?.nameTh, 'brand.nameTh', 160),
       nameEn: requiredString(input.brand?.nameEn, 'brand.nameEn', 160),
-      productName: requiredString(input.brand?.productName, 'brand.productName', 80),
+      productName,
       descriptor: requiredString(input.brand?.descriptor, 'brand.descriptor', 160),
       mark: requiredString(input.brand?.mark, 'brand.mark', 4),
       logoUrl,
@@ -105,7 +141,7 @@ export function validateTenantConfig(input) {
       url: validateUrl(input.database?.url, 'database.url'),
       publishableKey
     },
-    auth: { redirectOrigin },
+    auth: { redirectOrigin, provider: authProvider },
     identity: { qrIssuer: requiredString(input.identity?.qrIssuer || expectedClinicCode, 'identity.qrIssuer', 24).toUpperCase() },
     safety: { previewLocked: input.safety?.previewLocked === true }
   };
@@ -179,14 +215,15 @@ export function renderDeployManifest(manifest) {
 }
 
 export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
-  let config;
+  let input;
   if (env.CLINICAL_OS_TENANT_CONFIG_JSON) {
-    config = validateTenantConfig(JSON.parse(env.CLINICAL_OS_TENANT_CONFIG_JSON));
+    input = JSON.parse(env.CLINICAL_OS_TENANT_CONFIG_JSON);
   } else {
     const file = env.CLINICAL_OS_TENANT_CONFIG_PATH || 'config/tenant.chananya.json';
     const target = path.resolve(cwd, file);
-    config = validateTenantConfig(JSON.parse(fs.readFileSync(target, 'utf8')));
+    input = JSON.parse(fs.readFileSync(target, 'utf8'));
   }
+  const config = validateTenantConfig(applyTenantEnvOverrides(input, env));
   const preview = env.CONTEXT === 'deploy-preview' || env.CONTEXT === 'branch-deploy';
   const dedicatedStaging = env.CLINICAL_OS_STAGING_DEPLOYMENT === 'true';
   const guardedNonProduction = preview || dedicatedStaging;

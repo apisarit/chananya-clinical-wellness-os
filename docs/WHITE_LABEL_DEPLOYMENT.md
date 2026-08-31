@@ -9,12 +9,29 @@ This is a white-label product boundary, not a collection of customer forks. A cu
 One validated tenant config controls:
 
 - company/clinic names in Thai and English;
-- short brand, mark or logo, exact browser title (`brand.browserTitle`), printed pharmacy identity and color mask;
+- exact app name (`brand.appName`), short brand, mark or logo, exact browser title (`brand.browserTitle`), printed pharmacy identity and color mask;
 - expected clinic UUID and code used for HN, prescription, invoice, pharmacy sale and production numbering;
 - browser-safe Supabase URL and publishable key;
-- OAuth redirect origin and QR issuer.
+- OAuth provider, redirect origin and QR issuer.
 
 Use `config/tenant.example.json` as the customer template. Never put `SUPABASE_SERVICE_ROLE_KEY`, Google service-account JSON, backup encryption keys, LINE channel secrets or any other server secret in this file. `scripts/generate-tenant-config.mjs` rejects obvious secret/service-role keys.
+
+### Fast Netlify variable overrides
+
+Routine branding changes should use flat Netlify environment variables rather than hand-editing the full JSON. They override the matching tenant-config values during the build:
+
+| Variable | Controls |
+|---|---|
+| `CLINICAL_OS_APP_NAME` | Exact name shown on Login and boot screens |
+| `CLINICAL_OS_BRAND_SHORT_NAME` | Sidebar, labels and compact identity |
+| `CLINICAL_OS_BROWSER_TITLE` | Browser/tab title |
+| `CLINICAL_OS_BRAND_NAME_TH` / `CLINICAL_OS_BRAND_NAME_EN` | Legal/display names |
+| `CLINICAL_OS_PRODUCT_NAME` | Printed and product identity |
+| `CLINICAL_OS_BRAND_DESCRIPTOR` | Sidebar descriptor |
+| `CLINICAL_OS_BRAND_MARK` / `CLINICAL_OS_BRAND_LOGO_URL` | Mark or approved logo |
+| `CLINICAL_OS_AUTH_PROVIDER` | Supabase OAuth provider identifier, such as `google` |
+
+The structured JSON remains the audited tenant baseline for database, clinic identity, colors and safety guards. A Netlify variable can select an OAuth provider in the application, but the same provider must also be enabled in that tenant's Supabase Auth settings. The Login page probes Supabase before redirecting and displays a controlled configuration error instead of sending users to a raw provider JSON error.
 
 ## Isolation model
 

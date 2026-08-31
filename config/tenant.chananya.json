@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "deploymentId": "chananya-clinical-production",
   "brand": {
+    "appName": "CHANANYA Clinical & Wellness OS",
     "shortName": "CHANANYA",
     "nameTh": "ชนัญญา คลินิกการแพทย์แผนไทยและสุขภาวะ",
     "nameEn": "Chananya Thai Traditional Medicine & Wellness Clinic",
@@ -32,7 +33,8 @@
     "publishableKey": "sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ"
   },
   "auth": {
-    "redirectOrigin": "https://chananya.netlify.app"
+    "redirectOrigin": "https://chananya.netlify.app",
+    "provider": "google"
   },
   "identity": {
     "qrIssuer": "CHANANYA"

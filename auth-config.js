@@ -14,6 +14,7 @@
     anonKey: publishableKey,
     supabaseUrl: url,
     publishableKey,
-    redirectTo: auth.redirectOrigin || location.origin
+    redirectTo: auth.redirectOrigin || location.origin,
+    provider: auth.provider || 'google'
   });
 })();

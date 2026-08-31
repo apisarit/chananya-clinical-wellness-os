@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "deploymentId": "chananya-clinical-staging",
   "brand": {
+    "appName": "CNYOS",
     "shortName": "CNYOS",
     "browserTitle": "CNYOS",
     "nameTh": "CNYOS",
@@ -33,7 +34,8 @@
     "publishableKey": "sb_publishable_REPLACE_WITH_STAGING_KEY"
   },
   "auth": {
-    "redirectOrigin": "https://chananya-clinical-staging.netlify.app"
+    "redirectOrigin": "https://chananya-clinical-staging.netlify.app",
+    "provider": "google"
   },
   "identity": {
     "qrIssuer": "CHANANYA-STG"
