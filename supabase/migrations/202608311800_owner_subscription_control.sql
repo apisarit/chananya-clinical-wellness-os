@@ -454,8 +454,19 @@ grant execute on function public.set_clinic_subscription_state(uuid,uuid,text,bo
 -- Preserve subscription control evidence in the encrypted transaction/audit
 -- domain. clinics.active remains true during a commercial suspension, so the
 -- service-role backup path continues to run while all end-user RLS is denied.
-alter function public.export_clinic_backup_domain(uuid,text)
-  rename to export_clinic_backup_domain_v20260829;
+-- Keep this migration safe to replay after a dashboard/manual application.
+-- The archived v20260829 exporter is created only on the first execution;
+-- subsequent executions replace the owner-aware wrapper below in place.
+do $migration$
+begin
+  if to_regprocedure('public.export_clinic_backup_domain_v20260829(uuid,text)') is null then
+    if to_regprocedure('public.export_clinic_backup_domain(uuid,text)') is null then
+      raise exception 'BASE_BACKUP_EXPORTER_REQUIRED';
+    end if;
+    execute 'alter function public.export_clinic_backup_domain(uuid,text) rename to export_clinic_backup_domain_v20260829';
+  end if;
+end
+$migration$;
 
 create or replace function public.export_clinic_backup_domain(
   p_clinic_id uuid,
@@ -522,8 +533,18 @@ $$;
 revoke all on function public.backup_restore_contract_healthcheck() from public,anon;
 grant execute on function public.backup_restore_contract_healthcheck() to authenticated,service_role;
 
-alter function public.verify_clinic_restore_trace(uuid)
-  rename to verify_clinic_restore_trace_v20260829;
+-- Apply the same replay guard to the restore trace wrapper. This prevents a
+-- second run from attempting to recreate the v20260829 archive name.
+do $migration$
+begin
+  if to_regprocedure('public.verify_clinic_restore_trace_v20260829(uuid)') is null then
+    if to_regprocedure('public.verify_clinic_restore_trace(uuid)') is null then
+      raise exception 'BASE_RESTORE_TRACE_REQUIRED';
+    end if;
+    execute 'alter function public.verify_clinic_restore_trace(uuid) rename to verify_clinic_restore_trace_v20260829';
+  end if;
+end
+$migration$;
 
 create or replace function public.verify_clinic_restore_trace(p_clinic_id uuid)
 returns jsonb
