@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
 const stagingHostnameMarker = /(?:^|[-.])(staging|stage|nonprod)(?:$|[-.])/i;
+const acknowledgedNetlifyHostname = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/;
 const revision = /^[0-9a-f]{7,40}$/i;
 const routes = Object.freeze([
   '/',
@@ -22,13 +23,43 @@ const routes = Object.freeze([
   '/check-in.html'
 ]);
 
-function siteOrigin(value) {
+function stagingHostnameAllowlist(value = []) {
+  const entries = Array.isArray(value)
+    ? value
+    : String(value || '').split(',').filter(entry => entry.trim());
+  const hostnames = new Set();
+
+  for (const value of entries) {
+    assert.equal(typeof value, 'string', 'Staging hostname acknowledgements must be strings');
+    const hostname = value.trim();
+    assert.ok(hostname, 'Staging hostname acknowledgements must not be empty');
+    assert.equal(
+      hostname,
+      hostname.toLowerCase(),
+      'Staging hostname acknowledgements must be lowercase'
+    );
+    assert.match(
+      hostname,
+      acknowledgedNetlifyHostname,
+      'Staging hostname acknowledgements must be exact lowercase netlify.app hostnames without wildcards'
+    );
+    hostnames.add(hostname);
+  }
+
+  return hostnames;
+}
+
+function siteOrigin(value, hostnameAllowlist = []) {
   const parsed = new URL(String(value || '').trim());
+  const acknowledgedHostnames = stagingHostnameAllowlist(hostnameAllowlist);
   assert.equal(parsed.protocol, 'https:', 'Locked staging must use HTTPS');
   assert.equal(parsed.pathname, '/', 'STAGING_SITE_URL must be an origin without a path');
   assert.equal(parsed.search, '', 'STAGING_SITE_URL must not contain a query');
   assert.equal(parsed.hash, '', 'STAGING_SITE_URL must not contain a fragment');
-  assert.match(parsed.hostname, stagingHostnameMarker, 'Staging hostname must contain a non-production marker');
+  assert.ok(
+    stagingHostnameMarker.test(parsed.hostname) || acknowledgedHostnames.has(parsed.hostname),
+    'Staging hostname must contain a non-production marker or be explicitly acknowledged'
+  );
   return parsed.origin;
 }
 
@@ -71,9 +102,10 @@ export async function verifyLockedStaging({
   siteUrl,
   fetchImpl = fetch,
   expectedSourceCommit = '',
-  productionConfig = null
+  productionConfig = null,
+  stagingHostnameAllowlist = []
 }) {
-  const origin = siteOrigin(siteUrl);
+  const origin = siteOrigin(siteUrl, stagingHostnameAllowlist);
   const tenantResult = await fetchText(fetchImpl, origin, '/tenant-config.js');
   assert.match(
     tenantResult.response.headers.get('cache-control') || '',
@@ -171,7 +203,8 @@ async function main() {
   const result = await verifyLockedStaging({
     siteUrl: process.env.STAGING_SITE_URL || 'https://chananya-clinical-staging.netlify.app',
     expectedSourceCommit: process.env.EXPECTED_STAGING_SOURCE_COMMIT || '',
-    productionConfig
+    productionConfig,
+    stagingHostnameAllowlist: process.env.STAGING_HOSTNAME_ALLOWLIST || []
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

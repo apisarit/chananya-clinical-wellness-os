@@ -68,6 +68,15 @@ EXPECTED_STAGING_SOURCE_COMMIT=<exact Git SHA> \
 npm run staging:smoke:locked
 ```
 
+The canonical CNYOS staging hostname predates the marker rule. For CNYOS only, acknowledge that exact hostname (lowercase, with no scheme, path or wildcard):
+
+```bash
+STAGING_SITE_URL=https://cnyos.netlify.app \
+STAGING_HOSTNAME_ALLOWLIST=cnyos.netlify.app \
+EXPECTED_STAGING_SOURCE_COMMIT=<exact Git SHA> \
+npm run staging:smoke:locked
+```
+
 The locked smoke gate checks source provenance, tenant/database lock, security headers and all 11 public route shells. It is useful deployment evidence but does **not** satisfy the authenticated staging gate.
 
 ## What the workflow proves

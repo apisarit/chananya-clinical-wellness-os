@@ -307,6 +307,15 @@ const externalDenialEvidence = await verifyScheduledRouteDenial(
 assert.equal(externalDenialEvidence.length, 4);
 assert.deepEqual(externalDenialCalls.map(call => call.options.method), ['GET', 'POST', 'GET', 'POST']);
 assert.ok(externalDenialCalls.every(call => call.options.redirect === 'error'));
+const forbiddenExternalDenialEvidence = await verifyScheduledRouteDenial(
+  'https://synthetic-drive-staging.netlify.app',
+  async () => new Response('', {
+    status: 403,
+    headers: { 'Content-Type': 'text/plain' }
+  })
+);
+assert.equal(forbiddenExternalDenialEvidence.length, 4);
+assert.ok(forbiddenExternalDenialEvidence.every(item => item.status === 403));
 await assert.rejects(
   verifyScheduledRouteDenial(
     'https://synthetic-drive-staging.netlify.app',
@@ -321,11 +330,35 @@ await assert.rejects(
   verifyScheduledRouteDenial(
     'https://synthetic-drive-staging.netlify.app',
     async () => new Response(JSON.stringify({ ok: false, code: 'BACKUP_SCHEDULED_INVOCATION_REQUIRED' }), {
-      status: 401,
+      status: 403,
       headers: { 'Content-Type': 'application/json' }
     })
   ),
   /SCHEDULED_FUNCTION_RUNTIME_REACHED/
+);
+await assert.rejects(
+  verifyScheduledRouteDenial(
+    'https://synthetic-drive-staging.netlify.app',
+    async () => new Response('', { status: 401 })
+  ),
+  /SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT/
+);
+await assert.rejects(
+  verifyScheduledRouteDenial(
+    'https://synthetic-drive-staging.netlify.app',
+    async () => new Response('', {
+      status: 302,
+      headers: { Location: 'https://synthetic-drive-staging.netlify.app/login.html' }
+    })
+  ),
+  /SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT/
+);
+await assert.rejects(
+  verifyScheduledRouteDenial(
+    'https://synthetic-drive-staging.netlify.app',
+    async () => new Response('x'.repeat((16 * 1024) + 1), { status: 404 })
+  ),
+  /SCHEDULED_ROUTE_DENIAL_BODY_TOO_LARGE/
 );
 const deployMetadata = {
   function_schedules: [

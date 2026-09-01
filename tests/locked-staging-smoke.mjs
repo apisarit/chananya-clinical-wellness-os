@@ -137,7 +137,55 @@ await assert.rejects(
     siteUrl: 'https://clinic.example.test',
     fetchImpl: mockFetch()
   }),
-  /non-production marker/
+  /non-production marker or be explicitly acknowledged/
+);
+
+const cnyosSiteUrl = 'https://cnyos.netlify.app';
+const cnyosConfig = {
+  ...config,
+  auth: { redirectOrigin: cnyosSiteUrl }
+};
+
+await assert.rejects(
+  verifyLockedStaging({
+    siteUrl: cnyosSiteUrl,
+    fetchImpl: mockFetch({ tenant: cnyosConfig })
+  }),
+  /non-production marker or be explicitly acknowledged/
+);
+
+const acknowledgedCnyos = await verifyLockedStaging({
+  siteUrl: cnyosSiteUrl,
+  fetchImpl: mockFetch({ tenant: cnyosConfig }),
+  stagingHostnameAllowlist: ['cnyos.netlify.app']
+});
+assert.equal(acknowledgedCnyos.siteUrl, cnyosSiteUrl);
+
+await assert.rejects(
+  verifyLockedStaging({
+    siteUrl: cnyosSiteUrl,
+    fetchImpl: mockFetch({ tenant: cnyosConfig }),
+    stagingHostnameAllowlist: ['other.netlify.app']
+  }),
+  /non-production marker or be explicitly acknowledged/
+);
+
+await assert.rejects(
+  verifyLockedStaging({
+    siteUrl: cnyosSiteUrl,
+    fetchImpl: mockFetch({ tenant: cnyosConfig }),
+    stagingHostnameAllowlist: ['*.netlify.app']
+  }),
+  /exact lowercase netlify\.app hostnames without wildcards/
+);
+
+await assert.rejects(
+  verifyLockedStaging({
+    siteUrl: cnyosSiteUrl,
+    fetchImpl: mockFetch({ tenant: cnyosConfig }),
+    stagingHostnameAllowlist: ['CNYOS.netlify.app']
+  }),
+  /must be lowercase/
 );
 
 console.log('Locked staging smoke contracts passed: provenance, database lock, security headers and 11 routes');
