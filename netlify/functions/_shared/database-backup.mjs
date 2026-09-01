@@ -10,7 +10,7 @@ import {
 export const BACKUP_DOMAINS = Object.freeze(['patients', 'products', 'pharmacy', 'transactions']);
 export const BACKUP_ENVIRONMENTS = Object.freeze(['staging', 'production', 'restore-test']);
 export const BACKUP_FORMAT = 'chananya-encrypted-backup/v1';
-export const BACKUP_SCHEMA_VERSION = '2026-08-31.1';
+export const BACKUP_SCHEMA_VERSION = '2026-09-01.1';
 export const RESTORE_SET_FORMAT = 'chananya-restore-set-evidence/v1';
 export const BACKUP_REQUIRED_TABLES = Object.freeze({
   patients: Object.freeze([
@@ -84,7 +84,8 @@ export const BACKUP_REQUIRED_TABLES = Object.freeze({
     'line_oa_webhook_events',
     'line_oa_notification_outbox',
     'line_oa_delivery_events',
-    'clinic_subscription_control_events'
+    'clinic_subscription_control_events',
+    'clinic_drive_destination_events'
   ])
 });
 
@@ -114,10 +115,21 @@ export function parseServiceAccount(value) {
 }
 
 export function parseEncryptionKey(value) {
+  const text = String(value || '');
+  if (!text || text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) {
+    throw new Error('BACKUP_ENCRYPTION_KEY_INVALID');
+  }
   let key;
-  try { key = Buffer.from(String(value || ''), 'base64'); }
+  try { key = Buffer.from(text, 'base64'); }
   catch { throw new Error('BACKUP_ENCRYPTION_KEY_INVALID'); }
-  if (key.length !== 32) throw new Error('BACKUP_ENCRYPTION_KEY_MUST_BE_32_BYTES');
+  if (key.toString('base64') !== text) {
+    key.fill(0);
+    throw new Error('BACKUP_ENCRYPTION_KEY_INVALID');
+  }
+  if (key.length !== 32) {
+    key.fill(0);
+    throw new Error('BACKUP_ENCRYPTION_KEY_MUST_BE_32_BYTES');
+  }
   return key;
 }
 
@@ -144,7 +156,8 @@ export async function fetchGoogleAccessToken(serviceAccount, fetchImpl = fetch) 
     body: new URLSearchParams({
       grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
       assertion
-    })
+    }),
+    signal: AbortSignal.timeout(8000)
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.access_token) throw new Error('GOOGLE_OAUTH_TOKEN_FAILED');
@@ -225,8 +238,8 @@ export function decryptBackup(envelope, key) {
   return JSON.parse(plaintext.toString('utf8'));
 }
 
-function sortedUnique(values) {
-  return [...new Set(values.map(value => String(value)))].sort();
+function sortedValues(values) {
+  return values.map(value => String(value)).sort();
 }
 
 function assertRestoreSet(condition, code) {
@@ -240,13 +253,18 @@ function validateDomainPayload(payload, metadata, domain) {
   assertRestoreSet(payload?.domain === domain, 'RESTORE_SET_PAYLOAD_DOMAIN_MISMATCH');
   assertRestoreSet(payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data), 'RESTORE_SET_DATA_INVALID');
 
-  const dataTables = sortedUnique(Object.keys(payload.data));
-  const includedTables = sortedUnique(Array.isArray(payload.included_tables) ? payload.included_tables : []);
-  assertRestoreSet(JSON.stringify(dataTables) === JSON.stringify(includedTables), 'RESTORE_SET_INCLUDED_TABLES_MISMATCH');
-  for (const table of BACKUP_REQUIRED_TABLES[domain]) {
+  const dataTables = sortedValues(Object.keys(payload.data));
+  const includedTables = sortedValues(Array.isArray(payload.included_tables) ? payload.included_tables : []);
+  const requiredTables = [...BACKUP_REQUIRED_TABLES[domain]].sort();
+  for (const table of requiredTables) {
     assertRestoreSet(Object.hasOwn(payload.data, table), `RESTORE_SET_REQUIRED_TABLE_MISSING_${table.toUpperCase()}`);
     assertRestoreSet(Array.isArray(payload.data[table]), `RESTORE_SET_TABLE_NOT_ARRAY_${table.toUpperCase()}`);
   }
+  assertRestoreSet(
+    JSON.stringify(dataTables) === JSON.stringify(requiredTables)
+      && JSON.stringify(includedTables) === JSON.stringify(requiredTables),
+    'RESTORE_SET_INCLUDED_TABLES_MISMATCH'
+  );
 }
 
 export function verifyBackupSet(envelopes, key) {

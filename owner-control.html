@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
   <script src="auth-config.js?v=cnyos-owner1"></script>
   <script src="chananya-runtime.js?v=cnyos-owner1"></script>
-  <script defer src="owner-control.js?v=cnyos-owner1"></script>
+  <script defer src="owner-control.js?v=cnyos-owner4"></script>
 </head>
 <body class="owner-console-page">
 <div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด CNYOS Owner Control</h2><p id="boot-error">กำลังตรวจ Google session และสิทธิ์ Owner</p></div></div>
@@ -61,6 +61,67 @@
             <textarea id="owner-reason" minlength="8" maxlength="500" required></textarea>
           </label>
           <button class="btn danger full" id="owner-submit" type="submit">ยืนยันการเปลี่ยนสถานะที่ฐานข้อมูล</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="owner-drive-heading">
+      <div class="section-heading"><span class="section-number">3</span><div><h2 id="owner-drive-heading">Google Drive backup destination</h2><p>กำหนดโฟลเดอร์สำรองข้อมูลของแต่ละ Clinic แยกตาม environment</p></div></div>
+
+      <div class="owner-clinic-list">
+        <div class="notice warning">
+          Console นี้รับเฉพาะ Google Drive folder URL หรือ folder ID เท่านั้น Service account และ encryption key อยู่ใน Netlify Functions และจะไม่ถูกรับหรือแสดงในเบราว์เซอร์
+        </div>
+        <div id="owner-drive-status" class="status" role="status" aria-live="polite">รอการยืนยัน Owner และโหลด environment จาก server…</div>
+        <button class="btn ghost" id="owner-drive-retry" type="button">โหลดสถานะล่าสุดอีกครั้ง</button>
+
+        <div id="owner-drive-context" class="notice" aria-live="polite" aria-label="Drive deployment context จาก server">
+          <strong>Server deployment context</strong>
+          <div class="list">
+            <div class="item"><span>Environment</span><code id="owner-drive-context-environment">—</code></div>
+            <div class="item"><span>Deployment ID</span><code id="owner-drive-context-deployment">—</code></div>
+            <div class="item"><span>Supabase project</span><code id="owner-drive-context-project">—</code></div>
+            <div class="item"><span>Drive service account</span><code id="owner-drive-context-service-account">—</code></div>
+            <div class="item"><span>Expected Drive root</span><code id="owner-drive-context-root">—</code></div>
+          </div>
+        </div>
+
+        <form id="owner-drive-form" class="form owner-control-form">
+          <label>Clinic
+            <select id="owner-drive-clinic" required disabled></select>
+          </label>
+          <label>Environment (กำหนดโดย server)
+            <input id="owner-drive-environment" value="กำลังโหลด…" readonly aria-readonly="true" aria-describedby="owner-drive-environment-help">
+            <small id="owner-drive-environment-help" class="muted">แก้ไขจากหน้านี้ไม่ได้ เพื่อป้องกันการส่ง backup ข้าม staging/production</small>
+          </label>
+
+          <div id="owner-drive-folder-help" class="full muted">ทั้ง 5 โฟลเดอร์ต้องเขียนได้และเป็นลูกโดยตรงของ Expected Drive root ข้างบน</div>
+
+          <label>Patients folder URL / ID
+            <input id="owner-drive-patients" autocomplete="off" inputmode="url" aria-describedby="owner-drive-folder-help owner-drive-status" required disabled>
+          </label>
+          <label>Products folder URL / ID
+            <input id="owner-drive-products" autocomplete="off" inputmode="url" aria-describedby="owner-drive-folder-help owner-drive-status" required disabled>
+          </label>
+          <label>Pharmacy folder URL / ID
+            <input id="owner-drive-pharmacy" autocomplete="off" inputmode="url" aria-describedby="owner-drive-folder-help owner-drive-status" required disabled>
+          </label>
+          <label>Transactions folder URL / ID
+            <input id="owner-drive-transactions" autocomplete="off" inputmode="url" aria-describedby="owner-drive-folder-help owner-drive-status" required disabled>
+          </label>
+          <label class="full">Manifests folder URL / ID
+            <input id="owner-drive-manifests" autocomplete="off" inputmode="url" aria-describedby="owner-drive-folder-help owner-drive-status" required disabled>
+          </label>
+
+          <div id="owner-drive-current" class="full notice" aria-live="polite">เลือก Clinic เพื่อดู destination ปัจจุบัน</div>
+
+          <label>พิมพ์ Clinic code เพื่อยืนยัน
+            <input id="owner-drive-confirm-code" autocomplete="off" required disabled>
+          </label>
+          <label>เหตุผล (8–500 ตัวอักษร)
+            <textarea id="owner-drive-reason" minlength="8" maxlength="500" required disabled></textarea>
+          </label>
+          <button class="btn primary full" id="owner-drive-submit" type="submit" disabled>ตรวจสิทธิ์ Drive และบันทึก destination</button>
         </form>
       </div>
     </section>

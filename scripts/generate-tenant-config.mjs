@@ -7,9 +7,8 @@ const hex = /^#[0-9a-f]{6}$/i;
 const clinicCode = /^[A-Z][A-Z0-9_-]{1,23}$/;
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
 const sourceRevision = /^[0-9a-f]{7,40}$/i;
-// Existing installations use a deterministic compatibility UUID whose version
-// nibble is zero, so validate the UUID shape without imposing RFC version bits.
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const legacyClinicId = '00000000-0000-0000-0000-000000000001';
+const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function requiredString(value, field, max = 180) {
   const clean = String(value ?? '').trim();
@@ -105,7 +104,10 @@ export function validateTenantConfig(input) {
   const expectedClinicCode = requiredString(input.tenant?.expectedClinicCode, 'tenant.expectedClinicCode', 24).toUpperCase();
   if (!clinicCode.test(expectedClinicCode)) throw new Error('tenant.expectedClinicCode must be 2-24 uppercase letters, digits, _ or -');
   const expectedClinicId = requiredString(input.tenant?.expectedClinicId, 'tenant.expectedClinicId', 36).toLowerCase();
-  if (!uuid.test(expectedClinicId)) throw new Error('tenant.expectedClinicId must be a UUID');
+  const canonicalLegacyTenant = expectedClinicId === legacyClinicId && expectedClinicCode === 'CHANANYA';
+  if (!canonicalLegacyTenant && !uuidV4.test(expectedClinicId)) {
+    throw new Error('tenant.expectedClinicId must be an RFC 4122 version 4 UUID');
+  }
 
   const publishableKey = validatePublishableKey(input.database?.publishableKey);
   const redirectOrigin = validateOrigin(input.auth?.redirectOrigin, 'auth.redirectOrigin');
@@ -118,6 +120,11 @@ export function validateTenantConfig(input) {
   const authProvider = optionalString(input.auth?.provider, 'auth.provider', 40).toLowerCase() || 'google';
   if (!/^[a-z][a-z0-9_-]{1,39}$/.test(authProvider)) {
     throw new Error('auth.provider must be a lowercase OAuth provider identifier');
+  }
+
+  const qrIssuer = requiredString(input.identity?.qrIssuer || expectedClinicCode, 'identity.qrIssuer', 24).toUpperCase();
+  if (qrIssuer !== expectedClinicCode) {
+    throw new Error('identity.qrIssuer must exactly match tenant.expectedClinicCode');
   }
 
   return {
@@ -142,7 +149,7 @@ export function validateTenantConfig(input) {
       publishableKey
     },
     auth: { redirectOrigin, provider: authProvider },
-    identity: { qrIssuer: requiredString(input.identity?.qrIssuer || expectedClinicCode, 'identity.qrIssuer', 24).toUpperCase() },
+    identity: { qrIssuer },
     safety: { previewLocked: input.safety?.previewLocked === true }
   };
 }

@@ -93,9 +93,12 @@ LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
 PATIENT_IDENTITY_HMAC_SECRET
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
+CNYOS_RUNTIME_EXPECTED_CLINIC_ID
 ```
 
 Do not put these server-only values into `auth-config.js`. `LINE_LIFF_ID` is public but is served through the configuration response so the patient surface has one activation gate. Patient POST requests are accepted only when the browser `Origin` exactly matches the Function origin; there is no cross-origin allowlist.
+
+`CNYOS_RUNTIME_EXPECTED_CLINIC_ID` binds every service-role identity RPC to the single clinic served by that Netlify deployment. When Owner Control suspends the subscription, rate-limit writes, link/status/card reads and writes, QR issuance, and LINE OA processing all fail closed at Supabase before tenant state changes.
 
 `PATIENT_IDENTITY_HMAC_SECRET` is a long-lived identity key, not a routine application secret. Store it in the platform secret manager, restrict access, back it up through the approved operational process, and plan a versioned re-link migration before rotation. Replacing it without migration makes existing LINE links undiscoverable.
 

@@ -76,10 +76,21 @@ const missingTable = envelope('patients', 10, value => {
 });
 assert.throws(() => verifyBackupSet([missingTable, ...envelopes.slice(1)], key), /CLINICAL_RECORD_SIGNOFFS/);
 
+const unexpectedTable = envelope('patients', 11, value => {
+  value.data.unexpected_sensitive_table = [];
+  value.included_tables = Object.keys(value.data).sort();
+  return value;
+});
+assert.throws(
+  () => verifyBackupSet([unexpectedTable, ...envelopes.slice(1)], key),
+  /INCLUDED_TABLES_MISMATCH/
+);
+
 const migration = [
   'supabase/migrations/202608282000_complete_clinical_backup_and_restore_evidence.sql',
   'supabase/migrations/202608291800_line_oa_operational_messaging.sql',
-  'supabase/migrations/202608311800_owner_subscription_control.sql'
+  'supabase/migrations/202608311800_owner_subscription_control.sql',
+  'supabase/migrations/202609010600_owner_drive_backup_evidence.sql'
 ].map(read).join('\n');
 for (const tables of Object.values(BACKUP_REQUIRED_TABLES)) {
   for (const table of tables) assert.match(migration, new RegExp(`'${table}'`), `${table} missing from backup migration`);

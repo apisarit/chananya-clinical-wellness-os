@@ -52,6 +52,9 @@ jobs:
       - name: Run source and database behavioral contracts
         run: npm run check
 
+      - name: Prove scheduled backup Functions have no public URLs
+        run: npm run verify:backup-route-denial -- "$STAGING_SITE_URL"
+
       - name: Provision synthetic role identities
         run: npm run staging:provision
 

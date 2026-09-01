@@ -11,7 +11,7 @@ import {
   sha256Hex,
   verifyLineWebhookSignature
 } from './_shared/line-oa.mjs';
-import { hmacSha256, supabaseRpc } from './_shared/patient-identity.mjs';
+import { hmacSha256, normalizeClinicId, supabaseRpc } from './_shared/patient-identity.mjs';
 
 function noStoreHeaders() {
   return {
@@ -36,6 +36,12 @@ function configuration() {
   const patientCardUrl = safePatientCardUrl(
     configuredPatientUrl || (liffId ? `https://liff.line.me/${liffId}` : '')
   );
+  let expectedClinicId = '';
+  try {
+    expectedClinicId = normalizeClinicId(env('CNYOS_RUNTIME_EXPECTED_CLINIC_ID'));
+  } catch {
+    expectedClinicId = '';
+  }
   const config = {
     messagingChannelId: env('LINE_MESSAGING_CHANNEL_ID'),
     channelSecret: env('LINE_MESSAGING_CHANNEL_SECRET'),
@@ -43,6 +49,7 @@ function configuration() {
     identitySecret: env('PATIENT_IDENTITY_HMAC_SECRET'),
     supabaseUrl: env('SUPABASE_URL'),
     serviceRoleKey: env('SUPABASE_SERVICE_ROLE_KEY'),
+    expectedClinicId,
     patientCardUrl,
     brandName: env('LINE_OA_BRAND_NAME') || 'ชนัญญา'
   };
@@ -53,6 +60,7 @@ function configuration() {
     && config.identitySecret.length >= 32
     && config.supabaseUrl
     && config.serviceRoleKey
+    && config.expectedClinicId
   );
   return Object.freeze({ ...config, enabled });
 }
@@ -113,7 +121,8 @@ async function processEvent(event, config, context) {
   const action = classifyLineAction(event);
   const type = eventType(event);
 
-  const claim = firstRow(await rpc(config, 'register_line_oa_webhook_event', {
+  const claim = firstRow(await rpc(config, 'register_line_oa_webhook_event_for_clinic', {
+    p_clinic_id: config.expectedClinicId,
     p_provider_channel_hash: channelHash,
     p_event_id_hash: eventIdHash,
     p_subject_hash: subjectHash,
@@ -148,6 +157,12 @@ async function processEvent(event, config, context) {
       patientCardUrl: config.patientCardUrl,
       brandName: config.brandName
     });
+    // Re-check immediately before the external LINE send. Registration and
+    // database mutations are already guarded; this closes the practical race
+    // between accepting the event and consuming its one-time reply token.
+    await rpc(config, 'assert_clinic_subscription_active', {
+      p_clinic_id: config.expectedClinicId
+    });
     await replyLineMessage({
       replyToken: String(event.replyToken),
       messages,
@@ -169,6 +184,8 @@ async function processEvent(event, config, context) {
 
 export default async (request, context) => {
   const config = configuration();
+  let signatureVerified = false;
+  let received = 0;
 
   if (request.method === 'GET') {
     return json({
@@ -191,13 +208,24 @@ export default async (request, context) => {
     if (!verifyLineWebhookSignature(rawBody, signature, config.channelSecret)) {
       throw new Error('LINE_WEBHOOK_SIGNATURE_INVALID');
     }
+    signatureVerified = true;
     const events = parseLineWebhook(rawBody);
+    received = events.length;
+    await rpc(config, 'assert_clinic_subscription_active', {
+      p_clinic_id: config.expectedClinicId
+    });
     const results = [];
     for (const event of events) {
       results.push(await processEvent(event, config, context));
     }
     return json({ ok: true, received: events.length, processed: results.filter(item => item.processed).length });
   } catch (error) {
+    if (signatureVerified && error?.message === 'CNYOS_SUBSCRIPTION_SUSPENDED') {
+      // A valid delivery to a suspended clinic is acknowledged without
+      // registering tenant state or sending a LINE reply. Gateway finalization
+      // remains a narrow non-tenant evidence exception for a concurrent OFF.
+      return json({ ok: true, suspended: true, received, processed: 0 });
+    }
     const safe = publicLineWebhookError(error);
     console.error('LINE OA webhook request failed', {
       requestId: context.requestId,

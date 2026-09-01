@@ -10,7 +10,7 @@ const config = {
   schemaVersion: 1,
   deploymentId: 'clinic-staging',
   tenant: {
-    expectedClinicId: '10000000-0000-0000-0000-000000000002',
+    expectedClinicId: '10000000-0000-4000-8000-000000000002',
     expectedClinicCode: 'CLINIC-STG'
   },
   database: { provider: 'supabase', url: '', publishableKey: '' },

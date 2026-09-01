@@ -54,42 +54,67 @@ Each environment contains:
 - `04-transaction-audit` (canonical append-only audit, invoices, invoice items and payments)
 - `99-manifests-and-restore-tests`
 
-The scheduled Netlify function runs daily at `20:00 UTC` (`03:00 Asia/Bangkok`) and writes four independent `.cdb.json.enc` files plus one non-PHI manifest per clinic. Stable environment-prefixed names and a database lease make retries idempotent. Each domain file is encrypted using AES-256-GCM with a unique IV and authenticated metadata binding the environment, deployment ID, source revision, clinic, domain and backup slot. The manifest stores file IDs, row counts, key ID and SHA-256 evidence, not record content.
+The scheduled Netlify function runs daily at `20:00 UTC` (`03:00 Asia/Bangkok`). Its bounded scheduler validates the exact configured Netlify site ID/origin, Supabase project, deployment and source commit, reads the exact-slot run ledger, then sends one HMAC-signed dispatch only for a missing or stale-`started` clinic to a Netlify background worker. The signed v4 dispatch ID and exact site/deploy/project/environment/source/slot binding remain valid for a bounded 30-minute queue window, with at most 60 seconds of future clock skew; the database lease is the final replay/idempotency guard. A control-plane **Run now** always selects the most recent `20:00 UTC` slot; before `20:00 UTC` it selects the preceding day's slot and never creates a future-dated backup. The worker writes four independent `.cdb.json.enc` files plus one non-PHI manifest per clinic. Stable environment-prefixed names and a database lease make retries idempotent. Each domain file is encrypted using AES-256-GCM with a unique IV and authenticated metadata binding the environment, deployment ID, source revision, clinic, domain and backup slot. The manifest stores file IDs, row counts, key ID and SHA-256 evidence, not record content.
 
-Backup schema `2026-08-31.1` closes the clinical and subscription-control recovery gap. The patient domain includes the complete tenant-bound care record: appointments, encounters, vitals and assessments, examination, OPD history, Thai diagnosis/context/concepts, pain map, treatment plans/orders/sessions, outcomes/follow-up, sign-off, persistent LINE link and encounter identity verification. The transaction domain separately preserves clinical, appointment, identity and CNYOS subscription-control audit events with invoices and payments. Product and Pharmacy retain their independent files.
+Backup schema `2026-09-01.1` closes the clinical, subscription-control and Drive-destination evidence gaps. The patient domain includes the complete tenant-bound care record: appointments, encounters, vitals and assessments, examination, OPD history, Thai diagnosis/context/concepts, pain map, treatment plans/orders/sessions, outcomes/follow-up, sign-off, persistent LINE link and encounter identity verification. The transaction domain separately preserves clinical, appointment, identity, CNYOS subscription-control and sanitized Drive-assignment audit events with invoices and payments. Drive event export excludes owner email and free-text reason. Product and Pharmacy retain their independent files.
 
 Active one-time credentials are intentionally not exported. Link requests are included only after claim/invalidation/expiry; QR sessions are included only after use/expiry; rate-limit buckets are excluded. The encrypted payload records these filters. This preserves historical proof without making a restored environment reactivate a live QR or link code.
 
 LINE OA gateway transport telemetry (`line_oa_gateway_webhook_events`, gateway contact delivery state, reply tokens and message payloads) is not a clinical record and is excluded from logical restore. Raw user IDs, message text, reply tokens and payloads are never stored. The operational notification tables (`line_oa_contacts`, `line_oa_notification_preferences`, `line_oa_webhook_events`, `line_oa_notification_outbox`, and `line_oa_delivery_events`) remain in the encrypted clinic backup domain. Significant gateway actions for an already-linked identity append sanitized `patient_identity_events`, which are retained in the encrypted transaction/audit domain. Non-PHI `clinic_subscription_control_events` are retained in the same transaction/audit object so Owner ON/OFF evidence survives an isolated restore.
 
-The run is recorded in `backup_export_runs` as `started`, `completed`, `partial` or `failed`. A failed or partial slot may be retried. A completed slot cannot be duplicated.
+The run is recorded in `backup_export_runs` as `started`, `completed`, `partial` or `failed`. A 15-minute scheduled monitor operates for the bounded six-hour slot window. Both schedulers use the same candidate rule: only a missing lease (including an initial enqueue failure) or a `started` lease older than 30 minutes can be dispatched. `completed`, `partial` and `failed` are immutable exact-slot evidence and are never reacquired. A stale `started` lease requires a different canonical v4 dispatch ID; replaying the same signed dispatch cannot refresh its timestamp or reacquire it.
+
+### Terminal exact-slot incident handling
+
+There is no manual same-slot retry for `completed`, `partial` or `failed`. Netlify **Run now** observes and skips those terminal rows; it cannot reset them. Preserve the exact row (`domain_counts`, `object_manifest`, `error_code` and timestamps) and the associated Netlify request logs, correct the underlying fault, then run and verify the next normal slot. A future terminal override is allowed only after an Owner-authenticated, audited operation creates append-only attempt evidence; that operation is not built and must not be simulated by calling `database-backup-background` or reconstructing `BACKUP_INTERNAL_DISPATCH_SECRET`.
+
+If the next `20:00 UTC` boundary has already passed, do not rewrite the historical row or forge an old dispatch. Preserve the incident, run the current slot, and treat the missed slot as an RPO exception requiring review.
 
 ## Production configuration
 
 1. Create a dedicated Google Cloud service account and enable the Google Drive API.
 2. Share only the five destination folders inside the intended environment tree with the service-account email as Editor. Do not share the other environment and do not grant domain-wide Drive access.
 3. Generate a 32-byte backup key outside the repository, for example `openssl rand -base64 32`. Store a separately controlled recovery copy; never put the key in Drive.
-4. Set these Netlify environment variables only for the production Functions runtime:
-   - `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`
+4. Provision the encrypted service-account Blob by following [GOOGLE_SERVICE_ACCOUNT_BLOB.md](./GOOGLE_SERVICE_ACCOUNT_BLOB.md), then set these Netlify environment variables only for the production Functions runtime:
+   - `CNYOS_OWNER_DRIVE_ENABLED=false` initially
+   - `BACKUP_ENABLED=false` initially
+   - `GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_ID`
+   - `GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_BASE64` (distinct from the next key and dispatch secret)
+   - `GOOGLE_DRIVE_EXPECTED_SERVICE_ACCOUNT_EMAIL` (exact dedicated identity; authenticated into the encrypted binding)
    - `BACKUP_ENCRYPTION_KEY_BASE64`
-   - `GOOGLE_DRIVE_PATIENTS_FOLDER_ID`
-   - `GOOGLE_DRIVE_PRODUCTS_FOLDER_ID`
-   - `GOOGLE_DRIVE_PHARMACY_FOLDER_ID`
-   - `GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID`
-   - `GOOGLE_DRIVE_MANIFESTS_FOLDER_ID`
+   - `GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID`
    - `BACKUP_ENVIRONMENT=production`
    - `BACKUP_DEPLOYMENT_ID` (must not contain a staging marker)
+   - `BACKUP_EXPECTED_SUPABASE_PROJECT_REF` (must exactly match `SUPABASE_URL`)
+   - `BACKUP_EXPECTED_NETLIFY_SITE_ID` (immutable site UUID; must exactly match the Functions runtime)
+   - `BACKUP_EXPECTED_SITE_ORIGIN` (exact lowercase `https://<site>.netlify.app` origin)
+   - `BACKUP_INTERNAL_DISPATCH_SECRET` (distinct random secret, Functions-only)
+   - `BACKUP_MAX_CLINICS_PER_RUN` (optional, maximum 25)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `PATIENT_QR_ISSUER` (must equal the deployment's public `identity.qrIssuer`)
-5. Apply migrations through `202608282000_complete_clinical_backup_and_restore_evidence.sql` in filename order before deploying the worker.
-6. Run the function once, confirm four encrypted files and one manifest, and verify `backup_export_runs.status = 'completed'`.
+5. Apply migrations through `202609011200_backup_terminal_run_guard.sql` in filename order before deploying the scheduler and background worker.
+6. Share only five direct-child destination folders under `GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID`, deploy, then enable `CNYOS_OWNER_DRIVE_ENABLED=true`. In `/owner-control.html`, assign those five distinct folders for the clinic and server-fixed production environment. Staging and production require this audited database assignment; the `GOOGLE_DRIVE_*_FOLDER_ID` variables are restore-test-only.
+7. Keep `BACKUP_ENABLED=false` until the assignment and the exact published deploy are verified. Netlify's Scheduled Functions platform protection—not the forgeable `{ "next_run": ... }` event body—is the caller-auth boundary. For both `database-backup` and `database-backup-recovery`, require current deploy metadata to contain exactly one expected `function_schedules` entry and exactly one `available_functions` entry with no `ro` property. Pipe that current metadata JSON from the authenticated Netlify control plane to `npm run verify:backup-deploy-metadata -- -`; do not retain deploy IDs or hashes in the evidence output. This proves schedule registration and absence of a custom route only; `ro` absence alone does not prove that the default Function URL is inaccessible. Run `npm run verify:backup-route-denial -- https://<published-staging-site>.netlify.app` and require Netlify's documented `404` denial for GET and POST on both default Function URLs. Any other status, a runtime response such as `{ "enabled": false }`, or `BACKUP_SCHEDULED_INVOCATION_REQUIRED` is a failed route-protection check, not proof. Preserve the four method/path/status results with the exact-commit evidence.
+8. Enable `BACKUP_ENABLED=true` only outside the configured schedule windows, redeploy, and repeat both deploy-metadata and direct-URL checks against that exact published deploy before using authenticated Netlify **Run now**. Confirm four encrypted files and one manifest and verify `backup_export_runs.status = 'completed'`.
+9. Complete an isolated restore drill from that exact encrypted set before declaring the backup operational.
 
 ## Staging configuration
 
-Staging uses a different Supabase project, encryption key, service account access and all five Drive folder IDs. Set `BACKUP_ENVIRONMENT=staging`, `BACKUP_DEPLOYMENT_ID=chananya-clinical-staging` and `BACKUP_PRODUCTION_SUPABASE_URL` to the browser-safe Production origin used only as a denylist. The worker fails closed if the staging and Production Supabase origins match, if the deployment ID lacks a staging marker, or if any two domain folder IDs are the same.
+Staging uses a different Netlify project, Supabase project, encryption key, encrypted service-account Blob and five Drive folders. Set `BACKUP_ENVIRONMENT=staging`, a staging-marked `BACKUP_DEPLOYMENT_ID`, `BACKUP_EXPECTED_NETLIFY_SITE_ID`, `BACKUP_EXPECTED_SITE_ORIGIN`, `GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID`, `GOOGLE_DRIVE_EXPECTED_SERVICE_ACCOUNT_EMAIL`, and `BACKUP_EXPECTED_SUPABASE_PROJECT_REF` to the exact staging targets, then provision the credential as described in [GOOGLE_SERVICE_ACCOUNT_BLOB.md](./GOOGLE_SERVICE_ACCOUNT_BLOB.md). `BACKUP_PRODUCTION_SUPABASE_URL` is mandatory and must be the same customer's distinct Production origin, used only as a denylist boundary; never substitute another customer's Production URL. Assign the five folders from Owner Control only after sharing those exact direct-child staging folders with the staging service account. The worker fails closed if copied credentials run on another Netlify site ID/origin, if the Google client email differs from the authenticated tenant binding, if the Supabase URL does not match its exact expected ref, if the Production denylist is absent/invalid or matches, if the deployment ID lacks a staging marker, if the assignment is missing/partial, if a folder is outside the expected root, or if any two domain folder IDs are the same.
 
-The current Staging folder IDs are:
+The staging deployments are deliberately separated:
+
+| Customer | Netlify staging site (site ID) | Supabase staging project | Expected Drive root |
+| --- | --- | --- | --- |
+| CNYOS/Chananya | [`cnyos.netlify.app`](https://cnyos.netlify.app) (`7da5e39e-580d-44f1-8623-605313e2fb2b`) | `hsmnjwxurlmsizndjlun` | [`1eQLyI8f4YBI1spmk2ArueBptkvLl1h83`](https://drive.google.com/drive/folders/1eQLyI8f4YBI1spmk2ArueBptkvLl1h83) |
+| Jitarsa | [`jitarsa-staging.netlify.app`](https://jitarsa-staging.netlify.app) (`a71e3b2b-0b2a-46d8-af26-e7b26739d4df`) | `qbkuyjavtvjdzfdprgqa` | [`1g56i9GcL7Ia3iAX3OUpqlJPBy3QF1WGm`](https://drive.google.com/drive/folders/1g56i9GcL7Ia3iAX3OUpqlJPBy3QF1WGm) |
+
+`jitarsa.netlify.app` (site ID `c33db6a8-2fe8-410e-b4ff-16eeae4f33a7`) is a future-production shell, not staging. Keep it database-locked and do not place either staging project's Functions credentials or Drive assignment on it. See [CNYOS_OWNER_CONTROL.md](./CNYOS_OWNER_CONTROL.md) for the Build-versus-Functions variable matrix.
+
+Because a separate Jitarsa Production Supabase project does not yet exist, Jitarsa staging must keep Owner subscription, Owner Drive, scheduled backup and restore-source gates disabled. CNYOS Production is not a valid Jitarsa denylist.
+
+The following legacy folder IDs belong only to the CNYOS/Chananya staging environment. Never reuse them for Jitarsa or another white-label tenant:
 
 - patients: `15lIVkMJPzwApB_5j_fzTuyryenjK9VBR`
 - products/inventory: `1SD600SRH31rvxOZp5V0pgvAjjxrYK5yH`
@@ -97,7 +122,9 @@ The current Staging folder IDs are:
 - transaction/audit: `1TjunPn8V-VnDQTHCAP-1uC77kgntwpBi`
 - manifests/restore: `1ueEtjq5GxvWzZnnA67HLzpqaQRjiqtgm`
 
-Folder IDs are destination identifiers, not credentials. The service-account JSON, service-role key and encryption key remain protected secrets and must never be committed or placed in browser configuration.
+Folder IDs are destination identifiers, not credentials. The service-account source document, Blob wrap key, service-role key and backup encryption key remain protected secrets and must never be committed or placed in browser configuration.
+
+The five `GOOGLE_DRIVE_*_FOLDER_ID` environment variables are valid only for a complete `BACKUP_ENVIRONMENT=restore-test` set. Staging and production always resolve their per-clinic destination from the audited database assignment.
 
 The Netlify deploy preview must not receive production backup secrets and must not run the scheduled exporter.
 
@@ -121,11 +148,11 @@ npm run restore:verify-set -- /absolute/path/to/one-backup-slot
 
 The restore-set verifier fails when a domain/table is missing, ciphertext is modified, or environment, clinic, slot, key, schema or exact source commit differ. Its output contains hashes and counts only.
 
-The protected `Isolated managed restore drill` workflow is the executable isolated restore drill. It verifies a database that an operator restored from managed Supabase backup/PITR into a dedicated `restore-test` project. It downloads the matching Drive set, validates all four encrypted objects, compares core relational counts, checks referential integrity, requires a complete Patient → Encounter → Prescription → Dispense → Invoice → Payment chain when selected, and records measured RPO/RTO plus the reviewed restore change reference. It never imports JSON into Production and rejects the Production database origin.
+The protected `Isolated managed restore drill` workflow is the executable isolated restore drill. The staging workflow hardcodes the source trust environment to `staging`; its protected GitHub Environment binds one Netlify restore-source endpoint, one Drive root and a distinct Viewer-only Drive reader. A narrow bearer token lets the workflow retrieve only the five opaque object IDs and integrity evidence for one exact completed database run. It verifies a database that an operator restored from managed Supabase backup/PITR into a dedicated `restore-test` project, downloads those exact IDs rather than searching by filename or current assignment, validates the plaintext manifest and all four encrypted objects, compares core relational counts, checks referential integrity, requires a complete Patient → Encounter → Prescription → Dispense → Invoice → Payment chain when selected, and records measured RPO/RTO plus the reviewed restore change reference. It never imports JSON into Production and rejects the Production database origin.
 
 Drive JSON is off-site logical recovery evidence, not the full restore mechanism. Supabase Auth users, profiles, tenant/platform configuration and database internals require managed backup/PITR or an independently reviewed identity-mapping procedure.
 
-Initial target: daily RPO (maximum 24 hours). No commercial production claim should be made until the protected workflow succeeds against the exact candidate commit, establishes actual RPO/RTO, matches source/restore counts and confirms the complete clinical-financial trace.
+Initial target: daily RPO (maximum 24 hours). Folder metadata and `canAddChildren` checks are configuration evidence, not backup proof. No commercial production claim should be made until a dedicated service account performs a real encrypted write/export and the protected restore workflow succeeds against the exact candidate commit, establishes actual RPO/RTO, matches source/restore counts and confirms the complete clinical-financial trace.
 
 ## Exact-commit CI and operational workflows
 
@@ -143,6 +170,6 @@ The workflows are executable harnesses, not evidence by themselves. Each commerc
 - Product, patient and pharmacy browser code contains no protected direct writes.
 - Production browser code loads no patient-domain tables and contains no protected direct writes; FEFO shortage and retry tests prove rollback and idempotency.
 - Dedicated `quality` role, authenticated role E2E and an approved independent-QC SOP are required. Production must be denied both legacy release RPCs and the Quality workstation; producer/approver equality must fail in PostgreSQL.
-- Google service account and encryption key are present only in production Functions.
+- The encrypted Google service-account Blob is site-scoped; its distinct wrap key and the backup encryption key are available only to the reviewed Functions context.
 - First backup completes and a separate restore-verification run passes.
 - Supabase managed backup/PITR policy is enabled independently; Drive export is defense in depth, not a replacement.

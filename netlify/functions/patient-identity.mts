@@ -3,6 +3,7 @@ import {
   allowedRequestOrigin,
   createOneTimeCredential,
   hmacSha256,
+  normalizeClinicId,
   normalizeLinkCode,
   normalizePatientId,
   publicError,
@@ -27,11 +28,18 @@ function env(name) {
 }
 
 function configuration() {
+  let expectedClinicId = '';
+  try {
+    expectedClinicId = normalizeClinicId(env('CNYOS_RUNTIME_EXPECTED_CLINIC_ID'));
+  } catch {
+    expectedClinicId = '';
+  }
   const config = {
     liffId: env('LINE_LIFF_ID'),
     lineChannelId: env('LINE_LOGIN_CHANNEL_ID'),
     identitySecret: env('PATIENT_IDENTITY_HMAC_SECRET'),
     qrIssuer: env('PATIENT_QR_ISSUER') || 'CHANANYA',
+    expectedClinicId,
     supabaseUrl: env('SUPABASE_URL'),
     serviceRoleKey: env('SUPABASE_SERVICE_ROLE_KEY')
   };
@@ -39,6 +47,7 @@ function configuration() {
     config.liffId
     && config.lineChannelId
     && config.identitySecret.length >= 32
+    && config.expectedClinicId
     && config.supabaseUrl
     && config.serviceRoleKey
   );
@@ -68,7 +77,8 @@ async function consumeRateLimit(config, action, subjectHash, request, context) {
     card: { count: 12, seconds: 60 }
   };
   const limit = limits[action] || { count: 6, seconds: 60 };
-  const allowed = await rpc(config, 'consume_patient_identity_rate_limit', {
+  const allowed = await rpc(config, 'consume_patient_identity_rate_limit_for_clinic', {
+    p_clinic_id: config.expectedClinicId,
     p_bucket_key: bucketKey,
     p_limit: limit.count,
     p_window_seconds: limit.seconds
@@ -87,6 +97,10 @@ async function handlePatientAction(request, context, config) {
     return json({ ok: false, code: 'ACTION_NOT_ALLOWED' }, 400);
   }
 
+  await rpc(config, 'assert_clinic_subscription_active', {
+    p_clinic_id: config.expectedClinicId
+  });
+
   await consumeRateLimit(config, 'preauth', 'anonymous', request, context);
   const lineIdentity = await verifyLineIdToken(String(body.idToken || ''), config.lineChannelId);
   const subjectHash = hmacSha256(lineIdentity.subject, config.identitySecret);
@@ -94,7 +108,8 @@ async function handlePatientAction(request, context, config) {
 
   if (action === 'link') {
     const linkCode = normalizeLinkCode(body.linkCode);
-    await rpc(config, 'complete_patient_line_link', {
+    await rpc(config, 'complete_patient_line_link_for_clinic', {
+      p_clinic_id: config.expectedClinicId,
       p_link_code: linkCode,
       p_subject_hash: subjectHash,
       p_provider_channel: config.lineChannelId,
@@ -110,7 +125,8 @@ async function handlePatientAction(request, context, config) {
       credential = createOneTimeCredential(config.qrIssuer);
       const expiresAt = new Date(Date.now() + 90_000).toISOString();
       try {
-        issued = firstRow(await rpc(config, 'issue_patient_qr_for_subject', {
+        issued = firstRow(await rpc(config, 'issue_patient_qr_for_subject_in_clinic', {
+          p_clinic_id: config.expectedClinicId,
           p_subject_hash: subjectHash,
           p_patient_id: patientId,
           p_token_hash: credential.tokenHash,
@@ -144,7 +160,8 @@ async function handlePatientAction(request, context, config) {
     });
   }
 
-  const patients = await rpc(config, 'list_line_linked_patients', {
+  const patients = await rpc(config, 'list_line_linked_patients_for_clinic', {
+    p_clinic_id: config.expectedClinicId,
     p_subject_hash: subjectHash
   });
   return json({ ok: true, linked: Array.isArray(patients) ? patients : [] });

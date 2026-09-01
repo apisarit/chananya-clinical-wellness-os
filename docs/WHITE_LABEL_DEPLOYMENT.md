@@ -41,7 +41,7 @@ The browser config contains `expectedClinicId` and `expectedClinicCode`. After l
 
 ## Customer provisioning
 
-1. Create an isolated Supabase project and apply all migrations in order.
+1. Create an isolated Supabase project with automatic table exposure disabled, and apply every migration exactly once in order before creating any Auth user.
 2. Copy `config/tenant.example.json` outside the repository and fill the customer's public branding/database values.
 3. Generate and review the one-time clinic bootstrap SQL:
 
@@ -49,7 +49,7 @@ The browser config contains `expectedClinicId` and `expectedClinicCode`. After l
    npm run tenant:bootstrap-sql -- /absolute/path/customer.json > /secure/path/customer-bootstrap.sql
    ```
 
-4. Run that SQL once in the customer's isolated Supabase project. It changes the clinic code/name used by server-authoritative numbering.
+4. Run that SQL once in the customer's isolated Supabase project. The final migration removes the historical compatibility seed only when the database is provably pristine; bootstrap then creates exactly one customer clinic plus its state row. A non-CHANANYA bootstrap fails closed if the legacy seed remains. Use a new RFC 4122 version 4 clinic UUID for every customer/environment.
 5. In the customer's Netlify site, set `CLINICAL_OS_TENANT_CONFIG_JSON` to the complete JSON or set `CLINICAL_OS_TENANT_CONFIG_PATH` to a committed non-secret config path.
 6. Configure the customer's OAuth allowlist and server-only function variables. Set `PATIENT_QR_ISSUER` to the same value as `identity.qrIssuer`.
 7. Share only the customer's five environment-specific backup folders with that customer's Google service account.

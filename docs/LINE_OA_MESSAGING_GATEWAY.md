@@ -41,6 +41,7 @@ PATIENT_IDENTITY_HMAC_SECRET
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 LINE_LIFF_ID
+CNYOS_RUNTIME_EXPECTED_CLINIC_ID
 ```
 
 Optional:
@@ -54,13 +55,15 @@ LINE_OA_BRAND_NAME
 
 In Netlify, scope all secrets to Functions runtime. Staging and Production must use separate LINE channels/tokens, Supabase projects, identity keys, and patient origins.
 
+`CNYOS_RUNTIME_EXPECTED_CLINIC_ID` is the immutable UUID of the one clinic served by this isolated Netlify site. Migration `202609011000_owner_subscription_kill_switch_closure.sql` requires that exact active subscription for gateway registration, identity linking, QR issuance, notification claims and delivery finalization. A valid signed webhook received while OFF is acknowledged without a tenant write or LINE reply, preventing retry storms. Only narrow non-tenant gateway finalization/evidence may complete after a concurrent OFF; backup/export remains the sole tenant-data operation allowed during suspension.
+
 ## Idempotency and audit
 
 Migration `202608292100_line_oa_messaging_gateway.sql` adds:
 
 - `line_oa_gateway_webhook_events`: hashed event/payload identifiers, sanitized action code, processing/reply state, retry count, and no message content;
 - `line_oa_gateway_contact_states`: keyed subject/channel hashes and followed/unfollowed state;
-- `register_line_oa_webhook_event(...)`: atomic claim, stale/failed retry, duplicate suppression, and linked identity evidence;
+- `register_line_oa_webhook_event_for_clinic(...)`: exact-clinic subscription guard followed by atomic claim, stale/failed retry, duplicate suppression, and linked identity evidence; the archived unscoped overload is not service-role callable;
 - `finalize_line_oa_webhook_event(...)`: processed/ignored/failed outcome;
 - `line_oa_webhook_evidence(...)`: non-PHI staging evidence counts.
 

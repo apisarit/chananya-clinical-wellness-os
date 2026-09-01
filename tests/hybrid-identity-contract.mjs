@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 const sql = read('supabase/migrations/202608270300_hybrid_patient_identity.sql');
+const killSwitch = read('supabase/migrations/202609011000_owner_subscription_kill_switch_closure.sql');
 const backend = read('netlify/functions/patient-identity.mts');
 const helpers = read('netlify/functions/_shared/patient-identity.mjs');
 const patientHtml = read('patient-card.html');
@@ -93,6 +94,16 @@ for (const definition of definerFunctions) {
 assert.match(backend, /verifyLineIdToken/, 'patient backend must verify LINE tokens server-side');
 assert.match(backend, /hmacSha256\(lineIdentity\.subject/, 'patient backend must HMAC the LINE subject');
 assert.match(backend, /consume_patient_identity_rate_limit/, 'patient backend must enforce database-backed rate limiting');
+assert.match(backend, /CNYOS_RUNTIME_EXPECTED_CLINIC_ID/, 'patient backend must bind to one immutable clinic');
+for (const rpc of [
+  'assert_clinic_subscription_active',
+  'consume_patient_identity_rate_limit_for_clinic',
+  'complete_patient_line_link_for_clinic',
+  'list_line_linked_patients_for_clinic',
+  'issue_patient_qr_for_subject_in_clinic'
+]) assert.match(backend, new RegExp(`rpc\\(config, '${rpc}'`), `${rpc} must guard the patient service path`);
+assert.match(killSwitch, /revoke all on function public\.complete_patient_line_link\(text,text,text,boolean\)[\s\S]*?service_role/i);
+assert.match(killSwitch, /create or replace function public\.complete_patient_line_link_for_clinic/i);
 assert.match(backend, /consumeRateLimit\(config, 'preauth', 'anonymous'/, 'patient backend must rate-limit by IP before calling LINE verification');
 assert.match(backend, /allowedRequestOrigin/, 'patient backend must reject cross-origin requests');
 assert.match(backend, /Cache-Control': 'no-store/, 'identity responses must never be cached');

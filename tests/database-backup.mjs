@@ -25,6 +25,16 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const key = Buffer.from(Array.from({ length: 32 }, (_, index) => index));
 assert.deepEqual(parseEncryptionKey(key.toString('base64')), key);
 assert.throws(() => parseEncryptionKey(Buffer.alloc(16).toString('base64')), /32_BYTES/);
+assert.throws(
+  () => parseEncryptionKey(key.toString('base64url')),
+  /BACKUP_ENCRYPTION_KEY_INVALID/,
+  'base64url aliases must not bypass canonical key comparison'
+);
+assert.throws(
+  () => parseEncryptionKey(` ${key.toString('base64')}\n`),
+  /BACKUP_ENCRYPTION_KEY_INVALID/,
+  'whitespace aliases must not bypass canonical key comparison'
+);
 assert.equal(parseBackupEnvironment('STAGING'), 'staging');
 assert.throws(() => parseBackupEnvironment('preview'), /ENVIRONMENT_INVALID/);
 assert.deepEqual(BACKUP_DOMAINS, ['patients', 'products', 'pharmacy', 'transactions']);
@@ -142,15 +152,21 @@ await assert.rejects(
   /DOWNLOAD_FAILED/
 );
 
-const worker = read('netlify/functions/database-backup.mts');
-assert.match(worker, /schedule:\s*'0 20 \* \* \*'/, 'backup must run daily at 03:00 Asia/Bangkok');
-assert.match(worker, /begin_backup_export_run/, 'worker must acquire an idempotent database lease');
-assert.match(worker, /complete_backup_export_run/, 'worker must commit a non-PHI audit manifest');
-assert.match(worker, /BACKUP_DOMAINS/, 'worker must export the four isolated domains');
-assert.match(worker, /BACKUP_ENVIRONMENT/, 'worker must bind every object to an explicit environment');
-assert.match(worker, /GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID/, 'worker must isolate transaction and audit evidence');
-assert.match(worker, /BACKUP_STAGING_CANNOT_USE_PRODUCTION_DATABASE/, 'staging backup must reject the Production database');
-assert.match(worker, /BACKUP_DRIVE_FOLDER_IDS_MUST_BE_UNIQUE/, 'domain folders must not collapse into one destination');
-assert.doesNotMatch(worker, /console\.(?:log|error)\([^\n]*(?:payload|ciphertext|serviceRoleKey)/, 'worker logs must not include backup payloads or secrets');
+const scheduler = read('netlify/functions/database-backup.mts');
+const background = read('netlify/functions/database-backup-background.mts');
+const runtime = read('netlify/functions/_shared/database-backup-runtime.mjs');
+assert.match(scheduler, /schedule:\s*'0 20 \* \* \*'/, 'backup must run daily at 03:00 Asia/Bangkok');
+assert.match(background, /handleBackgroundBackup/, 'heavy work must run in a Netlify background function');
+assert.match(runtime, /begin_backup_export_run/, 'background worker must acquire an idempotent database lease');
+assert.match(runtime, /complete_backup_export_run/, 'background worker must commit a non-PHI audit manifest');
+assert.match(runtime, /BACKUP_DOMAINS/, 'background worker must export the four isolated domains');
+assert.match(runtime, /BACKUP_ENVIRONMENT/, 'worker must bind every object to an explicit environment');
+assert.match(runtime, /BACKUP_EXPECTED_SUPABASE_PROJECT_REF/, 'backup must pin the exact Supabase project for this deployment');
+assert.match(runtime, /BACKUP_SUPABASE_PROJECT_MISMATCH/, 'backup must fail closed on a cross-project target');
+assert.match(runtime, /GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID/, 'worker must isolate transaction and audit evidence');
+assert.match(runtime, /BACKUP_STAGING_PRODUCTION_DENYLIST_REQUIRED/, 'staging backup must require an explicit customer Production denylist');
+assert.match(runtime, /BACKUP_STAGING_CANNOT_USE_PRODUCTION_DATABASE/, 'staging backup must reject the Production database');
+assert.match(runtime, /BACKUP_DRIVE_FOLDER_IDS_MUST_BE_UNIQUE/, 'domain folders must not collapse into one destination');
+assert.doesNotMatch(runtime, /console\.(?:log|error)\([^\n]*(?:payload|ciphertext|serviceRoleKey)/, 'worker logs must not include backup payloads or secrets');
 
 console.log('Encrypted Google Drive backup checks passed: environment-bound AES-256-GCM, transaction audit domain, JWT, stable upsert and idempotent audit lease');

@@ -6,6 +6,8 @@ import { validateTenantConfig } from './generate-tenant-config.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = process.argv[2] || process.env.CLINICAL_OS_TENANT_CONFIG_PATH || 'config/tenant.chananya.json';
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
+const LEGACY_CLINIC_ID = '00000000-0000-0000-0000-000000000001';
+const LEGACY_CLINIC_CODE = 'CHANANYA';
 
 export function buildTenantBootstrapSql(input) {
   const config = validateTenantConfig(input);
@@ -14,13 +16,21 @@ export function buildTenantBootstrapSql(input) {
   const clinicCode = quote(tenant.expectedClinicCode);
   const nameTh = quote(brand.nameTh);
   const nameEn = quote(brand.nameEn);
+  const isCanonicalLegacyTenant = tenant.expectedClinicId === LEGACY_CLINIC_ID &&
+    tenant.expectedClinicCode === LEGACY_CLINIC_CODE;
 
   return `-- Review and run once in the customer's isolated Supabase project after all migrations.\n` +
-    `-- Idempotent tenant bootstrap for ${deploymentId}; the canonical migration seed is never re-keyed.\n` +
+    `-- Idempotent tenant bootstrap for ${deploymentId}; run before creating any Auth users.\n` +
     `begin;\n` +
     `select pg_advisory_xact_lock(202608302101::bigint);\n` +
     `do $tenant_collision_guard$\n` +
     `begin\n` +
+    (!isCanonicalLegacyTenant
+      ? `  if exists (\n` +
+        `    select 1 from public.clinics\n` +
+        `    where id = '${LEGACY_CLINIC_ID}'::uuid and code = '${LEGACY_CLINIC_CODE}'\n` +
+        `  ) then raise exception 'TENANT_BOOTSTRAP_LEGACY_SEED_PRESENT'; end if;\n`
+      : '') +
     `  if exists (\n` +
     `    select 1 from public.clinics\n` +
     `    where id = ${clinicId}::uuid and code <> ${clinicCode}\n` +
@@ -39,6 +49,9 @@ export function buildTenantBootstrapSql(input) {
     `  name_en = excluded.name_en,\n` +
     `  updated_at = now()\n` +
     `where clinics.code = excluded.code;\n` +
+    `insert into public.clinic_state (id)\n` +
+    `values (${clinicId}::uuid)\n` +
+    `on conflict (id) do nothing;\n` +
     `do $tenant_bootstrap_guard$\n` +
     `begin\n` +
     `  if exists (\n` +
@@ -59,7 +72,7 @@ export function buildTenantBootstrapSql(input) {
     `$tenant_bootstrap_guard$;\n` +
     `commit;\n` +
     `select jsonb_build_object(\n` +
-    `  'status','CHANANYA_TENANT_BOOTSTRAP_READY',\n` +
+    `  'status','CLINICAL_OS_TENANT_BOOTSTRAP_READY',\n` +
     `  'deployment_id',${quote(deploymentId)},\n` +
     `  'clinic_id',id,\n` +
     `  'clinic_code',code\n` +

@@ -18,6 +18,7 @@ const USER_RECEPTION = 'cccccccc-3333-4333-a333-333333333333';
 const USER_ADMIN = 'dddddddd-4444-4444-a444-444444444444';
 const USER_ROLE_TARGET = 'eeeeeeee-5555-4555-a555-555555555555';
 const USER_BILLING = 'f0f0f0f0-6666-4666-a666-666666666666';
+const CLINIC_A = '00000000-0000-0000-0000-000000000001';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
 const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
 const RX_BAD_REQUEST = '66666666-6666-4666-a666-666666666666';
@@ -139,6 +140,26 @@ async function asService(sql) {
   }
 }
 
+async function execAsDatabaseOwnerWithServiceClaim(sql) {
+  await db.exec(`
+    reset role;
+    select
+      set_config('request.jwt.claim.sub','',false),
+      set_config('request.jwt.claim.role','service_role',false);
+  `);
+  return db.exec(sql);
+}
+
+async function queryAsDatabaseOwnerWithServiceClaim(sql) {
+  await db.exec(`
+    reset role;
+    select
+      set_config('request.jwt.claim.sub','',false),
+      set_config('request.jwt.claim.role','service_role',false);
+  `);
+  return db.query(sql);
+}
+
 async function expectDatabaseError(promise, code) {
   await assert.rejects(promise, error => String(error.message).includes(code));
 }
@@ -188,14 +209,10 @@ const linkResult = await asUser(USER_A, `
 const linkCode = linkResult.rows[0].link_code;
 assert.match(linkCode, /^[0-9A-F]{12}$/);
 
-await db.exec(`
-  select set_config('request.jwt.claim.sub','',false);
-  set role service_role;
-`);
 const subjectHash = 'a'.repeat(64);
-await db.query(`
-  select * from public.complete_patient_line_link(
-    '${linkCode}','${subjectHash}','line-channel',true
+await asService(`
+  select * from public.complete_patient_line_link_for_clinic(
+    '${CLINIC_A}','${linkCode}','${subjectHash}','line-channel',true
   )
 `);
 const hashes = await db.query(`
@@ -204,21 +221,20 @@ const hashes = await db.query(`
     encode(digest('123456','sha256'),'hex') code_hash
 `);
 const { token_hash: tokenHash, code_hash: codeHash } = hashes.rows[0];
-const qrIssued = await db.query(`
-  select * from public.issue_patient_qr_for_subject(
-    '${subjectHash}','${patientA.id}','${tokenHash}','${codeHash}',
+const qrIssued = await asService(`
+  select * from public.issue_patient_qr_for_subject_in_clinic(
+    '${CLINIC_A}','${subjectHash}','${patientA.id}','${tokenHash}','${codeHash}',
     now()+interval '90 seconds'
   )
 `);
 assert.equal(qrIssued.rows[0].patient_id, patientA.id);
-await db.exec('reset role;');
 
 const lineOaChannelHash = 'b'.repeat(64);
 const lineOaEventHash = 'c'.repeat(64);
 const lineOaPayloadHash = 'd'.repeat(64);
 const lineOaClaim = await asService(`
-  select * from public.register_line_oa_webhook_event(
-    '${lineOaChannelHash}','${lineOaEventHash}','${subjectHash}',
+  select * from public.register_line_oa_webhook_event_for_clinic(
+    '${CLINIC_A}','${lineOaChannelHash}','${lineOaEventHash}','${subjectHash}',
     'follow','none',now(),false,'${lineOaPayloadHash}'
   )
 `);
@@ -231,8 +247,8 @@ const lineOaFinalized = await asService(`
 `);
 assert.equal(lineOaFinalized.rows[0].finalized, true);
 const lineOaDuplicate = await asService(`
-  select * from public.register_line_oa_webhook_event(
-    '${lineOaChannelHash}','${lineOaEventHash}','${subjectHash}',
+  select * from public.register_line_oa_webhook_event_for_clinic(
+    '${CLINIC_A}','${lineOaChannelHash}','${lineOaEventHash}','${subjectHash}',
     'follow','none',now(),true,'${lineOaPayloadHash}'
   )
 `);
@@ -420,15 +436,12 @@ assert.equal(manualEncounter.rows[0].patient_id, createdManual.rows[0].id);
 
 // Clinical -> Pharmacy is one transaction, server-numbered and idempotent.
 const productId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
-await db.exec(`
-  select set_config('request.jwt.claim.role','service_role',false);
-  set role service_role;
+await execAsDatabaseOwnerWithServiceClaim(`
   insert into public.products(
     id,sku,name_th,category,stock_unit,dispense_unit
   ) values (
     '${productId}','TTM-TEST-001','ยาทดสอบ','medicine','ขวด','ขวด'
   );
-  reset role;
 `);
 const prescription = await asUser(USER_A, `
   select * from public.create_atomic_prescription_handoff(
@@ -495,7 +508,7 @@ await expectDatabaseError(
 
 // Pharmacy test fixture: the billing RPC independently derives medicine
 // totals from dispensed quantities/prices and never trusts browser totals.
-await db.exec(`
+await execAsDatabaseOwnerWithServiceClaim(`
   insert into public.dispensing_items(
     dispensing_order_id,prescription_item_id,quantity_dispensed,unit,
     unit_price,status
@@ -616,7 +629,7 @@ assert.deepEqual(handoffAudit.rows, [
   { action: 'record_invoice_payment', count: 2 }
 ]);
 
-await db.exec(`
+await execAsDatabaseOwnerWithServiceClaim(`
   insert into public.clinics(id,code,name_th)
   values ('${CLINIC_B}','CLINICB','คลินิกบี');
   update public.clinic_memberships
@@ -667,7 +680,7 @@ assert.equal(crossTenantOutcomes.rows.length, 0, 'outcome search must not cross 
 // Department separation is enforced by both RPCs and restrictive RLS. An
 // account has one active department; only super_admin has the explicit
 // cross-workspace override, still inside its active clinic tenant.
-await db.exec(`
+await execAsDatabaseOwnerWithServiceClaim(`
   insert into auth.users(id,email,raw_user_meta_data) values
     ('${USER_PHARMACY}','pharmacy@example.test','{"full_name":"Pharmacist"}'),
     ('${USER_PRODUCTION}','production@example.test','{"full_name":"Production"}'),
@@ -957,7 +970,7 @@ const productionPrescriptionItem = await db.query(`
 `);
 const productionItemId = productionPrescriptionItem.rows[0].id;
 
-await asService(`
+await queryAsDatabaseOwnerWithServiceClaim(`
   insert into public.products(
     id,clinic_id,sku,name_th,category,stock_unit,dispense_unit
   ) values (
@@ -966,7 +979,7 @@ await asService(`
   )
 `);
 await expectDatabaseError(
-  asService(`
+  queryAsDatabaseOwnerWithServiceClaim(`
     insert into public.prescription_items(
       prescription_id,product_id,quantity_prescribed,unit
     ) values (
@@ -1176,7 +1189,7 @@ const completedProductionRetry = await asUser(USER_PRODUCTION, `
 `);
 assert.equal(completedProductionRetry.rows[0].id, completedProduction.rows[0].id);
 
-await db.exec(`
+await execAsDatabaseOwnerWithServiceClaim(`
   update public.production_orders
   set produced_by='${USER_QUALITY}'
   where id='${productionOrder.rows[0].id}'
@@ -1190,7 +1203,7 @@ await expectDatabaseError(
   `),
   'QC_INDEPENDENCE_REQUIRED'
 );
-await db.exec(`
+await execAsDatabaseOwnerWithServiceClaim(`
   update public.production_orders
   set produced_by='${USER_PRODUCTION}'
   where id='${productionOrder.rows[0].id}'
@@ -1332,7 +1345,7 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
-assert.equal(backupPayload.rows[0].payload.schema_version, '2026-08-31.1');
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-09-01.1');
 for (const table of [
   'services','price_lists','price_list_items','products','suppliers','inventory_lots',
   'stock_movements','formulas','formula_components','production_requests',
@@ -1351,16 +1364,17 @@ const transactionBackup = await asService(`
   ) payload
 `);
 assert.equal(transactionBackup.rows[0].payload.domain, 'transactions');
-assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-08-31.1');
+assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-09-01.1');
 for (const table of [
   'audit_logs','clinical_record_audit_events','appointment_events',
   'patient_identity_events','invoices','invoice_items','payments',
   'line_oa_webhook_events','line_oa_notification_outbox','line_oa_delivery_events',
-  'clinic_subscription_control_events'
+  'clinic_subscription_control_events','clinic_drive_destination_events'
 ]) {
   assert.ok(Array.isArray(transactionBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
 }
 assert.ok(transactionBackup.rows[0].payload.data.audit_logs.length > 0);
+assert.deepEqual(transactionBackup.rows[0].payload.data.clinic_drive_destination_events, []);
 assert.ok(
   transactionBackup.rows[0].payload.data.audit_logs.every(
     row => row.clinic_id === '00000000-0000-0000-0000-000000000001'
@@ -1393,14 +1407,16 @@ assert.match(patientBackup.rows[0].payload.recovery_model.full_database_restore,
 
 const backupContract = await asUser(USER_C, `select * from public.backup_restore_contract_healthcheck()`);
 assert.equal(backupContract.rows[0].ready, true);
-assert.equal(backupContract.rows[0].schema_version, '2026-08-31.1');
+assert.equal(backupContract.rows[0].schema_version, '2026-09-01.1');
+assert.equal(Number(backupContract.rows[0].transaction_table_count), 12);
 const restoreTrace = await asService(`
   select public.verify_clinic_restore_trace(
     '00000000-0000-0000-0000-000000000001'
   ) trace
 `);
 assert.equal(restoreTrace.rows[0].trace.ready, true);
-assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-08-31.1');
+assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-09-01.1');
+assert.equal(Number(restoreTrace.rows[0].trace.counts.clinic_drive_destination_events), 0);
 assert.equal(restoreTrace.rows[0].trace.referential_integrity_anomalies, 0);
 
 await asUser(USER_C, `
@@ -1423,13 +1439,13 @@ assert.equal(restoredContext.rows[0].ready, true, 'synthetic practitioner was no
 const backupSlot = '2026-08-27T20:00:00Z';
 const firstBackupLease = await asService(`
   select * from public.begin_backup_export_run(
-    '00000000-0000-0000-0000-000000000001','${backupSlot}','test-run-1'
+    '00000000-0000-0000-0000-000000000001','${backupSlot}','11111111-1111-4111-8111-111111111111'
   )
 `);
 assert.equal(firstBackupLease.rows[0].acquired, true);
 const duplicateBackupLease = await asService(`
   select * from public.begin_backup_export_run(
-    '00000000-0000-0000-0000-000000000001','${backupSlot}','test-run-2'
+    '00000000-0000-0000-0000-000000000001','${backupSlot}','22222222-2222-4222-8222-222222222222'
   )
 `);
 assert.equal(duplicateBackupLease.rows[0].acquired, false);
@@ -1441,7 +1457,7 @@ await asService(`
 `);
 const completedBackupLease = await asService(`
   select * from public.begin_backup_export_run(
-    '00000000-0000-0000-0000-000000000001','${backupSlot}','test-run-3'
+    '00000000-0000-0000-0000-000000000001','${backupSlot}','33333333-3333-4333-8333-333333333333'
   )
 `);
 assert.equal(completedBackupLease.rows[0].acquired, false);
@@ -1718,6 +1734,57 @@ for (const statement of [
 ]) {
   await expectDatabaseError(db.query(statement), 'APPEND_ONLY_RECORD_MUTATION_DENIED');
 }
+
+// Subscription OFF permits only the narrow LINE cleanup path: an existing
+// operational consent can be withdrawn, but it cannot be enabled or used to
+// create new operational work until Owner Control reactivates the clinic.
+const operationalChannelHash = '9'.repeat(64);
+const consentLinkCode = (await asUser(USER_A, `
+  select link_code from public.issue_patient_line_link_code(
+    '${patientA.id}','self',null,true
+  )
+`)).rows[0].link_code;
+await asService(`
+  select * from public.complete_patient_line_link_for_clinic(
+    '${CLINIC_A}','${consentLinkCode}','${subjectHash}','line-channel',true
+  )
+`);
+await asService(`
+  select * from public.set_line_oa_notification_preference_for_subject(
+    '${subjectHash}','${patientA.id}','${CLINIC_A}','staging','smoke-deploy',
+    '${operationalChannelHash}',true
+  )
+`);
+const smokeOff = (await asService(`
+  select public.set_clinic_subscription_state(
+    '${randomUUID()}','${CLINIC_A}','CHANANYA',false,1,
+    'Behavioral smoke suspension test','${USER_C}','owner@example.test'
+  ) result
+`)).rows[0].result;
+assert.equal(smokeOff.state,'suspended');
+const smokeWithdrawal = await asService(`
+  select * from public.set_line_oa_notification_preference_for_subject(
+    '${subjectHash}','${patientA.id}','${CLINIC_A}','staging','smoke-deploy',
+    '${operationalChannelHash}',false
+  )
+`);
+assert.equal(smokeWithdrawal.rows[0].operational_messaging_enabled,false);
+await expectDatabaseError(
+  asService(`
+    select * from public.set_line_oa_notification_preference_for_subject(
+      '${subjectHash}','${patientA.id}','${CLINIC_A}','staging','smoke-deploy',
+      '${operationalChannelHash}',true
+    )
+  `),
+  'CNYOS_SUBSCRIPTION_SUSPENDED'
+);
+const smokeOn = (await asService(`
+  select public.set_clinic_subscription_state(
+    '${randomUUID()}','${CLINIC_A}','CHANANYA',true,2,
+    'Behavioral smoke reactivation test','${USER_C}','owner@example.test'
+  ) result
+`)).rows[0].result;
+assert.equal(smokeOn.state,'active');
 
 await db.close();
 console.log(

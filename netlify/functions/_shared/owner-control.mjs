@@ -51,8 +51,70 @@ export function allowedOwnerOrigin(request) {
   return fetchSite === 'same-origin';
 }
 
-export function validateOwnerUser(user, allowedEmails) {
+function ownerSiteOrigin(value) {
+  let parsed;
+  try { parsed = new URL(value); }
+  catch { throw new Error('CNYOS_OWNER_SITE_CONFIG_INVALID'); }
+  if (parsed.protocol !== 'https:'
+    || parsed.username
+    || parsed.password
+    || parsed.port
+    || parsed.pathname !== '/'
+    || parsed.search
+    || parsed.hash
+    || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/.test(parsed.hostname)) {
+    throw new Error('CNYOS_OWNER_SITE_CONFIG_INVALID');
+  }
+  return parsed.origin;
+}
+
+export function assertOwnerRuntime(request, context, expectedSiteId, expectedSiteOrigin) {
+  const siteId = String(expectedSiteId || '').trim().toLowerCase();
+  const siteOrigin = ownerSiteOrigin(String(expectedSiteOrigin || '').trim().toLowerCase());
+  if (!UUID_PATTERN.test(siteId)) throw new Error('CNYOS_OWNER_SITE_CONFIG_INVALID');
+
+  let requestOrigin;
+  let contextOrigin;
+  try {
+    requestOrigin = new URL(request.url).origin;
+    contextOrigin = new URL(context?.site?.url).origin;
+  } catch {
+    throw new Error('CNYOS_OWNER_RUNTIME_MISMATCH');
+  }
+  if (String(context?.site?.id || '').trim().toLowerCase() !== siteId
+    || contextOrigin !== siteOrigin
+    || requestOrigin !== siteOrigin) {
+    throw new Error('CNYOS_OWNER_RUNTIME_MISMATCH');
+  }
+  if (context?.deploy?.published !== true
+    || context?.deploy?.context !== 'production'
+    || !/^[A-Za-z0-9_-]{6,200}$/.test(String(context?.deploy?.id || ''))) {
+    throw new Error('CNYOS_OWNER_DEPLOY_CONTEXT_DENIED');
+  }
+  return Object.freeze({
+    siteId,
+    siteOrigin,
+    deployId: context.deploy.id
+  });
+}
+
+function decodeOwnerAccessTokenClaims(accessToken) {
+  const parts = String(accessToken || '').split('.');
+  if (parts.length !== 3 || !parts[1]) throw new Error('CNYOS_OWNER_SESSION_INVALID');
+  try {
+    const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    if (!claims || typeof claims !== 'object' || Array.isArray(claims)) {
+      throw new Error('CNYOS_OWNER_SESSION_INVALID');
+    }
+    return claims;
+  } catch {
+    throw new Error('CNYOS_OWNER_SESSION_INVALID');
+  }
+}
+
+export function validateOwnerUser(user, allowedEmails, verifiedAccessToken) {
   const email = String(user?.email || '').trim().toLowerCase();
+  const claims = decodeOwnerAccessTokenClaims(verifiedAccessToken);
   const providers = new Set([
     user?.app_metadata?.provider,
     ...(Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers : []),
@@ -61,7 +123,23 @@ export function validateOwnerUser(user, allowedEmails) {
 
   if (!UUID_PATTERN.test(String(user?.id || '')) || !email) throw new Error('CNYOS_OWNER_SESSION_INVALID');
   if (!user?.email_confirmed_at && !user?.confirmed_at) throw new Error('CNYOS_OWNER_EMAIL_UNCONFIRMED');
-  if (!providers.has('google')) throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
+  if (String(claims.sub || '') !== user.id
+    || String(claims.email || '').trim().toLowerCase() !== email) {
+    throw new Error('CNYOS_OWNER_SESSION_INVALID');
+  }
+  const authenticationMethods = new Set((Array.isArray(claims.amr) ? claims.amr : [])
+    .map(reference => typeof reference === 'string' ? reference : reference?.method)
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean));
+  // The token has already been verified by Supabase /auth/v1/user. Requiring
+  // an OAuth AMR plus a Google-only identity prevents a password session on a
+  // linked account from entering the Owner console.
+  if (authenticationMethods.size !== 1
+    || !authenticationMethods.has('oauth')
+    || providers.size !== 1
+    || !providers.has('google')) {
+    throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
+  }
   if (!allowedEmails.includes(email)) throw new Error('CNYOS_OWNER_NOT_AUTHORIZED');
   return Object.freeze({ id: user.id, email });
 }
@@ -71,14 +149,25 @@ export function normalizeSubscriptionRequest(value) {
   const requestId = String(body.requestId || '').trim();
   const clinicId = String(body.clinicId || '').trim();
   const clinicCode = String(body.clinicCode || '').trim().toUpperCase();
+  const expectedVersion = body.expectedVersion;
   const reason = String(body.reason || '').trim();
   if (!UUID_PATTERN.test(requestId) || !UUID_PATTERN.test(clinicId)) {
     throw new Error('CNYOS_OWNER_CONTROL_INPUT_INVALID');
   }
   if (!CLINIC_CODE_PATTERN.test(clinicCode)) throw new Error('CNYOS_OWNER_CLINIC_CODE_INVALID');
   if (typeof body.enabled !== 'boolean') throw new Error('CNYOS_OWNER_STATE_INVALID');
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+    throw new Error('CNYOS_OWNER_SUBSCRIPTION_VERSION_INVALID');
+  }
   if (reason.length < 8 || reason.length > 500) throw new Error('CNYOS_OWNER_REASON_INVALID');
-  return Object.freeze({ requestId, clinicId, clinicCode, enabled: body.enabled, reason });
+  return Object.freeze({
+    requestId,
+    clinicId,
+    clinicCode,
+    enabled: body.enabled,
+    expectedVersion,
+    reason
+  });
 }
 
 export async function readOwnerJson(request, maxBytes = 8192) {
@@ -129,7 +218,9 @@ export function ownerPublicError(error) {
   const status = code === 'CNYOS_OWNER_SESSION_REQUIRED' || code === 'CNYOS_OWNER_SESSION_INVALID' ? 401
     : code === 'CNYOS_OWNER_NOT_AUTHORIZED' || code === 'CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED' || code === 'CNYOS_OWNER_EMAIL_UNCONFIRMED' || code === 'CNYOS_OWNER_CLINIC_NOT_ALLOWED' ? 403
       : code === 'CNYOS_OWNER_REQUEST_TOO_LARGE' ? 413
-        : code === 'CNYOS_OWNER_CONTROL_DISABLED' || code === 'CNYOS_OWNER_DATABASE_CONFIG_MISSING' || code === 'CNYOS_OWNER_EMAILS_INVALID' || code === 'CNYOS_OWNER_CLINIC_CODES_INVALID' || code === 'CNYOS_OWNER_PROJECT_REF_INVALID' || code === 'CNYOS_OWNER_PROJECT_MISMATCH' ? 503
+        : code === 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT' || code === 'CNYOS_OWNER_REQUEST_ID_CONFLICT' ? 409
+        : code === 'CNYOS_OWNER_DEPLOY_CONTEXT_DENIED' ? 403
+        : code === 'CNYOS_OWNER_CONTROL_DISABLED' || code === 'CNYOS_OWNER_DATABASE_CONFIG_MISSING' || code === 'CNYOS_OWNER_EMAILS_INVALID' || code === 'CNYOS_OWNER_CLINIC_CODES_INVALID' || code === 'CNYOS_OWNER_PROJECT_REF_INVALID' || code === 'CNYOS_OWNER_PROJECT_MISMATCH' || code === 'CNYOS_OWNER_ENVIRONMENT_INVALID' || code === 'CNYOS_OWNER_DEPLOYMENT_INVALID' || code === 'CNYOS_OWNER_PRODUCTION_DENYLIST_REQUIRED' || code === 'CNYOS_OWNER_PRODUCTION_DENYLIST_INVALID' || code === 'CNYOS_OWNER_PRODUCTION_TARGET_DENIED' || code === 'CNYOS_OWNER_SITE_CONFIG_INVALID' || code === 'CNYOS_OWNER_RUNTIME_MISMATCH' ? 503
         : code.includes('INPUT') || code.includes('INVALID') || code.includes('MISMATCH') || code.includes('REASON') ? 400
           : 500;
   const safeCode = /^CNYOS_OWNER_[A-Z0-9_]{3,80}$/.test(code) ? code : 'CNYOS_OWNER_CONTROL_FAILED';

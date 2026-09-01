@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "deploymentId": "jitarsa-clinical-staging",
+  "brand": {
+    "appName": "Jitarsa Clinical OS",
+    "shortName": "JITARSA",
+    "browserTitle": "Jitarsa Clinical OS",
+    "nameTh": "คลินิกจิตอาสา",
+    "nameEn": "Jitarsa Clinic",
+    "productName": "CNYOS",
+    "descriptor": "JITARSA\nISOLATED STAGING — SYNTHETIC DATA ONLY",
+    "mark": "J",
+    "logoUrl": "",
+    "colors": {
+      "primary950": "#20253d",
+      "primary900": "#2b3150",
+      "primary800": "#39416a",
+      "primary700": "#4a5486",
+      "primary100": "#e7e9f2",
+      "primary50": "#f4f5f9",
+      "accent": "#b56a32",
+      "accentSoft": "#f1dfcf",
+      "surface": "#fffefa",
+      "background": "#f6f4ef"
+    }
+  },
+  "tenant": {
+    "expectedClinicId": "7f760bc7-8a6f-4bfe-8bf3-5c349a15c070",
+    "expectedClinicCode": "JITARSA-STG"
+  },
+  "database": {
+    "provider": "supabase",
+    "url": "https://qbkuyjavtvjdzfdprgqa.supabase.co",
+    "publishableKey": "sb_publishable_REPLACE_AFTER_BOOTSTRAP"
+  },
+  "auth": {
+    "redirectOrigin": "https://jitarsa-staging.netlify.app",
+    "provider": "google"
+  },
+  "identity": {
+    "qrIssuer": "JITARSA-STG"
+  },
+  "safety": {
+    "previewLocked": true
+  }
+}

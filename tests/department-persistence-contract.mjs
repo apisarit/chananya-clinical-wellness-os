@@ -15,6 +15,9 @@ const searchSelect = read('searchable-select.js');
 const bodyMap = read('body-pain-map.js');
 const bodyFigure = read('bodymap-figures.svg');
 const backupWorker = read('netlify/functions/database-backup.mts');
+const backupBackground = read('netlify/functions/database-backup-background.mts');
+const backupRecovery = read('netlify/functions/database-backup-recovery.mts');
+const backupRuntime = read('netlify/functions/_shared/database-backup-runtime.mjs');
 const backupHelper = read('netlify/functions/_shared/database-backup.mjs');
 const runbook = read('docs/DEPARTMENT_ACCESS_AND_BACKUPS.md');
 
@@ -114,10 +117,14 @@ assert.doesNotMatch(bodyFigure, /(?:href|src)=["']https?:\/\//, 'body-map asset 
 assert.match(bodyFigure, /linearGradient id="skin"/, 'body map must use the polished clinical illustration');
 
 assert.match(backupWorker, /schedule:\s*'0 20 \* \* \*'/, 'backup worker must run daily');
-assert.match(backupWorker, /GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON/);
-assert.match(backupWorker, /GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID/);
-assert.match(backupWorker, /BACKUP_ENVIRONMENT/);
-assert.match(backupWorker, /BACKUP_PRODUCTION_SUPABASE_URL/);
+assert.match(backupBackground, /handleBackgroundBackup/, 'heavy backup work must use a Netlify background function');
+assert.match(backupRecovery, /handleBackupRecovery/, 'a bounded scheduled monitor must recover stale same-slot leases');
+assert.match(backupRuntime, /GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_BASE64/);
+assert.match(backupRuntime, /resolveGoogleServiceAccountCredential/);
+assert.match(backupRuntime, /BACKUP_GOOGLE_SERVICE_ACCOUNT_DIRECT_ENV_FORBIDDEN/);
+assert.match(backupRuntime, /GOOGLE_DRIVE_TRANSACTIONS_FOLDER_ID/);
+assert.match(backupRuntime, /BACKUP_ENVIRONMENT/);
+assert.match(backupRuntime, /BACKUP_PRODUCTION_SUPABASE_URL/);
 assert.match(backupHelper, /createCipheriv\('aes-256-gcm'/, 'backup payload must use authenticated AES-256-GCM');
 assert.match(backupHelper, /plaintext_sha256/);
 assert.match(backupHelper, /ciphertext_sha256/);

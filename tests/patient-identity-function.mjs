@@ -3,6 +3,7 @@ import {
   allowedRequestOrigin,
   createOneTimeCredential,
   hmacSha256,
+  normalizeClinicId,
   normalizeLinkCode,
   normalizePatientId,
   publicError,
@@ -24,6 +25,9 @@ assert.equal(normalizeLinkCode('ab-cd ef12-3456'), 'ABCDEF123456');
 assert.throws(() => normalizeLinkCode('NOT-A-CODE'), /LINK_CODE_FORMAT_INVALID/);
 assert.equal(normalizePatientId('a8098c1a-f86e-4a42-a72f-065ee44c9a03'), 'a8098c1a-f86e-4a42-a72f-065ee44c9a03');
 assert.throws(() => normalizePatientId('patient-1'), /PATIENT_ID_INVALID/);
+assert.equal(normalizeClinicId('a8098c1a-f86e-4a42-a72f-065ee44c9a03'), 'a8098c1a-f86e-4a42-a72f-065ee44c9a03');
+assert.equal(normalizeClinicId('00000000-0000-0000-0000-000000000001'), '00000000-0000-0000-0000-000000000001');
+assert.throws(() => normalizeClinicId('clinic-1'), /CNYOS_EXPECTED_CLINIC_ID_INVALID/);
 
 const credential = createOneTimeCredential();
 assert.match(credential.token, /^[A-Za-z0-9_-]{43}$/);
@@ -129,9 +133,59 @@ await assert.rejects(
 
 assert.deepEqual(publicError(new Error('RATE_LIMITED')), { code: 'RATE_LIMITED', status: 429 });
 assert.deepEqual(publicError(new Error('LINE_ID_TOKEN_EXPIRED')), { code: 'LINE_ID_TOKEN_EXPIRED', status: 401 });
+assert.deepEqual(publicError(new Error('CNYOS_SUBSCRIPTION_SUSPENDED')), {
+  code: 'CNYOS_SUBSCRIPTION_SUSPENDED',
+  status: 503
+});
 assert.deepEqual(publicError(new Error('database connection string')), {
   code: 'PATIENT_IDENTITY_REQUEST_FAILED',
   status: 500
 });
+
+// An OFF clinic is rejected before rate-limit state or LINE token verification.
+const previousNetlify = globalThis.Netlify;
+const previousFetch = globalThis.fetch;
+const patientFetches = [];
+globalThis.Netlify = {
+  env: {
+    get(name) {
+      return {
+        LINE_LIFF_ID: 'test-liff',
+        LINE_LOGIN_CHANNEL_ID: 'test-login-channel',
+        PATIENT_IDENTITY_HMAC_SECRET: secret,
+        PATIENT_QR_ISSUER: 'TEST',
+        SUPABASE_URL: 'https://db.example',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+        CNYOS_RUNTIME_EXPECTED_CLINIC_ID: '00000000-0000-0000-0000-000000000001'
+      }[name] || '';
+    }
+  }
+};
+globalThis.fetch = async (url, options) => {
+  patientFetches.push({ url: String(url), options });
+  return new Response(JSON.stringify({ message: 'CNYOS_SUBSCRIPTION_SUSPENDED' }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' }
+  });
+};
+try {
+  const { default: patientIdentityHandler } = await import('../netlify/functions/patient-identity.mts?off-contract');
+  const response = await patientIdentityHandler(new Request(
+    'https://patient.example/api/patient-identity',
+    {
+      method: 'POST',
+      headers: { origin: 'https://patient.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'status', idToken: 'must-not-be-verified' })
+    }
+  ), { ip: '127.0.0.1', requestId: 'off-contract' });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { ok: false, code: 'CNYOS_SUBSCRIPTION_SUSPENDED' });
+  assert.equal(patientFetches.length, 1);
+  assert.match(patientFetches[0].url, /\/rpc\/assert_clinic_subscription_active$/);
+  assert.doesNotMatch(patientFetches[0].url, /api\.line\.me|consume_patient_identity_rate_limit/);
+} finally {
+  globalThis.fetch = previousFetch;
+  globalThis.Netlify = previousNetlify;
+}
 
 console.log('Patient identity function tests passed: crypto, LINE verification, RPC isolation, origin, input limits and safe errors');

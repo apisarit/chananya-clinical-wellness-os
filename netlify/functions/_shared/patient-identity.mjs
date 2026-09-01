@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, randomInt } from 'node:crypto';
 
 const LINE_VERIFY_URL = 'https://api.line.me/oauth2/v2.1/verify';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CLINIC_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LINK_CODE_PATTERN = /^[0-9A-F]{12}$/;
 
 export function sha256(value) {
@@ -22,6 +23,12 @@ export function normalizeLinkCode(value) {
 export function normalizePatientId(value) {
   const normalized = String(value || '').trim();
   if (!UUID_PATTERN.test(normalized)) throw new Error('PATIENT_ID_INVALID');
+  return normalized;
+}
+
+export function normalizeClinicId(value) {
+  const normalized = String(value || '').trim();
+  if (!CLINIC_UUID_PATTERN.test(normalized)) throw new Error('CNYOS_EXPECTED_CLINIC_ID_INVALID');
   return normalized;
 }
 
@@ -120,10 +127,12 @@ export function publicError(error) {
     'CONSENT_REQUIRED',
     'PATIENT_ID_INVALID',
     'PATIENT_IDENTITY_NOT_LINKED',
+    'CNYOS_SUBSCRIPTION_SUSPENDED',
     'RATE_LIMITED'
   ]);
   const code = known.has(error?.message) ? error.message : 'PATIENT_IDENTITY_REQUEST_FAILED';
   const status = code === 'RATE_LIMITED' ? 429
+    : code === 'CNYOS_SUBSCRIPTION_SUSPENDED' ? 503
     : code.includes('TOKEN') ? 401
       : code.includes('INVALID') || code.includes('LINKED') || code === 'CONSENT_REQUIRED' ? 400
         : 500;

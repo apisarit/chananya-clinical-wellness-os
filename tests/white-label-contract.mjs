@@ -24,6 +24,8 @@ assert.equal(customer.brand.appName, 'CUSTOMER CLINIC OS');
 assert.equal(customer.brand.shortName, 'CUSTOMER CLINIC');
 assert.equal(customer.brand.browserTitle, 'CUSTOMER CLINIC OS');
 assert.equal(customer.auth.provider, 'google');
+assert.match(customer.tenant.expectedClinicId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+assert.equal(customer.identity.qrIssuer, customer.tenant.expectedClinicCode);
 assert.match(customer.database.url, /^https:\/\//);
 assert.match(renderTenantConfig(customer), /window\.CLINICAL_OS_CONFIG = Object\.freeze/);
 assert.doesNotMatch(renderBrandConfig(customer), /"database"|publishableKey|supabase\.co/i);
@@ -49,6 +51,14 @@ assert.throws(
 assert.throws(
   () => validateTenantConfig({ ...example, tenant: { ...example.tenant, expectedClinicCode: 'bad code' } }),
   /expectedClinicCode/
+);
+assert.throws(
+  () => validateTenantConfig({ ...example, tenant: { ...example.tenant, expectedClinicId: '10000000-0000-0000-0000-000000000002' } }),
+  /version 4 UUID/
+);
+assert.throws(
+  () => validateTenantConfig({ ...example, identity: { qrIssuer: 'OTHER' } }),
+  /must exactly match/
 );
 assert.throws(
   () => validateTenantConfig({ ...example, brand: { ...example.brand, browserTitle: 'x'.repeat(81) } }),
@@ -87,7 +97,7 @@ const stagingExample = {
   deploymentId: 'customer-clinic-staging',
   tenant: {
     ...example.tenant,
-    expectedClinicId: '10000000-0000-0000-0000-000000000002',
+    expectedClinicId: '10000000-0000-4000-8000-000000000002',
     expectedClinicCode: 'CUSTOMER-STG'
   },
   database: { ...example.database, url: 'https://customer-staging-project.supabase.co' },
@@ -174,7 +184,7 @@ assert.throws(
     },
     cwd: root
   }),
-  /clinic UUID/
+  /clinic UUID|version 4 UUID/
 );
 assert.throws(
   () => loadTenantConfig({

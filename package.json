@@ -10,7 +10,10 @@
     "build": "node scripts/generate-tenant-config.mjs && node scripts/import-pikad-staging.mjs && node scripts/import-ttm-dkr-staging.mjs",
     "tenant:bootstrap-sql": "node scripts/generate-tenant-bootstrap-sql.mjs",
     "migration:ledger-repair-sql": "node scripts/generate-migration-ledger-repair-sql.mjs",
-    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/browser-security-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/ttm-reasoning-contract.mjs && node tests/ttm-dkr-complete-contract.mjs && node tests/pikad-knowledge-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/line-oa-contract.mjs && node tests/clinical-outcomes-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/prescription-dispensing-contract.mjs && node tests/department-persistence-contract.mjs && node tests/atomic-production-contract.mjs && node tests/independent-quality-contract.mjs && node tests/white-label-contract.mjs && node tests/owner-control-contract.mjs && node tests/migration-ledger-contract.mjs && node tests/locked-staging-smoke.mjs && node tests/staging-safety-contract.mjs && node tests/patient-identity-function.mjs && node tests/database-backup.mjs && node tests/restore-set.mjs && node tests/commercial-release-gate.mjs && node tests/postgres-behavioral-smoke.mjs",
+    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/browser-security-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/ttm-reasoning-contract.mjs && node tests/ttm-dkr-complete-contract.mjs && node tests/pikad-knowledge-contract.mjs && node tests/hybrid-identity-contract.mjs && node tests/line-oa-contract.mjs && node tests/clinical-outcomes-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/clinical-signoff-delete-hardening-contract.mjs && node tests/prescription-dispensing-contract.mjs && node tests/department-persistence-contract.mjs && node tests/atomic-production-contract.mjs && node tests/independent-quality-contract.mjs && node tests/white-label-contract.mjs && node tests/owner-control-contract.mjs && node tests/owner-subscription-concurrency-contract.mjs && node tests/owner-subscription-suspension-boundary-contract.mjs && node tests/owner-control-historical-replay-guard-contract.mjs && node tests/google-service-account-credential.mjs && node tests/owner-drive-function-contract.mjs && node tests/owner-drive-ui-contract.mjs && node tests/owner-drive-assignment-db-contract.mjs && node tests/owner-drive-backup-evidence-contract.mjs && node tests/service-role-data-api-contract.mjs && node tests/migration-ledger-contract.mjs && node tests/locked-staging-smoke.mjs && node tests/staging-safety-contract.mjs && node tests/patient-identity-function.mjs && node tests/database-backup.mjs && node tests/database-backup-drive-destination-contract.mjs && node tests/database-backup-background-contract.mjs && node tests/restore-set.mjs && node tests/restore-source-assignment-contract.mjs && node tests/commercial-release-gate.mjs && node tests/postgres-behavioral-smoke.mjs",
+    "credential:drive:provision": "node scripts/provision-google-service-account-blob.mjs",
+    "verify:backup-route-denial": "node scripts/verify-netlify-scheduled-route-denial.mjs",
+    "verify:backup-deploy-metadata": "node scripts/verify-netlify-scheduled-deploy-metadata.mjs",
     "verify:backup": "node scripts/verify-backup.mjs",
     "restore:fetch": "node scripts/fetch-drive-restore-set.mjs",
     "restore:verify-set": "node scripts/verify-restore-set.mjs",
@@ -23,6 +26,7 @@
     "staging:smoke:locked": "node scripts/verify-locked-staging.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "10.0.11",
     "qrcode": "1.5.4"
   },
   "devDependencies": {

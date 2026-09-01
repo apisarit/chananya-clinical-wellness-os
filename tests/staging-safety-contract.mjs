@@ -40,7 +40,7 @@ assert.throws(
     },
     cwd: root
   }),
-  /clinic UUID/
+  /clinic UUID|version 4 UUID/
 );
 assert.throws(
   () => loadStagingTarget({ env: { ...baseEnv, CLINICAL_OS_STAGING_ACK: '' }, cwd: root }),
