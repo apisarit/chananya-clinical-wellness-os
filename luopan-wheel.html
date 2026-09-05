@@ -6,12 +6,12 @@
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="Luopan 23 ชั้น: กาลสมุฏฐาน โหราศาสตร์ไทย และ BaZi บนวงวันเกิดที่เริ่มปีจากเมษายน">
   <title>U Synthesise · Luopan 360° v1.0.0 | CNYOS</title>
-  <link rel="stylesheet" href="luopan.css?v=u-synthesise1">
+  <link rel="stylesheet" href="luopan.css?v=u-synthesise-classical1">
   <script src="luopan-frame-guard.js?v=luopan-auth1"></script>
   <script defer src="luopan-knowledge.js?v=1.0.0"></script>
   <script defer src="luopan-astronomy.js?v=2.1.19"></script>
   <script defer src="luopan.js?v=1.0.0"></script>
-  <script type="module" src="u-synthesise.js?v=0.1.0"></script>
+  <script type="module" src="u-synthesise.js?v=0.2.0"></script>
 </head>
 <body>
   <main class="luopan-site-main">
@@ -20,10 +20,12 @@
   <p id="us-version" class="text-small">กำลังเปิดฐานความรู้</p>
   <p class="text-small luopan-intro">เครื่องมือศึกษาและเทียบองค์ความรู้ · ข้อมูลที่กรอกคำนวณในหน้านี้ ไม่บันทึกลงเวชระเบียน</p>
   <label class="form-label us-mode-control">เลือกการอ่านวง
-    <select id="us-mode" class="form-select"><option value="astro_medical">เวลาและองค์ความรู้ · กาลสมุฏฐานเป็นแกน</option><option value="feng_shui">ทิศทาง · 24 ขุนเขาคงที่</option></select>
+    <select id="us-mode" class="form-select"><option value="astro_medical">เวลาและองค์ความรู้ · กาลสมุฏฐานเป็นแกน</option><option value="feng_shui">ทิศทาง · หล่อแกดั้งเดิม 14 ชั้น</option></select>
   </label>
-  <section id="us-spatial" hidden aria-label="ทิศทาง 24 ขุนเขา">
-    <h2>24 ขุนเขา · ทิศเหนือแม่เหล็ก</h2>
+  <section id="us-spatial" hidden aria-label="หล่อแกดั้งเดิม 14 ชั้น">
+    <p class="us-eyebrow">CLASSICAL LUOPAN · 三合 / 三元</p>
+    <h2>หล่อแกดั้งเดิม · 14 ชั้นความรู้</h2>
+    <p>สามจาน · ปากว้า · ลั่วซู · ธาตุ · สามหยวน · ฉางเซิง</p>
     <p class="text-small">กรอกค่าที่วัดจากเข็มทิศ ตารางทิศคงที่ตามเหนือแม่เหล็ก โหมดนี้ยังไม่อ่านเซนเซอร์มือถือ</p>
     <form id="us-bearing-form" class="viz-controls">
       <label class="form-label">องศาทิศที่วัดได้
@@ -35,9 +37,67 @@
       <button class="btn" type="submit">อ่านขุนเขา</button>
     </form>
     <p id="us-error" class="text-destructive" role="alert" hidden></p>
-    <svg id="us-compass" viewBox="0 0 500 500" role="img" aria-label="ทิศ 8 และ 24 ขุนเขา"></svg>
     <p id="us-result" aria-live="polite">รอค่าทิศทาง</p>
-    <p id="us-overlay" class="text-small"></p>
+    <p id="us-reading-origin" class="text-small"></p>
+    <div class="us-atlas-toolbar">
+      <label class="form-label">ชุดวงที่แสดง<select id="us-atlas-preset" class="form-select"></select></label>
+      <label class="form-label">ขนาดวง<select id="us-zoom" class="form-select"><option value="1">พอดีหน้าจอ</option><option value="1.5">ขยาย 150%</option><option value="2">ขยาย 200%</option><option value="3">ขยาย 300%</option></select></label>
+    </div>
+    <details class="us-ring-options"><summary>เลือกเปิด–ปิดวงทีละชั้น</summary><div id="us-ring-switches"></div></details>
+    <p id="us-wheel-count" class="text-small"></p>
+    <p class="text-small">แตะวงเพื่อทดลองอ่าน · ขยายแล้วเลื่อนดูรายละเอียด · สีเน้นคือช่องที่เข็มตัดผ่าน</p>
+    <div class="us-compass-scroll" tabindex="0" role="region" aria-label="วงหล่อแก ขยายและเลื่อนดูได้">
+      <svg id="us-compass" viewBox="0 0 980 980" role="img" aria-label="หล่อแกหลายชั้น เหนือแม่เหล็กอยู่ด้านบน"></svg>
+    </div>
+    <label class="form-label us-slider-label">ทดลองเลื่อนเข็มอ่าน 0–359.9°<input id="us-bearing-slider" class="form-range" type="range" min="0" max="359.9" step="0.1" value="0"></label>
+    <label class="form-label">อ่านความหมายของชั้น<select id="us-layer-select" class="form-select"></select></label>
+    <article id="us-layer-detail" class="us-layer-detail" aria-live="polite"></article>
+    <div id="us-axis-summary" class="us-axis-summary"></div>
+    <details class="us-atlas-section" open>
+      <summary>เข็มเดียวอ่านทุกชั้น · ผลเทียบองศา</summary>
+      <p class="text-small">ช่วงองศานับต้นช่วงและไม่รวมปลายช่วง ค่าที่คร่อมเส้นแบ่งให้ดูช่วงคลาดเคลื่อนประกอบ</p>
+      <div class="table-responsive"><table class="table us-reading-table"><thead><tr><th scope="col">วง</th><th scope="col">สิ่งที่เข็มตัดผ่าน</th></tr></thead><tbody id="us-ring-results"></tbody></table></div>
+    </details>
+    <details class="us-atlas-section">
+      <summary>12 ฉางเซิง · เปลี่ยนเกณฑ์ตารางศึกษา</summary>
+      <p>เลือกธาตุและหยิน–หยางเพื่อดูระยะบนจานฟ้า เป็นตารางเรียนรู้ก่อนกำหนดน้ำเข้า–ออกจริง</p>
+      <div class="us-atlas-toolbar">
+        <label class="form-label">ธาตุของตาราง<select id="us-life-element" class="form-select"><option value="water">น้ำ · 水</option><option value="wood">ไม้ · 木</option><option value="fire">ไฟ · 火</option><option value="metal">ทอง · 金</option></select></label>
+        <label class="form-label">ลำดับระยะ<select id="us-life-polarity" class="form-select"><option value="yang">หยาง · เรียงไปข้างหน้า</option><option value="yin">หยิน · เรียงย้อนกลับ</option></select></label>
+      </div>
+      <p class="text-small">ตัวเลือกนี้เปลี่ยนเฉพาะชั้นฉางเซิง จุดเริ่มกับลำดับระยะอ้างตารางของ劉啟治 / 聚賢館</p>
+    </details>
+    <details class="us-atlas-section">
+      <summary>24 ขุนเขา · คำอ่านไทยและรายละเอียดครบชุด</summary>
+      <p>แตะชื่อขุนเขาเพื่อตั้งเข็มทดลองที่กึ่งกลางช่อง</p>
+      <label class="form-label">ค้นชื่อจีน ไทย พินอิน ทิศ หรือธาตุ<input id="us-mountain-filter" class="form-control" type="search" placeholder="เช่น กุน / Hai / NW3 / น้ำ" autocomplete="off"></label>
+      <p id="us-mountain-count" class="text-small" aria-live="polite"></p><div id="us-mountain-cards" class="us-catalog-grid"></div>
+    </details>
+    <details class="us-atlas-section">
+      <summary>ปากว้า 8 ข่วย · ก่อนฟ้า / หลังฟ้า</summary>
+      <p>ขีดเต็มคือหยาง ขีดขาดคือหยิน อ่านเส้นจากล่างขึ้นบน ภาพธรรมชาติและครอบครัวเป็นภาพแทนตาม《說卦傳》</p>
+      <div id="us-trigram-cards" class="us-catalog-grid"></div>
+    </details>
+    <details class="us-atlas-section">
+      <summary>เหอถู–ลั่วซู · คู่ตัวเลขกับธาตุ</summary>
+      <h3>ลั่วซู · 洛書</h3><p>ผังนี้วางเหนือด้านบนให้ตรงกับวง เข็มขัดรอบนอกคือเลข 8 วัง เลข 5 อยู่ตรงกลาง ทุกแถว คอลัมน์ และแนวทแยงรวม 15</p>
+      <div id="us-loshu-grid" class="us-loshu-grid" aria-label="ลั่วซู เหนือด้านบน"></div>
+      <h3>เหอถู · 河圖</h3><p>คู่เลขก่อเกิด–สำเร็จรูปทั้งห้า แยกจากเลขลั่วซูประจำวัง</p>
+      <table class="table"><thead><tr><th>ตำแหน่ง</th><th>คู่เลข</th><th>ธาตุ</th></tr></thead><tbody id="us-hetu-rows"></tbody></table>
+    </details>
+    <details class="us-atlas-section">
+      <summary>คลังอี้จิง 64 ข่วย · เลือกข่วยบน–ล่าง</summary>
+      <p>ตารางศึกษาตามลำดับเหวินหวัง เลขข่วยในตารางนี้ไม่ได้แทนองศาฮวงจุ้ย</p>
+      <div class="us-atlas-toolbar">
+        <label class="form-label">ข่วยบน · 外卦<select id="us-hex-upper" class="form-select"></select></label>
+        <label class="form-label">ข่วยล่าง · 內卦<select id="us-hex-lower" class="form-select"></select></label>
+      </div>
+      <article id="us-hex-result" class="us-hex-result" aria-live="polite"></article>
+      <div class="table-responsive"><table class="us-hex-table"><caption>แถว = ข่วยล่าง · คอลัมน์ = ข่วยบน · แตะเพื่ออ่าน</caption><tbody id="us-hex-matrix"></tbody></table></div>
+    </details>
+    <details class="us-atlas-section"><summary>คู่มืออ่านหล่อแกและเกณฑ์แต่ละสำนัก</summary><div id="us-study-guide"></div></details>
+    <details class="us-atlas-section"><summary>ที่มาและตำราอ้างอิง</summary><p>เรียบเรียงคำอธิบายไทยเพื่อการศึกษา แยกต้นฉบับเก่า ผัง และเกณฑ์ผู้สอนไว้ตามแต่ละชั้น</p><ul id="us-classical-sources"></ul></details>
+    <details class="us-atlas-section"><summary>เชื่อมสัญลักษณ์จากยามเกิด</summary><p id="us-overlay" class="text-small"></p></details>
   </section>
 <div id="luopan-birthdate-ray">
 
