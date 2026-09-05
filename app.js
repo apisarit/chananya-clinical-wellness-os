@@ -467,6 +467,7 @@
       if (!session) { location.replace('/login.html'); return; }
       profile = await runtime.getProfile(session.user.id);
       if (!profile) throw new Error('ไม่พบ Profile');
+      if (profile.access_context_ready !== true) { runtime.showAccountStatus(profile, session); return; }
       role = runtime.roleOf(profile) || 'viewer';
       applyRole();
       await detectIdentityBackend();
