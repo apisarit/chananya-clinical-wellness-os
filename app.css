@@ -72,6 +72,9 @@ a { color: inherit; text-decoration: none; }
 #boot > div { max-width: 420px; }
 #boot h2 { margin: 0 0 8px; font-size: clamp(1.35rem, 3vw, 1.8rem); }
 #boot p { margin: 0; color: rgba(255,255,255,.72); }
+.account-status-actions { display: grid; gap: 12px; margin-top: 24px; }
+.account-status-actions p { overflow-wrap: anywhere; }
+.account-status-actions .btn { background: #fff; color: #20253d; }
 .spinner { width: 42px; height: 42px; margin: 0 auto 18px; border: 4px solid rgba(255,255,255,.24); border-top-color: #fff; border-radius: 50%; animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

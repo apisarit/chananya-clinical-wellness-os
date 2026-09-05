@@ -37,7 +37,10 @@
     const [tasks, actions, users, summaries] = await Promise.all([
       query('approval_tasks', '*', 'requested_at'),
       query('approval_actions', '*', 'acted_at'),
-      query('user_access_summary'),
+      window.ChananyaRuntime.accountRequest('staff_list').then(result => {
+        if (result.truncated) toast('แสดงรายชื่อสูงสุด 500 บัญชี');
+        return result.users;
+      }),
       query('admin_task_summary')
     ]);
     data = { tasks, actions, users, summary: summaries[0] || {} };
@@ -60,7 +63,7 @@
   }
 
   function renderUsers() {
-    $('#user-list').innerHTML = data.users.map(user => `<article class="item"><div><b>${esc(user.full_name || user.id)}</b><small>Operational: ${esc(user.role)} • System: ${esc(user.system_role)} • Effective: ${esc(user.effective_role)}</small></div><span class="badge">${esc(user.effective_role)}</span></article>`).join('') || '<p class="muted">ไม่พบผู้ใช้</p>';
+    $('#user-list').innerHTML = data.users.map(user => `<article class="item"><div><b>${esc(user.full_name || user.id)}</b><small>${esc(user.email || '')}</small><small>Operational: ${esc(user.role)} • System: ${esc(user.system_role)} • Effective: ${esc(user.effective_role)}</small></div><span class="badge">${esc(user.access_status === 'pending_approval' ? 'รอกำหนดสิทธิ์' : user.access_status === 'inactive' ? 'ระงับสมาชิก' : user.effective_role)}</span></article>`).join('') || '<p class="muted">ไม่พบผู้ใช้</p>';
   }
 
   function renderActions() {
@@ -74,9 +77,10 @@
     $('#stat-urgent').textContent = summary.urgent || 0;
     $('#stat-overdue').textContent = summary.overdue || 0;
     $('#stat-approved').textContent = summary.approved_today || 0;
-    const userOptions = options(data.users, user => `${user.full_name || user.id} — ${user.effective_role || user.role}`);
+    const label = user => `${user.full_name || user.id} · ${user.email || ''} — ${user.access_status === 'pending_approval' ? 'รอกำหนดสิทธิ์' : user.effective_role || user.role}`;
+    const userOptions = options(data.users, label);
     $('#staff-user').innerHTML = userOptions;
-    $('#system-user').innerHTML = userOptions;
+    $('#system-user').innerHTML = options(data.users.filter(user => user.access_status === 'active'), label);
     $('#super-admin-card').classList.toggle('hidden', systemRole !== 'super_admin');
     renderTasks();
     renderUsers();
@@ -175,6 +179,11 @@
   $('#task-form').addEventListener('submit', event => saveTask(event).catch(fail));
   $('#staff-role-form').addEventListener('submit', event => saveStaffRole(event).catch(fail));
   $('#system-role-form').addEventListener('submit', event => saveSystemRole(event).catch(fail));
+  $('#refresh-users').addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try { await load(); } catch (error) { fail(error); }
+    finally { $('#refresh-users').disabled = false; }
+  });
   $('#logout').addEventListener('click', async () => { await db.auth.signOut(); location.replace('/login.html'); });
   init();
 })();
