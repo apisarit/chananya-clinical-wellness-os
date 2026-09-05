@@ -23,11 +23,15 @@ jobs:
     environment: production
     env:
       PRODUCTION_RELEASE_ATTESTATION_JSON: ${{ secrets.PRODUCTION_RELEASE_ATTESTATION_JSON }}
+      EXPECTED_RELEASE_COMMIT: ${{ github.sha }}
+      RELEASE_GATE_EVIDENCE_DIR: artifacts/production-promotion/gate
     steps:
       - name: Require explicit promotion intent
         shell: bash
+        env:
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
-          test "${{ inputs.confirmation }}" = "PROMOTE_PRODUCTION" || {
+          test "$RELEASE_CONFIRMATION" = "PROMOTE_PRODUCTION" || {
             echo 'Promotion confirmation did not match PROMOTE_PRODUCTION.' >&2
             exit 1
           }
@@ -44,7 +48,6 @@ jobs:
         run: |
           test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -n "$PRODUCTION_RELEASE_ATTESTATION_JSON"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -52,21 +55,23 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Verify protected external approval and all exact-commit gates
+        run: npm run verify:production-promotion
+
       - name: Install locked dependencies
         run: npm ci
 
       - name: Re-run complete release contract suite
         run: npm run check
 
-      - name: Verify protected external approval and all exact-commit gates
-        run: npm run verify:production-promotion
-
       - name: Generate final exact-commit source evidence
+        if: always()
         run: npm run evidence:release
         env:
           RELEASE_EVIDENCE_DIR: artifacts/production-promotion
 
       - name: Retain production-promotion evidence
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: production-promotion-${{ github.sha }}-${{ github.run_id }}

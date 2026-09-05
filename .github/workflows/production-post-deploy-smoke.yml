@@ -30,8 +30,10 @@ jobs:
     steps:
       - name: Require explicit post-deploy verification intent
         shell: bash
+        env:
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
-          test "${{ inputs.confirmation }}" = "VERIFY_DEPLOYED_PRODUCTION" || {
+          test "$RELEASE_CONFIRMATION" = "VERIFY_DEPLOYED_PRODUCTION" || {
             echo 'Post-deploy confirmation did not match VERIFY_DEPLOYED_PRODUCTION.' >&2
             exit 1
           }

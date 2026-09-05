@@ -1,22 +1,92 @@
 {
   "schemaVersion": 1,
   "evidenceType": "cnyos_production_release_attestation",
-  "approvedForProduction": true,
+  "approvedForProduction": false,
   "releaseCommit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
-  "approvalReference": "REPLACE_WITH_RELEASE_REVIEW_OR_CHANGE_REFERENCE",
-  "approvedAt": "REPLACE_WITH_ISO_8601_TIMESTAMP",
-  "approvedBy": "REPLACE_WITH_ACCOUNTABLE_RELEASE_APPROVER",
+  "approvalReference": null,
+  "approvedAt": null,
+  "approvedBy": null,
   "realPatientDataAdmission": "blocked_pending_post_deploy_attestation",
   "gates": [
-    {"id":"owner_subscription_database_enforcement","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"authenticated_staging_all_roles","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"line_callback","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"encrypted_backup_restore_drill","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"privacy_security_legal_review","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"isolated_staging_migrations","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"independent_quality_segregation","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"managed_database_backup_pitr","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"operational_monitoring_incident_response","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"},
-    {"id":"release_provenance_ci_merge_protection","status":"passed","commit":"REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA","artifact":"REPLACE_WITH_EVIDENCE_REFERENCE","verifiedAt":"REPLACE_WITH_ISO_8601_TIMESTAMP","verifiedBy":"REPLACE_WITH_VERIFIER"}
+    {
+      "id": "owner_subscription_database_enforcement",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "authenticated_staging_all_roles",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "line_callback",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "encrypted_backup_restore_drill",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "privacy_security_legal_review",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "isolated_staging_migrations",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "independent_quality_segregation",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "managed_database_backup_pitr",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "operational_monitoring_incident_response",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "release_provenance_ci_merge_protection",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    }
   ]
 }

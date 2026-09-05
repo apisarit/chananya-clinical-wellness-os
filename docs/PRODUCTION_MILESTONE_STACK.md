@@ -2,6 +2,8 @@
 
 This document is the operational stack for moving CNYOS to a defensible production-grade release. It separates source completeness, live staging verification, operational readiness, pre-deployment approval, production deployment and admission of real patient data.
 
+For missing-approval diagnostics, exact-commit draft preparation and required workflow configuration, see [Release gate recovery](RELEASE_GATE_RECOVERY.md).
+
 ## Promotion and admission rule
 
 `release-readiness.json` is a **source-controlled fail-closed policy baseline**. It deliberately remains `commercialProductionReady=false`, with no `releaseCommit` and no embedded passed evidence. It must never be edited to approve the Git commit that contains it, because doing so would create a self-referential commit hash.

@@ -32,11 +32,15 @@ jobs:
       NETLIFY_DEPLOY_OUTPUT_PATH: artifacts/production-deploy/netlify-deploy.json
       NETLIFY_POST_DEPLOY_EVIDENCE_PATH: artifacts/production-deploy/netlify-after.json
       PUBLIC_DEPLOYMENT_EVIDENCE_PATH: artifacts/production-deploy/public-deployment.json
+      RELEASE_GATE_EVIDENCE_DIR: artifacts/production-deploy/gate
+      RELEASE_GATE_REQUIRE_DEPLOY_CONFIG: "true"
     steps:
       - name: Require explicit production deployment intent
         shell: bash
+        env:
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
-          test "${{ inputs.confirmation }}" = "DEPLOY_CNYOS_PRODUCTION" || {
+          test "$RELEASE_CONFIRMATION" = "DEPLOY_CNYOS_PRODUCTION" || {
             echo 'Production confirmation did not match DEPLOY_CNYOS_PRODUCTION.' >&2
             exit 1
           }
@@ -53,17 +57,17 @@ jobs:
         run: |
           test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -n "$PRODUCTION_RELEASE_ATTESTATION_JSON"
-          test -n "$NETLIFY_SITE_ID"
-          test -n "$PRODUCTION_SITE_URL"
-          test -n "$EXPECTED_PRODUCTION_HOST"
-          test -n "$NETLIFY_AUTH_TOKEN"
 
       - name: Set up application build runtime
         uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
+
+      - name: Require protected external approval and deployment configuration
+        run: npm run verify:production-promotion
+        env:
+          CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
 
       - name: Install locked application dependencies
         run: npm ci
@@ -73,9 +77,6 @@ jobs:
 
       - name: Re-run complete release contracts
         run: npm run check
-
-      - name: Require protected external approval and all exact-commit gates
-        run: npm run verify:production-promotion
 
       - name: Bind production build to exact commit and tree
         shell: bash
