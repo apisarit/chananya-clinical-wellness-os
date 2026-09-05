@@ -1,7 +1,7 @@
-import {identity, modules, layers, frames, mountains, bagua, elements, sources, rules} from './u-systesis-catalog.js';
-import {angle, readBearing, readBirthTime, branchBearingOverlay, relateElements, attachLegacyKnowledge} from './u-systesis-engine.js';
+import {identity, modules, layers, frames, mountains, bagua, elements, sources, rules} from './u-synthesise-catalog.js';
+import {angle, readBearing, readBirthTime, branchBearingOverlay, relateElements, attachLegacyKnowledge} from './u-synthesise-engine.js';
 
-export function mountUSystesis(document, window) {
+export function mountUSynthesise(document, window) {
   const q = id => document.getElementById(id);
   if (!q('us-mode')) return;
   const svg = q('us-compass'), NS = 'http://www.w3.org/2000/svg';
@@ -109,7 +109,7 @@ export function mountUSystesis(document, window) {
       link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
     }
   } catch {
-    q('us-version').textContent = 'U systesis: ฐานความรู้โหลดไม่ครบ กรุณาโหลดหน้าใหม่';
+    q('us-version').textContent = 'U Synthesise: ฐานความรู้โหลดไม่ครบ กรุณาโหลดหน้าใหม่';
     q('us-mode').disabled = true;
     return;
   }
@@ -125,6 +125,6 @@ export function mountUSystesis(document, window) {
 }
 
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => mountUSystesis(document, window), {once: true});
-  else mountUSystesis(document, window);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => mountUSynthesise(document, window), {once: true});
+  else mountUSynthesise(document, window);
 }

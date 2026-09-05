@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createHash} from 'node:crypto';
-import {identity, frames, sources, modules, mountains, bagua, stems, branches, layers, rules, seasonalCorrespondences} from '../knowledge/u-systesis/catalog.mjs';
-import {angle, readBearing, readKala, readChineseHour, clockPosition, parseCivilDateTime, civilYearPosition, readSolarTerm, branchBearingOverlay, relateElements, readBirthTime, attachLegacyKnowledge} from '../knowledge/u-systesis/engine.mjs';
+import {identity, frames, sources, modules, mountains, bagua, stems, branches, layers, rules, seasonalCorrespondences} from '../knowledge/u-synthesise/catalog.mjs';
+import {angle, readBearing, readKala, readChineseHour, clockPosition, parseCivilDateTime, civilYearPosition, readSolarTerm, branchBearingOverlay, relateElements, readBirthTime, attachLegacyKnowledge} from '../knowledge/u-synthesise/engine.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = name => fs.readFileSync(new URL(name, root), 'utf8');
@@ -74,7 +74,7 @@ assert.throws(() => branchBearingOverlay('戊'));
 
 const options = {era: 'BE', utcOffsetMinutes: 420};
 const birth = readBirthTime('29/10/2530 22.19', options);
-assert.equal(birth.system, 'U systesis');
+assert.equal(birth.system, 'U Synthesise');
 assert.equal(birth.civil.instant, '1987-10-29T15:19:00.000Z');
 assert.equal(birth.kala.name, 'ปิตตะ');
 assert.equal(birth.chineseHour.symbol, '亥');
@@ -133,4 +133,4 @@ assert.throws(() => { attached.legacy.source.ttmRaw.pop(); });
 const incomplete = structuredClone(legacy); incomplete.source.ttmRaw.pop();
 assert.throws(() => attachLegacyKnowledge(incomplete), /baseline changed/);
 
-console.log('U systesis foundation passed: separate coordinate frames, 24 mountains, uncertainty, Kala boundaries, calendar, Wuxing and lossless 113-rule legacy bridge');
+console.log('U Synthesise foundation passed: separate coordinate frames, 24 mountains, uncertainty, Kala boundaries, calendar, Wuxing and lossless 113-rule legacy bridge');
