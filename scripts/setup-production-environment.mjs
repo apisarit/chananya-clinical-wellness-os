@@ -37,6 +37,7 @@ export function prepareSetup({ commit, token, config, attestation, readiness, st
   if (config) {
     try {
       const normalized = validateTenantConfig(config);
+      requireCondition(!/REPLACE_WITH|PLACEHOLDER|YOUR_[A-Z]/i.test(normalized.database.publishableKey), 'PLACEHOLDER_DATABASE_KEY_REJECTED');
       requireCondition(normalized.auth.redirectOrigin === target.origin, 'TENANT_ORIGIN_MISMATCH');
       requireCondition(!/(?:^|[-_.])(staging|stage|stg|nonprod|test)(?:$|[-_.])/i.test(normalized.deploymentId), 'STAGING_TENANT_REJECTED');
       requireCondition(!/(?:^|[-_.])(staging|stage|stg|nonprod|test)(?:$|[-_.])/i.test(normalized.tenant.expectedClinicCode), 'STAGING_CLINIC_REJECTED');

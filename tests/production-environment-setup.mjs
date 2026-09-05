@@ -32,6 +32,7 @@ for (const value of [stagingConfig, { ...config, deploymentId: 'cnyos-staging' }
 }
 assert(prepareSetup({ ...input, attestation: prepareProductionAttestation(readiness, commit) }).blockers.includes('PRODUCTION_ATTESTATION_NOT_ACCEPTED'));
 assert(prepareSetup({ ...input, attestation: { ...attestation, releaseCommit: 'b'.repeat(40) } }).blockers.includes('PRODUCTION_ATTESTATION_NOT_ACCEPTED'));
+assert(prepareSetup({ ...input, config: { ...config, database: { ...config.database, publishableKey: 'sb_publishable_REPLACE_WITH_CUSTOMER_KEY' } } }).blockers.includes('PRODUCTION_TENANT_CONFIG_INVALID_OR_STAGING'));
 assert.throws(() => parseArgs(['--config']), /INPUT_FILE_ARGUMENT_REQUIRED/);
 assert.throws(() => parseArgs(['--token', token]), /UNKNOWN_SETUP_ARGUMENT/);
 

@@ -33,6 +33,8 @@ npm run setup:production-environment -- --config /secure/cnyos-production.json -
 
 Before any write, the helper validates all inputs and verifies remote `main`, repository administrator access, main branch protection, required production reviewers, and a deployment branch policy. If any check fails, it writes nothing. It never adds or relaxes these controls itself.
 
+Approval validation checks the supplied record's fields, gate statuses and commit binding. It does not independently perform the ten operational reviews or verify every referenced evidence artifact. Those reviews remain the accountable reviewers' responsibility.
+
 The destination is fixed to `apisarit/chananya-clinical-wellness-os`, environment `production`. It writes three variables, then the Netlify token and tenant config, and stores the validated approval last. Values are passed through stdin to GitHub CLI; the CLI encrypts secrets before upload. API/CLI output and error text are not echoed. A mid-write failure reports only completed key names and the failed key; earlier successful writes are not rolled back because previous secret values cannot be recovered. Correct the cause and repeat the same reviewed setup.
 
 After setup succeeds, use the existing protected production workflow. Its dependency, build, exact artifact, and post-deployment checks still run. Setup success is not deployment success or permission to admit real patient data. If `main` changes, obtain and validate approval for the new final commit.
