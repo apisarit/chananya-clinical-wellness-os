@@ -66,6 +66,12 @@
       "evidence": null
     },
     {
+      "id": "operational_monitoring_incident_response",
+      "label": "Production monitoring, alert ownership, incident response, containment, rollback and recovery procedures verified with retained evidence",
+      "status": "pending",
+      "evidence": null
+    },
+    {
       "id": "release_provenance_ci_merge_protection",
       "label": "Exact release-candidate source provenance, automated checks, review status and merge protection verified before production deployment",
       "status": "pending",

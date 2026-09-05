@@ -33,6 +33,7 @@ assert.deepEqual(
     'isolated_staging_migrations',
     'independent_quality_segregation',
     'managed_database_backup_pitr',
+    'operational_monitoring_incident_response',
     'release_provenance_ci_merge_protection'
   ],
   'all hard pre-deployment commercial release gates must remain explicit and ordered'

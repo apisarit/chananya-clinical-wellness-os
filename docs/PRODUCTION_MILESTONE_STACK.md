@@ -1,6 +1,6 @@
 # CNYOS Production Milestone Stack
 
-This document is the operational stack for moving the current CNYOS release candidate to a defensible production-grade release. It intentionally separates source completeness, pre-deployment approval, live production deployment and admission of real patient data.
+This document is the operational stack for moving CNYOS to a defensible production-grade release. It separates source completeness, live staging verification, operational readiness, pre-deployment approval, production deployment and admission of real patient data.
 
 ## Promotion and admission rule
 
@@ -8,30 +8,31 @@ Production deployment may be approved only when `release-readiness.json` reports
 
 Real patient data remains blocked after deployment until the separate `public_production_deployment_attestation` passes for that exact commit and Git tree on the intended production origin.
 
-Source code, Preview visibility, synthetic fixtures, a successful Netlify deploy, or a passing contract suite are not sufficient by themselves.
+Source code, Preview visibility, synthetic fixtures, a successful Netlify deploy, a dashboard, or a passing contract suite are not sufficient by themselves.
 
 ## Stack
 
 | Milestone | Exit condition | Current state |
 |---|---|---|
-| M0 — Source provenance | Exact candidate commit, locked dependencies, source manifest and migration-chain evidence retained | PASS on the stacked release-candidate line; repeat on final commit |
-| M1 — Contract + public runtime surface | Complete `npm run check` passes, including role matrix, tenant isolation, owner controls, clinical handoffs, pharmacy/production/quality, backup/restore contracts, PostgreSQL behavioral smoke, restricted Netlify publish surface and public-deployment verifier safeguards | PASS on current candidate CI; repeat on final commit |
-| M2 — Isolated staging runtime | Isolated staging database is migrated, tenant-bound and authenticated; every role passes allowed actions and denial cases; Owner OFF/ON is proven against already-issued sessions | PENDING live evidence |
-| M3 — LINE OA operational boundary | Signed real callback, follow/unfollow, consent, revoke, QR issue/expiry/replay denial and manual HN fallback pass with a dedicated synthetic account | PENDING live evidence; source present and live switch remains disabled until verified |
-| M4 — Backup and disaster recovery | Encrypted off-site export completes; isolated restore passes record/digest/clinical-chain checks; measured RPO/RTO retained; managed database backup/PITR configuration is separately verified | PENDING live evidence; Drive manifest/restore folder is currently empty and release backup switch remains disabled |
-| M5 — Clinical/quality governance | Independent Quality producer-versus-approver segregation passes and clinical-safety review has no unresolved release blocker | PENDING review evidence |
-| M6 — Privacy, security and legal | Privacy/PDPA, application-security and applicable legal review close with zero unresolved release blockers | PENDING independent review |
-| M7 — Candidate release controls | Exact release-candidate source provenance, automated checks, review status and enforced merge protection are verified before production deployment | PENDING final-commit/protection evidence; repository rulesets currently empty |
-| M8 — Production promotion approval | `npm run verify:production-promotion` passes for the exact checked-out commit and final promotion evidence artifact is retained | BLOCKED until M2–M7 pass |
-| M9 — Production deploy + admission | Deploy exact approved commit, then `npm run verify:public-deployment` proves commit + Git tree, runtime manifest, security headers and forbidden internal paths; retain 365-day evidence | BLOCKED until M8 passes; real patient data prohibited until this attestation passes |
+| M0 — Source provenance | Exact candidate commit, locked dependencies, source manifest and migration-chain evidence retained | PASS on trusted `main`; repeat on final release commit |
+| M1 — Contract + public runtime surface | Complete `npm run check` passes, including role matrix, tenant isolation, owner controls, clinical handoffs, pharmacy/production/quality, backup/restore contracts, PostgreSQL behavioral smoke, restricted Netlify publish surface and public-deployment verifier safeguards | PASS on trusted `main`; repeat on final release commit |
+| M2 — Isolated staging runtime | Isolated staging database is migrated, tenant-bound and authenticated; every role passes allowed actions and denial cases; Owner OFF/ON is proven against already-issued sessions | PENDING live protected-workflow evidence |
+| M3 — LINE OA operational boundary | Signed real callback, follow/unfollow, consent, revoke, QR issue/expiry/replay denial and manual HN fallback pass with a dedicated synthetic account | PENDING live protected-workflow evidence; live switch remains disabled until verified |
+| M4 — Backup and disaster recovery | Encrypted off-site export completes; isolated restore passes record/digest/clinical-chain checks; measured RPO/RTO retained; managed database backup/PITR configuration is separately verified | PENDING live evidence; Drive manifest/restore evidence is not yet present |
+| M5 — Clinical/quality governance | Independent Quality producer-versus-approver segregation passes and clinical-safety review has no unresolved release blocker | PENDING independent evidence |
+| M6 — Privacy, security and legal | Privacy/PDPA, application-security and applicable legal review close with zero unresolved release blockers | PENDING independent evidence |
+| M7 — Production operations | Monitoring and alert routing are active; named primary/alternate operational owners exist; alert delivery is tested; incident containment, rollback and recovery drill evidence is retained | PENDING operational evidence; runbook exists but does not itself satisfy the gate |
+| M8 — Candidate release controls | Exact release-candidate source provenance, automated checks, review status and enforced merge protection are verified before production deployment | PENDING final-commit/protection evidence; `main` currently lacks enforced protection |
+| M9 — Production promotion approval | `npm run verify:production-promotion` passes for the exact checked-out commit and final promotion evidence artifact is retained | BLOCKED until M2–M8 pass |
+| M10 — Production deploy + admission | Deploy exact approved commit/tree, then `npm run verify:public-deployment` proves commit + Git tree, runtime manifest, security headers and forbidden internal paths; retain 365-day evidence | BLOCKED until M9 passes; real patient data prohibited until this attestation passes |
 
 ## Current hosting interpretation
 
-The public `cnyos` Netlify project is currently a deployment surface, but its live configuration is deliberately staging-oriented and identifies synthetic-data/isolation controls. A Netlify `ready` state means the bundle deployed successfully; it is not a production-readiness attestation.
+The public `cnyos` Netlify project is currently a deployment surface, but its live configuration is staging/synthetic-oriented. A Netlify `ready` state means the bundle deployed successfully; it is not a production-readiness attestation.
 
-The current live deployment predates the restricted `dist/` publish hardening and is not the current candidate commit. It must not be treated as the final production artifact.
+The current CNYOS deployment predates the restricted `dist/` publish hardening and does not carry the exact trusted release provenance required by the post-deploy gate. It must not be treated as the final production artifact.
 
-The separate `jitarsa` and `jitarsa-staging` projects preserve the intended white-label topology. Promotion must keep tenant database, credentials, backup destinations, identity configuration and Owner control bound to the exact target site; no cross-tenant reuse is permitted.
+The separate white-label sites preserve the intended tenant topology. Promotion must keep tenant database, credentials, backup destinations, identity configuration and Owner control bound to the exact target site; no cross-tenant reuse is permitted.
 
 ## Evidence discipline
 
@@ -42,9 +43,11 @@ Each pre-deployment hard gate must store evidence with at least:
 - `verifiedAt` — verification timestamp
 - `verifiedBy` — accountable reviewer or verifier identity
 
+The operations gate additionally requires monitoring configuration references, named primary/alternate responders, a successful alert test and a non-production rollback/deployment-recovery drill. See `docs/PRODUCTION_OPERATIONS_RUNBOOK.md`.
+
 The post-deploy attestation additionally binds the public deployment to the exact Git tree and verifies the runtime surface after the production deploy exists.
 
-A gate may not be changed from `pending` to `passed` merely because a harness exists or a source-level contract test succeeds.
+A gate may not be changed from `pending` to `passed` merely because a harness, runbook, dashboard or source-level contract exists.
 
 ## Final promotion sequence
 
@@ -54,9 +57,11 @@ A gate may not be changed from `pending` to `passed` merely because a harness ex
 4. Run real LINE staging verification.
 5. Complete encrypted export and isolated restore drill; verify managed backup/PITR separately.
 6. Close Quality, privacy/security/clinical-safety/legal reviews with zero release blockers.
-7. Verify final candidate provenance plus enforced review/merge protection and record every pre-deployment gate artifact against the same release commit.
-8. Change the machine-readable pre-deployment release claim only after evidence review.
-9. Run the manual `Production promotion gate` workflow with explicit promotion confirmation.
-10. Deploy that exact verified commit/tree to the intended production site while keeping real patient-data admission blocked.
-11. Run the manual `Production post-deploy attestation` workflow; it must verify exact commit/tree, required routes/security headers and 404 denial of internal repository paths.
-12. Admit real patient data only after the post-deploy attestation artifact is retained and operational ownership/monitoring are active.
+7. Activate production monitoring, name the accountable operational roster, prove alert delivery, and retain rollback/recovery-drill evidence.
+8. Verify final candidate provenance plus enforced review/merge protection and record every pre-deployment gate artifact against the same release commit.
+9. Change the machine-readable pre-deployment release claim only after evidence review.
+10. Run the manual `Production promotion gate` workflow with explicit promotion confirmation.
+11. Deploy that exact verified commit/tree to the intended production site while keeping real-patient-data admission blocked.
+12. Run the manual `Production post-deploy attestation` workflow; it must verify exact commit/tree, required routes/security headers and 404 denial of internal repository paths.
+13. Confirm monitoring observes the deployed release and critical alert routes remain armed.
+14. Admit real patient data only after the post-deploy attestation artifact is retained and all operational owners approve reopening/admission where required.
