@@ -5,20 +5,44 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="Luopan 23 ชั้น: กาลสมุฏฐาน โหราศาสตร์ไทย และ BaZi บนวงวันเกิดที่เริ่มปีจากเมษายน">
-  <title>Luopan 360° v1.0.0 | CNYOS</title>
-  <link rel="stylesheet" href="luopan.css?v=1.0.0">
+  <title>U systesis · Luopan 360° v1.0.0 | CNYOS</title>
+  <link rel="stylesheet" href="luopan.css?v=u-systesis1">
   <script src="luopan-frame-guard.js?v=luopan-auth1"></script>
   <script defer src="luopan-knowledge.js?v=1.0.0"></script>
   <script defer src="luopan-astronomy.js?v=2.1.19"></script>
   <script defer src="luopan.js?v=1.0.0"></script>
+  <script type="module" src="u-systesis.js?v=0.1.0"></script>
 </head>
 <body>
   <main class="luopan-site-main">
-  <p class="luopan-intro">กาลสมุฏฐานเป็นแกนกลาง · ใส่วันเวลาเพื่อตั้งวง แล้วลากเข็มอ่านทุกชั้น</p>
+  <h1>U systesis</h1>
+  <p class="luopan-intro">Wuxing–BaZi · Luopan · โหราศาสตร์ไทย · สมุฏฐานเจ้าเรือน</p>
+  <p id="us-version" class="text-small">กำลังเปิดฐานความรู้</p>
   <p class="text-small luopan-intro">เครื่องมือศึกษาและเทียบองค์ความรู้ · ข้อมูลที่กรอกคำนวณในหน้านี้ ไม่บันทึกลงเวชระเบียน</p>
+  <label class="form-label us-mode-control">เลือกการอ่านวง
+    <select id="us-mode" class="form-select"><option value="astro_medical">เวลาและองค์ความรู้ · กาลสมุฏฐานเป็นแกน</option><option value="feng_shui">ทิศทาง · 24 ขุนเขาคงที่</option></select>
+  </label>
+  <section id="us-spatial" hidden aria-label="ทิศทาง 24 ขุนเขา">
+    <h2>24 ขุนเขา · ทิศเหนือแม่เหล็ก</h2>
+    <p class="text-small">กรอกค่าที่วัดจากเข็มทิศ ตารางทิศคงที่ตามเหนือแม่เหล็ก โหมดนี้ยังไม่อ่านเซนเซอร์มือถือ</p>
+    <form id="us-bearing-form" class="viz-controls">
+      <label class="form-label">องศาทิศที่วัดได้
+        <input id="us-bearing" class="form-control" type="number" min="0" max="360" step="any" placeholder="เช่น 330" required>
+      </label>
+      <label class="form-label">คลาดเคลื่อน ± องศา (ถ้าทราบ)
+        <input id="us-uncertainty" class="form-control" type="number" min="0" max="180" step="any" placeholder="ยังไม่ทราบ">
+      </label>
+      <button class="btn" type="submit">อ่านขุนเขา</button>
+    </form>
+    <p id="us-error" class="text-destructive" role="alert" hidden></p>
+    <svg id="us-compass" viewBox="0 0 500 500" role="img" aria-label="ทิศ 8 และ 24 ขุนเขา"></svg>
+    <p id="us-result" aria-live="polite">รอค่าทิศทาง</p>
+    <p id="us-overlay" class="text-small"></p>
+  </section>
 <div id="luopan-birthdate-ray">
 
   <h1>วงวันเกิด · เข็มอ่านร่วม 360°</h1>
+  <p class="text-small">วงปีเริ่มเมษายน · เข็มนี้ใช้เทียบเวลาและหมวดความรู้ ทิศบนวงเป็นชั้นอ้างอิง การอ่านทิศที่วัดได้ให้เลือกโหมดทิศทาง</p>
   <form id="lr-form">
     <div class="viz-controls">
       <label class="form-label">วัน / เดือน / ปี และเวลา · พ.ศ. หรือ ค.ศ.
@@ -79,6 +103,19 @@
 
 
 </div>
+
+  <details class="us-knowledge">
+    <summary>ฐานความรู้ U systesis · พิกัดและที่มา</summary>
+    <ul id="us-modules"></ul>
+    <h2>ความสัมพันธ์ Wuxing</h2>
+    <p class="text-small">อ่านจากธาตุต้นทางไปยังปลายทาง การส่งเสริมหรือข่มยังไม่บอกว่าเหมาะกับดวงหรือไม่</p>
+    <table class="table table-sm"><thead><tr><th>ต้นทาง</th><th>ส่งเสริม 生 →</th><th>ข่ม 克 →</th></tr></thead><tbody id="us-wuxing"></tbody></table>
+    <h2>พิกัดของชั้นวงล้อ</h2>
+    <table class="table table-sm"><thead><tr><th>ชั้น</th><th>พิกัดที่ใช้</th></tr></thead><tbody id="us-layer-frames"></tbody></table>
+    <p id="us-review" class="text-small"></p>
+    <h2>แหล่งอ้างอิง</h2>
+    <ul id="us-sources"></ul>
+  </details>
 
   <noscript>กรุณาเปิด JavaScript เพื่อคำนวณวันเวลาและใช้งานวงล้อ</noscript>
   </main>
