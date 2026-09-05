@@ -34,7 +34,7 @@ The Earth Plate facing/sitting axis is separated by 180°. The UI reports distan
 - All 24 mountains: Chinese, Thai pronunciation, pinyin, code, type, zodiac animal when applicable, exact range and center, own element, palace element, Yuan group, named San Yuan polarity, natal polarity when applicable, and opposite mountain. Search supports Thai, Chinese, unaccented pinyin, direction, or element.
 - Eight trigrams: line diagrams, Thai names, natural/family correspondences, Earlier Heaven number and bearing, Later Heaven bearing and Lo Shu number.
 - He Tu pairs and north-up Lo Shu square. Rotating a conventional south-up printed diagram by 180° preserves its geographical assignments and sums.
-- All 64 hexagrams in a lower-trigram × upper-trigram matrix, with selectable trigrams, six-line graphics and brief Thai study glosses. **No compass bearing is assigned to this catalog.** A directional Da Gua ring needs a separately specified sequence and angular origin.
+- All 64 hexagrams in a lower-trigram × upper-trigram matrix, with selectable trigrams and six-line graphics. Version 0.3.1 adds a short Thai meaning and reflection for each selected hexagram, originally worded from the public-domain *Zhouyi · Tuan* text, with a source link. **No compass bearing is assigned to this catalog.** A directional Da Gua ring needs a separately specified sequence and angular origin.
 - Ten short guides covering measurement, facing/sitting, plate conventions, element systems, life stages, Flying Star prerequisites, fine divisions, and birth-symbol correspondence.
 
 The descriptions distinguish San He and San Yuan. Fine rings (60, 72, 120, 240), directional 64 / 384 subdivisions, Flying Star natal charts, favorable directions, and automatic sensor readings are not implemented by this atlas. The page explains their prerequisites instead of synthesizing unsourced assignments.
@@ -51,6 +51,7 @@ Sources are attached to individual layers and exposed as links in the UI. Tradit
 - [Liu Xiejun: Three Yuan dragons and mountain yin/yang](https://www.cafengshuinet.com/m/show_detail.php?id=2781)
 - [Liu Qizhi / Juxian Guan: double mountains and life-stage sequences](https://www.juxian.com.hk/fs005/)
 - [Upper/lower trigram lookup for the 64 hexagrams](https://www.eee-learning.com/content/4)
+- [周易 · 彖傳 — primary classical text for the concise Thai interpretations](https://zh.wikisource.org/wiki/周易/彖)
 - [Hong Kong Observatory: stems and branches](https://www.hko.gov.hk/en/gts/time/stemsandbranches.htm)
 
 Implementation scope for water methods is the pair table and named yin/yang sequences only. No incoming/outgoing-water judgment is inferred, and divergent or inconsistent prose examples in modern references are not incorporated as rules.

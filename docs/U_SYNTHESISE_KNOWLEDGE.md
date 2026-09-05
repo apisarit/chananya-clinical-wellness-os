@@ -1,6 +1,6 @@
 # U Synthesise — ฐานความรู้บนวงล้อ
 
-รุ่นฐานความรู้ **0.3.0 — foundation draft + classical atlas + landscape study** · ชื่อ **U Synthesise** ตามที่เจ้าของโครงการกำหนด
+รุ่นฐานความรู้ **0.3.1 — foundation draft + classical atlas + landscape study + Yijing meanings** · ชื่อ **U Synthesise** ตามที่เจ้าของโครงการกำหนด
 
 เพิ่มหล่อแกดั้งเดิม 16 ชั้นในโหมดทิศทาง พร้อมสามจาน ปากว้า ลั่วซู สามหยวน ซวงซาน ฉางเซิง คลัง 64 ข่วย และกฎภูมิประเทศ–น้ำ Jin Suo Yu Guan ดูรายละเอียดขอบเขตและแหล่งอ้างอิงที่ [U_SYNTHESISE_CLASSICAL_LUOPAN.md](U_SYNTHESISE_CLASSICAL_LUOPAN.md)
 

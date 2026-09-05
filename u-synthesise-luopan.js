@@ -166,7 +166,15 @@ export function mountClassicalLuopan(document, {onExplore} = {}) {
   loShuGrid.forEach((row,i)=>row.forEach((value,j)=>{const cell=node('div',undefined,q('us-loshu-grid'));node('small',gridDirs[i][j],cell);node('strong',String(value),cell);}));
   for(const h of heTu){const row=node('tr',undefined,q('us-hetu-rows'));node('th',h.name,row,{scope:'row'});node('td',h.pair.join(' · '),row);node('td',elementName(h.element),row);}
   for(const select of ['us-hex-lower','us-hex-upper']){for(const t of trigrams)node('option',t.symbol+' '+t.thai+' · '+t.image,q(select),{value:t.symbol});q(select).value='乾';}
-  function hexResult(){const h=findHexagram(q('us-hex-lower').value,q('us-hex-upper').value),box=q('us-hex-result');box.replaceChildren();yaoGraphic(h.yao,box);node('h3',h.number+' · '+h.name+' · '+h.thai,box);node('p','ข่วยบน '+h.upper+' / ข่วยล่าง '+h.lower+' · อ่านเส้นจากล่างขึ้นบน',box);node('p','คำไทยเป็นคำแปลย่อเพื่อศึกษา ยังไม่ใช่คำทำนายจากทิศที่กรอก',box,{class:'text-small'});}
+  function hexResult(){
+    const h=findHexagram(q('us-hex-lower').value,q('us-hex-upper').value),box=q('us-hex-result');
+    box.replaceChildren();yaoGraphic(h.yao,box);
+    node('h3',h.number+' · '+h.name+' · '+h.thai,box);
+    node('p',h.meaning,box);
+    node('p','ข่วยบน '+h.upper+' / ข่วยล่าง '+h.lower+' · อ่านเส้นจากล่างขึ้นบน',box);
+    node('p','ความหมายย่อเรียบเรียงเพื่อศึกษา ไม่ใช่คำทำนายจากทิศที่กรอก',box,{class:'text-small'});
+    references(['tuan'],box);
+  }
   q('us-hex-lower').addEventListener('change',hexResult);q('us-hex-upper').addEventListener('change',hexResult);hexResult();
   const header=node('tr',undefined,q('us-hex-matrix'));node('th','ล่าง ↓ / บน →',header,{scope:'col'});for(const t of trigrams)node('th',t.symbol,header,{scope:'col'});
   hexagramMatrix.forEach((row,l)=>{const tr=node('tr',undefined,q('us-hex-matrix'));node('th',trigrams[l].symbol,tr,{scope:'row'});row.forEach((number,u)=>{const h=hexagrams[number-1],cell=node('td',undefined,tr),button=node('button',number+' '+h.name,cell,{type:'button','aria-label':number+' '+h.name+' '+h.thai});button.addEventListener('click',()=>{q('us-hex-lower').value=trigrams[l].symbol;q('us-hex-upper').value=trigrams[u].symbol;hexResult();});});});
