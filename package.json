@@ -28,7 +28,8 @@
     "staging:uat": "node scripts/run-staging-synthetic-uat.mjs",
     "staging:smoke:locked": "node scripts/verify-locked-staging.mjs",
     "check:evidence": "node tests/evidence-ui-contract.mjs && node tests/evidence-search-contract.mjs",
-    "check:luopan": "node tests/luopan-birthdate.mjs",
+    "check:luopan": "node tests/luopan-birthdate.mjs && npm run check:u-systesis",
+    "check:u-systesis": "node tests/u-systesis-knowledge.mjs",
     "prepare:production-approval": "node scripts/verify-production-promotion.mjs --prepare",
     "setup:production-environment": "node scripts/setup-production-environment.mjs"
   },
