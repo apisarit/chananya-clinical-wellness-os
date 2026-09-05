@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#153a31"><title>CHANANYA · Wuxing BaZi &amp; Health Assessment</title><meta name="description" content="สำรวจ BaZi และความเชื่อมโยงสุขภาพตามทฤษฎีห้าธาตุจีน พร้อมคำแปลไทย คำนวณในอุปกรณ์ของคุณ"><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head><body><main class="shell">
+<section class="hero">
+    <div class="brand">CHANANYA · BAZI & WELLNESS</div>
+    <h1>รู้จักธาตุ ผ่านวันเกิด</h1>
+    <p>สำรวจ Wuxing · BaZi และความเชื่อมโยงสุขภาพตามแนวคิดห้าธาตุจีน พร้อมคำแปลไทยและเหตุผลประกอบ</p>
+    <span class="version">v1.6.1 · Wuxing/BaZi + Health Assessment</span>
+  </section>
+<section class="card">
+    <div class="title-row">
+      <div><h2>ข้อมูลวันเกิด · 出生資料</h2><div class="hint">เลือกวันเกิด ปี พ.ศ. / ค.ศ. และเวลาท้องถิ่นตามเขตเวลาที่เกิด</div></div>
+    </div>
+    <div class="birth-grid">
+      <div class="field">
+        <label>วัน / เดือน / ปี</label>
+        <div class="date-row">
+          <select aria-label="วันเกิด" id="day" class="control"></select>
+          <select aria-label="เดือนเกิด" id="month" class="control"></select>
+          <select aria-label="ปีเกิด พ.ศ. / ค.ศ." id="year" class="control"></select>
+        </div>
+      </div>
+      <div class="field"><label for="time">เวลาเกิด</label><input id="time" class="control" type="time" value="12:00"></div>
+      <div class="field"><label for="gender">เพศสำหรับกฎเดินเสาโชค</label><select id="gender" class="control"><option value="female">หญิง 女</option><option value="male">ชาย 男</option></select></div>
+      <div class="field"><label for="tz">เขตเวลา ณ วันเกิด</label><select id="tz" class="control"><option value="7">Thailand · UTC+7</option><option value="8">UTC+8</option><option value="9">UTC+9</option><option value="0">UTC</option></select></div>
+    </div>
+    <div class="actions"><button id="calc" class="primary">คำนวณดวง</button><button id="sample" class="secondary">ดูตัวอย่างสมมุติ</button></div>
+    <p class="hint calendar-note">ใช้เวลาตาม UTC ที่เลือก ไม่ปรับเวลาอาทิตย์จริง · ปีและเดือนเปลี่ยนตาม節氣 · เสาวันเปลี่ยน 00:00 น. และก้านยามชวดใช้วันถัดไปตั้งแต่ 23:00 น.</p>
+    <p id="inputError" class="input-error" role="alert" hidden></p>
+    <p id="inputStatus" class="hint" aria-live="polite">ตัวอย่างสมมุติ — เปลี่ยนวันเกิดเพื่อคำนวณของคุณ ข้อมูลอยู่ในหน้านี้เท่านั้น</p>
+    <div id="boundary"></div>
+  </section>
+<nav class="tab-list" role="tablist" aria-label="เลือกมุมมอง">
+<button type="button" id="tab-bazi" role="tab" aria-controls="panel-bazi" aria-selected="true" tabindex="0">Wuxing / BaZi</button>
+<button type="button" id="tab-health" role="tab" aria-controls="panel-health" aria-selected="false" tabindex="-1">Health Assessment</button>
+</nav>
+<div id="results"><div id="panel-bazi" role="tabpanel" aria-labelledby="tab-bazi" tabindex="0">
+<section class="summary">
+    <div class="stat"><div class="eyebrow">Day Master</div><div class="big" id="dm">—</div><div class="small" id="dmMeta">—</div></div>
+    <div class="stat"><div class="eyebrow">กำลัง Day Master ตามโมเดล</div><div class="big" id="strength">—</div><div class="bar"><i id="strengthBar" style="width:0"></i></div><div class="small" id="strengthLabel">—</div></div>
+    <div class="stat"><div class="eyebrow">Structure · โครงสร้างดวง</div><div class="big" style="font-size:22px" id="structure">—</div><div class="small" id="flags">—</div></div>
+    <div class="stat"><div class="eyebrow">Solar Longitude · ตำแหน่งสุริยะ</div><div class="big" style="font-size:22px" id="longitude">—</div><div class="small">節氣 boundary engine</div></div>
+  </section>
+<section class="card">
+    <div class="title-row"><div><h2>四柱 · Four Pillars</h2><div class="hint">Year · Month · Day · Hour</div></div></div>
+    <div id="pillars" class="pillars"></div>
+  </section>
+<section class="two">
+    <div class="card"><h2>大運 · 10-Year Luck</h2><div id="luckStart" class="hint" style="margin:8px 0 12px"></div><div id="luckStrip" class="luck-strip"></div><div class="field" style="margin-top:10px"><label for="annual">流年 · ปีจร</label><select id="annual" class="control"></select></div><div id="transit" class="alert"></div></div>
+    <div class="card"><h2>五行 · Element Profile</h2><div id="elements"></div><div class="hint">season-weighted heuristic · แยกจากกฎปฏิทิน</div></div>
+  </section>
+<section class="two">
+    <div class="card"><h2>原局 · ปฏิสัมพันธ์ในดวงเดิม</h2><div id="interactions" class="chips" style="margin-top:12px"></div></div>
+    <div class="card"><h2>用神 · วิเคราะห์ธาตุใช้งาน 2 หลัก</h2><div id="useful"></div></div>
+  </section>
+<section class="card">
+    <div class="title-row">
+      <div>
+        <h2>ร้อยเรียงดาว · คู่สมพงษ์ · ซาฮะ</h2>
+        <div class="hint">จัดความสัมพันธ์ให้เป็นกลุ่มและแปลผลไทยทันที ไม่ต้องจำตัวอักษรจีน</div>
+      </div>
+    </div>
+    <div id="relationSummary" class="relation-groups"></div>
+    <h2 style="margin-top:18px;font-size:17px">กลุ่มดาวสิบเทพ · แปลเป็นบทบาท</h2>
+    <div id="starGroups" class="star-groups"></div>
+  </section>
+<section class="card">
+    <div class="title-row">
+      <div><h2>คำแปลไทย · ศัพท์จีนในดวง</h2><div class="hint">แสดงศัพท์จีนควบคู่ภาษาไทย เพื่อยังตรวจสอบกับตำราเดิมได้</div></div>
+    </div>
+    <div class="lenses">
+      <div class="lens"><b>日主 · เจ้าชะตา</b><div class="hint">ธาตุของก้านฟ้าในเสาวัน ใช้เป็นจุดอ้างอิงในการอ่านดวง</div></div>
+      <div class="lens"><b>月令 · กำลังประจำเดือนเกิด</b><div class="hint">พลังฤดูกาลจากกิ่งดินของเดือน เป็นแกนสำคัญในการประเมินความแข็ง–อ่อน</div></div>
+      <div class="lens"><b>藏干 · ธาตุซ่อน</b><div class="hint">ก้านฟ้าที่ซ่อนอยู่ภายในกิ่งดินแต่ละตัว</div></div>
+      <div class="lens"><b>十二長生 · 12 ระยะพลังชีวิต</b><div class="hint">วงจรสถานะพลังของธาตุ เช่น เกิด เติบโต รุ่งเรือง เสื่อม</div></div>
+      <div class="lens"><b>格局 · โครงสร้างดวง</b><div class="hint">รูปแบบหลักของดวงที่พิจารณาจากเดือนเกิดและความสัมพันธ์ของสิบเทพ</div></div>
+      <div class="lens"><b>用神 · ธาตุใช้งาน</b><div class="hint">ธาตุที่ถูกเลือกตามหลักวิเคราะห์เพื่อแก้หรือปรับสมดุลของโครงสร้าง ไม่ใช่แค่ธาตุที่มีน้อยที่สุด</div></div>
+      <div class="lens"><b>大運 · เสาโชค 10 ปี</b><div class="hint">วงรอบอิทธิพลระยะยาว โดยแต่ละเสาครอบคลุมประมาณสิบปี</div></div>
+      <div class="lens"><b>流年 · พลังประจำปี</b><div class="hint">ก้านฟ้า–กิ่งดินของแต่ละปีที่เข้ามาสัมพันธ์กับดวงเดิมและ大運</div></div>
+    </div>
+  </section>
+<section class="card"><h2>เหตุผล · Audit Trail</h2><div style="overflow:auto"><table class="audit"><thead><tr><th>Layer</th><th>Reason</th><th>Effect</th></tr></thead><tbody id="audit"></tbody></table></div></section>
+</div><div id="panel-health" role="tabpanel" aria-labelledby="tab-health" tabindex="0" hidden>
+<section class="card">
+    <div class="title-row">
+      <div>
+        <h2>สุขภาพตามธาตุ · Health Assessment</h2>
+        <div class="hint">ความเชื่อมโยงตามทฤษฎีห้าธาตุจีน คะแนนธาตุไม่ใช่คะแนนสุขภาพหรือความเสี่ยงโรค</div>
+      </div>
+    </div>
+    <div id="healthSummary" class="alert"></div>
+    <div id="healthOrgans" class="health-grid"></div>
+    <div class="lenses" style="margin-top:12px">
+      <div class="lens"><b>สิ่งที่ระบบพบจากดวง</b><div id="healthPattern" class="hint"></div></div>
+      <div class="lens"><b>สิ่งที่ควรตรวจในชีวิตจริง</b><div class="hint">อาการจริง ประวัติสุขภาพ การนอน อาหาร การออกกำลัง ยาที่ใช้ ผลตรวจ และการประเมินโดยบุคลากรสุขภาพ ต้องมาก่อนการตีความจาก BaZi เสมอ</div></div>
+    </div>
+  </section>
+<section class="card"><h2>สัดส่วนธาตุในโมเดล</h2><div id="healthElements"></div><p class="hint">น้ำหนักจากดวงและฤดูกาลตามโมเดลเดิม ใช้อ่านความเชื่อมโยงเชิงวัฒนธรรม ไม่ใช่ผลตรวจร่างกาย</p></section>
+</div></div>
+<p class="footer">CHANANYA · Traditional knowledge &amp; personal reflection · คำนวณในอุปกรณ์ของคุณ</p>
+<noscript><p class="alert">เปิด JavaScript เพื่อใช้เครื่องคำนวณนี้</p></noscript>
+</main></body></html>
