@@ -2,6 +2,9 @@ name: Authenticated staging E2E
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/production-readiness-stack-20260905
 
 permissions:
   contents: read
