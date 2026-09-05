@@ -89,7 +89,6 @@ jobs:
           CLINICAL_OS_TENANT_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
           CLINICAL_OS_SOURCE_COMMIT: ${{ github.sha }}
           CLINICAL_OS_REQUIRE_SOURCE_COMMIT: "true"
-          CLINICAL_OS_SOURCE_TREE: ${{ env.CLINICAL_OS_SOURCE_TREE }}
 
       - name: Verify exact production artifact before upload
         run: node scripts/verify-production-build-artifact.mjs
