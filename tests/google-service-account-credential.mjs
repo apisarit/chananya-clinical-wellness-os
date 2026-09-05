@@ -267,7 +267,17 @@ assert.match(provisioner, /SOURCE_MUST_BE_OUTSIDE_REPOSITORY/);
 assert.match(provisioner, /fileURLToPath\(import\.meta\.url\)/);
 assert.doesNotMatch(provisioner, /realpath\(process\.cwd\(\)\)/);
 assert.doesNotMatch(provisioner, /console\.(?:log|error)\([^\n]*(?:private_key|NETLIFY_AUTH_TOKEN|wrapKeyValue|serialized)/);
-assert.equal(JSON.parse(read('package.json')).dependencies['@netlify/blobs'], '10.0.11');
+const packageJson = JSON.parse(read('package.json'));
+const packageLock = JSON.parse(read('package-lock.json'));
+const netlifyBlobsVersion = packageJson.dependencies['@netlify/blobs'];
+assert.match(netlifyBlobsVersion, /^\d+\.\d+\.\d+$/, '@netlify/blobs must remain pinned to an exact version');
+assert.equal(packageLock.packages[''].dependencies['@netlify/blobs'], netlifyBlobsVersion, 'package.json and package-lock root dependency must match');
+assert.equal(packageLock.packages['node_modules/@netlify/blobs'].version, netlifyBlobsVersion, 'resolved @netlify/blobs version must match the declared exact version');
+const [blobsMajor, blobsMinor, blobsPatch] = netlifyBlobsVersion.split('.').map(Number);
+assert.ok(
+  blobsMajor > 10 || (blobsMajor === 10 && (blobsMinor > 7 || (blobsMinor === 7 && blobsPatch >= 13))),
+  '@netlify/blobs must not regress below the audited 10.7.13 security floor'
+);
 const foreignCwdRun = spawnSync(process.execPath, [
   path.join(root, 'scripts/provision-google-service-account-blob.mjs'),
   '--dry-run',
