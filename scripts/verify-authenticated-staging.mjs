@@ -115,6 +115,10 @@ const subscriptionControlEvidence = {
   clinicCode: target.config.tenant.expectedClinicCode,
   offRequestId: randomUUID(),
   onRequestId: randomUUID(),
+  initialVersion: null,
+  suspendedVersion: null,
+  restoredVersion: null,
+  offRetryIdempotent: false,
   existingTokenDenied: false,
   restoredOriginalBoundary: false,
   databaseEnforced: false
@@ -130,27 +134,48 @@ async function serviceRpc(name, body) {
 const initialSubscriptionRows = await serviceRpc('list_owner_subscription_clinics', {});
 const initialSubscription = initialSubscriptionRows.find(row => row.clinic_id === target.config.tenant.expectedClinicId);
 assert.equal(initialSubscription?.enabled, true, 'staging subscription must start ON before the reversible enforcement proof');
+const initialVersion = Number(initialSubscription?.subscription_version);
+assert.ok(Number.isSafeInteger(initialVersion) && initialVersion > 0, 'staging subscription version is invalid');
+subscriptionControlEvidence.initialVersion = initialVersion;
 let subscriptionChangeAttempted = false;
+let suspendedVersion = initialVersion + 1;
 try {
   subscriptionChangeAttempted = true;
-  await serviceRpc('set_clinic_subscription_state', {
+  const offResult = await serviceRpc('set_clinic_subscription_state', {
     p_request_id: subscriptionControlEvidence.offRequestId,
     p_clinic_id: target.config.tenant.expectedClinicId,
     p_expected_clinic_code: target.config.tenant.expectedClinicCode,
     p_enabled: false,
+    p_expected_version: initialVersion,
     p_reason: 'Authenticated staging database suspension proof',
     p_actor_user_id: ownerActor.userId,
     p_actor_email: ownerActor.email
   });
-  await serviceRpc('set_clinic_subscription_state', {
+  assert.equal(offResult?.enabled, false, 'staging subscription OFF RPC did not disable the tenant');
+  assert.equal(offResult?.state, 'suspended', 'staging subscription OFF RPC state mismatch');
+  assert.equal(Number(offResult?.version), suspendedVersion, 'staging subscription OFF did not advance version exactly once');
+  subscriptionControlEvidence.suspendedVersion = suspendedVersion;
+
+  const offRetry = await serviceRpc('set_clinic_subscription_state', {
     p_request_id: subscriptionControlEvidence.offRequestId,
     p_clinic_id: target.config.tenant.expectedClinicId,
     p_expected_clinic_code: target.config.tenant.expectedClinicCode,
     p_enabled: false,
+    p_expected_version: initialVersion,
     p_reason: 'Authenticated staging database suspension proof',
     p_actor_user_id: ownerActor.userId,
     p_actor_email: ownerActor.email
   });
+  assert.equal(offRetry?.idempotent, true, 'staging subscription OFF retry was not idempotent');
+  assert.equal(Number(offRetry?.version), suspendedVersion, 'staging subscription OFF retry changed version');
+  subscriptionControlEvidence.offRetryIdempotent = true;
+
+  const suspendedRows = await serviceRpc('list_owner_subscription_clinics', {});
+  const suspendedSubscription = suspendedRows.find(row => row.clinic_id === target.config.tenant.expectedClinicId);
+  assert.equal(suspendedSubscription?.enabled, false, 'staging subscription list did not report OFF');
+  assert.equal(suspendedSubscription?.subscription_state, 'suspended', 'staging subscription list state mismatch while OFF');
+  assert.equal(Number(suspendedSubscription?.subscription_version), suspendedVersion, 'staging subscription list version mismatch while OFF');
+
   const suspendedContext = rowOf(await rpc(target, subscriptionSession.access_token, 'current_access_context'));
   const suspendedClinical = await rpc(target, subscriptionSession.access_token, 'department_can', {
     p_capability: 'clinical'
@@ -161,15 +186,28 @@ try {
   subscriptionControlEvidence.databaseEnforced = true;
 } finally {
   if (subscriptionChangeAttempted) {
-    await serviceRpc('set_clinic_subscription_state', {
+    const onResult = await serviceRpc('set_clinic_subscription_state', {
       p_request_id: subscriptionControlEvidence.onRequestId,
       p_clinic_id: target.config.tenant.expectedClinicId,
       p_expected_clinic_code: target.config.tenant.expectedClinicCode,
       p_enabled: true,
+      p_expected_version: suspendedVersion,
       p_reason: 'Restore staging subscription after enforcement proof',
       p_actor_user_id: ownerActor.userId,
       p_actor_email: ownerActor.email
     });
+    const restoredVersion = suspendedVersion + 1;
+    assert.equal(onResult?.enabled, true, 'staging subscription ON RPC did not reactivate the tenant');
+    assert.equal(onResult?.state, 'active', 'staging subscription ON RPC state mismatch');
+    assert.equal(Number(onResult?.version), restoredVersion, 'staging subscription ON did not advance version exactly once');
+    subscriptionControlEvidence.restoredVersion = restoredVersion;
+
+    const restoredRows = await serviceRpc('list_owner_subscription_clinics', {});
+    const restoredSubscription = restoredRows.find(row => row.clinic_id === target.config.tenant.expectedClinicId);
+    assert.equal(restoredSubscription?.enabled, true, 'staging subscription list did not report restored ON state');
+    assert.equal(restoredSubscription?.subscription_state, 'active', 'staging subscription list state mismatch after restore');
+    assert.equal(Number(restoredSubscription?.subscription_version), restoredVersion, 'staging subscription list version mismatch after restore');
+
     const restoredContext = rowOf(await rpc(target, subscriptionSession.access_token, 'current_access_context'));
     assert.equal(restoredContext?.clinic_id, target.config.tenant.expectedClinicId, 'subscription ON did not restore the original clinic boundary');
     assert.equal(restoredContext?.clinic_role, 'practitioner', 'subscription ON widened or changed the original department role');
