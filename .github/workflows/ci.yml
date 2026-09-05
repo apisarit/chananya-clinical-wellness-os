@@ -19,9 +19,14 @@ jobs:
     name: Source + PostgreSQL + release evidence
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      CNYOS_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CNYOS_RELEASE_REF: ${{ github.event.pull_request.head.ref || github.ref }}
     steps:
       - name: Check out exact candidate commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CNYOS_RELEASE_SHA }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -48,7 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-contracts-${{ github.sha }}-${{ github.run_id }}
+          name: release-contracts-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
           path: artifacts/release-evidence/
           if-no-files-found: error
           retention-days: 90
