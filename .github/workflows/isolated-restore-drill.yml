@@ -61,7 +61,7 @@ jobs:
       RESTORE_SOURCE_BINDING_EVIDENCE_PATH: artifacts/restore-drill/evidence/restore-source-binding.json
     steps:
       - name: Check out trusted verifier from protected default branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
 
@@ -73,7 +73,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -119,7 +119,7 @@ jobs:
 
       - name: Retain non-PHI restore evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: isolated-restore-${{ github.sha }}-${{ github.run_id }}
           path: |
