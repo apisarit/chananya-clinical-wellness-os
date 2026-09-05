@@ -4,7 +4,7 @@
   "status": "production_candidate_under_verification",
   "commercialProductionReady": false,
   "releaseCommit": null,
-  "claimPolicy": "Commercial Production 100% may be stated only when every required gate is passed and evidence is tied to the exact release commit.",
+  "claimPolicy": "Commercial Production 100% may be stated only when every required pre-deployment gate is passed with evidence tied to the exact release commit; real patient data remains blocked until the post-deploy production attestation passes.",
   "promotionPolicy": {
     "allRequiredGatesMustPass": true,
     "evidenceMustMatchReleaseCommit": true,
@@ -13,7 +13,8 @@
       "artifact",
       "verifiedAt",
       "verifiedBy"
-    ]
+    ],
+    "postDeployAttestationRequiredBeforeRealPatientData": true
   },
   "requiredGates": [
     {
@@ -66,9 +67,16 @@
     },
     {
       "id": "release_provenance_ci_merge_protection",
-      "label": "Exact-commit deploy provenance, automated checks, review status and merge protection verified",
+      "label": "Exact release-candidate source provenance, automated checks, review status and merge protection verified before production deployment",
       "status": "pending",
       "evidence": null
     }
-  ]
+  ],
+  "postDeploymentGate": {
+    "id": "public_production_deployment_attestation",
+    "label": "Exact production commit/tree, runtime surface, security headers and forbidden-path denial attested after deployment",
+    "status": "pending",
+    "evidence": null,
+    "blocksRealPatientData": true
+  }
 }
