@@ -6,16 +6,61 @@ import {fileURLToPath} from 'node:url';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
-const html=read('luopan.html');
-const scriptNames=[...html.matchAll(/<script\b[^>]*src="([^"]+)"[^>]*>/g)].map(m=>m[1].split('?')[0]);
-assert.deepEqual(scriptNames,['luopan-knowledge.js','luopan-astronomy.js','luopan.js']);
+const shell=read('luopan.html');
+const html=read('luopan-wheel.html');
+const allScriptNames=[...html.matchAll(/<script\b[^>]*src="([^"]+)"[^>]*>/g)].map(m=>m[1].split('?')[0]);
+assert.deepEqual(allScriptNames,['luopan-frame-guard.js','luopan-knowledge.js','luopan-astronomy.js','luopan.js']);
+const scriptNames=allScriptNames.slice(1);
 assert.doesNotMatch(html,/<script(?![^>]*\bsrc=)[^>]*>|\son[a-z]+\s*=/i);
-assert.match(html,/Luopan v1\.0\.0 · 23 ชั้น/);
+assert.match(html,/Luopan 360° v1\.0\.0/);
+assert.match(html,/23 ชั้น/);
 assert.match(read('foundation.html'),/href="\/luopan\.html"/);
 assert.match(read('_redirects'),/^\/luopan\s+\/luopan\.html\s+301!$/m);
+assert.match(shell,/data-page="luopan"/);
+assert.match(shell,/data-src="\/luopan-wheel\.html"/);
+assert.doesNotMatch(shell,/<iframe[^>]+\ssrc=/i,'wheel must not load before authentication');
+assert.match(shell,/luopan-auth\.js/);
+assert.match(read('app-shell.js'),/key: 'luopan'[\s\S]*?capability: 'luopan_read'/);
+assert.match(read('luopan-auth.js'),/getSession\(\)[\s\S]*?location\.replace\('\/login\.html'\)[\s\S]*?runtime\.can\(profile, 'luopan_read'\)[\s\S]*?frame\.src = frame\.dataset\.src/);
+assert.match(read('luopan-frame-guard.js'),/window\.parent\.location\.origin === location\.origin/);
 assert.doesNotMatch(read('luopan.js'),/fetch\s*\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|supabase|window\.openai/i);
 assert.doesNotMatch(html,/<iframe\b|srcdoc=/i);
 for(const script of scriptNames)assert.doesNotThrow(()=>new vm.Script(read(script),{filename:script}));
+
+async function runAuth(session){
+  const frame={dataset:{src:'/luopan-wheel.html'},src:''};
+  const elements={
+    '#luopan-frame':frame,
+    '#app':{classList:{remove(value){this.removed=value;}}},
+    '#boot':{classList:{add(value){this.added=value;}}},
+    '#boot-error':{textContent:''},
+    '#logout':{addEventListener(){}}
+  };
+  let destination=null,mounted=null;
+  const location={replace(value){destination=value;}};
+  const window={
+    ChananyaRuntime:{
+      getDb(){return {auth:{async signOut(){}}};},
+      async getSession(){return session;},
+      async getProfile(){return session?{access_context_ready:true}:null;},
+      can(_profile,capability){return capability==='luopan_read';}
+    },
+    ChananyaShell:{mount(input){mounted=input;}}
+  };
+  vm.runInNewContext(read('luopan-auth.js'),{window,document:{querySelector:selector=>elements[selector]},location,console});
+  await new Promise(resolve=>setImmediate(resolve));
+  return {destination,mounted,frame,elements};
+}
+
+const signedOut=await runAuth(null);
+assert.equal(signedOut.destination,'/login.html');
+assert.equal(signedOut.frame.src,'','signed-out users must not load the wheel frame');
+const signedIn=await runAuth({user:{id:'user-1',email:'owner@example.test'}});
+assert.equal(signedIn.destination,null);
+assert.equal(signedIn.mounted.active,'luopan');
+assert.equal(signedIn.frame.src,'/luopan-wheel.html');
+assert.equal(signedIn.elements['#app'].classList.removed,'hidden');
+assert.equal(signedIn.elements['#boot'].classList.added,'hidden');
 
 class Element{
   constructor(tag='div'){this.localName=tag;this.attrs={};this.children=[];this.events={};this.textContent='';this.value='';this.hidden=true;this.capture=false;}
@@ -68,4 +113,4 @@ for(const width of [736,360]){
   submit('29/02/2567 22:19');assert.equal(ids['lr-error'].hidden,true);
   submit('29/10/1987 22:19');assert.equal(ids['lr-error'].hidden,true);assert.match(ids['lr-pillars'].textContent,/辛亥/);
 }
-console.log('Luopan standalone contract passed: 23 layers, pinned browser scripts, local-only input, birthdate/drag/house behavior and Kala boundaries');
+console.log('Authenticated Luopan contract passed: login gate, 23 layers, pinned browser scripts, local-only input, birthdate/drag/house behavior and Kala boundaries');

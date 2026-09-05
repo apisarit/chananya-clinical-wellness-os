@@ -27,7 +27,7 @@ for (const file of htmlFiles) {
   assert.doesNotMatch(html, /@supabase\/supabase-js@2(?:["'/]|$)/, `${file} must pin the complete Supabase browser SDK version`);
 }
 
-for (const file of ['auth-login.js', 'auth-callback.js', 'owner-control.js', 'pharmacy-labels.js', 'pharmacy-v33-tools.js']) {
+for (const file of ['auth-login.js', 'auth-callback.js', 'owner-control.js', 'pharmacy-labels.js', 'pharmacy-v33-tools.js', 'luopan-auth.js', 'luopan-frame-guard.js']) {
   const source = read(file);
   assert.doesNotThrow(() => new vm.Script(source, { filename: file }), `${file} must parse as browser JavaScript`);
   assert.doesNotMatch(source, /onclick\s*=/i, `${file} must bind events without inline handlers`);
@@ -154,9 +154,13 @@ assert.ok(!directives['script-src'].includes("'unsafe-inline'"), 'inline scripts
 assert.ok(!directives['script-src'].includes("'unsafe-eval'"), 'eval must remain blocked');
 assert.deepEqual(directives['object-src'], ["'none'"]);
 assert.deepEqual(directives['base-uri'], ["'none'"]);
-assert.deepEqual(directives['frame-ancestors'], ["'none'"]);
+assert.deepEqual(directives['frame-ancestors'], ["'self'"]);
 assert.ok(directives['connect-src'].includes('https://*.supabase.co'));
 assert.ok(directives['connect-src'].includes('wss://*.supabase.co'));
+assert.ok(directives['frame-src'].includes("'self'"), 'authenticated Luopan shell must allow its same-origin wheel frame');
+assert.match(netlify, /X-Frame-Options = "SAMEORIGIN"/, 'CNYOS pages may be framed only by the same origin');
+
+assert.match(netlify, /for = "\/luopan-wheel\.html"[\s\S]*?frame-ancestors 'self'/, 'Luopan wheel may be framed only by the same CNYOS origin');
 
 assert.match(netlify, /Referrer-Policy = "no-referrer"/);
 assert.match(netlify, /Strict-Transport-Security = "max-age=31536000"/);
