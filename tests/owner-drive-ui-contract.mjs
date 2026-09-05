@@ -7,8 +7,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = fs.readFileSync(path.join(root, 'owner-control.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'owner-control.js'), 'utf8');
 
-assert.match(html, /owner-control\.js\?v=cnyos-owner-recovery-20260906"/, 'Owner Console must load the recovery-aware controller revision');
-assert.match(html, /owner-control\.css\?v=cnyos-owner-recovery-20260906"/, 'Owner recovery stylesheet must share the controller revision');
+assert.match(html, /owner-control\.js\?v=cnyos-owner-google-20260906"/, 'Owner Console must load the recovery-aware controller revision');
+assert.match(html, /owner-control\.css\?v=cnyos-owner-google-20260906"/, 'Owner recovery stylesheet must share the controller revision');
 
 assert.match(html, /id="owner-drive-form"/);
 assert.match(html, /id="owner-drive-status"[^>]*role="status"[^>]*aria-live="polite"/);

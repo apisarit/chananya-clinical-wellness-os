@@ -268,9 +268,12 @@
       const response = await ownerAwait(fetch(path, {
         method,
         cache: 'no-store',
+        redirect: 'error',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           Accept: 'application/json',
+          // The server verifies this credential with Google for linked accounts.
+          ...(session.provider_token ? { 'X-Owner-Google-Token': session.provider_token } : {}),
           ...(body ? { 'Content-Type': 'application/json' } : {})
         },
         signal: timeout.signal,
@@ -281,7 +284,7 @@
         clearOwnerSession();
         showOwnerRecovery(response.status === 401
           ? 'Session ไม่ผ่านการยืนยัน (401) กรุณาออกจากระบบและเข้าสู่ระบบใหม่ด้วย Google Owner'
-          : 'Server ปฏิเสธสิทธิ์ Owner (403) กรุณาตรวจบัญชี Google Owner หรือการตั้งค่าเว็บไซต์ ไม่ได้เปิดสิทธิ์ให้อัตโนมัติ');
+          : 'ยืนยันสิทธิ์ Google Owner ไม่สำเร็จ (403) กรุณากด “ออกจากระบบแล้วเข้า Google ใหม่” ด้วยบัญชี Owner ที่ได้รับอนุญาต');
         throw ownerSessionError();
       }
       const payload = await ownerAwait(response.json(), timeout.signal);

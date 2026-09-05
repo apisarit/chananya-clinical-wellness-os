@@ -112,7 +112,13 @@ function decodeOwnerAccessTokenClaims(accessToken) {
   }
 }
 
-export function validateOwnerUser(user, allowedEmails, verifiedAccessToken) {
+class LinkedGoogleProofRequired extends Error {
+  constructor() { super('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED'); }
+}
+
+// Both user and verifiedAccessToken come from a successful Supabase /auth/v1/user
+// request. The optional profile must come only from Google's authenticated UserInfo.
+export function validateOwnerUser(user, allowedEmails, verifiedAccessToken, verifiedGoogleProfile = null) {
   const email = String(user?.email || '').trim().toLowerCase();
   const claims = decodeOwnerAccessTokenClaims(verifiedAccessToken);
   const providers = new Set([
@@ -131,17 +137,61 @@ export function validateOwnerUser(user, allowedEmails, verifiedAccessToken) {
     .map(reference => typeof reference === 'string' ? reference : reference?.method)
     .map(value => String(value || '').trim().toLowerCase())
     .filter(Boolean));
-  // The token has already been verified by Supabase /auth/v1/user. Requiring
-  // an OAuth AMR plus a Google-only identity prevents a password session on a
-  // linked account from entering the Owner console.
+  // OAuth AMR alone cannot distinguish Google from a linked GitHub login.
   if (authenticationMethods.size !== 1
     || !authenticationMethods.has('oauth')
-    || providers.size !== 1
     || !providers.has('google')) {
     throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
   }
   if (!allowedEmails.includes(email)) throw new Error('CNYOS_OWNER_NOT_AUTHORIZED');
+  if (providers.size !== 1) {
+    const googleSubjects = (Array.isArray(user.identities) ? user.identities : [])
+      .filter(identity => identity?.provider === 'google')
+      .map(identity => identity.identity_data?.sub)
+      .filter(sub => typeof sub === 'string' && sub.length > 0 && sub.length <= 255);
+    if (googleSubjects.length === 0) throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
+    if (!verifiedGoogleProfile) throw new LinkedGoogleProofRequired();
+    if (verifiedGoogleProfile.email_verified !== true
+      || typeof verifiedGoogleProfile.sub !== 'string'
+      || !googleSubjects.includes(verifiedGoogleProfile.sub)
+      || String(verifiedGoogleProfile.email || '').trim().toLowerCase() !== email) {
+      throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
+    }
+  }
   return Object.freeze({ id: user.id, email });
+}
+
+export async function validateOwnerUserWithGoogleProof({
+  request, user, allowedEmails, verifiedAccessToken, fetchImpl = fetch
+}) {
+  try {
+    return validateOwnerUser(user, allowedEmails, verifiedAccessToken);
+  } catch (error) {
+    if (!(error instanceof LinkedGoogleProofRequired)) throw error;
+  }
+  // Supabase may link Google and GitHub to the same account. Require a live
+  // Google credential for that case; never infer its provider from user metadata.
+  const providerToken = request.headers.get('x-owner-google-token') || '';
+  if (!/^[A-Za-z0-9._~+\/-]{32,8192}={0,2}$/.test(providerToken)) {
+    throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
+  }
+  let profile;
+  try {
+    const response = await fetchImpl('https://openidconnect.googleapis.com/v1/userinfo', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${providerToken}`, Accept: 'application/json' },
+      redirect: 'error',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) throw new Error('GOOGLE_PROOF_REJECTED');
+    profile = await response.json();
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw new Error('GOOGLE_PROOF_INVALID');
+  } catch {
+    // Never expose the provider token, Google's response or transport errors.
+    throw new Error('CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED');
+  }
+  return validateOwnerUser(user, allowedEmails, verifiedAccessToken, profile);
 }
 
 export function normalizeSubscriptionRequest(value) {
