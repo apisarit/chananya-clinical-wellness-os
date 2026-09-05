@@ -1,6 +1,6 @@
 [build]
   command = "npm run build"
-  publish = "."
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -23,6 +23,13 @@
 
 [[headers]]
   for = "/deploy-manifest.json"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+    X-Content-Type-Options = "nosniff"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/runtime-publish-manifest.json"
   [headers.values]
     Cache-Control = "no-store, max-age=0"
     X-Content-Type-Options = "nosniff"
