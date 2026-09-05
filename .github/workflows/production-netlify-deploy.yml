@@ -23,11 +23,18 @@ jobs:
     environment: production
     env:
       PRODUCTION_RELEASE_ATTESTATION_JSON: ${{ secrets.PRODUCTION_RELEASE_ATTESTATION_JSON }}
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+      PRODUCTION_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_SERVICE_ROLE_KEY }}
+      PRODUCTION_EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_EXPECTED_SUPABASE_PROJECT_REF }}
+      PRODUCTION_EXPECTED_CLINIC_ID: ${{ vars.PRODUCTION_EXPECTED_CLINIC_ID }}
+      PRODUCTION_EXPECTED_CLINIC_CODE: ${{ vars.PRODUCTION_EXPECTED_CLINIC_CODE }}
       EXPECTED_RELEASE_COMMIT: ${{ github.sha }}
       EXPECTED_PRODUCTION_HOST: ${{ vars.PRODUCTION_SITE_HOST }}
       PRODUCTION_SITE_URL: ${{ vars.PRODUCTION_SITE_URL }}
       NETLIFY_SITE_ID: ${{ vars.PRODUCTION_NETLIFY_SITE_ID }}
       NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      CNYOS_PRODUCTION_ADMISSION_LOCK_ACK: VERIFY_SUSPENDED_TENANT
+      PRODUCTION_ADMISSION_LOCK_EVIDENCE_PATH: artifacts/production-deploy/database-admission-lock.json
       NETLIFY_PRE_DEPLOY_EVIDENCE_PATH: artifacts/production-deploy/netlify-before.json
       NETLIFY_DEPLOY_OUTPUT_PATH: artifacts/production-deploy/netlify-deploy.json
       NETLIFY_POST_DEPLOY_EVIDENCE_PATH: artifacts/production-deploy/netlify-after.json
@@ -54,6 +61,11 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -n "$PRODUCTION_RELEASE_ATTESTATION_JSON"
+          test -n "$CLINICAL_OS_PRODUCTION_CONFIG_JSON"
+          test -n "$PRODUCTION_SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$PRODUCTION_EXPECTED_SUPABASE_PROJECT_REF"
+          test -n "$PRODUCTION_EXPECTED_CLINIC_ID"
+          test -n "$PRODUCTION_EXPECTED_CLINIC_CODE"
           test -n "$NETLIFY_SITE_ID"
           test -n "$PRODUCTION_SITE_URL"
           test -n "$EXPECTED_PRODUCTION_HOST"
@@ -76,6 +88,9 @@ jobs:
 
       - name: Require protected external approval and all exact-commit gates
         run: npm run verify:production-promotion
+
+      - name: Prove database-enforced real-data admission is still suspended
+        run: npm run verify:production-admission-lock
 
       - name: Bind production build to exact commit and tree
         shell: bash
