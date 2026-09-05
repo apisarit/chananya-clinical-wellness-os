@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { fileURLToPath } from 'node:url';
 
 // Execute the actual controller. All identities, records, transport and DOM are synthetic.
 const source = fs.readFileSync(new URL('../owner-control.js', import.meta.url), 'utf8');
@@ -53,7 +52,7 @@ function harness(options = {}) {
   const elements = new Map();
   const el = name => { if (!elements.has(name)) elements.set(name, new Element()); return elements.get(name); };
   el('owner-app').classList.add('hidden');
-  const window = new Element(); const calls = []; const timeouts = []; const redirects = []; let authCallback;
+  const window = new Element(); const calls = []; const timeouts = []; const redirects = []; const storageWrites = []; let authCallback;
   const state = { session: userSession(), getSessionCalls: 0, ...options };
   const db = { auth: {
     getSession: () => { state.getSessionCalls++; return state.getSession ? state.getSession() : Promise.resolve({ data: { session: state.session } }); },
@@ -63,7 +62,10 @@ function harness(options = {}) {
   window.ChananyaRuntime = { getDb: () => db }; window.confirm = () => true;
   const context = vm.createContext({ window, document: { querySelector: s => el(s.slice(1)), createElement: () => new Element() },
     location: { replace: target => redirects.push(target) },
-    sessionStorage: { setItem() { if (state.storageFails) throw new Error('Storage disabled'); } },
+    sessionStorage: { setItem(key, value) {
+      if (state.storageFails) throw new Error('Storage disabled');
+      storageWrites.push([key, value]);
+    } },
     fetch: async (url, init) => {
       calls.push({ url, ...init });
       if (state.fetch) return state.fetch(url, init, calls.length);
@@ -74,7 +76,7 @@ function harness(options = {}) {
     setTimeout: () => 0, clearTimeout() {}, console
   });
   vm.runInContext(source, context, { filename: 'owner-control.js' });
-  return { el, state, calls, timeouts, redirects, window,
+  return { el, state, calls, timeouts, redirects, storageWrites, window,
     auth: (event, value) => { state.session = value; return authCallback(event, value); },
     submit: () => {
       el('owner-clinic').value = 'synthetic-clinic'; el('owner-confirm-code').value = 'TEST-STG';
@@ -139,9 +141,15 @@ await check('local logout hides immediately even when remote logout fails', asyn
   pending.resolve({ error: new Error('synthetic network failure') }); await logout;
   assertCleared(h); assert.match(h.el('boot-error').textContent, /ออกจากระบบไม่สำเร็จ/); assert.equal(h.redirects.length, 0);
 });
-await check('successful logout still redirects when browser storage is unavailable', async () => {
-  const h = harness({ storageFails: true }); await flush(); await h.el('owner-logout').dispatch('click');
-  assertCleared(h); assert.deepEqual(h.redirects, ['/login.html']);
+await check('successful logout preserves its return path and tolerates unavailable storage', async () => {
+  for (const storageFails of [false, true]) {
+    const h = harness({ storageFails }); await flush();
+    await h.el('owner-logout').dispatch('click');
+    assertCleared(h); assert.deepEqual(h.redirects, ['/login.html']);
+    assert.deepEqual(h.storageWrites, storageFails ? [] : [
+      ['cnyos:post_auth_path', '/owner-control.html']
+    ]);
+  }
 });
 await check('pagehide clears state and BFCache restoration starts a fresh load', async () => {
   const h = harness(); await flush(); await h.window.dispatch('pagehide'); assertCleared(h);
