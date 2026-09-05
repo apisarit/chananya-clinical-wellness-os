@@ -116,6 +116,26 @@ await check('same-user SIGNED_IN does not wipe state or recursively call auth', 
   h.auth('SIGNED_IN', userSession());
   assert.equal(h.state.getSessionCalls, before); assert.equal(h.el('owner-clinic-list').children.length, 1);
 });
+await check('Owner requests use the latest SDK Google token without persisting another copy', async () => {
+  const h = harness({ session: { ...userSession(), provider_token: 'synthetic-old-google-proof' } }); await flush();
+  assert.equal(h.calls[0].headers['X-Owner-Google-Token'], 'synthetic-old-google-proof');
+  assert.equal(h.calls[0].redirect, 'error', 'Never forward the Google credential through a redirect');
+  h.state.session = { ...userSession('fresh-session'), provider_token: 'synthetic-fresh-google-proof' };
+  await h.el('owner-drive-retry').dispatch('click');
+  assert.equal(h.calls.at(-1).headers['X-Owner-Google-Token'], 'synthetic-fresh-google-proof');
+  assert.deepEqual(h.storageWrites, []);
+  h.auth('TOKEN_REFRESHED', userSession('refreshed-without-provider-token'));
+  await h.el('owner-drive-retry').dispatch('click');
+  assert.equal(h.calls.at(-1).headers['X-Owner-Google-Token'], undefined, 'Do not reuse a stale Google token after refresh');
+});
+await check('Google proof cannot survive account switching in an in-flight Owner request', async () => {
+  const h = harness({ session: { ...userSession(), provider_token: 'synthetic-google-proof' } }); await flush();
+  const pending = deferred(); h.state.getSession = () => pending.promise;
+  const before = h.calls.length; const retry = h.el('owner-drive-retry').dispatch('click'); await flush();
+  h.auth('SIGNED_IN', userSession('other-session', 'another-owner'));
+  pending.resolve({ data: { session: { ...userSession(), provider_token: 'synthetic-google-proof' } } });
+  await retry; assertCleared(h); assert.equal(h.calls.length, before);
+});
 await check('cross-tab logout clears all rendered and entered Owner state', async () => {
   const h = harness(); await flush(); h.el('owner-reason').value = 'Private entered reason';
   h.auth('SIGNED_OUT', null); assertCleared(h); const before = h.calls.length;
@@ -349,4 +369,3 @@ await check('duplicate Drive submit dispatch is ignored while the first is in fl
   assert.equal(h.el('owner-drive-submit').disabled, false);
 });
 console.log(`Owner session lifecycle passed: ${passed} synthetic browser-controller cases; no live authentication or deployment claimed.`);
-

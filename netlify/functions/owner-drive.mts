@@ -8,7 +8,7 @@ import {
   ownerPublicError,
   readOwnerJson,
   supabaseOwnerRequest,
-  validateOwnerUser
+  validateOwnerUserWithGoogleProof
 } from './_shared/owner-control.mjs';
 import {
   fetchGoogleAccessToken,
@@ -141,7 +141,7 @@ function configuration(getEnv = readEnv) {
   });
 }
 
-async function authenticateOwner(request, config, ownerRequest = supabaseOwnerRequest) {
+async function authenticateOwner(request, config, ownerRequest = supabaseOwnerRequest, googleFetch = fetch) {
   const token = extractBearerToken(request);
   const user = await ownerRequest({
     url: config.supabaseUrl,
@@ -149,7 +149,9 @@ async function authenticateOwner(request, config, ownerRequest = supabaseOwnerRe
     resource: '/auth/v1/user',
     bearer: token
   });
-  return validateOwnerUser(user, config.ownerEmails, token);
+  return validateOwnerUserWithGoogleProof({
+    request, user, allowedEmails: config.ownerEmails, verifiedAccessToken: token, fetchImpl: googleFetch
+  });
 }
 
 async function listAssignments(config, ownerRequest = supabaseOwnerRequest) {
@@ -272,7 +274,7 @@ export async function handleOwnerDrive(request, context, deps = {}) {
       config.expectedNetlifySiteId,
       config.expectedSiteOrigin
     );
-    const owner = await authenticateOwner(request, config, deps.ownerRequest);
+    const owner = await authenticateOwner(request, config, deps.ownerRequest, deps.googleFetch);
     const serviceAccount = await resolveServiceAccount(config, runtime, deps.credentialResolver);
     if (request.method === 'GET') {
       return json({

@@ -17,9 +17,9 @@ for (const id of ['owner-refresh', 'owner-recovery-login', 'owner-clinic', 'owne
 }
 assert.match(html, /id="owner-recovery-actions" hidden/);
 assert.match(html, /id="owner-boot-spinner"/);
-assert.match(html, /owner-control\.js\?v=cnyos-owner-recovery-20260906/);
+assert.match(html, /owner-control\.js\?v=cnyos-owner-google-20260906/);
 assert.match(html, /supabase-js@2\.112\.4" integrity="sha384-yiVMs0R\/Jyz7OhoXa\/DsEMUSBLjEhr\/QJta2ONO\+zB6I8\/GmNg\/7AUFrZmAJV7KV" crossorigin="anonymous"/);
-assert.match(html, /owner-control\.css\?v=cnyos-owner-recovery-20260906/);
+assert.match(html, /owner-control\.css\?v=cnyos-owner-google-20260906/);
 const css = fs.readFileSync(new URL('owner-control.css', root), 'utf8');
 assert.match(css, /\.owner-console-page \[hidden\] \{ display: none !important; \}/);
 assert.ok(!html.includes('onclick='), 'No inline click handlers');
