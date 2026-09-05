@@ -1,0 +1,30 @@
+name: Onboarding repair workspace
+on:
+  push:
+    branches: ['codex/pending-user-approval-20260905']
+permissions:
+  contents: read
+jobs:
+  source-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Package tracked public source and locked test dependencies only
+        shell: bash
+        run: |
+          git ls-files -z > /tmp/cnyos-source-files
+          tar -czf /tmp/cnyos-onboarding-source.tgz --null -T /tmp/cnyos-source-files node_modules
+      - uses: actions/upload-artifact@v6
+        with:
+          name: onboarding-source-${{ github.sha }}
+          path: /tmp/cnyos-onboarding-source.tgz
+          retention-days: 1
+          if-no-files-found: error
