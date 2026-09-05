@@ -5,7 +5,7 @@
   "commercialProductionReady": false,
   "releaseCommit": null,
   "productionApprovalSource": "external_exact_commit_attestation",
-  "claimPolicy": "This source-controlled file is a fail-closed policy baseline and must not be mutated to approve its own Git commit. Production approval is supplied as an external exact-commit attestation from the protected production environment. Real patient data remains blocked until the separate post-deploy production attestation passes.",
+  "claimPolicy": "This source-controlled file is a fail-closed policy baseline and must not be mutated to approve its own Git commit. Production approval is supplied as an external exact-commit attestation from a production environment whose protection and approval rules are separately verified. Real patient data remains blocked until the separate post-deploy production attestation passes.",
   "promotionPolicy": {
     "allRequiredGatesMustPass": true,
     "evidenceMustMatchReleaseCommit": true,
@@ -84,7 +84,7 @@
     },
     {
       "id": "release_provenance_ci_merge_protection",
-      "label": "Exact release-candidate source provenance, automated checks, review status and merge protection verified before production deployment",
+      "label": "Exact release-candidate provenance, automated checks, review status, main-branch protection and production-environment protection/approval verified before production deployment",
       "status": "pending",
       "evidence": null
     }
