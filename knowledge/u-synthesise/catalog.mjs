@@ -8,7 +8,7 @@ export function deepFreeze(value) {
 }
 
 export const identity = deepFreeze({
-  name: 'U Synthesise', id: 'u-synthesise', version: '0.2.0', status: 'foundation_draft',
+  name: 'U Synthesise', id: 'u-synthesise', version: '0.3.0', status: 'foundation_draft',
   baselineCommit: '40cb673f02e8b9e2641c46702441cff8c8ef19bd',
   legacyFile: 'luopan-knowledge.js',
   legacySha256: '79e0c23c763aa580665cdabfedc989275b3bbbdce867f02e4fc38d618acf1951',

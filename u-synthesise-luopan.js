@@ -1,8 +1,10 @@
+import {mountLandscape} from './u-synthesise-landscape-ui.js';
 import {classicalIdentity, classicalSources, trigrams, mountainDetails, classicalRings, ringPresets, classicalReading, elementName, polarityName, loShuGrid, heTu, hexagrams, hexagramMatrix, findHexagram, studyGuide} from './u-synthesise-classical.js';
 
 export function mountClassicalLuopan(document, {onExplore} = {}) {
   const q=id=>document.getElementById(id), svg=q('us-compass'), NS='http://www.w3.org/2000/svg';
   if(!svg||!q('us-atlas-preset'))return {update(){}};
+  let landscape=null;
   let reading=null, overlay=null, selected='earth', visible=new Set(ringPresets.core.ids);
   let lifeElement='water', lifePolarity='yang', origin='manual';
   const mod=(v,n=360)=>((v%n)+n)%n;
@@ -43,7 +45,7 @@ export function mountClassicalLuopan(document, {onExplore} = {}) {
         const hit=read?.sector===s || (read?.sector.start===s.start);
         const possible=read?.candidates?.some(c=>c.start===s.start);
         const linked=r.id==='earth'&&s.symbol===overlay?.symbol;
-        const attrs={d:arc(inner,outer,s.start,s.span),fill:hit?'#cfb77b':linked?'#795838':index%2?'#252c30':'#323332',stroke:possible?'#e9b569':'#686052','stroke-width':possible?2:0.7,'data-layer-id':r.id,'data-sector-start':s.start};
+        const attrs={d:arc(inner,outer,s.start,s.span),fill:hit?'#cfb77b':linked?'#795838':s.baseline==='favorable'?'#25483e':s.baseline==='unfavorable'?'#573c36':index%2?'#252c30':'#323332',stroke:possible?'#e9b569':'#686052','stroke-width':possible?2:0.7,'data-layer-id':r.id,'data-sector-start':s.start};
         if(r.id==='earth')attrs['data-mountain']=s.symbol;
         const path=shape('path',attrs);shape('title',{},r.name+' · '+s.value+' · '+range(s),path);
         const middle=(inner+outer)/2,p=point(middle,s.center);
@@ -68,9 +70,17 @@ export function mountClassicalLuopan(document, {onExplore} = {}) {
       shape('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'#ffcc71','stroke-width':3,'pointer-events':'none','data-bearing':data.degrees});
       shape('circle',{cx:b[0],cy:b[1],r:6,fill:'#ffcc71','pointer-events':'none'});
     }
+    for(const [index,feature]of (landscape?.features||[]).entries()){
+      const p=point(447,feature.result.position.degrees),group=shape('g',{'data-feature-index':index});
+      shape('circle',{cx:p[0],cy:p[1],r:11,fill:'#172126',stroke:'#ffcc71','stroke-width':2},undefined,group);
+      shape('text',{x:p[0],y:p[1]+4,'text-anchor':'middle','font-size':12,fill:'#fff'},String(index+1),group);
+      shape('title',{},feature.label+' · '+feature.result.position.degrees+'°',group);
+      group.addEventListener('click',()=>onExplore?.(feature.result.position.degrees));
+    }
     q('us-wheel-count').textContent='แสดง '+(visible.size+1)+' / '+classicalIdentity.scaleCount+' ชั้น รวมสเกลองศา · เส้นทึบ = แนวอ่าน · เส้นประ = ฝั่งตรงข้าม';
   }
   function readout(){
+    landscape?.update(reading,origin);
     const rs=rings(),focus=rs.find(r=>r.id===selected),data=result(),box=q('us-layer-detail');box.replaceChildren();
     node('p',focus.school,box,{class:'us-eyebrow'});node('h3',focus.name,box);node('p',focus.description,box);
     if(data){const read=data.readings.find(r=>r.id===selected);node('strong',read.sector.value,box);node('p',range(read.sector),box,{class:'text-small'});}
@@ -162,6 +172,7 @@ export function mountClassicalLuopan(document, {onExplore} = {}) {
   hexagramMatrix.forEach((row,l)=>{const tr=node('tr',undefined,q('us-hex-matrix'));node('th',trigrams[l].symbol,tr,{scope:'row'});row.forEach((number,u)=>{const h=hexagrams[number-1],cell=node('td',undefined,tr),button=node('button',number+' '+h.name,cell,{type:'button','aria-label':number+' '+h.name+' '+h.thai});button.addEventListener('click',()=>{q('us-hex-lower').value=trigrams[l].symbol;q('us-hex-upper').value=trigrams[u].symbol;hexResult();});});});
   for(const guide of studyGuide){const detail=node('details',undefined,q('us-study-guide'));node('summary',guide.title,detail);node('p',guide.text,detail);references(guide.sourceIds,detail);}
   for(const [id,s]of Object.entries(classicalSources)){const li=node('li',undefined,q('us-classical-sources'));node('a',s.title,li,{href:s.url,target:'_blank',rel:'noopener noreferrer'});}
+  landscape=mountLandscape(document,{onChange:draw,onExplore});
   draw();readout();
   return {update(nextReading,nextOverlay,nextOrigin='manual'){reading=nextReading;overlay=nextOverlay;origin=nextOrigin;if(reading)q('us-bearing-slider').value=String(reading.position.degrees);draw();readout();}};
 }

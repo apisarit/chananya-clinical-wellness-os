@@ -1124,3 +1124,8 @@ svg.lucide {
   .us-axis-card>strong { font-size:1rem; }
   .us-reading-table { font-size:0.8rem; }
 }
+
+.us-feature-form { display:grid; gap:0.65rem; margin:1rem 0; }
+.us-landscape-status { display:block; padding:0.5rem 0; color:var(--us-gold); }
+#us-landscape-panel>summary { color:var(--us-gold); }
+#us-landscape-guide h3 { font-size:1rem; margin-top:0.9rem; }

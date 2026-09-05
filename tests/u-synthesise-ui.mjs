@@ -21,7 +21,7 @@ const window = {};
 vm.runInNewContext(read('luopan-knowledge.js'), {window});
 const document = {getElementById: id => ids[id] || null, createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag)};
 mountUSynthesise(document, window);
-assert.match(ids['us-version'].textContent, /U Synthesise 0\.2\.0.*113/);
+assert.match(ids['us-version'].textContent, /U Synthesise 0\.3\.0.*113/);
 assert.equal(ids['us-modules'].children.length, 4);
 assert.equal(ids['us-layer-frames'].children.length, 23);
 assert.equal(ids['us-wuxing'].children.length, 5);
@@ -61,8 +61,8 @@ assert.equal(ids['us-spatial'].hidden, true);
 assert.equal(ids['luopan-birthdate-ray'].hidden, false);
 assert.doesNotMatch(read('u-synthesise.js'), /fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|DeviceOrientationEvent/);
 assert.match(read('app-shell.js'), /label: 'U Synthesise'.*capability: 'luopan_read'/);
-for (const name of ['catalog', 'engine', 'classical']) {
-  const expected = '// Generated from knowledge/u-synthesise/' + name + '.mjs\n' + read('knowledge/u-synthesise/' + name + '.mjs').replace("from './catalog.mjs'", "from './u-synthesise-catalog.js'");
+for (const name of ['catalog', 'engine', 'classical', 'landscape']) {
+  const expected = '// Generated from knowledge/u-synthesise/' + name + '.mjs\n' + read('knowledge/u-synthesise/' + name + '.mjs').replace(/from '\.\/(catalog|classical|landscape)\.mjs'/g, (_, name) => "from './u-synthesise-" + name + ".js'");
   assert.equal(read('u-synthesise-' + name + '.js'), expected, 'published module must match its tested source');
 }
 console.log('U Synthesise UI passed: two modes, fixed geometry, birthdate separation, uncertain and invalid headings, complete catalog and generated module identity');
@@ -74,15 +74,15 @@ assert.equal(ids['us-loshu-grid'].children.length,9);
 assert.equal(ids['us-hetu-rows'].children.length,5);
 assert.equal(ids['us-hex-matrix'].children.length,9);
 assert.equal(ids['us-study-guide'].children.length,10);
-assert.equal(ids['us-classical-sources'].children.length,9);
+assert.equal(ids['us-classical-sources'].children.length,10);
 ids['us-atlas-preset'].value='all';ids['us-atlas-preset'].events.change();
-assert.match(ids['us-wheel-count'].textContent,/14 \/ 14/);
-assert.equal(new Set(ids['us-compass'].children.map(c=>c.attrs['data-layer-id']).filter(Boolean)).size,13);
+assert.match(ids['us-wheel-count'].textContent,/16 \/ 16/);
+assert.equal(new Set(ids['us-compass'].children.map(c=>c.attrs['data-layer-id']).filter(Boolean)).size,15);
 ids['us-zoom'].value='2';ids['us-zoom'].events.change();assert.match(ids['us-compass'].attrs.style,/width:200%/);
 ids['us-uncertainty'].value='3';ids['us-bearing-slider'].value='180';ids['us-bearing-slider'].events.input();
 assert.equal(ids['us-bearing'].value,'180');assert.equal(ids['us-uncertainty'].value,'');
 assert.match(ids['us-reading-origin'].textContent,/ตำแหน่งทดลอง/);
-assert.equal(ids['us-ring-results'].children.length,13);
+assert.equal(ids['us-ring-results'].children.length,15);
 assert.match(allText(ids['us-axis-summary']),/午 อู่.*子 จื่อ/);
 ids['us-compass'].events.click({target:mountains()[0],clientX:300,clientY:196});
 assert.equal(ids['us-bearing'].value,'90','tap maps to measured reference geometry at mobile display width');
@@ -97,6 +97,6 @@ ids['us-mountain-filter'].value='<script>';ids['us-mountain-filter'].events.inpu
 ids['us-mountain-filter'].value='';ids['us-mountain-filter'].events.input();
 ids['us-hex-upper'].value='震';ids['us-hex-lower'].value='乾';ids['us-hex-upper'].events.change();assert.match(allText(ids['us-hex-result']),/34.*大壯/);
 ids['us-bearing'].value='';submit();assert.equal(ids['us-ring-results'].children.length,0);assert.doesNotMatch(allText(ids['us-axis-summary']),/亥/);
-for(const file of ['u-synthesise-luopan.js','u-synthesise-classical.js'])assert.doesNotMatch(read(file),/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|DeviceOrientationEvent|innerHTML/);
+for(const file of ['u-synthesise-luopan.js','u-synthesise-classical.js','u-synthesise-landscape-ui.js','u-synthesise-landscape.js'])assert.doesNotMatch(read(file),/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|DeviceOrientationEvent|innerHTML/);
 console.log('Classical UI passed: all rings, mobile tap, zoom, manual vs study provenance, search, hexagram selection, unchanged bearings and no stale invalid result');
-export {ids};
+export {ids, allText};

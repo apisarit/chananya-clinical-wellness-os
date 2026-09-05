@@ -1,8 +1,10 @@
 import {deepFreeze, mountains, bagua, branches, stems, elements} from './catalog.mjs';
+import {landscapeRings, landscapeSources} from './landscape.mjs';
 
 // A sourced study atlas. Ring membership never assigns a fortune or medical result.
-export const classicalIdentity = deepFreeze({version: '1.0.0', name: 'หล่อแกดั้งเดิม', frame: 'magnetic_bearing', north: 0, clockwise: true, boundary: '[start,end)', scaleCount: 14});
+export const classicalIdentity = deepFreeze({version: '1.1.0', name: 'หล่อแกดั้งเดิม', frame: 'magnetic_bearing', north: 0, clockwise: true, boundary: '[start,end)', scaleCount: 16});
 export const classicalSources = deepFreeze({
+  ...landscapeSources,
   compass: {title: 'Feng Shui Natural — 24 Mountains and facing / sitting', url: 'https://www.fengshuinatural.com/en/fengshuicompass.htm', kind: 'practitioner'},
   plates: {title: 'Evelyn Escarfullery / FORMOSA Art — Three plates and schools', url: 'https://www.formosa-art.com/feng-shui-knowledge/feng-shui-blog/evelyn-escarfullery/', kind: 'practitioner'},
   shuoGua: {title: '周易 · 說卦傳 — ปากว้าและภาพแทนตามคัมภีร์', url: 'https://www.chineseclassic.com/content/196', kind: 'classical_text'},
@@ -81,6 +83,7 @@ export function classicalRings({lifeElement='water',lifePolarity='yang'}={}) {
     ring('dragons','สามหยวนมังกร · 三元龍','ซานหยวน · 三元','แต่ละวังมี 3 ขุนเขา เรียงเป็นตี้หยวน–เทียนหยวน–เหรินหยวน เป็นการจัดกลุ่มขุนเขา ไม่ใช่จานดิน–ฟ้า–คนสามวง',['sanyuan'],mountainDetails.map(m=>({...m,label:{earth:'地',heaven:'天',human:'人'}[m.dragon],value:m.symbol+' · '+m.dragonName}))),
     ring('mountain_polarity','หยิน–หยางขุนเขา · 三元陰陽','ซานหยวน · 三元','เกณฑ์ซานหยวน: 子午卯酉 เป็นหยิน และ 寅申巳亥 เป็นหยาง จึงห้ามยกหยิน–หยางกิ่งดิน BaZi มาแทน',['sanyuan'],mountainDetails.map(m=>({...m,label:m.sanYuanPolarity==='yang'?'陽':'陰',value:m.symbol+' · '+polarityName(m.sanYuanPolarity)+' ตามซานหยวน'}))),
     ring('double','คู่ขุนเขา · 天盤雙山','ซาฮะ · 三合','จับคู่บนจานฟ้าเป็น 12 ช่อง ช่องละ 30° ธาตุซาฮะตามกลุ่ม申子辰น้ำ・亥卯未ไม้・寅午戌ไฟ・巳酉丑ทอง เช่น 癸丑 เป็นทองตามเกณฑ์นี้',['sanhe','plates'],doubleMountains.map(p=>({...p,label:p.symbol,value:p.symbol+' · ซาฮะธาตุ'+elementName(p.element)}))),
+    ...landscapeRings(),
     ring('life','12 ระยะฉางเซิง · 十二長生','ซาฮะ · ตารางศึกษา','แสดงตามธาตุและหยิน/หยางที่ผู้ใช้เลือก: หยางเรียงไปข้างหน้า หยินย้อนกลับ ชื่อ病・死เป็นชื่อระยะตามตำรา ยังไม่ใช้วินิจฉัยคนหรือฟันธงน้ำเข้า–ออก',['sanhe'],lifeRing(lifeElement,lifePolarity).map(s=>({...s,label:s.symbol,value:s.symbol+' '+s.thai+' · '+s.meaning+' · คู่ '+s.pair+' · ธาตุ'+elementName(lifeElement)+' '+polarityName(lifePolarity)}))),
   ];
 }
@@ -88,7 +91,8 @@ export const ringPresets = deepFreeze({
   core:{name:'แกนหลัก',ids:['directions','later','early','loshu','earth','zheng_elements']},
   sanhe:{name:'ซาฮะ · สามจาน',ids:['directions','earth','human','heaven','double','life']},
   sanyuan:{name:'ซานหยวน · ปากว้า',ids:['directions','early','later','loshu','earth','dragons','mountain_polarity']},
-  all:{name:'ครบ 14 ชั้น',ids:classicalRings().map(r=>r.id)},
+  jinsuo:{name:'ภูมิประเทศ–น้ำ · 金鎖玉關',ids:['directions','later','loshu','earth','jinsuo_sha','jinsuo_shui']},
+  all:{name:'ครบ 16 ชั้น',ids:classicalRings().map(r=>r.id)},
 });
 
 export function sectorAt(sectors, degrees) {

@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import {readLandscape,landscapeRules,landscapeIdentity} from '../knowledge/u-synthesise/landscape.mjs';
+import {ids,allText} from './u-synthesise-ui.mjs';
+
+const read=(degrees,kind,options={})=>readLandscape({position:{frame:'magnetic_bearing',degrees},kind,...options});
+// Independent compass fixtures: N, NE, E, SE, S, SW, W, NW. Each palace has three mountains.
+const expected=[['N',1,'sha'],['NE',8,'shui'],['E',3,'sha'],['SE',4,'sha'],['S',9,'shui'],['SW',2,'sha'],['W',7,'shui'],['NW',6,'shui']];
+for(const[i,[direction,loShu,prefers]]of expected.entries())for(const offset of [-15,0,15])for(const kind of ['sha','shui']){
+  const r=read(i*45+offset,kind);
+  assert.equal(r.rule.direction,direction);assert.equal(r.rule.loShu,loShu);
+  assert.equal(r.baseline,kind===prefers?'favorable':'unfavorable');
+  assert.equal(r.status,'form_unassessed');assert.equal(r.overallAssessment,'not_evaluated');
+}
+assert.equal(landscapeRules.length,8);assert.equal(landscapeIdentity.scope,'eight_palace_baseline');
+assert.equal(read(330,'shui').mountain.symbol,'亥');
+assert.equal(read(360,'sha').rule.direction,'N');
+assert.equal(read(22.499,'sha').baseline,'favorable');
+assert.equal(read(22.5,'sha').baseline,'unfavorable');
+const uncertain=read(22.4,'sha',{uncertaintyDegrees:0.2,form:'orderly'});
+assert.equal(uncertain.status,'boundary_ambiguous');assert.equal(uncertain.conflicts,true);
+assert.deepEqual(uncertain.candidateReadings.map(c=>c.rule.direction),['N','NE']);
+assert.equal(read(359.9,'sha',{uncertaintyDegrees:0.2}).crossesPalaces,false,'north wrap stays within the same palace');
+assert.equal(read(0,'sha',{uncertaintyDegrees:180}).candidateReadings.length,8);
+assert.equal(read(112.5,'sha',{uncertaintyDegrees:1}).conflicts,false,'E and SE share the baseline even if palace is uncertain');
+assert.equal(read(0,'sha',{form:'adverse'}).status,'form_review');
+assert.equal(read(0,'sha',{form:'orderly'}).status,'baseline_only');
+assert.equal(read(0,'mixed').status,'mixed');assert.equal(read(0,'unclassified').status,'unclassified');
+assert.throws(()=>readLandscape({position:{frame:'clock12',degrees:0},kind:'sha'}));
+for(const d of [null,'0',NaN,Infinity])assert.throws(()=>read(d,'sha'));
+for(const u of [-1,181,'1',NaN])assert.throws(()=>read(0,'sha',{uncertaintyDegrees:u}));
+assert.throws(()=>read(0,'unknown'));assert.throws(()=>read(0,'sha',{form:'unknown'}));
+
+const change=id=>ids[id].events.change(),submit=()=>ids['us-bearing-form'].events.submit({preventDefault(){}});
+ids['us-atlas-preset'].value='jinsuo';change('us-atlas-preset');
+assert.match(ids['us-wheel-count'].textContent,/7 \/ 16/);
+assert.equal(ids['us-landscape-table'].children.length,24);
+ids['us-bearing'].value='22.4';ids['us-uncertainty'].value='0.2';submit();
+ids['us-landscape-kind'].value='sha';change('us-landscape-kind');
+assert.match(allText(ids['us-landscape-result']),/ยังเลือกผลเดียวไม่ได้/);
+ids['us-bearing'].value='0';ids['us-uncertainty'].value='';submit();
+assert.match(allText(ids['us-landscape-result']),/吉.*เข้ากฎพื้นฐาน/);
+ids['us-landscape-form'].value='adverse';change('us-landscape-form');
+assert.match(allText(ids['us-landscape-result']),/รูปลักษณ์ที่ระบุมีเงื่อนไขขัดเกณฑ์/);
+ids['us-bearing-slider'].value='330';ids['us-bearing-slider'].events.input();
+ids['us-feature-use-ray'].events.click();
+assert.equal(ids['us-feature-bearing'].value,'330');assert.match(ids['us-feature-origin'].textContent,/ตำแหน่งจากการทดลอง/);
+const add=()=>ids['us-feature-form'].events.submit({preventDefault(){}});
+ids['us-feature-label'].value='<img src=x onerror=alert(1)>';ids['us-feature-note'].value='อาคารสมมติ';add();
+assert.match(allText(ids['us-feature-list']),/<img src=x onerror=alert\(1\)>/,'user text is rendered as literal text');
+assert.match(allText(ids['us-feature-list']),/คัดลอกจากเข็มทดลอง/);
+assert.equal(ids['us-compass'].children.filter(c=>c.attrs['data-feature-index']!==undefined).length,1);
+const saved=allText(ids['us-feature-list']);
+ids['lr-birth'].value='01/04/2567 06:00';ids['lr-form'].events.submit();
+assert.equal(allText(ids['us-feature-list']),saved,'birth input cannot rewrite landscape observations');
+ids['us-feature-label'].value='รายการถัดไป';ids['us-feature-bearing'].value='361';add();
+assert.equal(ids['us-feature-error'].hidden,false);assert.match(ids['us-feature-count'].textContent,/^1 \/ 20/);
+ids['us-feature-bearing'].value='90';ids['us-feature-bearing'].events.input();
+assert.equal(ids['us-feature-uncertainty'].value,'');assert.match(ids['us-feature-origin'].textContent,/ผู้ใช้กรอกเอง/);
+ids['us-feature-kind'].value='shui';add();assert.match(ids['us-feature-count'].textContent,/^2 \/ 20/);
+const cards=ids['us-feature-list'].children;
+cards[0].children.at(-1).events.click();assert.match(ids['us-feature-count'].textContent,/^1 \/ 20/);
+assert.doesNotMatch(allText(ids['us-feature-list']),/<img/);
+ids['us-bearing'].value='';submit();assert.doesNotMatch(allText(ids['us-landscape-result']),/JSYG-P/,'invalid heading clears the current landscape result');
+assert.match(ids['us-feature-count'].textContent,/^1 \/ 20/,'saved observations are separate from the current ray');
+console.log('Jin Suo Yu Guan passed: all 48 mountain/type fixtures, palace boundaries, form qualifications, mixed/unknown data, saved observation provenance and safe text rendering');

@@ -29,7 +29,7 @@
     "staging:smoke:locked": "node scripts/verify-locked-staging.mjs",
     "check:evidence": "node tests/evidence-ui-contract.mjs && node tests/evidence-search-contract.mjs",
     "check:luopan": "node tests/luopan-birthdate.mjs && npm run check:u-synthesise",
-    "check:u-synthesise": "node scripts/build-u-synthesise.mjs && node tests/u-synthesise-knowledge.mjs && node tests/u-synthesise-classical.mjs && node tests/u-synthesise-ui.mjs",
+    "check:u-synthesise": "node scripts/build-u-synthesise.mjs && node tests/u-synthesise-knowledge.mjs && node tests/u-synthesise-classical.mjs && node tests/u-synthesise-ui.mjs && node tests/u-synthesise-landscape.mjs",
     "prepare:production-approval": "node scripts/verify-production-promotion.mjs --prepare",
     "setup:production-environment": "node scripts/setup-production-environment.mjs"
   },
