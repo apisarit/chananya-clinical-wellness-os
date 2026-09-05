@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHA40 = /^[0-9a-f]{40}$/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NETLIFY_DEPLOY_ID = /^[0-9a-f]{24}$/i;
 const PROJECT_REF = /^[a-z]{20}$/;
 
@@ -146,6 +144,15 @@ export function assertSuspended(row) {
   return row;
 }
 
+export function assertActive(row) {
+  assert.equal(row.enabled, true, 'production tenant must be ON for final admission verification');
+  assert.equal(row.state, 'active', 'production tenant subscription_state must be active');
+  assert.ok(row.changedAt && Number.isFinite(Date.parse(row.changedAt)), 'production activation changedAt evidence missing');
+  assert.ok(String(row.changedBy || '').trim(), 'production activation changedBy evidence missing');
+  assert.ok(String(row.changeReason || '').trim().length >= 8, 'production activation reason evidence missing');
+  return row;
+}
+
 export function parseAdmissionAttestation(raw) {
   if (!String(raw || '').trim()) throw new Error('PRODUCTION_ADMISSION_ATTESTATION_JSON_REQUIRED');
   try { return JSON.parse(raw); }
@@ -210,67 +217,6 @@ export async function readPublicDeploymentEvidence(file, { source, origin }) {
   assert.equal(String(evidence?.origin || '').replace(/\/$/, ''), origin, 'public deployment evidence origin mismatch');
   assert.ok(Number.isFinite(Date.parse(evidence?.verifiedAt)), 'public deployment evidence timestamp invalid');
   return evidence;
-}
-
-export function actorFromEnv(env = process.env) {
-  const userId = requiredEnv('PRODUCTION_ADMISSION_ACTOR_USER_ID', env).toLowerCase();
-  const email = requiredEnv('PRODUCTION_ADMISSION_ACTOR_EMAIL', env).toLowerCase();
-  if (!UUID.test(userId)) throw new Error('PRODUCTION_ADMISSION_ACTOR_USER_ID_INVALID');
-  if (email.length > 320 || !/^[^@\s]+@[^@\s]+$/.test(email)) throw new Error('PRODUCTION_ADMISSION_ACTOR_EMAIL_INVALID');
-  return Object.freeze({ userId, email });
-}
-
-function admissionReason(reference) {
-  const reason = `Production real-patient-data admission ${String(reference || '').trim()}`.slice(0, 500);
-  if (reason.length < 8) throw new Error('PRODUCTION_ADMISSION_REASON_INVALID');
-  return reason;
-}
-
-export async function activateSubscription({ target, serviceRoleKey, expectedVersion, approvalReference, actor }) {
-  const requestId = randomUUID();
-  if (!UUID_V4.test(requestId)) throw new Error('PRODUCTION_ADMISSION_REQUEST_ID_INVALID');
-  const reason = admissionReason(approvalReference);
-  const body = {
-    p_request_id: requestId,
-    p_clinic_id: target.clinicId,
-    p_expected_clinic_code: target.clinicCode,
-    p_enabled: true,
-    p_expected_version: expectedVersion,
-    p_reason: reason,
-    p_actor_user_id: actor.userId,
-    p_actor_email: actor.email
-  };
-  let result;
-  let firstError;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      result = await supabaseServiceRpc(target, serviceRoleKey, 'set_clinic_subscription_state', body);
-      break;
-    } catch (error) {
-      firstError ||= error;
-    }
-  }
-  const current = await listExactSubscription(target, serviceRoleKey);
-  const expectedNextVersion = expectedVersion + 1;
-  const matchesRequestedActivation = current.enabled === true
-    && current.state === 'active'
-    && current.version === expectedNextVersion
-    && String(current.changedBy || '').toLowerCase() === actor.email
-    && current.changeReason === reason;
-  if (!result && !matchesRequestedActivation) throw firstError || new Error('PRODUCTION_ADMISSION_TRANSITION_UNVERIFIED');
-  assert.equal(current.enabled, true, 'production tenant did not become active');
-  assert.equal(current.state, 'active', 'production tenant did not become active');
-  assert.equal(current.version, expectedNextVersion, 'production subscription version did not advance exactly once');
-  assert.equal(String(current.changedBy || '').toLowerCase(), actor.email, 'production activation audit actor mismatch');
-  assert.equal(current.changeReason, reason, 'production activation audit reason mismatch');
-  if (result) {
-    assert.equal(result?.clinicId, target.clinicId, 'production admission RPC clinic ID mismatch');
-    assert.equal(String(result?.clinicCode || '').toUpperCase(), target.clinicCode, 'production admission RPC clinic code mismatch');
-    assert.equal(result?.enabled, true, 'production admission RPC did not enable tenant');
-    assert.equal(result?.state, 'active', 'production admission RPC state mismatch');
-    assert.equal(Number(result?.version), expectedNextVersion, 'production admission RPC version mismatch');
-  }
-  return Object.freeze({ requestId, reason, result: result || null, current });
 }
 
 export async function writeEvidence(file, value) {
