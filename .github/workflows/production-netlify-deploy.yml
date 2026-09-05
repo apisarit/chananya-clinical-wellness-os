@@ -1,0 +1,147 @@
+name: Exact CNYOS production deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type DEPLOY_CNYOS_PRODUCTION to deploy the selected main commit'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnyos-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-exact-production:
+    name: Verify, build, publish and attest exact release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: production
+    env:
+      EXPECTED_RELEASE_COMMIT: ${{ github.sha }}
+      EXPECTED_PRODUCTION_HOST: ${{ vars.PRODUCTION_SITE_HOST }}
+      PRODUCTION_SITE_URL: ${{ vars.PRODUCTION_SITE_URL }}
+      NETLIFY_SITE_ID: ${{ vars.PRODUCTION_NETLIFY_SITE_ID }}
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_PRE_DEPLOY_EVIDENCE_PATH: artifacts/production-deploy/netlify-before.json
+      NETLIFY_DEPLOY_OUTPUT_PATH: artifacts/production-deploy/netlify-deploy.json
+      NETLIFY_POST_DEPLOY_EVIDENCE_PATH: artifacts/production-deploy/netlify-after.json
+      PUBLIC_DEPLOYMENT_EVIDENCE_PATH: artifacts/production-deploy/public-deployment.json
+    steps:
+      - name: Require explicit production deployment intent
+        shell: bash
+        run: |
+          test "${{ inputs.confirmation }}" = "DEPLOY_CNYOS_PRODUCTION" || {
+            echo 'Production confirmation did not match DEPLOY_CNYOS_PRODUCTION.' >&2
+            exit 1
+          }
+
+      - name: Check out exact selected release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require trusted default branch and exact checkout
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$NETLIFY_SITE_ID"
+          test -n "$PRODUCTION_SITE_URL"
+          test -n "$EXPECTED_PRODUCTION_HOST"
+          test -n "$NETLIFY_AUTH_TOKEN"
+
+      - name: Set up application build runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked application dependencies
+        run: npm ci
+
+      - name: Reject high or critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Re-run complete release contracts
+        run: npm run check
+
+      - name: Require all exact-commit pre-deployment gates to pass
+        run: npm run verify:production-promotion
+
+      - name: Bind production build to exact commit and tree
+        shell: bash
+        run: |
+          TREE="$(git rev-parse 'HEAD^{tree}')"
+          echo "CLINICAL_OS_SOURCE_TREE=$TREE" >> "$GITHUB_ENV"
+          echo "EXACT_RELEASE_TREE=$TREE" >> "$GITHUB_ENV"
+
+      - name: Build restricted production artifact
+        run: npm run build
+        env:
+          CONTEXT: production
+          CLINICAL_OS_TENANT_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+          CLINICAL_OS_SOURCE_COMMIT: ${{ github.sha }}
+          CLINICAL_OS_REQUIRE_SOURCE_COMMIT: "true"
+
+      - name: Verify exact production artifact before upload
+        run: node scripts/verify-production-build-artifact.mjs
+
+      - name: Capture current published deploy for rollback evidence
+        run: node scripts/netlify-production-deploy-evidence.mjs snapshot
+
+      - name: Set up pinned Netlify CLI runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify pinned Netlify CLI version
+        shell: bash
+        run: |
+          VERSION="$(npm exec --yes --package=netlify-cli@27.5.0 -- netlify --version | tr -d '\r')"
+          echo "$VERSION" | grep -Eq '(^|[^0-9])27\.5\.0([^0-9]|$)'
+
+      - name: Publish the already-verified artifact to the fixed production site
+        shell: bash
+        run: |
+          mkdir -p "$(dirname "$NETLIFY_DEPLOY_OUTPUT_PATH")"
+          npm exec --yes --package=netlify-cli@27.5.0 -- netlify deploy \
+            --prod \
+            --no-build \
+            --dir=dist \
+            --functions=netlify/functions \
+            --context=production \
+            --skip-functions-cache \
+            --message="CNYOS production ${GITHUB_SHA}" \
+            --json \
+            > "$NETLIFY_DEPLOY_OUTPUT_PATH"
+
+      - name: Verify Netlify published deploy identity
+        run: node scripts/netlify-production-deploy-evidence.mjs verify
+
+      - name: Attest public commit tree headers and forbidden paths
+        run: npm run verify:public-deployment
+        env:
+          CNYOS_PRODUCTION_SMOKE_ACK: VERIFY_PUBLIC_RELEASE
+
+      - name: Generate exact source evidence for deployment
+        if: always()
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/production-deploy/release
+
+      - name: Retain production deployment and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cnyos-production-deploy-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/production-deploy/
+          if-no-files-found: warn
+          retention-days: 365
