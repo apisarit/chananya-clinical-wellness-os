@@ -1,0 +1,31 @@
+name: BaZi health standalone contracts
+
+on:
+  pull_request:
+    paths:
+      - 'apps/bazi-health/**'
+      - '.github/workflows/bazi-health.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/bazi-health/**'
+      - '.github/workflows/bazi-health.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  standalone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Verify recovered calculator and two-tab behavior
+        run: node apps/bazi-health/tests/contracts.mjs
+      - name: Build the isolated static release
+        run: node apps/bazi-health/scripts/build.mjs
