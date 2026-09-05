@@ -21,6 +21,15 @@ assert.equal(readiness.commercialProductionReady, true, 'commercialProductionRea
 assert.equal(readiness.releaseCommit, exactCommit, 'releaseCommit must equal the exact checked-out commit');
 assert.equal(readiness.promotionPolicy?.allRequiredGatesMustPass, true);
 assert.equal(readiness.promotionPolicy?.evidenceMustMatchReleaseCommit, true);
+assert.equal(
+  readiness.promotionPolicy?.postDeployAttestationRequiredBeforeRealPatientData,
+  true,
+  'promotion policy must keep real patient data blocked until post-deploy attestation'
+);
+assert.equal(readiness.postDeploymentGate?.id, 'public_production_deployment_attestation');
+assert.equal(readiness.postDeploymentGate?.status, 'pending', 'post-deploy attestation must be pending before production deployment');
+assert.equal(readiness.postDeploymentGate?.evidence, null, 'post-deploy evidence cannot exist before production deployment');
+assert.equal(readiness.postDeploymentGate?.blocksRealPatientData, true, 'post-deploy gate must block real patient data');
 
 const expectedGateIds = [
   'owner_subscription_database_enforcement',
@@ -37,7 +46,7 @@ const expectedGateIds = [
 assert.deepEqual(
   readiness.requiredGates?.map(gate => gate.id),
   expectedGateIds,
-  'production promotion requires the complete ordered hard-gate set'
+  'production promotion requires the complete ordered pre-deployment hard-gate set'
 );
 
 const requiredEvidenceFields = readiness.promotionPolicy?.requiredEvidenceFields || [];
@@ -58,4 +67,4 @@ for (const gate of readiness.requiredGates) {
   assert.ok(Number.isFinite(Date.parse(gate.evidence.verifiedAt)), `${gate.id} verifiedAt is not an ISO-compatible timestamp`);
 }
 
-process.stdout.write(`Production promotion gate passed for ${exactCommit}: ${readiness.requiredGates.length}/${readiness.requiredGates.length} hard gates have exact-commit evidence.\n`);
+process.stdout.write(`Production promotion gate passed for ${exactCommit}: ${readiness.requiredGates.length}/${readiness.requiredGates.length} pre-deployment hard gates have exact-commit evidence; real patient data remains blocked pending post-deploy attestation.\n`);
