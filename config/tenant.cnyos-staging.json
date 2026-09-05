@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "deploymentId": "chananya-clinical-staging",
+  "brand": {
+    "appName": "CNYOS",
+    "shortName": "CNYOS",
+    "browserTitle": "CNYOS",
+    "nameTh": "CNYOS",
+    "nameEn": "CNYOS",
+    "productName": "CNYOS",
+    "descriptor": "CNYOS\nISOLATED STAGING — SYNTHETIC DATA ONLY",
+    "mark": "C",
+    "logoUrl": "",
+    "colors": {
+      "primary950": "#20253d",
+      "primary900": "#2b3150",
+      "primary800": "#39416a",
+      "primary700": "#4a5486",
+      "primary100": "#e7e9f2",
+      "primary50": "#f4f5f9",
+      "accent": "#b56a32",
+      "accentSoft": "#f1dfcf",
+      "surface": "#fffefa",
+      "background": "#f6f4ef"
+    }
+  },
+  "tenant": {
+    "expectedClinicId": "00000000-0000-4000-8000-00000000a001",
+    "expectedClinicCode": "CHANANYA-STG"
+  },
+  "database": {
+    "provider": "supabase",
+    "url": "https://hsmnjwxurlmsizndjlun.supabase.co",
+    "publishableKey": "sb_publishable_REPLACE_AFTER_BOOTSTRAP"
+  },
+  "auth": {
+    "redirectOrigin": "https://cnyos.netlify.app",
+    "provider": "google"
+  },
+  "identity": {
+    "qrIssuer": "CHANANYA-STG"
+  },
+  "safety": {
+    "previewLocked": true
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 2,
+  "releaseChannel": "preview",
+  "status": "production_candidate_under_verification",
+  "commercialProductionReady": false,
+  "releaseCommit": null,
+  "claimPolicy": "Commercial Production 100% may be stated only when every required pre-deployment gate is passed with evidence tied to the exact release commit; real patient data remains blocked until the post-deploy production attestation passes.",
+  "promotionPolicy": {
+    "allRequiredGatesMustPass": true,
+    "evidenceMustMatchReleaseCommit": true,
+    "requiredEvidenceFields": [
+      "commit",
+      "artifact",
+      "verifiedAt",
+      "verifiedBy"
+    ],
+    "postDeployAttestationRequiredBeforeRealPatientData": true
+  },
+  "requiredGates": [
+    {
+      "id": "owner_subscription_database_enforcement",
+      "label": "CNYOS Owner subscription ON/OFF enforced by database authorization",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "authenticated_staging_all_roles",
+      "label": "Authenticated staging E2E for every role",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "line_callback",
+      "label": "LINE OA signed callback, consent, revoke, QR expiry and replay denial",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "encrypted_backup_restore_drill",
+      "label": "Encrypted Google Drive export and isolated restore drill with measured RPO/RTO",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "privacy_security_legal_review",
+      "label": "Privacy, security, clinical-safety and applicable legal review with zero unresolved release blockers",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "isolated_staging_migrations",
+      "label": "Required migrations applied to isolated staging with migration and rollback evidence",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "independent_quality_segregation",
+      "label": "Independent Quality SOP and producer-versus-approver segregation verified",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "managed_database_backup_pitr",
+      "label": "Managed database backup/PITR configuration verified separately from Google Drive export",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "release_provenance_ci_merge_protection",
+      "label": "Exact release-candidate source provenance, automated checks, review status and merge protection verified before production deployment",
+      "status": "pending",
+      "evidence": null
+    }
+  ],
+  "postDeploymentGate": {
+    "id": "public_production_deployment_attestation",
+    "label": "Exact production commit/tree, runtime surface, security headers and forbidden-path denial attested after deployment",
+    "status": "pending",
+    "evidence": null,
+    "blocksRealPatientData": true
+  }
+}

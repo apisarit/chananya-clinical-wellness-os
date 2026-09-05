@@ -1,0 +1,198 @@
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  buildLineReplyMessages,
+  classifyLineAction,
+  lineEventHashes,
+  lineEventTimestamp,
+  parseLineWebhook,
+  publicLineWebhookError,
+  readLineWebhookBody,
+  replyLineMessage,
+  safePatientCardUrl,
+  verifyLineWebhookSignature
+} from '../netlify/functions/_shared/line-oa.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const secret = '0123456789abcdef0123456789abcdef';
+const rawBody = JSON.stringify({ destination: 'channel', events: [] });
+const signature = createHmac('sha256', secret).update(rawBody).digest('base64');
+
+assert.equal(verifyLineWebhookSignature(rawBody, signature, secret), true);
+assert.equal(verifyLineWebhookSignature(`${rawBody} `, signature, secret), false);
+assert.equal(verifyLineWebhookSignature(rawBody, 'invalid', secret), false);
+assert.equal(parseLineWebhook(rawBody).length, 0);
+assert.throws(() => parseLineWebhook('{bad'), /LINE_WEBHOOK_JSON_INVALID/);
+assert.throws(() => parseLineWebhook('{"events":{}}'), /LINE_WEBHOOK_PAYLOAD_INVALID/);
+
+const textEvent = text => ({ type: 'message', message: { type: 'text', text } });
+assert.equal(classifyLineAction(textEvent('บัตรผู้รับบริการ')), 'card');
+assert.equal(classifyLineAction(textEvent('ขอดูนัดหมาย')), 'appointments');
+assert.equal(classifyLineAction(textEvent('ถอนความยินยอม')), 'revoke');
+assert.equal(classifyLineAction(textEvent('PDPA')), 'privacy');
+assert.equal(classifyLineAction(textEvent('ดูสถานะ')), 'status');
+assert.equal(classifyLineAction(textEvent('hello')), 'unknown');
+assert.equal(classifyLineAction({ type: 'postback', postback: { data: 'action=card' } }), 'card');
+assert.equal(classifyLineAction({ type: 'image' }), 'unknown');
+
+const event = {
+  type: 'follow',
+  timestamp: 1_800_000_000_000,
+  webhookEventId: '01H-EVENT-ID',
+  source: { type: 'user', userId: 'U0123456789abcdef0123456789abcdef' }
+};
+const hashes = lineEventHashes(event);
+assert.match(hashes.eventIdHash, /^[0-9a-f]{64}$/);
+assert.match(hashes.payloadHash, /^[0-9a-f]{64}$/);
+assert.doesNotMatch(JSON.stringify(hashes), /U0123456789/);
+assert.equal(lineEventTimestamp(event), new Date(event.timestamp).toISOString());
+
+assert.equal(safePatientCardUrl('javascript:alert(1)'), '');
+assert.equal(safePatientCardUrl('http://patient.example/card'), '');
+assert.equal(safePatientCardUrl('https://liff.line.me/123-test'), 'https://liff.line.me/123-test');
+const replies = buildLineReplyMessages('card', {
+  patientCardUrl: 'https://liff.line.me/123-test',
+  brandName: 'CHANANYA'
+});
+assert.equal(replies.length, 1);
+assert.equal(replies[0].type, 'text');
+assert.equal(replies[0].quickReply.items[0].action.type, 'uri');
+assert.equal(replies[0].quickReply.items[0].action.uri, 'https://liff.line.me/123-test');
+assert.doesNotMatch(JSON.stringify(replies), /CHANANYA-00000001|สมชาย|โรคทดสอบ/);
+
+let replyRequest;
+await replyLineMessage({
+  replyToken: 'reply-token-0123456789',
+  messages: replies,
+  channelAccessToken: 'channel-access-token-0123456789',
+  fetchImpl: async (url, options) => {
+    replyRequest = { url, options };
+    return new Response('{}', { status: 200 });
+  }
+});
+assert.equal(replyRequest.url, 'https://api.line.me/v2/bot/message/reply');
+assert.equal(replyRequest.options.method, 'POST');
+assert.equal(replyRequest.options.headers.Authorization, 'Bearer channel-access-token-0123456789');
+assert.deepEqual(JSON.parse(replyRequest.options.body), {
+  replyToken: 'reply-token-0123456789',
+  messages: replies
+});
+
+assert.equal(
+  await readLineWebhookBody(new Request('https://patient.example', { method: 'POST', body: rawBody })),
+  rawBody
+);
+await assert.rejects(
+  readLineWebhookBody(new Request('https://patient.example', { method: 'POST', body: '12345' }), 4),
+  /LINE_WEBHOOK_REQUEST_TOO_LARGE/
+);
+assert.deepEqual(publicLineWebhookError(new Error('LINE_WEBHOOK_SIGNATURE_INVALID')), {
+  code: 'LINE_WEBHOOK_SIGNATURE_INVALID',
+  status: 401
+});
+assert.deepEqual(publicLineWebhookError(new Error('database secret detail')), {
+  code: 'LINE_WEBHOOK_PROCESSING_FAILED',
+  status: 500
+});
+
+const backend = read('netlify/functions/line-oa-webhook.mts');
+const migration = read('supabase/migrations/202608292100_line_oa_messaging_gateway.sql');
+const killSwitch = read('supabase/migrations/202609011000_owner_subscription_kill_switch_closure.sql');
+const envExample = read('.env.example');
+
+assert.match(backend, /verifyLineWebhookSignature\(rawBody, signature/);
+assert.match(backend, /request\.headers\.get\('x-line-signature'\)/);
+assert.match(backend, /register_line_oa_webhook_event_for_clinic/);
+assert.match(backend, /finalize_line_oa_webhook_event/);
+assert.match(backend, /CNYOS_RUNTIME_EXPECTED_CLINIC_ID/);
+assert.match(backend, /signatureVerified && error\?\.message === 'CNYOS_SUBSCRIPTION_SUSPENDED'/);
+assert.match(backend, /suspended: true/);
+const guardBeforeReply = backend.indexOf("rpc(config, 'assert_clinic_subscription_active'", backend.indexOf('const messages'));
+const externalReply = backend.indexOf('await replyLineMessage', backend.indexOf('const messages'));
+assert.ok(guardBeforeReply > 0 && guardBeforeReply < externalReply, 'subscription must be rechecked immediately before LINE send');
+assert.match(backend, /hmacSha256\(subject, config\.identitySecret\)/);
+assert.match(backend, /source\?\.type !== 'user'/);
+assert.doesNotMatch(backend, /console\.(?:log|error)\([^\n]*(?:rawBody|userId|message\.text)/);
+assert.match(migration, /create table if not exists public\.line_oa_gateway_webhook_events/i);
+assert.match(migration, /unique \(provider_channel_hash, event_id_hash\)/i);
+assert.match(migration, /raw LINE user IDs, message text, reply tokens/i);
+assert.match(migration, /revoke all on public\.line_oa_gateway_webhook_events from public, anon, authenticated, service_role/i);
+assert.match(migration, /register_line_oa_webhook_event/i);
+assert.match(migration, /LINE_OA_PATIENT_CARD_REQUESTED/i);
+assert.match(killSwitch, /create or replace function public\.register_line_oa_webhook_event_for_clinic/i);
+assert.match(killSwitch, /LINE_OA_CROSS_TENANT_SUBJECT/);
+assert.match(killSwitch, /revoke all on function public\.line_oa_register_gateway_v20260829[\s\S]*?service_role/i);
+assert.match(migration, /grant execute on function public\.line_oa_webhook_evidence\(timestamptz\) to service_role/i);
+for (const key of [
+  'LINE_MESSAGING_CHANNEL_ID',
+  'LINE_MESSAGING_CHANNEL_SECRET',
+  'LINE_MESSAGING_CHANNEL_ACCESS_TOKEN'
+]) assert.match(envExample, new RegExp(`^${key}=`, 'm'));
+assert.match(envExample, /^CNYOS_RUNTIME_EXPECTED_CLINIC_ID=/m);
+
+// A correctly signed delivery to an OFF clinic is acknowledged without a
+// registration mutation or external LINE reply.
+const previousNetlify = globalThis.Netlify;
+const previousFetch = globalThis.fetch;
+const webhookFetches = [];
+globalThis.Netlify = {
+  env: {
+    get(name) {
+      return {
+        LINE_LIFF_ID: 'test-liff',
+        LINE_MESSAGING_CHANNEL_ID: 'test-messaging-channel',
+        LINE_MESSAGING_CHANNEL_SECRET: secret,
+        LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: 'channel-access-token-0123456789',
+        PATIENT_IDENTITY_HMAC_SECRET: secret,
+        SUPABASE_URL: 'https://db.example',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+        CNYOS_RUNTIME_EXPECTED_CLINIC_ID: '00000000-0000-0000-0000-000000000001'
+      }[name] || '';
+    }
+  }
+};
+globalThis.fetch = async (url, options) => {
+  webhookFetches.push({ url: String(url), options });
+  return new Response(JSON.stringify({ message: 'CNYOS_SUBSCRIPTION_SUSPENDED' }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' }
+  });
+};
+try {
+  const { default: lineWebhookHandler } = await import('../netlify/functions/line-oa-webhook.mts?off-contract');
+  const offBody = JSON.stringify({
+    destination: 'test-messaging-channel',
+    events: [{
+      type: 'message',
+      timestamp: Date.now(),
+      webhookEventId: '01H-OFF-CONTRACT',
+      replyToken: 'reply-token-must-not-be-used',
+      source: { type: 'user', userId: 'U0123456789abcdef0123456789abcdef' },
+      message: { type: 'text', id: '1', text: 'บัตรผู้รับบริการ' }
+    }]
+  });
+  const offSignature = createHmac('sha256', secret).update(offBody).digest('base64');
+  const response = await lineWebhookHandler(new Request(
+    'https://patient.example/api/line-oa-webhook',
+    {
+      method: 'POST',
+      headers: { 'x-line-signature': offSignature, 'Content-Type': 'application/json' },
+      body: offBody
+    }
+  ), { requestId: 'off-contract' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, suspended: true, received: 1, processed: 0 });
+  assert.equal(webhookFetches.length, 1);
+  assert.match(webhookFetches[0].url, /\/rpc\/assert_clinic_subscription_active$/);
+  assert.ok(webhookFetches.every(call => !call.url.includes('api.line.me')));
+  assert.ok(webhookFetches.every(call => !call.url.includes('register_line_oa_webhook_event')));
+} finally {
+  globalThis.fetch = previousFetch;
+  globalThis.Netlify = previousNetlify;
+}
+
+console.log('LINE OA gateway contracts passed: signature, privacy-safe routing, idempotency, audit and Messaging API reply');

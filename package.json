@@ -1,0 +1,38 @@
+{
+  "name": "chananya-clinical-wellness-os",
+  "version": "3.5.0-preview.7",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/generate-tenant-config.mjs && node scripts/import-pikad-staging.mjs && node scripts/import-ttm-dkr-staging.mjs && node scripts/build-netlify-publish.mjs",
+    "tenant:bootstrap-sql": "node scripts/generate-tenant-bootstrap-sql.mjs",
+    "migration:ledger-repair-sql": "node scripts/generate-migration-ledger-repair-sql.mjs",
+    "check": "node tests/v34-runtime-role-matrix.mjs && node tests/ia-static-contract.mjs && node tests/browser-security-contract.mjs && node tests/netlify-publish-surface-contract.mjs && node tests/public-deployment-verifier-contract.mjs && node tests/release-evidence-provenance-contract.mjs && node tests/ttm-foundation-contract.mjs && node tests/ttm-reasoning-contract.mjs && node tests/ttm-dkr-complete-contract.mjs && node tests/pikad-knowledge-contract.mjs && node tests/hybrid-identity-contract.mjs && node --experimental-loader=./tests/plain-mts-loader.mjs tests/line-oa-contract.mjs && node tests/clinical-outcomes-contract.mjs && node tests/atomic-handoffs-contract.mjs && node tests/clinical-signoff-delete-hardening-contract.mjs && node tests/prescription-dispensing-contract.mjs && node tests/department-persistence-contract.mjs && node tests/atomic-production-contract.mjs && node tests/independent-quality-contract.mjs && node tests/white-label-contract.mjs && node --experimental-loader=./tests/plain-mts-loader.mjs tests/owner-control-contract.mjs && node tests/owner-subscription-concurrency-contract.mjs && node tests/owner-subscription-suspension-boundary-contract.mjs && node tests/owner-control-historical-replay-guard-contract.mjs && node tests/google-service-account-credential.mjs && node --experimental-loader=./tests/plain-mts-loader.mjs tests/owner-drive-function-contract.mjs && node tests/owner-drive-ui-contract.mjs && node tests/owner-drive-assignment-db-contract.mjs && node tests/owner-drive-backup-evidence-contract.mjs && node tests/service-role-data-api-contract.mjs && node tests/migration-ledger-contract.mjs && node tests/locked-staging-smoke.mjs && node tests/staging-safety-contract.mjs && node --experimental-loader=./tests/plain-mts-loader.mjs tests/patient-identity-function.mjs && node tests/database-backup.mjs && node --experimental-loader=./tests/plain-mts-loader.mjs tests/database-backup-drive-destination-contract.mjs && node tests/database-backup-background-contract.mjs && node tests/restore-set.mjs && node --experimental-loader=./tests/plain-mts-loader.mjs tests/restore-source-assignment-contract.mjs && node tests/commercial-release-gate.mjs && node tests/postgres-behavioral-smoke.mjs && npm run check:evidence",
+    "credential:drive:provision": "node scripts/provision-google-service-account-blob.mjs",
+    "verify:backup-route-denial": "node scripts/verify-netlify-scheduled-route-denial.mjs",
+    "verify:backup-deploy-metadata": "node scripts/verify-netlify-scheduled-deploy-metadata.mjs",
+    "verify:backup": "node scripts/verify-backup.mjs",
+    "restore:fetch": "node scripts/fetch-drive-restore-set.mjs",
+    "restore:verify-set": "node scripts/verify-restore-set.mjs",
+    "restore:verify-database": "node scripts/verify-restored-database.mjs",
+    "evidence:release": "node scripts/generate-release-evidence.mjs",
+    "verify:production-promotion": "node scripts/verify-production-promotion.mjs",
+    "verify:public-deployment": "node scripts/verify-public-deployment.mjs",
+    "staging:provision": "node scripts/provision-staging-users.mjs",
+    "staging:verify": "node scripts/verify-authenticated-staging.mjs",
+    "staging:line": "node scripts/verify-line-staging.mjs",
+    "staging:uat": "node scripts/run-staging-synthetic-uat.mjs",
+    "staging:smoke:locked": "node scripts/verify-locked-staging.mjs",
+    "check:evidence": "node tests/evidence-ui-contract.mjs && node tests/evidence-search-contract.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "10.7.13",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14"
+  }
+}

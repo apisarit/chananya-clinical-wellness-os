@@ -12,6 +12,10 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[m]));
   const num = v => Number(v || 0);
+  const clinicBrand = () => {
+    const brand = window.CLINICAL_OS_CONFIG?.brand || {};
+    return brand.nameEn || brand.nameTh || brand.shortName || 'Clinical & Wellness OS';
+  };
 
   async function waitRuntime() {
     for (let i = 0; i < 50; i++) {
@@ -24,12 +28,14 @@
   function labelWindow(title, labels) {
     const w = window.open('', '_blank', 'width=850,height=900');
     if (!w) { alert('Browser ปิดกั้นหน้าต่างพิมพ์ กรุณาอนุญาต Pop-up'); return; }
-    w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:60mm 40mm;margin:1.5mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,"Noto Sans Thai",sans-serif;color:#111}.label{width:57mm;min-height:37mm;border:1px solid #222;padding:2.2mm;page-break-after:always;position:relative;overflow:hidden}.label:last-of-type{page-break-after:auto}.clinic{font-size:10pt;font-weight:800;border-bottom:1px solid #333;padding-bottom:1mm;margin-bottom:1mm}.patient{font-size:9pt;font-weight:700}.drug{font-size:12pt;font-weight:800;margin:1mm 0}.directions{font-size:9pt;line-height:1.25}.meta{font-size:7.2pt;line-height:1.2;margin-top:1mm}.warning{font-size:7.5pt;font-weight:700;margin-top:1mm}button{margin:10px;padding:8px 16px}@media print{button{display:none}}</style></head><body>${labels.join('')}<button onclick="print()">พิมพ์ฉลาก</button></body></html>`);
+    w.opener = null;
+    w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:60mm 40mm;margin:1.5mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,"Noto Sans Thai",sans-serif;color:#111}.label{width:57mm;min-height:37mm;border:1px solid #222;padding:2.2mm;page-break-after:always;position:relative;overflow:hidden}.label:last-of-type{page-break-after:auto}.clinic{font-size:10pt;font-weight:800;border-bottom:1px solid #333;padding-bottom:1mm;margin-bottom:1mm}.patient{font-size:9pt;font-weight:700}.drug{font-size:12pt;font-weight:800;margin:1mm 0}.directions{font-size:9pt;line-height:1.25}.meta{font-size:7.2pt;line-height:1.2;margin-top:1mm}.warning{font-size:7.5pt;font-weight:700;margin-top:1mm}button{margin:10px;padding:8px 16px}@media print{button{display:none}}</style></head><body>${labels.join('')}<button type="button" data-print-labels>พิมพ์ฉลาก</button></body></html>`);
     w.document.close();
+    w.document.querySelector('[data-print-labels]')?.addEventListener('click', () => w.print());
   }
 
   function labelHtml({ patientName, hn, medicine, quantity, unit, dose, frequency, duration, instructions, lot, expiry, reference, pharmacist }) {
-    return `<section class="label"><div class="clinic">CHANANYA THAI TRADITIONAL MEDICINE & WELLNESS CLINIC</div><div class="patient">${esc(patientName || 'ผู้รับบริการทั่วไป')} ${hn ? `• HN ${esc(hn)}` : ''}</div><div class="drug">${esc(medicine || 'ยา/สมุนไพร')}</div><div class="directions">จำนวน ${esc(quantity ?? '-')} ${esc(unit || '')}<br>${dose ? `ครั้งละ ${esc(dose)}` : ''} ${frequency ? `• ${esc(frequency)}` : ''} ${duration ? `• ${esc(duration)}` : ''}</div>${instructions ? `<div class="warning">${esc(instructions)}</div>` : ''}<div class="meta">Lot ${esc(lot || '-')} • EXP ${esc(expiry || '-')}<br>Ref ${esc(reference || '-')} • ผู้จ่าย ${esc(pharmacist || '-')}<br>วันที่ ${new Date().toLocaleDateString('th-TH')}</div></section>`;
+    return `<section class="label"><div class="clinic">${esc(clinicBrand())}</div><div class="patient">${esc(patientName || 'ผู้รับบริการทั่วไป')} ${hn ? `• HN ${esc(hn)}` : ''}</div><div class="drug">${esc(medicine || 'ยา/สมุนไพร')}</div><div class="directions">จำนวน ${esc(quantity ?? '-')} ${esc(unit || '')}<br>${dose ? `ครั้งละ ${esc(dose)}` : ''} ${frequency ? `• ${esc(frequency)}` : ''} ${duration ? `• ${esc(duration)}` : ''}</div>${instructions ? `<div class="warning">${esc(instructions)}</div>` : ''}<div class="meta">Lot ${esc(lot || '-')} • EXP ${esc(expiry || '-')}<br>Ref ${esc(reference || '-')} • ผู้จ่าย ${esc(pharmacist || '-')}<br>วันที่ ${new Date().toLocaleDateString('th-TH')}</div></section>`;
   }
 
   async function printDoctorLabels(orderId) {
@@ -172,12 +178,8 @@
     session = await R.getSession();
     if (!session) return;
     await enhance();
-    ['rx-list', 'walkin-list', 'history-list'].forEach(id => {
-      const node = $(`#${id}`);
-      if (node) new MutationObserver(scheduleEnhance).observe(node, { childList: true, subtree: true });
-    });
-    window.addEventListener('chananya:pharmacy-rendered', scheduleEnhance);
   }
 
+  window.addEventListener('chananya:pharmacy-rendered', scheduleEnhance);
   window.addEventListener('load', () => install().catch(error => console.error('Pharmacy label extension failed', error)));
 })();

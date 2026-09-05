@@ -1,50 +1,81 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" width="800" height="380">
-<rect width="800" height="380" fill="#fff"/>
-<style>.o{fill:none;stroke:#555;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.d{fill:none;stroke:#aaa;stroke-width:1.2;stroke-dasharray:4 4}</style>
-<g transform="translate(28,10)">
-  <circle class="o" cx="72" cy="35" r="25"/>
-  <path class="o" d="M57 58 L54 72 Q35 79 26 100 Q17 124 12 155 L3 230 Q1 243 13 249 Q25 252 31 238 L45 165"/>
-  <path class="o" d="M87 58 L90 72 Q109 79 118 100 Q127 124 132 155 L141 230 Q143 243 131 249 Q119 252 113 238 L99 165"/>
-  <path class="o" d="M54 72 Q72 82 90 72 Q105 92 102 130 Q98 162 93 191 L93 220"/>
-  <path class="o" d="M90 72 Q72 84 54 72 Q39 92 42 130 Q46 162 51 191 L51 220"/>
-  <path class="o" d="M51 220 Q43 251 45 287 L48 356 Q51 369 63 368 L69 292 L72 225"/>
-  <path class="o" d="M93 220 Q101 251 99 287 L96 356 Q93 369 81 368 L75 292 L72 225"/>
-  <path class="d" d="M72 82 L72 220"/>
-  <path class="o" d="M51 136 Q72 146 93 136"/>
-  <path class="o" d="M56 105 Q62 116 72 116 Q82 116 88 105"/>
-</g>
-<g transform="translate(228,10)">
-  <circle class="o" cx="72" cy="35" r="25"/>
-  <path class="o" d="M57 58 L54 72 Q35 79 26 100 Q17 124 12 155 L3 230 Q1 243 13 249 Q25 252 31 238 L45 165"/>
-  <path class="o" d="M87 58 L90 72 Q109 79 118 100 Q127 124 132 155 L141 230 Q143 243 131 249 Q119 252 113 238 L99 165"/>
-  <path class="o" d="M54 72 Q72 78 90 72 Q103 94 101 132 Q98 174 92 215"/>
-  <path class="o" d="M90 72 Q72 78 54 72 Q41 94 43 132 Q46 174 52 215"/>
-  <path class="o" d="M52 215 Q43 247 45 286 L48 356 Q51 369 63 368 L69 292 L72 223"/>
-  <path class="o" d="M92 215 Q101 247 99 286 L96 356 Q93 369 81 368 L75 292 L72 223"/>
-  <path class="d" d="M72 58 L72 218"/>
-  <path class="o" d="M49 205 Q72 220 95 205"/>
-  <path class="o" d="M50 126 Q72 139 94 126"/>
-</g>
-<g transform="translate(432,8)">
-  <circle class="o" cx="70" cy="37" r="24"/>
-  <path class="o" d="M52 51 Q45 67 53 78 Q39 94 40 124 Q41 151 50 181 Q56 201 52 226"/>
-  <path class="o" d="M77 57 Q91 73 89 98 Q87 119 81 138 Q77 153 80 172 Q84 193 91 214"/>
-  <path class="o" d="M56 84 Q66 101 66 126 Q66 156 63 188 L59 240"/>
-  <path class="o" d="M64 122 Q77 153 81 186 L83 241"/>
-  <path class="o" d="M59 240 Q48 262 43 292 L31 342 Q28 356 40 363 L58 307 L74 260"/>
-  <path class="o" d="M83 241 Q101 260 112 287 L133 319 Q141 330 151 323 L127 276 Q113 250 91 214"/>
-  <path class="o" d="M64 105 Q81 108 85 124"/>
-  <path class="o" d="M60 152 L43 229 Q42 242 54 246 Q65 247 69 234 L77 168"/>
-</g>
-<g transform="translate(632,8) scale(-1,1) translate(-144,0)">
-  <circle class="o" cx="70" cy="37" r="24"/>
-  <path class="o" d="M52 51 Q45 67 53 78 Q39 94 40 124 Q41 151 50 181 Q56 201 52 226"/>
-  <path class="o" d="M77 57 Q91 73 89 98 Q87 119 81 138 Q77 153 80 172 Q84 193 91 214"/>
-  <path class="o" d="M56 84 Q66 101 66 126 Q66 156 63 188 L59 240"/>
-  <path class="o" d="M64 122 Q77 153 81 186 L83 241"/>
-  <path class="o" d="M59 240 Q48 262 43 292 L31 342 Q28 356 40 363 L58 307 L74 260"/>
-  <path class="o" d="M83 241 Q101 260 112 287 L133 319 Q141 330 151 323 L127 276 Q113 250 91 214"/>
-  <path class="o" d="M64 105 Q81 108 85 124"/>
-  <path class="o" d="M60 152 L43 229 Q42 242 54 246 Q65 247 69 234 L77 168"/>
-</g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" width="800" height="420" role="img" aria-labelledby="title description">
+  <title id="title">แผนที่ร่างกายสำหรับบันทึกตำแหน่งอาการ</title>
+  <desc id="description">ภาพบุคคลผู้ใหญ่ในมุมด้านหน้า ด้านหลัง ด้านซ้าย และด้านขวา</desc>
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4cfb5"/>
+      <stop offset="0.55" stop-color="#e9b995"/>
+      <stop offset="1" stop-color="#dca681"/>
+    </linearGradient>
+    <linearGradient id="skinSide" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d9a17d"/>
+      <stop offset="0.52" stop-color="#efc3a3"/>
+      <stop offset="1" stop-color="#d9a17d"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfaf7"/>
+      <stop offset="1" stop-color="#f1f6f2"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#173f34" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .panel{fill:url(#panel);stroke:#dce7e1;stroke-width:1}
+      .skin{fill:url(#skin);stroke:#6f5547;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+      .side-skin{fill:url(#skinSide);stroke:#6f5547;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+      .hair{fill:#3d302a;stroke:#3d302a;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
+      .feature{fill:none;stroke:#8b6857;stroke-width:1.15;stroke-linecap:round;opacity:.76}
+      .guide{fill:none;stroke:#9db9ae;stroke-width:1;stroke-linecap:round;stroke-dasharray:3 4;opacity:.7}
+      .joint{fill:#fff;stroke:#9db9ae;stroke-width:1;opacity:.62}
+    </style>
+  </defs>
+
+  <rect width="800" height="420" rx="24" fill="#ffffff"/>
+  <g opacity=".98">
+    <rect class="panel" x="8" y="8" width="184" height="404" rx="20"/>
+    <rect class="panel" x="208" y="8" width="184" height="404" rx="20"/>
+    <rect class="panel" x="408" y="8" width="184" height="404" rx="20"/>
+    <rect class="panel" x="608" y="8" width="184" height="404" rx="20"/>
+  </g>
+
+  <!-- Front -->
+  <g transform="translate(10 6)" filter="url(#softShadow)">
+    <path class="hair" d="M72 39c1-21 12-32 28-32s27 11 28 32l-6 21H78z"/>
+    <ellipse class="skin" cx="100" cy="40" rx="21" ry="26"/>
+    <path class="feature" d="M94 42q6 3 12 0M100 43v6M95 54q5 3 10 0"/>
+    <path class="skin" d="M90 63v13l-26 10c-10 4-16 13-19 28l-15 80-12 69c-2 12 3 20 11 22 9 2 15-4 18-15l16-66 8-55-4 75c-1 13 1 25 7 38l-7 45-5 89c0 10 6 16 14 16 7 0 12-5 13-14l9-88 2-45 2 45 9 88c1 9 6 14 13 14 8 0 14-6 14-16l-5-89-7-45c6-13 8-25 7-38l-4-75 8 55 16 66c3 11 9 17 18 15 8-2 13-10 11-22l-12-69-15-80c-3-15-9-24-19-28l-26-10V63z"/>
+    <path class="feature" d="M90 76q10 8 20 0M70 117q30 13 60 0M73 166q27 12 54 0M75 224q25 18 50 0M100 80v147M87 299l13-33 13 33"/>
+    <path class="guide" d="M58 145h84M68 204h64M63 263h74M67 307h66M65 350h70"/>
+    <circle class="joint" cx="45" cy="194" r="3.5"/><circle class="joint" cx="155" cy="194" r="3.5"/>
+    <circle class="joint" cx="87" cy="307" r="3.5"/><circle class="joint" cx="113" cy="307" r="3.5"/>
+  </g>
+
+  <!-- Back -->
+  <g transform="translate(210 6)" filter="url(#softShadow)">
+    <path class="hair" d="M73 38C73 17 84 7 100 7s27 10 27 31l-3 30-11 7H87l-11-7z"/>
+    <ellipse class="skin" cx="100" cy="40" rx="21" ry="26"/>
+    <path class="skin" d="M90 63v13l-26 10c-10 4-16 13-19 28l-15 80-12 69c-2 12 3 20 11 22 9 2 15-4 18-15l16-66 8-55-4 75c-1 13 1 25 7 38l-7 45-5 89c0 10 6 16 14 16 7 0 12-5 13-14l9-88 2-45 2 45 9 88c1 9 6 14 13 14 8 0 14-6 14-16l-5-89-7-45c6-13 8-25 7-38l-4-75 8 55 16 66c3 11 9 17 18 15 8-2 13-10 11-22l-12-69-15-80c-3-15-9-24-19-28l-26-10V63z"/>
+    <path class="feature" d="M90 76q10 8 20 0M69 115q16 15 31 15t31-15M74 171q26 12 52 0M74 224q26 18 52 0M100 79v150M86 132q14 10 28 0M87 299l13-33 13 33"/>
+    <path class="guide" d="M58 145h84M68 204h64M63 263h74M67 307h66M65 350h70"/>
+    <circle class="joint" cx="45" cy="194" r="3.5"/><circle class="joint" cx="155" cy="194" r="3.5"/>
+    <circle class="joint" cx="87" cy="307" r="3.5"/><circle class="joint" cx="113" cy="307" r="3.5"/>
+  </g>
+
+  <!-- Left -->
+  <g transform="translate(410 6)" filter="url(#softShadow)">
+    <path class="hair" d="M84 38C85 17 95 7 108 8c15 1 24 13 23 31l-7 24-24 4-16-12z"/>
+    <path class="side-skin" d="M87 38c0-16 9-27 21-27 11 0 19 8 20 20l9 6-8 6c-1 14-8 23-19 24l-2 12 19 10c9 5 14 15 13 29l-4 61 9 82 20 62 14 57c2 10-3 17-11 19-8 1-13-4-16-13l-19-53-27-55 3 38 3 84c0 9-5 15-13 15s-13-6-13-15l-5-84-7-51c-4-21-1-46 4-66l5-42-10 51-12 72c-2 11-8 17-16 15-8-2-12-10-9-21l14-78 8-85c1-16 7-27 18-33l17-9 1-13c-7-6-10-14-10-24z"/>
+    <path class="feature" d="M113 35h5M118 47q5 2 8-1M105 80q10 7 20 4M105 90q18 17 26 46M101 121q17 18 16 47M96 179q20 9 38-2M95 235q13 16 30 17M105 277l4 39"/>
+    <path class="guide" d="M78 145h61M76 204h63M86 263h48M93 307h51M93 350h62"/>
+    <circle class="joint" cx="68" cy="199" r="3.5"/><circle class="joint" cx="109" cy="307" r="3.5"/>
+  </g>
+
+  <!-- Right -->
+  <g transform="translate(790 6) scale(-1 1)" filter="url(#softShadow)">
+    <path class="hair" d="M84 38C85 17 95 7 108 8c15 1 24 13 23 31l-7 24-24 4-16-12z"/>
+    <path class="side-skin" d="M87 38c0-16 9-27 21-27 11 0 19 8 20 20l9 6-8 6c-1 14-8 23-19 24l-2 12 19 10c9 5 14 15 13 29l-4 61 9 82 20 62 14 57c2 10-3 17-11 19-8 1-13-4-16-13l-19-53-27-55 3 38 3 84c0 9-5 15-13 15s-13-6-13-15l-5-84-7-51c-4-21-1-46 4-66l5-42-10 51-12 72c-2 11-8 17-16 15-8-2-12-10-9-21l14-78 8-85c1-16 7-27 18-33l17-9 1-13c-7-6-10-14-10-24z"/>
+    <path class="feature" d="M113 35h5M118 47q5 2 8-1M105 80q10 7 20 4M105 90q18 17 26 46M101 121q17 18 16 47M96 179q20 9 38-2M95 235q13 16 30 17M105 277l4 39"/>
+    <path class="guide" d="M78 145h61M76 204h63M86 263h48M93 307h51M93 350h62"/>
+    <circle class="joint" cx="68" cy="199" r="3.5"/><circle class="joint" cx="109" cy="307" r="3.5"/>
+  </g>
 </svg>

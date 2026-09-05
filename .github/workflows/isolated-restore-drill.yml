@@ -1,0 +1,129 @@
+name: Isolated managed restore drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_clinic_code:
+        description: Exact source clinic code on the site-bound staging endpoint
+        required: true
+        type: string
+      backup_slot:
+        description: Exact completed backup slot in ISO-8601 UTC
+        required: true
+        type: string
+      expected_source_commit:
+        description: Historical backup source commit (40-character Git SHA)
+        required: true
+        type: string
+      restore_started_at:
+        description: Managed restore start time in ISO-8601 UTC
+        required: true
+        type: string
+      managed_restore_change_reference:
+        description: Reviewed restore/PITR change or ticket reference
+        required: true
+        type: string
+      expect_complete_chain:
+        description: Require at least one restored Encounter-to-Payment chain
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-managed-restore-drill-staging
+  cancel-in-progress: false
+
+jobs:
+  verify-isolated-restore:
+    name: Exact five-object set + restored database integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # This protected GitHub environment maps to one staging Netlify endpoint,
+    # one source environment/project, one Drive root and one read-only reader.
+    # Production uses a separate protected environment/workflow mapping.
+    environment: restore-test-staging
+    env:
+      RESTORE_DRILL_ACK: ISOLATED_RESTORE_TEST_ONLY
+      RESTORE_SOURCE_ENVIRONMENT: staging
+      RESTORE_SOURCE_CLINIC_CODE: ${{ inputs.source_clinic_code }}
+      RESTORE_BACKUP_SLOT: ${{ inputs.backup_slot }}
+      RESTORE_EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
+      RESTORE_STARTED_AT: ${{ inputs.restore_started_at }}
+      RESTORE_CHANGE_REFERENCE: ${{ inputs.managed_restore_change_reference }}
+      RESTORE_EXPECT_COMPLETE_CHAIN: ${{ inputs.expect_complete_chain }}
+      RESTORE_SOURCE_API_URL: ${{ vars.RESTORE_SOURCE_API_URL }}
+      GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID: ${{ vars.GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID }}
+      RESTORE_SET_DIR: artifacts/restore-drill/encrypted
+      RESTORE_EVIDENCE_DIR: artifacts/restore-drill/evidence
+      RESTORE_SOURCE_BINDING_EVIDENCE_PATH: artifacts/restore-drill/evidence/restore-source-binding.json
+    steps:
+      - name: Check out trusted verifier from protected default branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Reject an unprotected verifier ref
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run source and PostgreSQL behavioral contracts
+        run: npm run check
+
+      - name: Fetch exact completed-run manifest and four encrypted objects
+        run: npm run restore:fetch
+        env:
+          RESTORE_SOURCE_API_TOKEN: ${{ secrets.RESTORE_SOURCE_API_TOKEN }}
+          GOOGLE_DRIVE_RESTORE_READER_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_DRIVE_RESTORE_READER_SERVICE_ACCOUNT_JSON }}
+
+      - name: Verify encryption, integrity, table coverage and source binding
+        run: npm run restore:verify-set -- "$RESTORE_SET_DIR"
+        env:
+          BACKUP_ENCRYPTION_KEY_BASE64: ${{ secrets.BACKUP_ENCRYPTION_KEY_BASE64 }}
+
+      - name: Resolve generated restore-set evidence path
+        run: |
+          RESTORE_FILE="$(find "$RESTORE_EVIDENCE_DIR" -maxdepth 1 -type f -name 'restore-set-*.json' -print -quit)"
+          test -n "$RESTORE_FILE"
+          echo "RESTORE_SET_EVIDENCE_PATH=$RESTORE_FILE" >> "$GITHUB_ENV"
+
+      - name: Bind decrypted restore set to exact completed run
+        run: node scripts/verify-restore-source-binding.mjs
+
+      - name: Verify isolated managed restore and measure RPO/RTO
+        run: npm run restore:verify-database
+        env:
+          CLINICAL_OS_RESTORE_TEST_CONFIG_JSON: ${{ secrets.CLINICAL_OS_RESTORE_TEST_CONFIG_JSON }}
+          CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+          RESTORE_TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RESTORE_TEST_SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Generate exact-verifier-commit evidence
+        if: always()
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/restore-drill/release
+
+      - name: Retain non-PHI restore evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: isolated-restore-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            artifacts/restore-drill/evidence/
+            artifacts/restore-drill/release/
+          if-no-files-found: warn
+          retention-days: 365

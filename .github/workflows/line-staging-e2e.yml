@@ -1,0 +1,67 @@
+name: Real LINE hybrid identity staging E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-line-hybrid-identity-staging
+  cancel-in-progress: false
+
+jobs:
+  verify-line-staging:
+    name: Consent + QR + expiry + replay + revoke + HN fallback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: staging
+    env:
+      CLINICAL_OS_STAGING_ACK: STAGING_ONLY
+      CLINICAL_OS_STAGING_CONFIG_JSON: ${{ secrets.CLINICAL_OS_STAGING_CONFIG_JSON }}
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+      STAGING_SITE_URL: ${{ vars.STAGING_SITE_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      STAGING_TEST_EMAIL_DOMAIN: ${{ vars.STAGING_TEST_EMAIL_DOMAIN }}
+      STAGING_TEST_EMAIL_PREFIX: clinical-os-e2e
+      STAGING_TEST_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
+      STAGING_LINE_E2E_ACK: DEDICATED_TEST_LINE_ACCOUNT
+      STAGING_LINE_ID_TOKEN: ${{ secrets.STAGING_LINE_ID_TOKEN }}
+      STAGING_LINE_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      STAGING_EVIDENCE_DIR: artifacts/line-staging
+    steps:
+      - name: Check out exact candidate commit
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run source and PostgreSQL behavioral contracts
+        run: npm run check
+
+      - name: Provision dedicated synthetic staff identities
+        run: npm run staging:provision
+
+      - name: Exercise real LINE identity and hybrid HN flow
+        run: npm run staging:line
+
+      - name: Generate exact-commit evidence
+        if: always()
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/line-staging/release
+
+      - name: Retain exact-commit LINE evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: line-staging-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/line-staging/
+          if-no-files-found: warn
+          retention-days: 90

@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#173f31">
 <title>เข้าสู่ระบบ | Chananya Clinical OS</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="tenant-config.js?v=white-label1"></script>
+<script src="tenant-brand.js?v=white-label2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
+<script src="auth-config.js?v=white-label1"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;font-family:Inter,"Noto Sans Thai",system-ui,sans-serif;background:linear-gradient(135deg,#102e24,#245b46);color:#1c2822}.card{width:min(430px,94vw);background:#fff;border-radius:24px;padding:30px;box-shadow:0 30px 100px rgba(0,0,0,.3);text-align:center}.logo{width:70px;height:70px;margin:0 auto 16px;border-radius:20px;display:grid;place-items:center;background:#173f31;color:#fff;font-size:38px}h1{margin:0 0 8px;font-size:27px}p{color:#6f7b75;line-height:1.55}.btn{width:100%;border:0;border-radius:12px;padding:14px 16px;font:inherit;font-weight:800;cursor:pointer;background:#173f31;color:#fff;margin-top:16px}.btn:disabled{opacity:.6}.status{margin-top:14px;font-size:13px;color:#6f7b75}.error{margin-top:10px;color:#b14949;font-size:13px}
 </style>
@@ -13,27 +16,12 @@
 <body>
 <main class="card">
 <div class="logo">ช</div>
-<h1>Chananya Clinical OS</h1>
-<p>เข้าสู่ระบบด้วยบัญชี Google ที่ได้รับอนุญาต</p>
+<h1 data-brand-app-name>CNYOS</h1>
+<p>เข้าสู่ระบบด้วยบัญชี <span data-auth-provider-name>Google</span> ที่ได้รับอนุญาต</p>
 <button class="btn" id="login">เข้าสู่ระบบด้วย Google</button>
 <div class="status" id="status">PKCE secure login</div>
 <div class="error" id="error"></div>
 </main>
-<script>
-const client=supabase.createClient(
-  'https://qptxnrldzzinlcabudjv.supabase.co',
-  'sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ',
-  {auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}
-);
-const btn=document.getElementById('login'),statusEl=document.getElementById('status'),errorEl=document.getElementById('error');
-btn.onclick=async()=>{
-  btn.disabled=true;errorEl.textContent='';statusEl.textContent='กำลังเปิด Google…';
-  const {error}=await client.auth.signInWithOAuth({
-    provider:'google',
-    options:{redirectTo:'https://chananya.netlify.app/auth-callback.html'}
-  });
-  if(error){errorEl.textContent=error.message;statusEl.textContent='เข้าสู่ระบบไม่สำเร็จ';btn.disabled=false;}
-};
-</script>
+<script src="auth-login.js?v=csp2"></script>
 </body>
 </html>

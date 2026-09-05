@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "deploymentId": "customer-clinic-production",
+  "brand": {
+    "appName": "CUSTOMER CLINIC OS",
+    "shortName": "CUSTOMER CLINIC",
+    "browserTitle": "CUSTOMER CLINIC OS",
+    "nameTh": "ชื่อลูกค้า คลินิกการแพทย์แผนไทย",
+    "nameEn": "Customer Thai Traditional Medicine Clinic",
+    "productName": "Clinical & Wellness OS",
+    "descriptor": "Thai Traditional Medicine\nClinical & Wellness OS",
+    "mark": "ค",
+    "logoUrl": "/customer-logo.svg",
+    "colors": {
+      "primary950": "#17342d",
+      "primary900": "#20483e",
+      "primary800": "#286052",
+      "primary700": "#367866",
+      "primary100": "#e4f0ec",
+      "primary50": "#f3f8f6",
+      "accent": "#aa8245",
+      "accentSoft": "#f0e3c8",
+      "surface": "#fffefa",
+      "background": "#f7f4ed"
+    }
+  },
+  "tenant": {
+    "expectedClinicId": "11111111-1111-4111-8111-111111111111",
+    "expectedClinicCode": "CUSTOMER"
+  },
+  "database": {
+    "provider": "supabase",
+    "url": "https://customer-project.supabase.co",
+    "publishableKey": "sb_publishable_REPLACE_WITH_CUSTOMER_KEY"
+  },
+  "auth": {
+    "redirectOrigin": "https://customer-clinic.example.com",
+    "provider": "google"
+  },
+  "identity": {
+    "qrIssuer": "CUSTOMER"
+  }
+}

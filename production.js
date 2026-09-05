@@ -1,54 +1,464 @@
-(()=>{'use strict';
-const cfg=window.CHANANYA_AUTH||{},$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const url=cfg.supabaseUrl||cfg.url,key=cfg.publishableKey||cfg.anonKey||cfg.key;
-let db,session,role='viewer',preview={batchId:null,type:null,rows:[],valid:[]};
-let data={products:[],lots:[],formulas:[],components:[],requests:[],orders:[],issues:[],qc:[],receipts:[],dispensing:[],prescriptions:[],rxItems:[],patients:[]};
-const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),num=v=>Number(v||0),now=()=>new Date().toISOString();
-function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
-function fail(e){console.error(e);alert(e?.message||String(e))}
-function product(id){return data.products.find(x=>x.id===id)}
-function patientName(id){const p=data.patients.find(x=>x.id===id);return p?`${p.prefix||''}${p.first_name} ${p.last_name}`:'-'}
-async function q(t,order){let r=db.from(t).select('*');if(order)r=r.order(order,{ascending:false});const o=await r;if(o.error)throw o.error;return o.data||[]}
-async function load(){const a=await Promise.all([q('products'),q('inventory_lots'),q('formulas'),q('formula_components'),q('production_requests','requested_at'),q('production_orders','created_at'),q('production_material_issues'),q('production_qc'),q('finished_goods_receipts'),q('dispensing_orders','created_at'),q('prescriptions'),q('prescription_items'),q('patients')]);['products','lots','formulas','components','requests','orders','issues','qc','receipts','dispensing','prescriptions','rxItems','patients'].forEach((k,i)=>data[k]=a[i]);render()}
-function opts(arr,label){return '<option value="">เลือก</option>'+arr.map(x=>`<option value="${x.id}">${esc(label(x))}</option>`).join('')}
-function render(){
- $('#role').textContent=role;
- $('#f-product').innerHTML=opts(data.products,p=>`${p.sku} — ${p.name_th}`);
- $('#c-formula').innerHTML=opts(data.formulas,f=>`${f.formula_code} Rev.${f.revision} — ${f.name_th}`);
- $('#c-material').innerHTML=opts(data.products.filter(p=>['raw_material','material','herb','packaging'].includes((p.category||'').toLowerCase())),p=>`${p.sku} — ${p.name_th}`);
- const activeDisp=data.dispensing.filter(o=>!['submitted_to_billing','billed','cancelled','rejected'].includes(o.status));
- $('#req-dispensing').innerHTML=opts(activeDisp,o=>{const rx=data.prescriptions.find(r=>r.id===o.prescription_id);return `${o.queue_number||'-'} — ${patientName(rx?.patient_id)}`});
- $('#stat-requests').textContent=data.requests.filter(r=>!['fulfilled','cancelled'].includes(r.status)).length;
- $('#stat-orders').textContent=data.orders.filter(o=>!['released','rejected','cancelled'].includes(o.status)).length;
- $('#stat-qc').textContent=data.orders.filter(o=>o.status==='awaiting_qc').length;
- $('#stat-released').textContent=data.orders.filter(o=>o.status==='released').length;
- $('#stat-low').textContent=data.products.filter(p=>data.lots.filter(l=>l.product_id===p.id).reduce((s,l)=>s+num(l.current_quantity),0)<=num(p.reorder_level)).length;
- renderRequests();renderOrders();renderFormulas();renderMaterials();bindActions();
-}
-function renderRequests(){$('#request-list').innerHTML=data.requests.map(r=>{const p=product(r.requested_product_id),o=data.orders.find(x=>x.production_request_id===r.id);return `<div class="item column"><div class="wide"><div class="row"><b>${esc(r.request_no)} • ${esc(p?.name_th||'-')}</b><span class="badge">${esc(r.status)}</span></div><small>${num(r.requested_quantity)} ${esc(r.unit)} • ${esc(r.priority)} • ${esc(r.reason||'')}</small><div class="right">${!o&&r.status==='requested'?`<button class="btn primary" data-act="open-order" data-id="${r.id}">Open Production Order</button>`:''}</div></div></div>`}).join('')||'<p class="muted">ยังไม่มีคำขอผลิต</p>'}
-function renderOrders(){$('#order-list').innerHTML=data.orders.map(o=>{const p=product(o.finished_product_id),f=data.formulas.find(x=>x.id===o.formula_id),iss=data.issues.filter(x=>x.production_order_id===o.id),buttons=[];if(o.status==='planned')buttons.push(`<button class="btn primary" data-act="issue" data-id="${o.id}">เบิก Raw Material FEFO</button>`);if(o.status==='materials_issued'||o.status==='in_process')buttons.push(`<button class="btn primary" data-act="complete" data-id="${o.id}">บันทึกผลผลิต</button>`);if(o.status==='awaiting_qc')buttons.push(`<button class="btn primary" data-act="release" data-id="${o.id}">QC Pass & Release</button><button class="btn danger" data-act="reject" data-id="${o.id}">QC Reject</button>`);return `<div class="item column"><div class="wide"><div class="row"><b>${esc(o.production_order_no)} • Batch ${esc(o.batch_number)}</b><span class="badge">${esc(o.status)}</span></div><small>${esc(p?.name_th||'-')} • Plan ${num(o.planned_quantity)} ${esc(o.planned_unit)} • Formula ${esc(f?.formula_code||'-')} Rev.${esc(f?.revision||'-')}</small><small>Issued materials: ${iss.length} lot line(s) • Actual ${num(o.actual_quantity)} • Yield ${num(o.yield_percent)}%</small><div class="right">${buttons.join('')}</div></div></div>`}).join('')||'<p class="muted">ยังไม่มี Production Order</p>'}
-function renderFormulas(){$('#formula-list').innerHTML=data.formulas.map(f=>`<div class="item"><div><b>${esc(f.formula_code)} Rev.${esc(f.revision)} • ${esc(f.name_th)}</b><small>${esc(product(f.finished_product_id)?.name_th||'-')} • Batch ${num(f.standard_batch_size)} ${esc(f.batch_unit)} • ${esc(f.status)}</small></div></div>`).join('')||'<p class="muted">ยังไม่มี Formula</p>';$('#component-list').innerHTML=data.components.map(c=>{const f=data.formulas.find(x=>x.id===c.formula_id);return `<div class="item"><div><b>${esc(f?.formula_code||'-')} • ${esc(product(c.material_product_id)?.name_th||'-')}</b><small>${num(c.quantity_per_batch)} ${esc(c.unit)} • Stage ${esc(c.process_stage||'-')}</small></div></div>`}).join('')||'<p class="muted">ยังไม่มี BOM Component</p>'}
-function renderMaterials(){$('#material-list').innerHTML=[...data.lots].sort((a,b)=>(a.expiry_date||'9999').localeCompare(b.expiry_date||'9999')).map(l=>`<div class="item"><div><b>${esc(product(l.product_id)?.name_th||'-')} • Lot ${esc(l.lot_number)}</b><small>EXP ${esc(l.expiry_date||'-')} • ${esc(l.storage_location||'-')}</small></div><span class="badge">${num(l.current_quantity)} ${esc(l.unit)}</span></div>`).join('')||'<p class="muted">ยังไม่มี Lot</p>'}
-function bindActions(){$$('[data-act]').forEach(b=>b.onclick=()=>action(b.dataset.act,b.dataset.id))}
-async function action(a,id){try{if(a==='open-order')await openOrder(id);if(a==='issue')await issueMaterials(id);if(a==='complete')await completeOrder(id);if(a==='release')await releaseOrder(id);if(a==='reject')await rejectOrder(id)}catch(e){fail(e)}}
-async function createRequest(e){e.preventDefault();const orderId=$('#req-dispensing').value,itemId=$('#req-item').value,item=data.rxItems.find(x=>x.id===itemId);if(!item)throw new Error('กรุณาเลือกรายการยา');const r=await db.from('production_requests').insert({request_no:`PR-${Date.now()}`,source_type:'pharmacy',dispensing_order_id:orderId,prescription_item_id:itemId,requested_product_id:item.product_id,requested_quantity:num($('#req-qty').value),unit:$('#req-unit').value,required_by:$('#req-required').value?new Date($('#req-required').value).toISOString():null,priority:$('#req-priority').value,status:'requested',reason:$('#req-reason').value||'out_of_stock',requested_by:session.user.id}).select().single();if(r.error)throw r.error;await db.from('dispensing_orders').update({status:'out_of_stock'}).eq('id',orderId);e.target.reset();await load();toast('สร้าง Production Request แล้ว')}
-function loadRequestItems(){const o=data.dispensing.find(x=>x.id===$('#req-dispensing').value),rx=data.prescriptions.find(x=>x.id===o?.prescription_id),items=data.rxItems.filter(x=>x.prescription_id===rx?.id);$('#req-item').innerHTML=opts(items,i=>`${product(i.product_id)?.name_th||'-'} — ${i.quantity_prescribed} ${i.unit}`)}
-async function saveFormula(e){e.preventDefault();const r=await db.from('formulas').insert({formula_code:$('#f-code').value.trim(),revision:$('#f-rev').value.trim(),name_th:$('#f-name').value.trim(),finished_product_id:$('#f-product').value,standard_batch_size:num($('#f-batch').value),batch_unit:$('#f-unit').value.trim(),expected_yield_percent:num($('#f-yield').value)||100,shelf_life_days:num($('#f-shelf').value)||null,manufacturing_instructions:$('#f-instructions').value||null,status:'approved',approved_by:session.user.id,approved_at:now(),created_by:session.user.id}).select().single();if(r.error)throw r.error;e.target.reset();await load();toast('บันทึก Formula แล้ว')}
-async function saveComponent(e){e.preventDefault();const r=await db.from('formula_components').insert({formula_id:$('#c-formula').value,material_product_id:$('#c-material').value,sequence_no:num($('#c-seq').value)||1,quantity_per_batch:num($('#c-qty').value),unit:$('#c-unit').value,process_stage:$('#c-stage').value||null});if(r.error)throw r.error;e.target.reset();await load();toast('เพิ่ม BOM Component แล้ว')}
-async function openOrder(requestId){const r=data.requests.find(x=>x.id===requestId),f=data.formulas.find(x=>x.finished_product_id===r.requested_product_id&&x.status==='approved');if(!f)throw new Error('ไม่พบ Formula approved สำหรับสินค้านี้');const planned=Math.max(num(r.requested_quantity),num(f.standard_batch_size));const o=await db.from('production_orders').insert({production_order_no:`PO-${Date.now()}`,production_request_id:r.id,formula_id:f.id,finished_product_id:r.requested_product_id,batch_number:`B${new Date().toISOString().slice(0,10).replaceAll('-','')}-${String(Date.now()).slice(-5)}`,planned_quantity:planned,planned_unit:f.batch_unit,planned_start_at:now(),status:'planned',created_by:session.user.id}).select().single();if(o.error)throw o.error;await db.from('production_requests').update({status:'planned'}).eq('id',r.id);await load();toast('เปิด Production Order แล้ว')}
-async function issueMaterials(orderId){const o=data.orders.find(x=>x.id===orderId),f=data.formulas.find(x=>x.id===o.formula_id),cs=data.components.filter(x=>x.formula_id===f.id);if(!cs.length)throw new Error('Formula ยังไม่มี BOM Component');const factor=num(o.planned_quantity)/num(f.standard_batch_size),plan=[];for(const c of cs){let need=num(c.quantity_per_batch)*factor;const lots=[...data.lots].filter(l=>l.product_id===c.material_product_id&&num(l.current_quantity)>0&&(!l.expiry_date||l.expiry_date>=new Date().toISOString().slice(0,10))).sort((a,b)=>(a.expiry_date||'9999').localeCompare(b.expiry_date||'9999'));const available=lots.reduce((s,l)=>s+num(l.current_quantity),0);if(available+1e-9<need)throw new Error(`วัตถุดิบ ${product(c.material_product_id)?.name_th||''} ไม่พอ ต้องการ ${need} มี ${available}`);for(const l of lots){if(need<=0)break;const take=Math.min(need,num(l.current_quantity));plan.push({c,l,take,required:num(c.quantity_per_batch)*factor});need-=take}}
-for(const x of plan){const ir=await db.from('production_material_issues').insert({production_order_id:o.id,formula_component_id:x.c.id,material_product_id:x.c.material_product_id,inventory_lot_id:x.l.id,required_quantity:x.required,issued_quantity:x.take,unit:x.c.unit,issued_by:session.user.id}).select().single();if(ir.error)throw ir.error;const sm=await db.from('stock_movements').insert({inventory_lot_id:x.l.id,movement_type:'production_issue',quantity:x.take,direction:'out',reference_type:'production_order',reference_id:o.id,reason:`Issue to ${o.production_order_no}`,performed_by:session.user.id});if(sm.error)throw sm.error}
-await db.from('production_orders').update({status:'materials_issued',actual_start_at:now(),produced_by:session.user.id}).eq('id',o.id);await load();toast('เบิกวัตถุดิบตาม FEFO แล้ว')}
-async function completeOrder(id){const o=data.orders.find(x=>x.id===id),actual=num(prompt('Actual quantity produced',String(o.planned_quantity)));if(!(actual>0))return;const loss=num(prompt('Loss quantity','0')),waste=num(prompt('Waste quantity','0')),yieldPct=o.planned_quantity?actual/num(o.planned_quantity)*100:0;const r=await db.from('production_orders').update({actual_quantity:actual,loss_quantity:loss,waste_quantity:waste,yield_percent:yieldPct,actual_end_at:now(),status:'awaiting_qc'}).eq('id',id);if(r.error)throw r.error;await load();toast('บันทึกผลผลิตและส่ง QC แล้ว')}
-async function releaseOrder(id){const o=data.orders.find(x=>x.id===id),f=data.formulas.find(x=>x.id===o.formula_id),summary=prompt('QC result summary','ผ่านตามข้อกำหนด');if(summary===null)return;let r=await db.from('production_qc').upsert({production_order_id:id,result_summary:summary,status:'passed',tested_by:session.user.id,tested_at:now(),approved_by:session.user.id,approved_at:now()},{onConflict:'production_order_id'}).select().single();if(r.error)throw r.error;const exp=f.shelf_life_days?new Date(Date.now()+num(f.shelf_life_days)*86400000).toISOString().slice(0,10):null;const lot=await db.from('inventory_lots').insert({product_id:o.finished_product_id,lot_number:o.batch_number,manufacture_date:new Date().toISOString().slice(0,10),expiry_date:exp,received_quantity:num(o.actual_quantity),current_quantity:0,unit:o.planned_unit,purchase_cost:0,storage_location:'Finished Goods',status:'active',created_by:session.user.id}).select().single();if(lot.error)throw lot.error;r=await db.from('stock_movements').insert({inventory_lot_id:lot.data.id,movement_type:'production_receipt',quantity:num(o.actual_quantity),direction:'in',reference_type:'production_order',reference_id:o.id,reason:'QC released finished goods',performed_by:session.user.id});if(r.error)throw r.error;r=await db.from('finished_goods_receipts').insert({production_order_id:o.id,inventory_lot_id:lot.data.id,received_quantity:num(o.actual_quantity),unit:o.planned_unit,received_by:session.user.id});if(r.error)throw r.error;await db.from('production_orders').update({status:'released'}).eq('id',id);const req=data.requests.find(x=>x.id===o.production_request_id);if(req){await db.from('production_requests').update({status:'fulfilled'}).eq('id',req.id);if(req.dispensing_order_id)await db.from('dispensing_orders').update({status:'waiting'}).eq('id',req.dispensing_order_id)}await load();toast('QC Release และรับ Finished Goods เข้า Stock แล้ว')}
-async function rejectOrder(id){const reason=prompt('เหตุผลที่ไม่ผ่าน QC');if(!reason)return;let r=await db.from('production_qc').upsert({production_order_id:id,result_summary:'ไม่ผ่าน',status:'rejected',tested_by:session.user.id,tested_at:now(),rejection_reason:reason},{onConflict:'production_order_id'});if(r.error)throw r.error;r=await db.from('production_orders').update({status:'rejected'}).eq('id',id);if(r.error)throw r.error;await load();toast('บันทึก QC Reject แล้ว')}
-const aliases={sku:['sku','product_code','รหัสสินค้า','รหัสวัตถุดิบ'],name_th:['name_th','name','ชื่อ','ชื่อสินค้า','ชื่อวัตถุดิบ'],category:['category','ประเภท'],stock_unit:['stock_unit','unit','หน่วย'],dispense_unit:['dispense_unit','หน่วยจ่าย'],supplier_code:['supplier_code','รหัสผู้ขาย'],supplier_name:['supplier_name','supplier','ชื่อผู้ขาย'],formula_code:['formula_code','รหัสสูตร'],revision:['revision','rev'],finished_sku:['finished_sku','finished_product_sku','sku_finished'],batch_size:['batch_size','standard_batch_size'],batch_unit:['batch_unit','หน่วยผลิต'],material_sku:['material_sku','raw_material_sku'],quantity:['quantity','qty','จำนวน','quantity_per_batch'],unit:['unit','หน่วย'],lot_number:['lot_number','lot','ล็อต'],expiry_date:['expiry_date','expiry','วันหมดอายุ'],current_quantity:['current_quantity','opening_qty','quantity','จำนวนคงเหลือ'],location:['location','storage_location','ตำแหน่ง']};
-function normalize(row){const out={};for(const [k,as] of Object.entries(aliases)){const hit=Object.keys(row).find(x=>as.includes(String(x).trim().toLowerCase())||as.includes(String(x).trim()));if(hit!==undefined&&row[hit]!==undefined&&row[hit]!==null&&row[hit]!=='')out[k]=row[hit]}return out}
-function validate(type,n){const e=[];if(['products','raw_materials'].includes(type)){if(!n.sku)e.push('missing sku');if(!n.name_th)e.push('missing name');if(!n.stock_unit&&!n.unit)e.push('missing unit')}if(type==='suppliers'){if(!n.supplier_code)e.push('missing supplier_code');if(!n.supplier_name&&!n.name_th)e.push('missing supplier name')}if(type==='formulas'){if(!n.formula_code)e.push('missing formula_code');if(!n.finished_sku)e.push('missing finished_sku');if(!n.batch_size)e.push('missing batch_size')}if(type==='formula_components'){if(!n.formula_code)e.push('missing formula_code');if(!n.material_sku)e.push('missing material_sku');if(!n.quantity)e.push('missing quantity')}if(type==='inventory_lots'){if(!n.sku)e.push('missing sku');if(!n.lot_number)e.push('missing lot');if(!n.current_quantity)e.push('missing quantity')}return e}
-async function previewFile(e){e.preventDefault();const file=$('#import-file').files[0],type=$('#import-type').value;if(!file)throw new Error('กรุณาเลือกไฟล์');const buf=await file.arrayBuffer(),wb=XLSX.read(buf,{type:'array'}),sheet=wb.SheetNames[0],rows=XLSX.utils.sheet_to_json(wb.Sheets[sheet],{defval:''}),norm=rows.map((r,i)=>({row_number:i+2,raw:r,normalized:normalize(r)}));norm.forEach(x=>x.errors=validate(type,x.normalized));const b=await db.from('import_batches').insert({import_type:type,source_file_name:file.name,source_sheet_name:sheet,status:'validated',total_rows:norm.length,valid_rows:norm.filter(x=>!x.errors.length).length,invalid_rows:norm.filter(x=>x.errors.length).length,uploaded_by:session.user.id}).select().single();if(b.error)throw b.error;const staged=norm.map(x=>({import_batch_id:b.data.id,row_number:x.row_number,raw_data:x.raw,normalized_data:x.normalized,validation_status:x.errors.length?'invalid':'valid',validation_errors:x.errors,target_table:type==='raw_materials'?'products':type}));if(staged.length){const sr=await db.from('import_rows').insert(staged);if(sr.error)throw sr.error}preview={batchId:b.data.id,type,rows:norm,valid:norm.filter(x=>!x.errors.length)};renderPreview();toast('Preview และ Validate แล้ว')}
-function renderPreview(){const rows=preview.rows,keys=[...new Set(rows.flatMap(x=>Object.keys(x.normalized)))];$('#import-summary').innerHTML=`<p><b>${rows.length}</b> rows • Valid <b>${preview.valid.length}</b> • Invalid <b>${rows.length-preview.valid.length}</b></p>`;$('#preview-table').innerHTML=`<thead><tr><th>Row</th><th>Status</th>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,100).map(x=>`<tr><td>${x.row_number}</td><td>${x.errors.length?'<span class="error">'+esc(x.errors.join(', '))+'</span>':'OK'}</td>${keys.map(k=>`<td>${esc(x.normalized[k]??'')}</td>`).join('')}</tr>`).join('')}</tbody>`;$('#confirm-import').classList.toggle('hidden',!preview.valid.length)}
-async function confirmImport(){try{let count=0;for(const x of preview.valid){const n=x.normalized;let target=null;if(['products','raw_materials'].includes(preview.type)){const payload={sku:String(n.sku),name_th:String(n.name_th),category:preview.type==='raw_materials'?'raw_material':String(n.category||'finished_product'),purchase_unit:String(n.stock_unit||n.unit),stock_unit:String(n.stock_unit||n.unit),dispense_unit:String(n.dispense_unit||n.stock_unit||n.unit),active:true};const r=await db.from('products').upsert(payload,{onConflict:'sku'}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='suppliers'){const r=await db.from('suppliers').upsert({supplier_code:String(n.supplier_code),name:String(n.supplier_name||n.name_th),active:true},{onConflict:'supplier_code'}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='formulas'){const p=data.products.find(p=>p.sku===String(n.finished_sku));if(!p)throw new Error(`ไม่พบ finished SKU ${n.finished_sku}`);const r=await db.from('formulas').upsert({formula_code:String(n.formula_code),revision:String(n.revision||'00'),name_th:String(n.name_th||n.formula_code),finished_product_id:p.id,standard_batch_size:num(n.batch_size),batch_unit:String(n.batch_unit||n.unit||p.stock_unit),status:'approved',approved_by:session.user.id,approved_at:now(),created_by:session.user.id},{onConflict:'formula_code,revision'}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='formula_components'){const f=data.formulas.find(f=>f.formula_code===String(n.formula_code)&&f.revision===String(n.revision||'00')),p=data.products.find(p=>p.sku===String(n.material_sku));if(!f||!p)throw new Error(`หา Formula/Material ไม่พบ row ${x.row_number}`);const r=await db.from('formula_components').insert({formula_id:f.id,material_product_id:p.id,sequence_no:count+1,quantity_per_batch:num(n.quantity),unit:String(n.unit||p.stock_unit)}).select().single();if(r.error)throw r.error;target=r.data.id}else if(preview.type==='inventory_lots'){const p=data.products.find(p=>p.sku===String(n.sku));if(!p)throw new Error(`ไม่พบ SKU ${n.sku}`);const qty=num(n.current_quantity);const r=await db.from('inventory_lots').upsert({product_id:p.id,lot_number:String(n.lot_number),expiry_date:n.expiry_date?new Date(n.expiry_date).toISOString().slice(0,10):null,received_quantity:qty,current_quantity:0,unit:String(n.unit||p.stock_unit),storage_location:String(n.location||''),status:'active',created_by:session.user.id},{onConflict:'product_id,lot_number'}).select().single();if(r.error)throw r.error;await db.from('stock_movements').insert({inventory_lot_id:r.data.id,movement_type:'opening_balance',quantity:qty,direction:'in',reference_type:'import_batch',reference_id:preview.batchId,performed_by:session.user.id});target=r.data.id}await db.from('import_rows').update({validation_status:'imported',target_id:target,imported_at:now()}).eq('import_batch_id',preview.batchId).eq('row_number',x.row_number);count++}
-await db.from('import_batches').update({status:'completed',imported_rows:count,completed_at:now()}).eq('id',preview.batchId);await load();toast(`Import สำเร็จ ${count} rows`);$('#confirm-import').classList.add('hidden')}catch(e){fail(e)}}
-async function init(){try{if(!url||!key)throw new Error('ไม่พบ Supabase config');db=supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});const s=await db.auth.getSession();session=s.data.session;if(!session){location.href='/login.html';return}const p=await db.from('profiles').select('role,full_name').eq('id',session.user.id).single();if(p.error)throw p.error;role=p.data.role||'viewer';if(!['admin','pharmacy','production','inventory'].includes(role))throw new Error('บัญชีนี้ไม่มีสิทธิ์ Production Workstation');$('#identity').textContent=`${p.data.full_name||session.user.email} • ${session.user.email}`;$('#boot').classList.add('hidden');$('#app').classList.remove('hidden');await load()}catch(e){$('#boot-error').textContent=e.message;console.error(e)}}
-$$('.nav button').forEach(b=>b.onclick=()=>{$$('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.view));$$('.nav button').forEach(x=>x.classList.toggle('active',x===b))});$('#logout').onclick=async()=>{await db.auth.signOut();location.href='/login.html'};$('#req-dispensing').onchange=loadRequestItems;$('#request-form').onsubmit=e=>createRequest(e).catch(fail);$('#formula-form').onsubmit=e=>saveFormula(e).catch(fail);$('#component-form').onsubmit=e=>saveComponent(e).catch(fail);$('#import-form').onsubmit=e=>previewFile(e).catch(fail);$('#confirm-import').onclick=confirmImport;init();
+(() => {
+  'use strict';
+
+  const $ = selector => document.querySelector(selector);
+  const $$ = selector => [...document.querySelectorAll(selector)];
+  const collator = new Intl.Collator(['th', 'en'], { sensitivity: 'base', numeric: true });
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character]));
+  const num = value => Number(value || 0);
+  const optionalNumber = value => value === '' || value === null ? null : Number(value);
+
+  let db;
+  let session;
+  let profile;
+  let persistenceReady = false;
+  let activeOrderId = null;
+  let preview = { batchId: null, type: null, rows: [], valid: [] };
+
+  const data = {
+    products: [], lots: [], formulas: [], components: [], requests: [],
+    orders: [], issues: [], qc: [], receipts: []
+  };
+
+  const errorLabels = {
+    PRODUCTION_DEPARTMENT_REQUIRED: 'บัญชีนี้ไม่มีสิทธิ์ Production',
+    PRODUCTION_REQUEST_NOT_FOUND: 'ไม่พบคำขอผลิตในคลินิกนี้',
+    PRODUCTION_REQUEST_NOT_OPEN: 'คำขอผลิตนี้ไม่อยู่ในสถานะเปิด',
+    APPROVED_FORMULA_NOT_FOUND: 'ไม่พบสูตรที่อนุมัติสำหรับสินค้านี้',
+    FORMULA_COMPONENT_REQUIRED: 'สูตรยังไม่มีรายการวัตถุดิบ',
+    PRODUCTION_MATERIAL_INSUFFICIENT: 'วัตถุดิบที่ยังไม่หมดอายุมีไม่เพียงพอ ระบบยกเลิกการเบิกทั้งหมดแล้ว',
+    PRODUCTION_UNIT_CONVERSION_REQUIRED: 'หน่วยวัตถุดิบไม่ตรงกับ Product Master ต้องกำหนด conversion ก่อน',
+    PRODUCTION_LOT_UNIT_MISMATCH: 'หน่วยของ Lot ไม่ตรงกับสูตร ระบบไม่ได้ตัด Stock',
+    IMPORT_BATCH_NOT_VALIDATED: 'ชุด Import นี้ยังไม่ผ่านการตรวจสอบ',
+    IMPORT_VALID_ROW_REQUIRED: 'ไม่มีแถวที่ถูกต้องสำหรับ Import'
+  };
+
+  function messageFor(error) {
+    const raw = error?.message || String(error);
+    const key = Object.keys(errorLabels).find(item => raw.includes(item));
+    return key ? errorLabels[key] : raw;
+  }
+
+  function toast(message) {
+    const element = $('#toast');
+    element.textContent = message;
+    element.classList.add('show');
+    window.setTimeout(() => element.classList.remove('show'), 2600);
+  }
+
+  function fail(error) {
+    console.error(error);
+    alert(messageFor(error));
+  }
+
+  function product(id) { return data.products.find(item => item.id === id); }
+  function formula(id) { return data.formulas.find(item => item.id === id); }
+  function order(id) { return data.orders.find(item => item.id === id); }
+
+  async function waitRuntime() {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (window.ChananyaRuntime) return window.ChananyaRuntime;
+      await new Promise(resolve => window.setTimeout(resolve, 100));
+    }
+    throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
+  }
+
+  async function query(table, orderBy) {
+    let request = db.from(table).select('*');
+    if (orderBy) request = request.order(orderBy, { ascending: false });
+    const result = await request;
+    if (result.error) throw result.error;
+    return result.data || [];
+  }
+
+  async function rpc(name, parameters) {
+    if (!persistenceReady) {
+      throw new Error('ฐานข้อมูล Production ยังไม่พร้อม ระบบหยุดการเขียนเพื่อป้องกันข้อมูลครึ่งชุด');
+    }
+    const result = await db.rpc(name, parameters);
+    if (result.error) throw result.error;
+    return Array.isArray(result.data) && result.data.length === 1 ? result.data[0] : result.data;
+  }
+
+  async function load() {
+    const rows = await Promise.all([
+      query('products', 'updated_at'),
+      query('inventory_lots', 'created_at'),
+      query('formulas', 'updated_at'),
+      query('formula_components'),
+      query('production_requests', 'requested_at'),
+      query('production_orders', 'created_at'),
+      query('production_material_issues', 'issued_at'),
+      query('production_qc', 'created_at'),
+      query('finished_goods_receipts', 'received_at')
+    ]);
+    [
+      'products', 'lots', 'formulas', 'components', 'requests',
+      'orders', 'issues', 'qc', 'receipts'
+    ].forEach((key, index) => { data[key] = rows[index]; });
+    render();
+  }
+
+  function options(rows, label, selected = '') {
+    const sorted = [...rows].sort((left, right) => collator.compare(label(left), label(right)));
+    return '<option value="">เลือก</option>' + sorted.map(item => (
+      `<option value="${esc(item.id)}"${item.id === selected ? ' selected' : ''}>${esc(label(item))}</option>`
+    )).join('');
+  }
+
+  function syncFormulaUnit() {
+    const selected = product($('#f-product')?.value);
+    if ($('#f-unit')) $('#f-unit').value = selected?.stock_unit || '';
+  }
+
+  function syncComponentUnit() {
+    const selected = product($('#c-material')?.value);
+    if ($('#c-unit')) $('#c-unit').value = selected?.stock_unit || '';
+  }
+
+  function render() {
+    const selectedFinishedProduct = $('#f-product')?.value || '';
+    const selectedFormula = $('#c-formula')?.value || '';
+    const selectedMaterial = $('#c-material')?.value || '';
+    const runtimeRoles = window.ChananyaRuntime?.rolesOf(profile);
+    $('#role').textContent = runtimeRoles?.effectiveRole || 'production';
+
+    $('#f-product').innerHTML = options(
+      data.products.filter(item => item.active !== false),
+      item => `${item.sku} — ${item.name_th}`,
+      selectedFinishedProduct
+    );
+    $('#c-formula').innerHTML = options(
+      data.formulas.filter(item => item.status !== 'inactive'),
+      item => `${item.formula_code} Rev.${item.revision} — ${item.name_th}`,
+      selectedFormula
+    );
+    $('#c-material').innerHTML = options(
+      data.products.filter(item => item.active !== false && [
+        'raw_material', 'material', 'herb', 'packaging'
+      ].includes(String(item.category || '').toLowerCase())),
+      item => `${item.sku} — ${item.name_th}`,
+      selectedMaterial
+    );
+
+    syncFormulaUnit();
+    syncComponentUnit();
+    $('#stat-requests').textContent = data.requests.filter(item => ![
+      'fulfilled', 'cancelled', 'rejected'
+    ].includes(item.status)).length;
+    $('#stat-orders').textContent = data.orders.filter(item => ![
+      'released', 'rejected', 'cancelled'
+    ].includes(item.status)).length;
+    $('#stat-qc').textContent = data.orders.filter(item => item.status === 'awaiting_qc').length;
+    $('#stat-released').textContent = data.orders.filter(item => item.status === 'released').length;
+    $('#stat-low').textContent = data.products.filter(item => {
+      const quantity = data.lots
+        .filter(lot => lot.product_id === item.id && lot.status === 'active')
+        .reduce((total, lot) => total + num(lot.current_quantity), 0);
+      return quantity <= num(item.reorder_level);
+    }).length;
+
+    renderRequests();
+    renderOrders();
+    renderFormulas();
+    renderMaterials();
+    bindActions();
+    window.dispatchEvent(new CustomEvent('chananya:production-rendered'));
+  }
+
+  function renderRequests() {
+    const rows = data.requests.map(request => {
+      const requestedProduct = product(request.requested_product_id);
+      const linkedOrder = data.orders.find(item => item.production_request_id === request.id);
+      const requiredBy = request.required_by
+        ? new Date(request.required_by).toLocaleString('th-TH')
+        : 'ไม่กำหนด';
+      const button = !linkedOrder && request.status === 'requested'
+        ? `<button class="btn primary" data-act="open-order" data-id="${esc(request.id)}">เปิด Production Order</button>`
+        : '';
+      return `<div class="item column"><div class="row"><div><b>${esc(request.request_no)} • ${esc(requestedProduct?.name_th || '-')}</b><small>${num(request.requested_quantity)} ${esc(request.unit)} • ${esc(request.priority)} • ต้องการ ${esc(requiredBy)}</small><small>เหตุผล: ${esc(request.reason || 'out_of_stock')}</small></div><span class="badge">${esc(request.status)}</span></div>${button ? `<div class="right">${button}</div>` : ''}</div>`;
+    }).join('');
+    $('#request-list').innerHTML = rows || '<p class="muted">ยังไม่มีคำขอผลิตจาก Pharmacy</p>';
+  }
+
+  function renderOrders() {
+    const rows = data.orders.map(item => {
+      const finished = product(item.finished_product_id);
+      const linkedFormula = formula(item.formula_id);
+      const issueLines = data.issues.filter(issue => issue.production_order_id === item.id).length;
+      const buttons = [];
+      if (item.status === 'planned') {
+        buttons.push(`<button class="btn primary" data-act="issue" data-id="${esc(item.id)}">เบิกวัตถุดิบ FEFO</button>`);
+      }
+      if (['materials_issued', 'in_process'].includes(item.status)) {
+        buttons.push(`<button class="btn primary" data-act="complete" data-id="${esc(item.id)}">บันทึกผลผลิต</button>`);
+      }
+      if (item.status === 'awaiting_qc') {
+        buttons.push('<span class="notice">ส่งให้ Independent Quality แล้ว • ผู้ผลิตไม่สามารถอนุมัติ Batch ของตนเอง</span>');
+      }
+      return `<div class="item column"><div class="row"><div><b>${esc(item.production_order_no)} • Batch ${esc(item.batch_number)}</b><small>${esc(finished?.name_th || '-')} • Plan ${num(item.planned_quantity)} ${esc(item.planned_unit)} • Formula ${esc(linkedFormula?.formula_code || '-')} Rev.${esc(linkedFormula?.revision || '-')}</small><small>Issued ${issueLines} lot line(s) • Actual ${num(item.actual_quantity)} • Yield ${num(item.yield_percent)}%</small></div><span class="badge">${esc(item.status)}</span></div>${buttons.length ? `<div class="right">${buttons.join('')}</div>` : ''}</div>`;
+    }).join('');
+    $('#order-list').innerHTML = rows || '<p class="muted">ยังไม่มี Production Order</p>';
+  }
+
+  function renderFormulas() {
+    const formulas = data.formulas.map(item => (
+      `<div class="item"><div><b>${esc(item.formula_code)} Rev.${esc(item.revision)} • ${esc(item.name_th)}</b><small>${esc(product(item.finished_product_id)?.name_th || '-')} • Batch ${num(item.standard_batch_size)} ${esc(item.batch_unit)} • ${esc(item.status)}</small></div><span class="badge">${esc(item.status)}</span></div>`
+    )).join('');
+    $('#formula-list').innerHTML = formulas || '<p class="muted">ยังไม่มี Formula</p>';
+
+    const components = data.components.map(item => {
+      const linkedFormula = formula(item.formula_id);
+      return `<div class="item"><div><b>${esc(linkedFormula?.formula_code || '-')} Rev.${esc(linkedFormula?.revision || '-')} • ${esc(product(item.material_product_id)?.name_th || '-')}</b><small>${num(item.quantity_per_batch)} ${esc(item.unit)} • Sequence ${num(item.sequence_no)} • ${esc(item.process_stage || 'ไม่ระบุขั้นตอน')}</small></div></div>`;
+    }).join('');
+    $('#component-list').innerHTML = components || '<p class="muted">ยังไม่มี BOM Component</p>';
+  }
+
+  function renderMaterials() {
+    const rows = [...data.lots]
+      .sort((left, right) => (left.expiry_date || '9999').localeCompare(right.expiry_date || '9999'))
+      .map(lot => `<div class="item"><div><b>${esc(product(lot.product_id)?.name_th || '-')} • Lot ${esc(lot.lot_number)}</b><small>EXP ${esc(lot.expiry_date || '-')} • ${esc(lot.storage_location || '-')} • ${esc(lot.status)}</small></div><span class="badge">${num(lot.current_quantity)} ${esc(lot.unit)}</span></div>`)
+      .join('');
+    $('#material-list').innerHTML = rows || '<p class="muted">ยังไม่มี Lot</p>';
+  }
+
+  function bindActions() {
+    $$('[data-act]').forEach(button => {
+      button.onclick = () => action(button.dataset.act, button.dataset.id, button).catch(fail);
+    });
+  }
+
+  async function action(actionName, id, button) {
+    if (button) button.disabled = true;
+    try {
+      if (actionName === 'open-order') {
+        await rpc('open_production_order', {
+          p_request_id: id, p_formula_id: null, p_planned_quantity: null
+        });
+        await load();
+        toast('เปิด Production Order และบันทึก Audit แล้ว');
+      } else if (actionName === 'issue') {
+        if (!confirm('ยืนยันเบิกวัตถุดิบตาม FEFO? หากวัตถุดิบไม่พอ ระบบจะไม่ตัด Stock แม้แต่รายการเดียว')) return;
+        await rpc('issue_production_materials_fefo', { p_production_order_id: id });
+        await load();
+        toast('เบิกวัตถุดิบ FEFO แบบ transaction เดียวแล้ว');
+      } else if (actionName === 'complete') {
+        openCompleteDialog(id);
+      }
+    } finally {
+      if (button?.isConnected) button.disabled = false;
+    }
+  }
+
+  function openCompleteDialog(id) {
+    const selected = order(id);
+    if (!selected) return;
+    activeOrderId = id;
+    $('#complete-form').reset();
+    $('#complete-order-label').textContent = `${selected.production_order_no} • Plan ${num(selected.planned_quantity)} ${selected.planned_unit}`;
+    $('#complete-actual').value = selected.actual_quantity || selected.planned_quantity;
+    $('#complete-loss').value = selected.loss_quantity || 0;
+    $('#complete-waste').value = selected.waste_quantity || 0;
+    $('#complete-dialog').showModal();
+  }
+
+  async function saveCompletedOrder(event) {
+    event.preventDefault();
+    await rpc('complete_production_order', {
+      p_production_order_id: activeOrderId,
+      p_actual_quantity: num($('#complete-actual').value),
+      p_loss_quantity: num($('#complete-loss').value),
+      p_waste_quantity: num($('#complete-waste').value)
+    });
+    $('#complete-dialog').close();
+    await load();
+    toast('บันทึกผลผลิตและส่ง QC พร้อม Audit แล้ว');
+  }
+
+  async function saveFormula(event) {
+    event.preventDefault();
+    await rpc('upsert_production_formula', {
+      p_formula_id: null,
+      p_formula_code: $('#f-code').value.trim(),
+      p_revision: $('#f-rev').value.trim(),
+      p_name_th: $('#f-name').value.trim(),
+      p_finished_product_id: $('#f-product').value,
+      p_standard_batch_size: num($('#f-batch').value),
+      p_batch_unit: $('#f-unit').value.trim(),
+      p_expected_yield_percent: num($('#f-yield').value) || 100,
+      p_shelf_life_days: optionalNumber($('#f-shelf').value),
+      p_manufacturing_instructions: $('#f-instructions').value.trim() || null,
+      p_status: $('#f-status').value
+    });
+    event.target.reset();
+    $('#f-rev').value = '00';
+    $('#f-yield').value = '100';
+    await load();
+    toast('บันทึก Formula และ Audit แล้ว');
+  }
+
+  async function saveComponent(event) {
+    event.preventDefault();
+    await rpc('upsert_production_formula_component', {
+      p_component_id: null,
+      p_formula_id: $('#c-formula').value,
+      p_material_product_id: $('#c-material').value,
+      p_sequence_no: num($('#c-seq').value) || 1,
+      p_quantity_per_batch: num($('#c-qty').value),
+      p_unit: $('#c-unit').value,
+      p_process_stage: $('#c-stage').value.trim() || null,
+      p_notes: null
+    });
+    event.target.reset();
+    $('#c-seq').value = '1';
+    await load();
+    toast('เพิ่ม BOM Component และ Audit แล้ว');
+  }
+
+  const aliases = {
+    sku: ['sku', 'product_code', 'รหัสสินค้า', 'รหัสวัตถุดิบ'],
+    name_th: ['name_th', 'name', 'ชื่อ', 'ชื่อสินค้า', 'ชื่อวัตถุดิบ'],
+    category: ['category', 'ประเภท'],
+    stock_unit: ['stock_unit', 'unit', 'หน่วย'],
+    dispense_unit: ['dispense_unit', 'หน่วยจ่าย'],
+    supplier_code: ['supplier_code', 'รหัสผู้ขาย'],
+    supplier_name: ['supplier_name', 'supplier', 'ชื่อผู้ขาย'],
+    formula_code: ['formula_code', 'รหัสสูตร'],
+    revision: ['revision', 'rev'],
+    finished_sku: ['finished_sku', 'finished_product_sku', 'sku_finished'],
+    batch_size: ['batch_size', 'standard_batch_size'],
+    batch_unit: ['batch_unit', 'หน่วยผลิต'],
+    material_sku: ['material_sku', 'raw_material_sku'],
+    quantity: ['quantity', 'qty', 'จำนวน', 'quantity_per_batch'],
+    sequence_no: ['sequence_no', 'sequence', 'ลำดับ'],
+    unit: ['unit', 'หน่วย'],
+    lot_number: ['lot_number', 'lot', 'ล็อต'],
+    expiry_date: ['expiry_date', 'expiry', 'วันหมดอายุ'],
+    current_quantity: ['current_quantity', 'opening_qty', 'quantity', 'จำนวนคงเหลือ'],
+    location: ['location', 'storage_location', 'ตำแหน่ง']
+  };
+
+  function normalize(row) {
+    const normalized = {};
+    for (const [key, names] of Object.entries(aliases)) {
+      const source = Object.keys(row).find(rawKey => {
+        const candidate = String(rawKey).trim();
+        return names.includes(candidate.toLowerCase()) || names.includes(candidate);
+      });
+      if (source !== undefined && row[source] !== undefined && row[source] !== null && row[source] !== '') {
+        normalized[key] = row[source];
+      }
+    }
+    return normalized;
+  }
+
+  async function previewFile(event) {
+    event.preventDefault();
+    const file = $('#import-file').files[0];
+    const type = $('#import-type').value;
+    if (!file) throw new Error('กรุณาเลือกไฟล์');
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+    if (!rawRows.length) throw new Error('ไฟล์ไม่มีข้อมูล');
+    const rows = rawRows.map((raw, index) => ({
+      row_number: index + 2,
+      raw_data: raw,
+      normalized_data: normalize(raw)
+    }));
+    const batch = await rpc('stage_production_import', {
+      p_import_type: type,
+      p_source_file_name: file.name,
+      p_source_sheet_name: sheetName,
+      p_rows: rows
+    });
+    const staged = await db.from('import_rows').select('*')
+      .eq('import_batch_id', batch.id).order('row_number');
+    if (staged.error) throw staged.error;
+    preview = {
+      batchId: batch.id,
+      type,
+      rows: staged.data || [],
+      valid: (staged.data || []).filter(row => row.validation_status === 'valid')
+    };
+    renderPreview();
+    toast(`ตรวจสอบบน Server แล้ว: ผ่าน ${batch.valid_rows} / ${batch.total_rows} rows`);
+  }
+
+  function renderPreview() {
+    const rows = preview.rows;
+    const keys = [...new Set(rows.flatMap(row => Object.keys(row.normalized_data || {})))];
+    $('#import-summary').innerHTML = `<p><b>${rows.length}</b> rows • Valid <b>${preview.valid.length}</b> • Invalid <b>${rows.length - preview.valid.length}</b></p>`;
+    $('#preview-table').innerHTML = `<thead><tr><th>Row</th><th>Status</th>${keys.map(key => `<th>${esc(key)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 100).map(row => `<tr><td>${row.row_number}</td><td>${row.validation_status === 'valid' ? 'OK' : `<span class="error">${esc((row.validation_errors || []).join(', '))}</span>`}</td>${keys.map(key => `<td>${esc(row.normalized_data?.[key] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    $('#confirm-import').classList.toggle('hidden', !preview.valid.length);
+  }
+
+  async function confirmImport() {
+    if (!preview.batchId) throw new Error('ยังไม่มี Import batch ที่ผ่านการตรวจสอบ');
+    const result = await rpc('commit_production_import', { p_import_batch_id: preview.batchId });
+    $('#confirm-import').classList.add('hidden');
+    await load();
+    toast(`Import แบบ transaction เดียวสำเร็จ ${result.imported_rows} rows`);
+  }
+
+  async function detectPersistence() {
+    const result = await db.rpc('production_execution_healthcheck');
+    const row = Array.isArray(result.data) ? result.data[0] : result.data;
+    persistenceReady = !result.error && row?.ready === true;
+    if (!persistenceReady) {
+      throw new Error('ฐานข้อมูล Atomic Production migration ยังไม่พร้อม ระบบหยุดการเขียนเพื่อป้องกันข้อมูลครึ่งชุด');
+    }
+  }
+
+  async function init() {
+    try {
+      const runtime = await waitRuntime();
+      db = runtime.getDb();
+      session = await runtime.getSession();
+      if (!session) { location.replace('/login.html'); return; }
+      profile = await runtime.getProfile(session.user.id);
+      if (!profile) throw new Error('ไม่พบ Profile');
+      if (!runtime.can(profile, 'production_operate')) {
+        throw new Error('บัญชีนี้ไม่มีสิทธิ์ Production Workstation — แต่ละบัญชีเข้าได้เฉพาะแผนกของตน');
+      }
+      await detectPersistence();
+      window.ChananyaShell?.mount({ profile, session, active: 'production' });
+      $('#app').classList.remove('hidden');
+      $('#boot').classList.add('hidden');
+      await load();
+    } catch (error) {
+      console.error(error);
+      $('#boot-error').textContent = messageFor(error);
+    }
+  }
+
+  $$('.nav button').forEach(button => {
+    button.onclick = () => {
+      $$('.nav button').forEach(item => item.classList.toggle('active', item === button));
+      $$('.view').forEach(view => view.classList.toggle('active', view.id === button.dataset.view));
+    };
+  });
+  $$('[data-close-dialog]').forEach(button => {
+    button.addEventListener('click', () => button.closest('dialog')?.close());
+  });
+  $$('dialog').forEach(dialog => {
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) dialog.close();
+    });
+  });
+  $('#formula-form').addEventListener('submit', event => saveFormula(event).catch(fail));
+  $('#component-form').addEventListener('submit', event => saveComponent(event).catch(fail));
+  $('#import-form').addEventListener('submit', event => previewFile(event).catch(fail));
+  $('#complete-form').addEventListener('submit', event => saveCompletedOrder(event).catch(fail));
+  $('#confirm-import').addEventListener('click', () => confirmImport().catch(fail));
+  $('#f-product').addEventListener('change', syncFormulaUnit);
+  $('#c-material').addEventListener('change', syncComponentUnit);
+  $('#logout').onclick = async () => {
+    if (db) await db.auth.signOut();
+    location.replace('/login.html');
+  };
+  init();
 })();

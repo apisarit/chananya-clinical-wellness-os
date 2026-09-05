@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0d2d24">
+  <meta name="referrer" content="no-referrer">
+  <title>CNYOS • ค้นแหล่งอ้างอิง</title>
+  <link rel="stylesheet" href="app.css?v=evidence1">
+  <link rel="stylesheet" href="evidence.css?v=1">
+  <script src="tenant-config.js?v=white-label1"></script>
+  <script src="tenant-brand.js?v=white-label1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
+  <script src="auth-config.js?v=evidence1"></script>
+  <script src="chananya-runtime.js?v=clinical-os-department1"></script>
+  <script src="app-shell.js?v=evidence1"></script>
+  <script type="module" src="evidence-page.mjs?v=1"></script>
+</head>
+<body data-page="foundation">
+  <div id="boot"><div><div class="spinner"></div><h2>กำลังเปิดแหล่งอ้างอิง</h2><p id="boot-error">กำลังตรวจสอบบัญชีและสิทธิ์</p><a href="/login.html">กลับหน้าเข้าสู่ระบบ</a></div></div>
+  <div id="app" class="app-frame hidden">
+    <aside class="sidebar" aria-label="เมนูระบบ">
+      <a class="brand" href="/"><span class="brand-mark">C</span><span><strong>CNYOS</strong><small>Clinical &amp; Wellness OS</small></span></a>
+      <nav class="global-nav" id="global-nav"></nav>
+      <div class="sidebar-foot">หลักฐานที่เปิดต้นฉบับตรวจสอบได้</div>
+    </aside>
+    <button class="sidebar-scrim" data-shell-close aria-label="ปิดเมนู"></button>
+    <div class="workspace">
+      <header class="top">
+        <div class="actions"><button class="btn ghost menu-toggle" data-shell-menu aria-label="เปิดเมนู" aria-expanded="false">☰</button><div class="top-title"><span class="page-kicker">Evidence Library</span><h1>ค้นแหล่งอ้างอิง</h1></div></div>
+        <div class="actions"><div class="identity-block"><small id="identity"></small></div><span class="badge" id="role">viewer</span><button class="btn ghost" id="logout">ออกจากระบบ</button></div>
+      </header>
+      <main class="evidence-main">
+        <section class="hero">
+          <span class="page-kicker">ค้น • อ่านต้นฉบับ • ทบทวน</span>
+          <h2>งานวิจัยและข้อมูลยา พร้อมแหล่งอ้างอิง</h2>
+          <p>ค้นด้วยชื่อสมุนไพร ชื่อยา หรือหัวข้องานวิจัย แล้วเปิดต้นฉบับเพื่อประเมินความเหมาะสมกับบริบทแพทย์แผนไทย</p>
+          <a class="btn ghost" href="/foundation.html">กลับรากวิชา</a>
+        </section>
+        <form class="card evidence-form" id="evidence-form">
+          <div class="section-heading"><div><h2>เลือกแหล่งข้อมูล</h2><p id="source-description">ทะเบียนการศึกษาทางคลินิก</p></div></div>
+          <label for="evidence-source">แหล่งอ้างอิง</label>
+          <select id="evidence-source" name="source"><option value="clinicaltrials">ClinicalTrials.gov — ทะเบียนการศึกษา</option><option value="dailymed">DailyMed — ฉลากยาในสหรัฐฯ</option><option value="pubmed">PubMed — งานวิจัย (เปิดเฉพาะระบบที่พร้อม)</option></select>
+          <label for="evidence-query">คำค้นทั่วไป</label>
+          <input id="evidence-query" name="query" type="search" minlength="2" maxlength="160" required autocomplete="off" spellcheck="false" placeholder="เช่น Curcuma longa" aria-describedby="evidence-privacy">
+          <p id="evidence-privacy" class="evidence-note">คำค้นจะถูกส่งไปยังแหล่งที่เลือก กรุณาใช้ชื่อยา สมุนไพร หรือหัวข้องานวิจัย ไม่ใส่ชื่อ HN หรือข้อมูลที่ระบุตัวผู้ป่วย</p>
+          <div class="actions"><button class="btn primary" id="evidence-submit" type="submit" disabled>ค้นต้นฉบับ</button><button class="btn ghost" id="evidence-clear" type="button">ล้างผลค้น</button></div>
+        </form>
+        <section class="card" aria-label="ผลการค้นหา" aria-busy="false" id="evidence-output">
+          <p id="evidence-status" role="status" aria-live="polite">เลือกแหล่งอ้างอิงและกรอกคำค้นเพื่อเริ่ม</p>
+          <div id="evidence-results" class="evidence-results"></div>
+        </section>
+        <p class="evidence-note">ผลค้นเป็นรายการจากต้นทาง ยังไม่ผ่านการทบทวนทางคลินิก การมีทะเบียนการศึกษาหรือฉลากยาไม่ยืนยันประสิทธิผลหรือการขึ้นทะเบียนในประเทศไทย ต้องอ่านต้นฉบับก่อนนำไปใช้ รุ่นนี้ยังไม่มี AI สรุปหรือแนะนำการรักษา</p>
+        <p class="evidence-note">หากบริการ PubMed ยังไม่เปิด สามารถ <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">ค้นที่เว็บไซต์ PubMed</a> ได้โดยตรง • <a href="https://www.ncbi.nlm.nih.gov/About/disclaimer.html" target="_blank" rel="noopener noreferrer">ข้อกำหนดและลิขสิทธิ์ข้อมูล NCBI</a></p>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

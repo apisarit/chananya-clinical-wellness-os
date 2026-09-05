@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "deploymentId": "chananya-clinical-production",
+  "brand": {
+    "appName": "CHANANYA Clinical & Wellness OS",
+    "shortName": "CHANANYA",
+    "nameTh": "ชนัญญา คลินิกการแพทย์แผนไทยและสุขภาวะ",
+    "nameEn": "Chananya Thai Traditional Medicine & Wellness Clinic",
+    "productName": "Clinical & Wellness OS",
+    "descriptor": "Thai Traditional Medicine\nClinical & Wellness OS",
+    "mark": "ช",
+    "logoUrl": "",
+    "colors": {
+      "primary950": "#0d2d24",
+      "primary900": "#123b2e",
+      "primary800": "#174f3d",
+      "primary700": "#21634d",
+      "primary100": "#e6f0eb",
+      "primary50": "#f3f7f4",
+      "accent": "#b6924e",
+      "accentSoft": "#eee2c6",
+      "surface": "#fffefa",
+      "background": "#f7f4ed"
+    }
+  },
+  "tenant": {
+    "expectedClinicId": "00000000-0000-0000-0000-000000000001",
+    "expectedClinicCode": "CHANANYA"
+  },
+  "database": {
+    "provider": "supabase",
+    "url": "https://qptxnrldzzinlcabudjv.supabase.co",
+    "publishableKey": "sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ"
+  },
+  "auth": {
+    "redirectOrigin": "https://chananya.netlify.app",
+    "provider": "google"
+  },
+  "identity": {
+    "qrIssuer": "CHANANYA"
+  }
+}
