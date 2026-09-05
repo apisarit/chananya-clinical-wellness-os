@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {mountUSystesis} from '../u-systesis.js';
+import {mountUSynthesise} from '../u-synthesise.js';
 
 const root = new URL('../', import.meta.url);
 const read = file => fs.readFileSync(new URL(file, root), 'utf8');
@@ -18,8 +18,8 @@ ids['us-mode'].value = 'astro_medical'; ids['us-spatial'].hidden = true;
 const window = {};
 vm.runInNewContext(read('luopan-knowledge.js'), {window});
 const document = {getElementById: id => ids[id] || null, createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag)};
-mountUSystesis(document, window);
-assert.match(ids['us-version'].textContent, /U systesis 0\.1\.0.*113/);
+mountUSynthesise(document, window);
+assert.match(ids['us-version'].textContent, /U Synthesise 0\.1\.0.*113/);
 assert.equal(ids['us-modules'].children.length, 4);
 assert.equal(ids['us-layer-frames'].children.length, 23);
 assert.equal(ids['us-wuxing'].children.length, 5);
@@ -57,10 +57,10 @@ for (const value of ['', '-1', '361', 'NaN']) {
 ids['us-mode'].value = 'astro_medical'; ids['us-mode'].events.change();
 assert.equal(ids['us-spatial'].hidden, true);
 assert.equal(ids['luopan-birthdate-ray'].hidden, false);
-assert.doesNotMatch(read('u-systesis.js'), /fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|DeviceOrientationEvent/);
-assert.match(read('app-shell.js'), /label: 'U systesis'.*capability: 'luopan_read'/);
+assert.doesNotMatch(read('u-synthesise.js'), /fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|DeviceOrientationEvent/);
+assert.match(read('app-shell.js'), /label: 'U Synthesise'.*capability: 'luopan_read'/);
 for (const name of ['catalog', 'engine']) {
-  const expected = '// Generated from knowledge/u-systesis/' + name + '.mjs\n' + read('knowledge/u-systesis/' + name + '.mjs').replace("from './catalog.mjs'", "from './u-systesis-catalog.js'");
-  assert.equal(read('u-systesis-' + name + '.js'), expected, 'published module must match its tested source');
+  const expected = '// Generated from knowledge/u-synthesise/' + name + '.mjs\n' + read('knowledge/u-synthesise/' + name + '.mjs').replace("from './catalog.mjs'", "from './u-synthesise-catalog.js'");
+  assert.equal(read('u-synthesise-' + name + '.js'), expected, 'published module must match its tested source');
 }
-console.log('U systesis UI passed: two modes, fixed geometry, birthdate separation, uncertain and invalid headings, complete catalog and generated module identity');
+console.log('U Synthesise UI passed: two modes, fixed geometry, birthdate separation, uncertain and invalid headings, complete catalog and generated module identity');

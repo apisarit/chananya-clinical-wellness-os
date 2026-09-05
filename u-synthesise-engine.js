@@ -1,5 +1,5 @@
-// Generated from knowledge/u-systesis/engine.mjs
-import {identity, frames, mountains, bagua, branches, elements, solarTerms, kala, layers, legacyCounts, deepFreeze} from './u-systesis-catalog.js';
+// Generated from knowledge/u-synthesise/engine.mjs
+import {identity, frames, mountains, bagua, branches, elements, solarTerms, kala, layers, legacyCounts, deepFreeze} from './u-synthesise-catalog.js';
 
 const mod = (number, period) => ((number % period) + period) % period;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
