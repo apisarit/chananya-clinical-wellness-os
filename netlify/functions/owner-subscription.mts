@@ -2,6 +2,7 @@ import {
   allowedOwnerOrigin,
   assertOwnerProject,
   assertOwnerRuntime,
+  assertProductionAdmissionUnlock,
   extractBearerToken,
   normalizeOwnerClinicCodes,
   normalizeOwnerEmails,
@@ -71,7 +72,10 @@ function configuration(getEnv = env) {
     environment,
     deploymentId,
     expectedNetlifySiteId: getEnv('CNYOS_OWNER_EXPECTED_NETLIFY_SITE_ID'),
-    expectedSiteOrigin: getEnv('CNYOS_OWNER_EXPECTED_SITE_ORIGIN')
+    expectedSiteOrigin: getEnv('CNYOS_OWNER_EXPECTED_SITE_ORIGIN'),
+    productionAdmissionEnabled: getEnv('CNYOS_REAL_DATA_ADMISSION_ENABLED') === 'true',
+    productionAdmissionReleaseCommit: getEnv('CNYOS_REAL_DATA_ADMISSION_RELEASE_COMMIT'),
+    productionAdmissionApprovalReference: getEnv('CNYOS_REAL_DATA_ADMISSION_APPROVAL_REFERENCE')
   });
 }
 
@@ -99,9 +103,10 @@ async function listClinics(config, ownerRequest = supabaseOwnerRequest) {
     : [];
 }
 
-async function changeSubscription(request, config, owner, ownerRequest = supabaseOwnerRequest) {
+async function changeSubscription(request, config, owner, ownerRequest = supabaseOwnerRequest, publicFetch = fetch) {
   const input = normalizeSubscriptionRequest(await readOwnerJson(request));
   if (!config.clinicCodes.includes(input.clinicCode)) throw new Error('CNYOS_OWNER_CLINIC_NOT_ALLOWED');
+  await assertProductionAdmissionUnlock(input, config, publicFetch);
   return ownerRequest({
     url: config.supabaseUrl,
     serviceRoleKey: config.serviceRoleKey,
@@ -127,24 +132,16 @@ export async function handleOwnerSubscription(request, context, deps = {}) {
 
   try {
     const config = configuration(deps.getEnv || env);
-    assertOwnerRuntime(
-      request,
-      context,
-      config.expectedNetlifySiteId,
-      config.expectedSiteOrigin
-    );
+    assertOwnerRuntime(request, context, config.expectedNetlifySiteId, config.expectedSiteOrigin);
     const owner = await authenticateOwner(request, config, deps.ownerRequest);
     if (request.method === 'GET') {
       return json({ ok: true, clinics: await listClinics(config, deps.ownerRequest) });
     }
-    const result = await changeSubscription(request, config, owner, deps.ownerRequest);
+    const result = await changeSubscription(request, config, owner, deps.ownerRequest, deps.publicFetch || fetch);
     return json({ ok: true, result });
   } catch (error) {
     const safe = ownerPublicError(error);
-    console.error('CNYOS owner subscription request failed', {
-      requestId,
-      code: safe.code
-    });
+    console.error('CNYOS owner subscription request failed', { requestId, code: safe.code });
     return json({ ok: false, code: safe.code }, safe.status);
   }
 }
