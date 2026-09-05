@@ -157,6 +157,7 @@ const payload = await supabaseOwnerRequest({
   }
 });
 assert.equal(payload.email, ownerUser.email);
+
 for (const status of [401, 403]) {
   await assert.rejects(supabaseOwnerRequest({
     url: 'https://stagingprojectrefabc.supabase.co',
@@ -165,6 +166,7 @@ for (const status of [401, 403]) {
     fetchImpl: async () => new Response(JSON.stringify({ message: 'Invalid JWT' }), { status })
   }), /CNYOS_OWNER_SESSION_INVALID/, 'Auth rejection must be recoverable, not a database failure');
 }
+
 assert.equal(calls[0].options.headers.apikey, 'server-service-role-test-key');
 assert.equal(calls[0].options.headers.Authorization, 'Bearer user-session-test-token');
 const rpcCalls = [];
@@ -362,10 +364,25 @@ assert.match(consoleJs, /CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT/);
 assert.match(consoleJs, /confirmCode\.value/);
 assert.match(consoleJs, /Authorization:\s*`Bearer \$\{session\.access_token\}`/);
 assert.match(consoleJs, /sessionStorage\.setItem\('cnyos:post_auth_path', '\/owner-control\.html'\)/);
+// The logout implementation delegates navigation to a storage-safe helper.
+// Verify both scopes, not their relative declaration order; behavioral coverage
+// in owner-session-lifecycle.mjs also asserts the exact return-path write.
+const returnStart = consoleJs.indexOf('function loginAgain()');
+const returnEnd = consoleJs.indexOf('function clearOwnerSession(', returnStart);
+assert.ok(returnStart >= 0 && returnEnd > returnStart, 'Owner login helper must exist');
+const returnBlock = consoleJs.slice(returnStart, returnEnd);
 assert.match(
-  consoleJs,
-  /signOut\(\{ scope: 'local' \}\)[\s\S]*sessionStorage\.setItem\('cnyos:post_auth_path', '\/owner-control\.html'\)[\s\S]*location\.replace\('\/login\.html'\)/,
-  'Owner logout must preserve the protected return path for the next Google sign-in'
+  returnBlock,
+  /sessionStorage\.setItem\('cnyos:post_auth_path', '\/owner-control\.html'\)[\s\S]*location\.replace\('\/login\.html'\)/,
+  'Owner login helper must preserve the protected return path before navigation'
+);
+const logoutStart = consoleJs.indexOf("$('#owner-logout').addEventListener('click'");
+const logoutEnd = consoleJs.indexOf("clinicSelect.addEventListener('change'", logoutStart);
+assert.ok(logoutStart >= 0 && logoutEnd > logoutStart, 'Owner logout handler must exist');
+assert.match(
+  consoleJs.slice(logoutStart, logoutEnd),
+  /clearOwnerSession\(\)[\s\S]*await db\.auth\.signOut\(\)[\s\S]*if \(signedOut\?\.error\) throw signedOut\.error;[\s\S]*loginAgain\(\)/,
+  'Owner logout must clear the console, complete sign-out, then use protected return navigation'
 );
 assert.match(read('auth-callback.js'), /candidate === '\/owner-control\.html'/);
 assert.match(read('scripts/generate-tenant-bootstrap-sql.mjs'), /TENANT_BOOTSTRAP_SUBSCRIPTION_SUSPENDED/);

@@ -22,6 +22,10 @@
   const driveSubmit = $('#owner-drive-submit');
   const driveRetry = $('#owner-drive-retry');
   const toast = $('#owner-toast');
+  const subscriptionRetry = $('#owner-refresh');
+  const recoveryActions = $('#owner-recovery-actions');
+  const recoveryLogin = $('#owner-recovery-login');
+  const bootSpinner = $('#owner-boot-spinner');
 
   const driveContextFields = Object.freeze({
     environment: $('#owner-drive-context-environment'),
@@ -40,24 +44,27 @@
   ]);
 
   let session = null;
-  let ownerUserId = null;
-  let signingOut = false;
   let clinics = [];
-  let subscriptionReady = false;
-  let subscriptionBusy = false;
-  let subscriptionLoading = false;
   let driveAssignments = [];
   let driveEnvironment = '';
   let driveReady = false;
   let driveBusy = false;
   let driveLoading = false;
   let driveContext = null;
+  let ownerDb = null;
+  let ownerEpoch = 0;
+  let ownerBlocked = false;
+  let subscriptionUncertain = false;
+  let subscriptionBusy = false;
+  let subscriptionLoading = false;
+  let driveUncertain = false;
+  let signingOut = false;
+  let navigationStarted = false;
+  const ownerRequests = new Set();
 
   const OWNER_API_TIMEOUT_MS = 15000;
 
   const messages = Object.freeze({
-    CNYOS_OWNER_SESSION_REQUIRED: 'กรุณาเข้าสู่ระบบ Google ใหม่เพื่อเปิด Owner Control',
-    CNYOS_OWNER_SESSION_INVALID: 'Session หมดอายุหรือเปลี่ยนบัญชี กรุณาเข้าสู่ระบบ Google ใหม่',
     CNYOS_OWNER_NOT_AUTHORIZED: 'บัญชีนี้ไม่อยู่ใน Owner allowlist',
     CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED: 'Owner Console ต้องเข้าสู่ระบบด้วย Google',
     CNYOS_OWNER_EMAIL_UNCONFIRMED: 'บัญชี Google ยังไม่ได้ยืนยันอีเมล',
@@ -112,6 +119,7 @@
   });
 
   function showToast(message, error = false) {
+    if (ownerBlocked) return;
     toast.textContent = message;
     toast.classList.toggle('error', error);
     toast.classList.add('show');
@@ -124,35 +132,142 @@
     return folder ? `${folder.label}: ${message}` : message;
   }
 
-  function ownerRequestTimeout() {
-    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-      return Object.freeze({ signal: AbortSignal.timeout(OWNER_API_TIMEOUT_MS), clear: () => {} });
+  function ownerSessionError() {
+    const error = new Error('Owner session changed; sign in again');
+    error.code = 'CNYOS_OWNER_SESSION_CHANGED';
+    return error;
+  }
+
+  function currentOwnerEpoch(epoch) {
+    return !ownerBlocked && epoch === ownerEpoch;
+  }
+
+  function assertOwnerEpoch(epoch) {
+    if (!currentOwnerEpoch(epoch)) throw ownerSessionError();
+  }
+
+  function loginAgain() {
+    if (navigationStarted) return;
+    navigationStarted = true;
+    try { sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html'); }
+    catch { /* Restricted storage must not prevent hiding or leaving the console. */ }
+    location.replace('/login.html');
+  }
+
+  function showOwnerRecovery(message) {
+    $('#boot-error').textContent = message;
+    $('#boot-error').classList.add('error');
+    if (bootSpinner) bootSpinner.hidden = true;
+    if (recoveryActions) recoveryActions.hidden = false;
+    if (recoveryLogin) recoveryLogin.disabled = !ownerDb || signingOut;
+  }
+
+  // Recovery is deliberately a fresh read/load, never an automatic mutation retry.
+  $('#owner-recovery-retry')?.addEventListener('click', () => {
+    if (signingOut) return;
+    clearOwnerSession();
+    location.replace('/owner-control.html');
+  });
+
+  function setSubscriptionControlsState() {
+    const unavailable = ownerBlocked || !session || clinics.length === 0;
+    const busy = subscriptionBusy || subscriptionLoading;
+    for (const element of [clinicSelect, stateSelect, confirmCode, reason]) {
+      element.disabled = unavailable || busy;
     }
+    submit.disabled = unavailable || busy || subscriptionUncertain;
+    if (subscriptionRetry) subscriptionRetry.disabled = ownerBlocked || !session || busy;
+    form.setAttribute('aria-busy', String(busy));
+  }
+
+  function clearOwnerSession(redirect = false) {
+    ownerBlocked = true;
+    ownerEpoch += 1;
+    session = null;
+    for (const controller of ownerRequests) controller.abort();
+    ownerRequests.clear();
+    clinics = [];
+    driveAssignments = [];
+    driveEnvironment = '';
+    driveContext = null;
+    driveReady = false;
+    driveBusy = false;
+    driveLoading = false;
+    subscriptionBusy = false;
+    subscriptionLoading = false;
+    subscriptionUncertain = true;
+    driveUncertain = true;
+    if (subscriptionRetry) subscriptionRetry.disabled = true;
+    app.classList.add('hidden');
+    boot.classList.remove('hidden');
+    for (const element of [list, clinicSelect, driveClinicSelect, driveCurrent]) element.replaceChildren();
+    for (const element of [confirmCode, reason, driveConfirmCode, driveReason, driveEnvironmentInput,
+      ...driveFolderSpecs.map(spec => spec.input)]) element.value = '';
+    for (const element of [clinicSelect, stateSelect, confirmCode, reason, submit,
+      driveClinicSelect, driveConfirmCode, driveReason, driveSubmit, driveRetry,
+      ...driveFolderSpecs.map(spec => spec.input)]) element.disabled = true;
+    $('#owner-email').textContent = '—';
+    status.textContent = '';
+    driveStatus.textContent = '';
+    toast.textContent = '';
+    toast.classList.remove('show');
+    renderDriveContext();
+    $('#boot-error').textContent = 'Session สิ้นสุดหรือเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่';
+    if (redirect && !signingOut) loginAgain();
+  }
+
+  function ownerRequestTimeout() {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OWNER_API_TIMEOUT_MS);
-    return Object.freeze({ signal: controller.signal, clear: () => clearTimeout(timer) });
+    ownerRequests.add(controller);
+    const timeoutSignal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? AbortSignal.timeout(OWNER_API_TIMEOUT_MS) : null;
+    const abort = () => controller.abort();
+    const timer = timeoutSignal ? null : setTimeout(abort, OWNER_API_TIMEOUT_MS);
+    timeoutSignal?.addEventListener('abort', abort, { once: true });
+    return Object.freeze({
+      signal: controller.signal,
+      clear: () => {
+        if (timer !== null) clearTimeout(timer);
+        timeoutSignal?.removeEventListener('abort', abort);
+        ownerRequests.delete(controller);
+      }
+    });
+  }
+
+  function ownerAwait(promise, signal) {
+    // Bound session lookup, fetch and body parsing, including test/browser adapters that ignore abort.
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(new Error('OWNER_REQUEST_ABORTED'));
+      if (signal.aborted) { abort(); return; }
+      signal.addEventListener('abort', abort, { once: true });
+      Promise.resolve(promise).then(value => {
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      }, error => {
+        signal.removeEventListener('abort', abort);
+        reject(error);
+      });
+    });
   }
 
   async function ownerApi(path, method = 'GET', body) {
-    // Supabase refreshes its stored session; never reuse the opening-page token.
-    const current = await window.ChananyaRuntime.getDb().auth.getSession();
-    const next = current.data?.session;
-    if (signingOut || current.error || !next?.access_token || (ownerUserId && next.user?.id !== ownerUserId)) {
-      session = null;
-      subscriptionReady = false;
-      driveReady = false;
-      setSubscriptionControlsState();
-      setDriveControlsState();
-      const error = new Error(messages.CNYOS_OWNER_SESSION_INVALID);
-      error.code = 'CNYOS_OWNER_SESSION_INVALID'; error.status = 401;
-      throw error;
-    }
-    session = next;
+    const epoch = ownerEpoch;
+    assertOwnerEpoch(epoch);
+    const principal = session?.user?.id;
+    if (!principal) throw ownerSessionError();
     const timeout = ownerRequestTimeout();
-    let response;
     try {
-      response = await fetch(path, {
+      // This is transport freshness, not authorization: the server still checks Google Owner and tenant access.
+      const latest = await ownerAwait(ownerDb.auth.getSession(), timeout.signal);
+      assertOwnerEpoch(epoch);
+      if (latest.error || !latest.data?.session?.access_token || latest.data.session.user?.id !== principal) {
+        clearOwnerSession(true);
+        throw ownerSessionError();
+      }
+      session = latest.data.session;
+      const response = await ownerAwait(fetch(path, {
         method,
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           Accept: 'application/json',
@@ -160,35 +275,35 @@
         },
         signal: timeout.signal,
         ...(body ? { body: JSON.stringify(body) } : {})
-      });
+      }), timeout.signal);
+      assertOwnerEpoch(epoch);
+      if (response.status === 401 || response.status === 403) {
+        clearOwnerSession();
+        showOwnerRecovery(response.status === 401
+          ? 'Session ไม่ผ่านการยืนยัน (401) กรุณาออกจากระบบและเข้าสู่ระบบใหม่ด้วย Google Owner'
+          : 'Server ปฏิเสธสิทธิ์ Owner (403) กรุณาตรวจบัญชี Google Owner หรือการตั้งค่าเว็บไซต์ ไม่ได้เปิดสิทธิ์ให้อัตโนมัติ');
+        throw ownerSessionError();
+      }
+      const payload = await ownerAwait(response.json(), timeout.signal);
+      assertOwnerEpoch(epoch);
+      if (!response.ok || payload.ok !== true) {
+        const error = new Error(messages[payload.code] || payload.code || `HTTP ${response.status}`);
+        error.code = payload.code || 'CNYOS_OWNER_REQUEST_FAILED';
+        error.field = payload.field;
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
     } catch (cause) {
-      const error = new Error(timeout.signal.aborted
-        ? messages.CNYOS_OWNER_REQUEST_TIMEOUT
-        : messages.CNYOS_OWNER_NETWORK_REQUEST_FAILED);
-      error.code = timeout.signal.aborted
-        ? 'CNYOS_OWNER_REQUEST_TIMEOUT'
-        : 'CNYOS_OWNER_NETWORK_REQUEST_FAILED';
-      error.cause = cause;
+      if (!currentOwnerEpoch(epoch)) throw ownerSessionError();
+      if (cause?.code) throw cause;
+      const code = timeout.signal.aborted ? 'CNYOS_OWNER_REQUEST_TIMEOUT' : 'CNYOS_OWNER_NETWORK_REQUEST_FAILED';
+      const error = new Error(messages[code]);
+      error.code = code;
       throw error;
     } finally {
       timeout.clear();
     }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload.ok !== true) {
-      if (response.status === 401) {
-        session = null;
-        subscriptionReady = false;
-        driveReady = false;
-        setSubscriptionControlsState();
-        setDriveControlsState();
-      }
-      const error = new Error(messages[payload.code] || payload.code || `HTTP ${response.status}`);
-      error.code = payload.code;
-      error.field = payload.field;
-      error.status = response.status;
-      throw error;
-    }
-    return payload;
   }
 
   function subscriptionApi(method = 'GET', body) {
@@ -311,22 +426,14 @@
   function setDriveControlsState() {
     const clinic = selectedDriveClinic();
     const requestActive = driveBusy || driveLoading;
-    const canEdit = Boolean(session && !signingOut && driveReady && driveEnvironment && clinic && !requestActive);
+    const canEdit = Boolean(!ownerBlocked && session && driveReady && !driveUncertain && driveEnvironment && clinic && !requestActive);
     driveForm.setAttribute('aria-busy', String(requestActive));
-    driveRetry.disabled = !session || signingOut || requestActive;
-    driveClinicSelect.disabled = !session || !driveReady || clinics.length === 0 || requestActive;
+    driveRetry.disabled = ownerBlocked || !session || requestActive;
+    driveClinicSelect.disabled = ownerBlocked || !session || !driveReady || clinics.length === 0 || requestActive;
     for (const spec of driveFolderSpecs) spec.input.disabled = !canEdit;
     driveConfirmCode.disabled = !canEdit;
     driveReason.disabled = !canEdit;
     driveSubmit.disabled = !canEdit;
-  }
-
-  function setSubscriptionControlsState() {
-    const busy = subscriptionBusy || subscriptionLoading || signingOut;
-    form.setAttribute('aria-busy', String(busy));
-    submit.disabled = busy || !session || !subscriptionReady || clinics.length === 0;
-    clinicSelect.disabled = busy || !subscriptionReady || clinics.length === 0;
-    $('#owner-refresh').disabled = busy;
   }
 
   function renderDriveCurrent() {
@@ -446,8 +553,7 @@
       driveOption.textContent = clinic.clinic_code;
       driveClinicSelect.append(driveOption);
     }
-    clinicSelect.disabled = clinics.length === 0;
-    submit.disabled = clinics.length === 0;
+    setSubscriptionControlsState();
     if (previous) {
       clinicSelect.value = previous;
       driveClinicSelect.value = previous;
@@ -462,32 +568,44 @@
   }
 
   async function refresh() {
+    const epoch = ownerEpoch;
+    assertOwnerEpoch(epoch);
     subscriptionLoading = true;
-    subscriptionReady = false;
+    subscriptionUncertain = true;
     setSubscriptionControlsState();
     status.textContent = 'กำลังอ่านสถานะจริงจาก Supabase…';
     status.classList.remove('danger');
     try {
       const payload = await subscriptionApi();
-      if (!Array.isArray(payload.clinics)) throw new Error('Server ไม่ได้ส่งสถานะโครงการ กรุณาโหลดใหม่');
+      assertOwnerEpoch(epoch);
+      if (!Array.isArray(payload.clinics) || payload.clinics.some(clinic =>
+        !clinic || typeof clinic.clinic_id !== 'string' || !clinic.clinic_id ||
+        typeof clinic.clinic_code !== 'string' || !clinic.clinic_code ||
+        typeof clinic.enabled !== 'boolean' || subscriptionVersion(clinic) === null)) {
+        throw new Error('Server ตอบสถานะคลินิกไม่ครบ กรุณาโหลดสถานะใหม่');
+      }
       clinics = payload.clinics;
-      subscriptionReady = true;
+      subscriptionUncertain = false;
       renderClinics();
       status.textContent = `เชื่อมต่อแล้ว · ${clinics.length} tenant · ทุกคำสั่งถูกบันทึกใน audit ledger`;
     } finally {
-      subscriptionLoading = false;
+      if (currentOwnerEpoch(epoch)) subscriptionLoading = false;
       setSubscriptionControlsState();
     }
   }
 
   async function refreshDrive() {
+    const epoch = ownerEpoch;
+    assertOwnerEpoch(epoch);
     driveLoading = true;
+    driveUncertain = true;
     if (!driveEnvironment) driveEnvironmentInput.value = 'กำลังโหลด…';
     setDriveStatus('กำลังอ่าน Drive destination และ environment จาก server…');
     setDriveControlsState();
 
     try {
       const payload = await driveApi();
+      assertOwnerEpoch(epoch);
       const nextContext = normalizeDriveContext(payload);
       const nextAssignments = normalizeDriveAssignments(payload);
       driveContext = nextContext;
@@ -495,11 +613,27 @@
       driveAssignments = nextAssignments;
       driveEnvironmentInput.value = driveEnvironment;
       driveReady = true;
+      driveUncertain = false;
+      driveForm.hidden = false;
+      if ($('#owner-drive-context')) $('#owner-drive-context').hidden = false;
       renderDriveContext();
       renderDriveCurrent();
       setDriveStatus(`เชื่อมต่อแล้ว · ${driveEnvironment} · ${driveAssignments.length} tenant มี Drive destination`);
     } catch (error) {
+      if (!currentOwnerEpoch(epoch)) throw ownerSessionError();
       driveReady = false;
+      if (error?.code === 'CNYOS_OWNER_DRIVE_DISABLED') {
+        driveAssignments = [];
+        driveContext = null;
+        driveEnvironment = '';
+        driveCurrent.replaceChildren();
+        for (const spec of driveFolderSpecs) spec.input.value = '';
+        renderDriveContext();
+        driveForm.hidden = true;
+        if ($('#owner-drive-context')) $('#owner-drive-context').hidden = true;
+        setDriveStatus('ยังไม่ได้เปิดบริการกำหนด Google Drive backup — แยกจาก Subscription ON/OFF ซึ่งยังใช้งานได้เมื่อ Owner ผ่านการตรวจสิทธิ์', false);
+        return;
+      }
       driveEnvironmentInput.value = driveEnvironment || 'ไม่พร้อมใช้งาน';
       setDriveStatus(errorMessage(error), true);
       throw error;
@@ -510,19 +644,76 @@
   }
 
   async function start() {
-    $('#owner-logout').addEventListener('click', () => signInAgain().catch(error => showToast(errorMessage(error), true)));
-    $('#owner-refresh').addEventListener('click', async () => {
-      if (subscriptionBusy || subscriptionLoading || signingOut) return;
-      try { await refresh(); showToast('โหลดสถานะ ON/OFF ล่าสุดแล้ว'); }
-      catch (error) {
-        status.textContent = errorMessage(error);
-        status.classList.add('danger');
+    if (!window.ChananyaRuntime) throw new Error('CNYOS runtime unavailable');
+    const db = window.ChananyaRuntime.getDb();
+    ownerDb = db;
+    const epoch = ownerEpoch;
+    // Keep auth callbacks synchronous; calling Supabase APIs inside them can deadlock its session lock.
+    db.auth.onAuthStateChange((event, nextSession) => {
+      if (ownerBlocked) return;
+      if (event === 'SIGNED_OUT' || (session && nextSession?.user?.id !== session.user?.id)) {
+        clearOwnerSession(true);
+        return;
       }
+      if (session && nextSession) session = nextSession;
     });
+    window.addEventListener('pagehide', () => clearOwnerSession());
+    window.addEventListener('pageshow', event => {
+      if (!event.persisted) return;
+      clearOwnerSession();
+      // A cached document must start a fresh, server-authorized load; never redisplay its retained DOM.
+      location.replace('/owner-control.html');
+    });
+    $('#owner-logout').addEventListener('click', signOutOwner);
+    recoveryLogin?.addEventListener('click', signOutOwner);
+    async function signOutOwner() {
+      if (signingOut) return;
+      signingOut = true;
+      clearOwnerSession();
+      const logoutEpoch = ownerEpoch;
+      if (recoveryLogin) recoveryLogin.disabled = true;
+      const timeout = ownerRequestTimeout();
+      try {
+        await ownerAwait((async () => {
+          const signedOut = await db.auth.signOut();
+          if (signedOut?.error) throw signedOut.error;
+        })(), timeout.signal);
+        if (ownerEpoch !== logoutEpoch) return;
+        loginAgain();
+      } catch {
+        if (ownerEpoch === logoutEpoch) {
+          showOwnerRecovery('ออกจากระบบไม่สำเร็จ หน้านี้ถูกล็อกแล้ว กรุณาตรวจเครือข่ายและลองใหม่');
+        }
+      } finally {
+        timeout.clear();
+        signingOut = false;
+        if (recoveryLogin) recoveryLogin.disabled = false;
+      }
+    }
+    const startupTimeout = ownerRequestTimeout();
+    let result;
+    try {
+      result = await ownerAwait(db.auth.getSession(), startupTimeout.signal);
+    } catch (error) {
+      if (startupTimeout.signal.aborted && currentOwnerEpoch(epoch)) {
+        throw new Error(messages.CNYOS_OWNER_REQUEST_TIMEOUT);
+      }
+      throw error;
+    } finally {
+      startupTimeout.clear();
+    }
+    assertOwnerEpoch(epoch);
+    if (result.error) throw result.error;
+    session = result.data.session;
+    if (!session) {
+      clearOwnerSession(true);
+      return;
+    }
+    $('#owner-email').textContent = session.user?.email || 'Google Owner';
     clinicSelect.addEventListener('change', () => syncClinicSelection(clinicSelect.value));
     driveClinicSelect.addEventListener('change', () => syncClinicSelection(driveClinicSelect.value));
     driveRetry.addEventListener('click', async () => {
-      if (driveLoading || driveBusy) return;
+      if (ownerBlocked || driveLoading || driveBusy) return;
       try {
         await refreshDrive();
         showToast('โหลด Drive destination ล่าสุดแล้ว');
@@ -531,10 +722,22 @@
       }
     });
 
+    subscriptionRetry?.addEventListener('click', async () => {
+      if (ownerBlocked || subscriptionBusy || subscriptionLoading) return;
+      const refreshEpoch = ownerEpoch;
+      try {
+        await refresh();
+      } catch (error) {
+        if (!currentOwnerEpoch(refreshEpoch)) return;
+        status.textContent = errorMessage(error);
+        status.classList.add('danger');
+      }
+    });
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      if (subscriptionBusy || subscriptionLoading || signingOut) return;
-      if (!subscriptionReady) return showToast('กรุณาโหลดสถานะ ON/OFF ล่าสุดก่อนยืนยัน', true);
+      if (ownerBlocked || subscriptionUncertain || subscriptionBusy || subscriptionLoading) return;
+      const epoch = ownerEpoch;
       const clinic = selectedClinic();
       if (!clinic) return showToast('กรุณาเลือก Clinic', true);
       const expectedCode = clinic.clinic_code;
@@ -564,27 +767,31 @@
           expectedVersion,
           reason: cleanReason
         });
+        assertOwnerEpoch(epoch);
         saved = true;
         confirmCode.value = '';
         reason.value = '';
         await refresh();
         showToast(`${expectedCode} เปลี่ยนเป็น ${action} ที่ฐานข้อมูลแล้ว`);
       } catch (error) {
+        if (!currentOwnerEpoch(epoch)) return;
         if (saved) {
-          subscriptionReady = false;
-          status.textContent = `บันทึก ${action} สำเร็จแล้ว แต่โหลดผลล่าสุดไม่สำเร็จ กรุณากดโหลดสถานะ ON/OFF ล่าสุด`;
-        } else if (error?.code === 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT') {
+          subscriptionUncertain = true;
+          status.textContent = 'บันทึกสำเร็จ แต่โหลดสถานะล่าสุดไม่สำเร็จ กรุณาโหลดหน้าใหม่ก่อนทำรายการต่อ';
+          status.classList.add('danger');
+          return;
+        }
+        if (error?.code === 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT') {
           try {
             await refresh();
           } catch {
             // Keep the original concurrency error as the actionable result.
           }
+          if (!currentOwnerEpoch(epoch)) return;
           status.textContent = 'คำสั่งไม่ถูกบันทึก · สถานะเปลี่ยนจากอีก session แล้ว กรุณาตรวจและยืนยันใหม่';
         } else {
-          subscriptionReady = false;
-          status.textContent = [400, 401, 403].includes(error?.status)
-            ? `คำสั่งถูกปฏิเสธ · ${errorMessage(error)}`
-            : 'ยังยืนยันผลคำสั่งไม่ได้ กรุณาโหลดสถานะ ON/OFF ล่าสุดก่อนทำรายการอีกครั้ง';
+          subscriptionUncertain = true;
+          status.textContent = 'ยังยืนยันผลคำสั่งไม่ได้ กรุณาโหลดสถานะล่าสุดก่อนทำรายการซ้ำ';
         }
         status.classList.add('danger');
         showToast(errorMessage(error), true);
@@ -596,6 +803,8 @@
 
     driveForm.addEventListener('submit', async event => {
       event.preventDefault();
+      if (ownerBlocked || driveBusy || driveLoading || driveUncertain) return;
+      const epoch = ownerEpoch;
       const clinic = selectedDriveClinic();
       if (!driveReady || !driveEnvironment || !clinic) return showToast('Drive assignment ยังไม่พร้อมใช้งาน', true);
       const expectedCode = clinic.clinic_code;
@@ -624,12 +833,15 @@
           folders,
           reason: cleanReason
         });
+        assertOwnerEpoch(epoch);
         saved = true;
         driveConfirmCode.value = '';
         driveReason.value = '';
         showToast(`${expectedCode} บันทึก Drive destination สำหรับ ${driveEnvironment} แล้ว`);
         await refreshDrive();
       } catch (error) {
+        if (!currentOwnerEpoch(epoch)) return;
+        driveUncertain = true;
         if (saved) {
           setDriveStatus('บันทึกสำเร็จ แต่โหลด destination ล่าสุดไม่สำเร็จ กรุณาโหลดหน้าใหม่', true);
         } else {
@@ -647,26 +859,8 @@
       }
     });
 
-    await loadConsole();
-  }
-
-  async function loadConsole() {
-    $('#owner-boot-retry').disabled = true;
-    try {
-      if (!window.ChananyaRuntime) throw new Error('CNYOS runtime unavailable');
-      const result = await window.ChananyaRuntime.getDb().auth.getSession();
-      if (result.error) throw result.error;
-      session = result.data.session;
-      if (!session) {
-        sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html');
-        location.replace('/login.html');
-        return;
-      }
-      if (!ownerUserId) ownerUserId = session.user?.id || null;
-      await refresh();
-      $('#owner-email').textContent = session.user?.email || 'Google Owner';
-    }
-    finally { $('#owner-boot-retry').disabled = false; }
+    await refresh();
+    assertOwnerEpoch(epoch);
     boot.classList.add('hidden');
     app.classList.remove('hidden');
     try {
@@ -676,30 +870,10 @@
     }
   }
 
-  async function signInAgain() {
-    signingOut = true;
-    session = null;
-    subscriptionReady = false;
-    driveReady = false;
-    setSubscriptionControlsState();
-    setDriveControlsState();
-    try {
-      const signedOut = await window.ChananyaRuntime.getDb().auth.signOut({ scope: 'local' });
-      if (signedOut?.error) throw signedOut.error;
-      sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html');
-      location.replace('/login.html');
-    } finally { signingOut = false; setSubscriptionControlsState(); setDriveControlsState(); }
-  }
-
-  function showBootError(error) {
+  start().catch(error => {
+    if (ownerBlocked) return;
     const message = errorMessage(error);
-    $('#boot-error').textContent = message;
-    $('#boot-error').classList.add('error');
-    boot.querySelector('.spinner')?.classList.add('hidden');
-    $('#owner-boot-actions').classList.remove('hidden');
-  }
-
-  $('#owner-boot-retry').addEventListener('click', () => loadConsole().catch(showBootError));
-  $('#owner-boot-login').addEventListener('click', () => signInAgain().catch(showBootError));
-  start().catch(showBootError);
+    clearOwnerSession();
+    showOwnerRecovery(message);
+  });
 })();
