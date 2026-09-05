@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "cnyos_real_patient_data_admission_attestation",
+  "admitRealPatientData": true,
+  "releaseCommit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+  "releaseTree": "REPLACE_WITH_EXACT_40_CHARACTER_GIT_TREE",
+  "netlifyDeployId": "REPLACE_WITH_EXACT_24_CHARACTER_NETLIFY_DEPLOY_ID",
+  "clinicId": "REPLACE_WITH_EXACT_PRODUCTION_CLINIC_UUID",
+  "clinicCode": "REPLACE_WITH_EXACT_PRODUCTION_CLINIC_CODE",
+  "productionOrigin": "https://REPLACE_WITH_PRODUCTION_HOST",
+  "expectedSubscriptionVersion": 1,
+  "postDeployArtifact": "REPLACE_WITH_POST_DEPLOY_ATTESTATION_REFERENCE",
+  "postDeployVerifiedAt": "REPLACE_WITH_ISO_8601_TIMESTAMP",
+  "monitoringArtifact": "REPLACE_WITH_MONITORING_AND_ALERT_TEST_REFERENCE",
+  "monitoringVerifiedAt": "REPLACE_WITH_ISO_8601_TIMESTAMP",
+  "approvalReference": "REPLACE_WITH_REAL_DATA_ADMISSION_APPROVAL_REFERENCE",
+  "approvedAt": "REPLACE_WITH_ISO_8601_TIMESTAMP_AFTER_POST_DEPLOY_AND_MONITORING",
+  "approvedBy": "REPLACE_WITH_ACCOUNTABLE_ADMISSION_APPROVER"
+}
