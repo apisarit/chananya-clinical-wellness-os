@@ -37,10 +37,10 @@ jobs:
           }
 
       - name: Check out exact selected release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -60,7 +60,7 @@ jobs:
           RELEASE_EVIDENCE_DIR: artifacts/production-post-deploy/release
 
       - name: Retain post-deploy production evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: production-post-deploy-${{ github.sha }}-${{ github.run_id }}
           path: artifacts/production-post-deploy/
