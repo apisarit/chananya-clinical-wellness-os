@@ -19,6 +19,7 @@
     "restore:verify-set": "node scripts/verify-restore-set.mjs",
     "restore:verify-database": "node scripts/verify-restored-database.mjs",
     "evidence:release": "node scripts/generate-release-evidence.mjs",
+    "verify:production-promotion": "node scripts/verify-production-promotion.mjs",
     "staging:provision": "node scripts/provision-staging-users.mjs",
     "staging:verify": "node scripts/verify-authenticated-staging.mjs",
     "staging:line": "node scripts/verify-line-staging.mjs",
