@@ -1,18 +1,29 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "releaseChannel": "preview",
   "status": "production_candidate_under_verification",
   "commercialProductionReady": false,
   "releaseCommit": null,
-  "claimPolicy": "Commercial Production 100% may be stated only when every required pre-deployment gate is passed with evidence tied to the exact release commit; real patient data remains blocked until the post-deploy production attestation passes.",
+  "productionApprovalSource": "external_exact_commit_attestation",
+  "claimPolicy": "This source-controlled file is a fail-closed policy baseline and must not be mutated to approve its own Git commit. Production approval is supplied as an external exact-commit attestation from a production environment whose protection and approval rules are separately verified. Real patient data remains blocked until the separate post-deploy production attestation passes.",
   "promotionPolicy": {
     "allRequiredGatesMustPass": true,
     "evidenceMustMatchReleaseCommit": true,
+    "sourceReadinessMustRemainFailClosed": true,
+    "externalAttestationRequired": true,
+    "externalAttestationEnvironment": "production",
+    "externalAttestationSecret": "PRODUCTION_RELEASE_ATTESTATION_JSON",
     "requiredEvidenceFields": [
       "commit",
       "artifact",
       "verifiedAt",
       "verifiedBy"
+    ],
+    "requiredApprovalFields": [
+      "releaseCommit",
+      "approvalReference",
+      "approvedAt",
+      "approvedBy"
     ],
     "postDeployAttestationRequiredBeforeRealPatientData": true
   },
@@ -73,7 +84,7 @@
     },
     {
       "id": "release_provenance_ci_merge_protection",
-      "label": "Exact release-candidate source provenance, automated checks, review status and merge protection verified before production deployment",
+      "label": "Exact release-candidate provenance, automated checks, review status, main-branch protection and production-environment protection/approval verified before production deployment",
       "status": "pending",
       "evidence": null
     }

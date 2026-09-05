@@ -15,6 +15,8 @@ assert.match(workflow, /environment:\s*production/, 'production deployment must 
 assert.match(workflow, /DEPLOY_CNYOS_PRODUCTION/, 'production deployment must require explicit confirmation');
 assert.match(workflow, /test "\$GITHUB_REF" = "refs\/heads\/\$DEFAULT_BRANCH"/, 'deployment must reject non-default-branch refs');
 assert.match(workflow, /test "\$\(git rev-parse HEAD\)" = "\$GITHUB_SHA"/, 'deployment must verify exact checkout');
+assert.match(workflow, /secrets\.PRODUCTION_RELEASE_ATTESTATION_JSON/, 'production deploy must consume protected external release approval');
+assert.match(workflow, /test -n "\$PRODUCTION_RELEASE_ATTESTATION_JSON"/, 'production deploy must fail closed when release attestation is absent');
 assert.match(workflow, /PRODUCTION_NETLIFY_SITE_ID/, 'production site ID must come from environment configuration');
 assert.match(workflow, /secrets\.NETLIFY_AUTH_TOKEN/, 'Netlify auth token must come from a secret');
 assert.match(workflow, /CLINICAL_OS_PRODUCTION_CONFIG_JSON/, 'production tenant config must come from the protected environment');
@@ -22,7 +24,7 @@ assert.doesNotMatch(workflow, /7da5e39e-580d-44f1-8623-605313e2fb2b/, 'productio
 
 const promotionIndex = workflow.indexOf('npm run verify:production-promotion');
 const buildIndex = workflow.indexOf('npm run build');
-const artifactIndex = workflow.indexOf('verify-production-build-artifact.mjs');
+const artifactIndex = workflow.indexOf('npm run verify:production-artifact');
 const snapshotIndex = workflow.indexOf('netlify-production-deploy-evidence.mjs snapshot');
 const deployIndex = workflow.indexOf('netlify deploy');
 const netlifyVerifyIndex = workflow.indexOf('netlify-production-deploy-evidence.mjs verify');
@@ -57,4 +59,4 @@ assert.match(netlifyEvidence, /published\.context, 'production'/, 'post-deploy e
 assert.match(netlifyEvidence, /expectedCommit\.slice\(0, 12\)/, 'published deploy title must identify the release commit');
 assert.doesNotMatch(netlifyEvidence, /console\.(?:log|error)\([^\n]*(?:NETLIFY_AUTH_TOKEN|token)/, 'deployment evidence code must not print the Netlify token');
 
-console.log('Exact Netlify production deploy contract passed: manual gated build, fixed site, rollback evidence and post-deploy attestation');
+console.log('Exact Netlify production deploy contract passed: protected external approval, manual exact build, fixed site, rollback evidence and post-deploy attestation');

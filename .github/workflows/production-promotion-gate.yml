@@ -20,6 +20,9 @@ jobs:
     name: Verify exact-commit production readiness
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    environment: production
+    env:
+      PRODUCTION_RELEASE_ATTESTATION_JSON: ${{ secrets.PRODUCTION_RELEASE_ATTESTATION_JSON }}
     steps:
       - name: Require explicit promotion intent
         shell: bash
@@ -31,6 +34,17 @@ jobs:
 
       - name: Check out exact candidate commit
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require trusted default branch and exact checkout
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$PRODUCTION_RELEASE_ATTESTATION_JSON"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -44,10 +58,10 @@ jobs:
       - name: Re-run complete release contract suite
         run: npm run check
 
-      - name: Verify all production hard gates and exact-commit evidence
+      - name: Verify protected external approval and all exact-commit gates
         run: npm run verify:production-promotion
 
-      - name: Generate final exact-commit evidence
+      - name: Generate final exact-commit source evidence
         run: npm run evidence:release
         env:
           RELEASE_EVIDENCE_DIR: artifacts/production-promotion

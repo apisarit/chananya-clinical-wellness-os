@@ -4,11 +4,13 @@ This document is the operational stack for moving CNYOS to a defensible producti
 
 ## Promotion and admission rule
 
-Production deployment may be approved only when `release-readiness.json` reports `commercialProductionReady=true`, the release channel is `production`, every required **pre-deployment** gate is `passed`, and every gate retains evidence for the exact release commit.
+`release-readiness.json` is a **source-controlled fail-closed policy baseline**. It deliberately remains `commercialProductionReady=false`, with no `releaseCommit` and no embedded passed evidence. It must never be edited to approve the Git commit that contains it, because doing so would create a self-referential commit hash.
+
+Production deployment may be approved only when the GitHub `production` environment has separately verified protection/approval controls and supplies `PRODUCTION_RELEASE_ATTESTATION_JSON` for the exact checked-out `main` commit. That external attestation must approve production, reference all required pre-deployment gates in the policy-defined order, bind every gate to the exact same release commit and retain artifact/reviewer/timestamp references.
 
 Real patient data remains blocked after deployment until the separate `public_production_deployment_attestation` passes for that exact commit and Git tree on the intended production origin.
 
-Source code, Preview visibility, synthetic fixtures, a successful Netlify deploy, a dashboard, or a passing contract suite are not sufficient by themselves.
+Source code, Preview visibility, synthetic fixtures, a successful Netlify deploy, a dashboard, a runbook or a passing contract suite are not sufficient by themselves.
 
 ## Stack
 
@@ -22,9 +24,9 @@ Source code, Preview visibility, synthetic fixtures, a successful Netlify deploy
 | M5 — Clinical/quality governance | Independent Quality producer-versus-approver segregation passes and clinical-safety review has no unresolved release blocker | PENDING independent evidence |
 | M6 — Privacy, security and legal | Privacy/PDPA, application-security and applicable legal review close with zero unresolved release blockers | PENDING independent evidence |
 | M7 — Production operations | Monitoring and alert routing are active; named primary/alternate operational owners exist; alert delivery is tested; incident containment, rollback and recovery drill evidence is retained | PENDING operational evidence; runbook exists but does not itself satisfy the gate |
-| M8 — Candidate release controls | Exact release-candidate source provenance, automated checks, review status and enforced merge protection are verified before production deployment | PENDING final-commit/protection evidence; `main` currently lacks enforced protection |
-| M9 — Production promotion approval | `npm run verify:production-promotion` passes for the exact checked-out commit and final promotion evidence artifact is retained | BLOCKED until M2–M8 pass |
-| M10 — Production deploy + admission | Deploy exact approved commit/tree, then `npm run verify:public-deployment` proves commit + Git tree, runtime manifest, security headers and forbidden internal paths; retain 365-day evidence | BLOCKED until M9 passes; real patient data prohibited until this attestation passes |
+| M8 — Candidate release controls | Exact release-candidate provenance, automated checks, review status, enforced `main` protection and verified protection/approval rules on the GitHub `production` environment | PENDING final-commit/admin evidence; `main` currently lacks enforced protection and production-environment protection is not yet verified |
+| M9 — Production promotion approval | Protected external attestation for the exact `main` commit passes `npm run verify:production-promotion`; promotion evidence is retained | BLOCKED until M2–M8 pass and the production environment contains the exact-commit attestation |
+| M10 — Production deploy + admission | Exact-artifact workflow builds and publishes the approved commit/tree, verifies the Netlify deploy ID, then proves public commit/tree, headers and forbidden-path denial | BLOCKED until M9 passes; real patient data prohibited until post-deploy attestation passes |
 
 ## Current hosting interpretation
 
@@ -36,32 +38,36 @@ The separate white-label sites preserve the intended tenant topology. Promotion 
 
 ## Evidence discipline
 
-Each pre-deployment hard gate must store evidence with at least:
+Each external pre-deployment gate record must include at least:
 
 - `commit` — full 40-character release commit SHA
 - `artifact` — retained artifact, report or immutable evidence reference
 - `verifiedAt` — verification timestamp
 - `verifiedBy` — accountable reviewer or verifier identity
 
+The protected release attestation additionally requires `releaseCommit`, `approvalReference`, `approvedAt`, `approvedBy`, `approvedForProduction=true`, and `realPatientDataAdmission=blocked_pending_post_deploy_attestation`.
+
+The release-control gate must include evidence that `main` is protected with enforced required checks/review as applicable and that the GitHub `production` environment has the intended protection/approval rules; merely referencing `environment: production` in YAML is not sufficient.
+
 The operations gate additionally requires monitoring configuration references, named primary/alternate responders, a successful alert test and a non-production rollback/deployment-recovery drill. See `docs/PRODUCTION_OPERATIONS_RUNBOOK.md`.
 
 The post-deploy attestation additionally binds the public deployment to the exact Git tree and verifies the runtime surface after the production deploy exists.
 
-A gate may not be changed from `pending` to `passed` merely because a harness, runbook, dashboard or source-level contract exists.
+A gate may not be claimed passed in source. The source policy stays pending/fail-closed; live approval exists outside the release commit so it can safely reference that immutable commit.
 
 ## Final promotion sequence
 
-1. Freeze the exact candidate commit.
+1. Freeze the exact candidate commit on `main`.
 2. Run complete CI and retain exact-commit evidence.
-3. Run authenticated isolated-staging role/Owner verification.
-4. Run real LINE staging verification.
+3. Run authenticated isolated-staging role/Owner verification on that exact commit.
+4. Run real LINE staging verification on that exact commit.
 5. Complete encrypted export and isolated restore drill; verify managed backup/PITR separately.
 6. Close Quality, privacy/security/clinical-safety/legal reviews with zero release blockers.
 7. Activate production monitoring, name the accountable operational roster, prove alert delivery, and retain rollback/recovery-drill evidence.
-8. Verify final candidate provenance plus enforced review/merge protection and record every pre-deployment gate artifact against the same release commit.
-9. Change the machine-readable pre-deployment release claim only after evidence review.
+8. Verify final candidate provenance, enforced `main` protection and verified `production` environment protection/approval controls; record every pre-deployment gate artifact against the same release commit.
+9. Assemble the external release attestation for that immutable commit and store it as production environment secret `PRODUCTION_RELEASE_ATTESTATION_JSON`; do not modify the release commit.
 10. Run the manual `Production promotion gate` workflow with explicit promotion confirmation.
-11. Deploy that exact verified commit/tree to the intended production site while keeping real-patient-data admission blocked.
-12. Run the manual `Production post-deploy attestation` workflow; it must verify exact commit/tree, required routes/security headers and 404 denial of internal repository paths.
+11. Run `Exact CNYOS production deploy` for that same approved `main` commit; it captures the previous deploy, builds/verifies `dist`, publishes it, verifies the new Netlify deploy ID and runs public attestation while real-data admission remains blocked.
+12. Run/retain the Production post-deploy attestation for exact commit/tree and required routes/security headers/404 denial of internal repository paths.
 13. Confirm monitoring observes the deployed release and critical alert routes remain armed.
-14. Admit real patient data only after the post-deploy attestation artifact is retained and all operational owners approve reopening/admission where required.
+14. Admit real patient data only after the post-deploy attestation artifact is retained and all operational owners approve admission/reopening where required.

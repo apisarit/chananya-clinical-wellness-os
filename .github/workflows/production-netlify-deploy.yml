@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 45
     environment: production
     env:
+      PRODUCTION_RELEASE_ATTESTATION_JSON: ${{ secrets.PRODUCTION_RELEASE_ATTESTATION_JSON }}
       EXPECTED_RELEASE_COMMIT: ${{ github.sha }}
       EXPECTED_PRODUCTION_HOST: ${{ vars.PRODUCTION_SITE_HOST }}
       PRODUCTION_SITE_URL: ${{ vars.PRODUCTION_SITE_URL }}
@@ -52,6 +53,7 @@ jobs:
         run: |
           test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$PRODUCTION_RELEASE_ATTESTATION_JSON"
           test -n "$NETLIFY_SITE_ID"
           test -n "$PRODUCTION_SITE_URL"
           test -n "$EXPECTED_PRODUCTION_HOST"
@@ -72,7 +74,7 @@ jobs:
       - name: Re-run complete release contracts
         run: npm run check
 
-      - name: Require all exact-commit pre-deployment gates to pass
+      - name: Require protected external approval and all exact-commit gates
         run: npm run verify:production-promotion
 
       - name: Bind production build to exact commit and tree
@@ -91,7 +93,7 @@ jobs:
           CLINICAL_OS_REQUIRE_SOURCE_COMMIT: "true"
 
       - name: Verify exact production artifact before upload
-        run: node scripts/verify-production-build-artifact.mjs
+        run: npm run verify:production-artifact
 
       - name: Capture current published deploy for rollback evidence
         run: node scripts/netlify-production-deploy-evidence.mjs snapshot
