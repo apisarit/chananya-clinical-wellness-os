@@ -11,7 +11,7 @@
   <script defer src="luopan-knowledge.js?v=1.0.0"></script>
   <script defer src="luopan-astronomy.js?v=2.1.19"></script>
   <script defer src="luopan.js?v=1.0.0"></script>
-  <script type="module" src="u-synthesise.js?v=0.2.0"></script>
+  <script type="module" src="u-synthesise.js?v=0.3.0"></script>
 </head>
 <body>
   <main class="luopan-site-main">
@@ -20,12 +20,12 @@
   <p id="us-version" class="text-small">กำลังเปิดฐานความรู้</p>
   <p class="text-small luopan-intro">เครื่องมือศึกษาและเทียบองค์ความรู้ · ข้อมูลที่กรอกคำนวณในหน้านี้ ไม่บันทึกลงเวชระเบียน</p>
   <label class="form-label us-mode-control">เลือกการอ่านวง
-    <select id="us-mode" class="form-select"><option value="astro_medical">เวลาและองค์ความรู้ · กาลสมุฏฐานเป็นแกน</option><option value="feng_shui">ทิศทาง · หล่อแกดั้งเดิม 14 ชั้น</option></select>
+    <select id="us-mode" class="form-select"><option value="astro_medical">เวลาและองค์ความรู้ · กาลสมุฏฐานเป็นแกน</option><option value="feng_shui">ทิศทาง · หล่อแกดั้งเดิม 16 ชั้น</option></select>
   </label>
-  <section id="us-spatial" hidden aria-label="หล่อแกดั้งเดิม 14 ชั้น">
-    <p class="us-eyebrow">CLASSICAL LUOPAN · 三合 / 三元</p>
-    <h2>หล่อแกดั้งเดิม · 14 ชั้นความรู้</h2>
-    <p>สามจาน · ปากว้า · ลั่วซู · ธาตุ · สามหยวน · ฉางเซิง</p>
+  <section id="us-spatial" hidden aria-label="หล่อแกดั้งเดิม 16 ชั้น">
+    <p class="us-eyebrow">CLASSICAL LUOPAN · 三合 / 三元 / 金鎖玉關</p>
+    <h2>หล่อแกดั้งเดิม · 16 ชั้นความรู้</h2>
+    <p>สามจาน · ปากว้า · ลั่วซู · ธาตุ · สามหยวน · ฉางเซิง · ภูมิประเทศ–น้ำ</p>
     <p class="text-small">กรอกค่าที่วัดจากเข็มทิศ ตารางทิศคงที่ตามเหนือแม่เหล็ก โหมดนี้ยังไม่อ่านเซนเซอร์มือถือ</p>
     <form id="us-bearing-form" class="viz-controls">
       <label class="form-label">องศาทิศที่วัดได้
@@ -53,6 +53,44 @@
     <label class="form-label">อ่านความหมายของชั้น<select id="us-layer-select" class="form-select"></select></label>
     <article id="us-layer-detail" class="us-layer-detail" aria-live="polite"></article>
     <div id="us-axis-summary" class="us-axis-summary"></div>
+    <details id="us-landscape-panel" class="us-atlas-section" open>
+      <summary>ภูมิประเทศ–น้ำ · 金鎖玉關</summary>
+      <p>เพิ่มการอ่านแบบวงอ้างอิง Jin Suo Yu Guan: เลือกสิ่งที่พบ แล้วอ่านกฎพื้นฐานของวังที่เข็มผ่าน</p>
+      <div class="us-atlas-toolbar">
+        <label class="form-label">สิ่งที่พบตามแนวเข็ม<select id="us-landscape-kind" class="form-select"><option value="unclassified">ยังจำแนกไม่ได้</option><option value="sha">砂 · ภูเขา / สิ่งสูง</option><option value="shui">水 · น้ำ / ที่ต่ำ</option><option value="mixed">มีทั้ง砂และ水</option></select></label>
+        <label class="form-label">รูปลักษณ์ที่สังเกต<select id="us-landscape-form" class="form-select"><option value="unassessed">ยังไม่ได้พิจารณา</option><option value="orderly">เรียบร้อย / น้ำใสไหลนุ่มนวล</option><option value="adverse">แตกแหว่ง / น้ำขุ่นหรือพุ่งตรง</option></select></label>
+      </div>
+      <article id="us-landscape-result" class="us-layer-detail" aria-live="polite"></article>
+      <p class="text-small">吉 / 凶 เป็นคำตามกฎพื้นฐานของสำนักนี้ รูปร่าง ระยะ ขนาด และทิศตรงข้ามยังมีผลต่อการตีความ ผลนี้ไม่ใช้วินิจฉัยสุขภาพ</p>
+      <details><summary>บันทึกสิ่งแวดล้อมรอบจุดสำรวจ</summary>
+        <p>ใช้จุดอ้างอิงเดียวกัน วัดองศาไปยังแต่ละสิ่งแยกจากแนวหันอาคาร รายการอยู่ในหน้านี้จนกว่าจะโหลดใหม่</p>
+        <form id="us-feature-form" class="us-feature-form">
+          <label class="form-label">ชื่อสิ่งที่เห็น<input id="us-feature-label" class="form-control" maxlength="80" placeholder="เช่น อาคารสูงด้านเหนือ" required></label>
+          <div class="us-atlas-toolbar">
+            <label class="form-label">องศาไปยังสิ่งนั้น<input id="us-feature-bearing" class="form-control" type="number" min="0" max="360" step="any" required></label>
+            <label class="form-label">คลาดเคลื่อน ± องศา<input id="us-feature-uncertainty" class="form-control" type="number" min="0" max="180" step="any" placeholder="ยังไม่ทราบ"></label>
+          </div>
+          <button id="us-feature-use-ray" class="btn" type="button">คัดลอกตำแหน่งเข็มและตัวเลือกด้านบน</button>
+          <p id="us-feature-origin" class="text-small"></p>
+          <div class="us-atlas-toolbar">
+            <label class="form-label">ประเภท<select id="us-feature-kind" class="form-select"><option value="unclassified">ยังจำแนกไม่ได้</option><option value="sha">砂 · ภูเขา / สิ่งสูง</option><option value="shui">水 · น้ำ / ที่ต่ำ</option><option value="mixed">มีทั้ง砂และ水</option></select></label>
+            <label class="form-label">รูปลักษณ์<select id="us-feature-shape" class="form-select"><option value="unassessed">ยังไม่ได้พิจารณา</option><option value="orderly">เรียบร้อย / น้ำใสไหลนุ่มนวล</option><option value="adverse">แตกแหว่ง / น้ำขุ่นหรือพุ่งตรง</option></select></label>
+          </div>
+          <label class="form-label">สิ่งที่ควรอ่านประกอบ<input id="us-feature-note" class="form-control" maxlength="240" placeholder="เช่น ระยะโดยประมาณ ความสูง รูปร่าง ลักษณะน้ำ"></label>
+          <button class="btn" type="submit">เพิ่มรายการในหน้านี้</button>
+          <p id="us-feature-error" class="text-destructive" role="alert" hidden></p>
+        </form>
+        <p id="us-feature-count" class="text-small" aria-live="polite"></p>
+        <div id="us-feature-list" class="us-catalog-grid"></div>
+      </details>
+      <details><summary>ตารางครบ 24 ขุนเขา × 砂 / 水</summary>
+        <p class="text-small">แต่ละแถวสืบทอดกฎพื้นฐานจากวัง 45° เดียวกัน ยังไม่ใช่คำทำนายเฉพาะขุนเขาจากบทกลอนฉบับเต็ม</p>
+        <div class="table-responsive"><table class="table us-reading-table"><thead><tr><th>ขุนเขา / วัง</th><th>พบ砂 / พบ水</th></tr></thead><tbody id="us-landscape-table"></tbody></table></div>
+      </details>
+      <details><summary>วิธีอ่านและที่มาของกฎ</summary>
+        <div id="us-landscape-guide"></div>
+      </details>
+    </details>
     <details class="us-atlas-section" open>
       <summary>เข็มเดียวอ่านทุกชั้น · ผลเทียบองศา</summary>
       <p class="text-small">ช่วงองศานับต้นช่วงและไม่รวมปลายช่วง ค่าที่คร่อมเส้นแบ่งให้ดูช่วงคลาดเคลื่อนประกอบ</p>

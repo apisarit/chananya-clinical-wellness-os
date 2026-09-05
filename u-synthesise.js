@@ -53,7 +53,7 @@ export function mountUSynthesise(document, window) {
   const frameNames = {magnetic_bearing: 'ทิศเหนือแม่เหล็ก', zodiac_sidereal: 'องศาราศีนิรายนะ', civil_year_april: 'วงปีเริ่มเมษายน', clock12: 'เวลา 12 ชั่วโมง × 2 รอบ', lunar_sequence: 'ลำดับฤดูจันทรคติ', category: 'หมวดองค์ความรู้'};
   try {
     const attached = attachLegacyKnowledge(window.LuopanKnowledgeV1);
-    q('us-version').textContent = `${identity.name} ${identity.version} · วงเวลา 23 ชั้น · หล่อแก 14 ชั้น · สมุฏฐานเดิม ${attached.legacy.source.ttmRaw.length} กฎ`;
+    q('us-version').textContent = `${identity.name} ${identity.version} · วงเวลา 23 ชั้น · หล่อแก 16 ชั้น · สมุฏฐานเดิม ${attached.legacy.source.ttmRaw.length} กฎ`;
     for (const module of modules) {
       const item = node('li', undefined, q('us-modules'));
       node('strong', module.name + ' — ', item);

@@ -5,7 +5,7 @@ const position=degrees=>({frame:'magnetic_bearing',degrees});
 const read=(degrees,options)=>classicalReading(position(degrees),options);
 const value=(degrees,id)=>read(degrees).readings.find(r=>r.id===id).sector;
 assert.equal(classicalRings().length+1,classicalIdentity.scaleCount);
-assert.equal(classicalIdentity.scaleCount,14);
+assert.equal(classicalIdentity.scaleCount,16);
 assert.equal(mountainDetails.length,24);
 assert.equal(new Set(mountainDetails.map(m=>m.symbol)).size,24);
 assert.deepEqual(plates.map(p=>p.offset),[0,-7.5,7.5]);
@@ -68,4 +68,4 @@ assert.throws(()=>findHexagram('foo','乾'));
 for(const t of trigrams){assert.equal(t.yao.length,3);assert.equal(t.earlyCenter%45,0);assert.equal(t.laterCenter%45,0);}
 for(const g of studyGuide)for(const id of g.sourceIds)assert.ok(classicalSources[id]);
 assert.equal(read(180).auspiciousness,'not_evaluated');
-console.log('Classical Luopan passed: 14 layers, three-plate boundaries, 24 mountain polarity, all 8 life tables, uncertainty, Lo Shu / He Tu, and all 64 distinct hexagrams');
+console.log('Classical Luopan passed: 16 layers, three-plate boundaries, 24 mountain polarity, all 8 life tables, uncertainty, Lo Shu / He Tu, and all 64 distinct hexagrams');

@@ -6,7 +6,7 @@ This extends the existing authenticated `/luopan.html` spatial mode. The origina
 
 ## Delivered surface
 
-Four viewing presets: core, San He, San Yuan, and all layers. The full view contains 13 data rings plus a degree scale, hence **14 layers**. A phone can show the complete overview, zoom to 150–300%, pan, and read a selected layer in ordinary-size text. The detailed readout includes every layer even when a viewing preset hides some rings.
+Five viewing presets: core, San He, San Yuan, Jin Suo Yu Guan, and all layers. The original full view contained 13 data rings plus a degree scale. Version 0.3.0 adds two Jin Suo Yu Guan study rings: **16 layers** total. A phone can show the complete overview, zoom to 150–300%, pan, and read a selected layer in ordinary-size text. The detailed readout includes every layer even when a viewing preset hides some rings.
 
 | Ring | Coordinates / method |
 |---|---|
@@ -62,3 +62,8 @@ Implementation scope for water methods is the pair table and named yin/yang sequ
 `npm run check:luopan` covers the existing authenticated/birth-time contracts plus independent fixtures for three-plate boundaries, all 24 mountain polarities, all eight life-stage tables, complete nonoverlapping circles, uncertainty, He Tu / Lo Shu, all 64 distinct six-line figures, search, zoom, mobile-coordinate tapping, input provenance and invalid-input clearing.
 
 SVG views are rendered from the actual UI implementation for visual inspection. The browser session requires login, so authenticated device-level UI testing is not represented as completed by an offline renderer. Production verification additionally reads the actual page and imported scripts and checks the deployed source manifest against the merged commit.
+
+
+## Jin Suo Yu Guan extension
+
+U Synthesise 0.3.0 adds an explicitly scoped eight-palace landscape baseline; see [U_SYNTHESISE_LANDSCAPE.md](U_SYNTHESISE_LANDSCAPE.md). The prior atlas, three-plate and time calculations remain available.
