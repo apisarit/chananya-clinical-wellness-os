@@ -1,9 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "releaseChannel": "preview",
   "status": "production_candidate_under_verification",
   "commercialProductionReady": false,
+  "releaseCommit": null,
   "claimPolicy": "Commercial Production 100% may be stated only when every required gate is passed and evidence is tied to the exact release commit.",
+  "promotionPolicy": {
+    "allRequiredGatesMustPass": true,
+    "evidenceMustMatchReleaseCommit": true,
+    "requiredEvidenceFields": [
+      "commit",
+      "artifact",
+      "verifiedAt",
+      "verifiedBy"
+    ]
+  },
   "requiredGates": [
     {
       "id": "owner_subscription_database_enforcement",
@@ -25,13 +36,37 @@
     },
     {
       "id": "encrypted_backup_restore_drill",
-      "label": "Encrypted backup and isolated restore drill",
+      "label": "Encrypted Google Drive export and isolated restore drill with measured RPO/RTO",
       "status": "pending",
       "evidence": null
     },
     {
       "id": "privacy_security_legal_review",
-      "label": "Privacy, security and applicable legal review",
+      "label": "Privacy, security, clinical-safety and applicable legal review with zero unresolved release blockers",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "isolated_staging_migrations",
+      "label": "Required migrations applied to isolated staging with migration and rollback evidence",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "independent_quality_segregation",
+      "label": "Independent Quality SOP and producer-versus-approver segregation verified",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "managed_database_backup_pitr",
+      "label": "Managed database backup/PITR configuration verified separately from Google Drive export",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "release_provenance_ci_merge_protection",
+      "label": "Exact-commit deploy provenance, automated checks, review status and merge protection verified",
       "status": "pending",
       "evidence": null
     }
