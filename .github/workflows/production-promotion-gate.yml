@@ -1,0 +1,61 @@
+name: Production promotion gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type PROMOTE_PRODUCTION to run the final production gate'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-promotion-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-production-release:
+    name: Verify exact-commit production readiness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require explicit promotion intent
+        shell: bash
+        run: |
+          test "${{ inputs.confirmation }}" = "PROMOTE_PRODUCTION" || {
+            echo 'Promotion confirmation did not match PROMOTE_PRODUCTION.' >&2
+            exit 1
+          }
+
+      - name: Check out exact candidate commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Re-run complete release contract suite
+        run: npm run check
+
+      - name: Verify all production hard gates and exact-commit evidence
+        run: npm run verify:production-promotion
+
+      - name: Generate final exact-commit evidence
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/production-promotion
+
+      - name: Retain production-promotion evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-promotion-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/production-promotion/
+          if-no-files-found: error
+          retention-days: 365
