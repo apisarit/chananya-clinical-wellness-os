@@ -102,6 +102,10 @@ a { color: inherit; text-decoration: none; }
 .nav-copy small { display: block; margin-top: 1px; color: inherit; opacity: .68; font-size: .7rem; }
 .sidebar-foot { margin-top: auto; padding: 16px 9px 0; border-top: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.58); font-size: .72rem; line-height: 1.55; }
 .workspace { min-width: 0; }
+.luopan-shell-workspace { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.luopan-shell-workspace .top { flex: 0 0 auto; }
+.luopan-embed-main { flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; }
+.luopan-frame { display: block; width: 100%; height: 100%; border: 0; background: var(--paper); }
 
 .top {
   position: sticky;

@@ -4,7 +4,7 @@ This release packages the earlier full 23-layer birthday/time reading wheel for 
 
 ## Routes and behavior
 
-- `/luopan.html` (also `/luopan`) is a standalone, public knowledge tool. The TTM Foundation page links to it.
+- `/luopan.html` (also `/luopan`) is an authenticated CNYOS workspace and appears in the global navigation after login. It loads the isolated calculation surface from `/luopan-wheel.html` only after a valid tenant session and profile are confirmed.
 - The annual wheel begins on 1 April and uses actual calendar-day spans.
 - Birth input accepts Buddhist or Gregorian years and `HH.mm` or `HH:mm` time. Example: `29/10/2530 22.19`.
 - The central Kala cycle is 12 hours repeated twice: Pitta 10:00–14:00 / 22:00–02:00; Vata 14:00–18:00 / 02:00–06:00; Semha 06:00–10:00 / 18:00–22:00. Intervals include their start and exclude their end.

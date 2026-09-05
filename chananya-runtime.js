@@ -64,6 +64,7 @@
   const permissions = Object.freeze({
     operations_view: ['super_admin','admin','practitioner','doctor','reception','pharmacy','production','inventory','quality','billing','viewer'],
     knowledge_read: ['super_admin','practitioner','doctor','pharmacy','production','inventory'],
+    luopan_read: ['super_admin','admin','practitioner','doctor','reception','pharmacy','production','inventory','quality','billing','viewer'],
     clinical_read: ['super_admin','practitioner','doctor'],
     clinical_write: ['super_admin','practitioner','doctor'],
     patient_registry: ['super_admin','practitioner','doctor','reception'],

@@ -137,6 +137,10 @@
   color-scheme: dark;
 }
 
+html[data-luopan-frame]:not([data-luopan-embedded]) body {
+  visibility: hidden;
+}
+
 * {
   box-sizing: border-box;
 }

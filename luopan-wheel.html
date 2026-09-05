@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="th" data-visualize-standalone data-luopan-frame>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Luopan 23 ชั้น: กาลสมุฏฐาน โหราศาสตร์ไทย และ BaZi บนวงวันเกิดที่เริ่มปีจากเมษายน">
+  <title>Luopan 360° v1.0.0 | CNYOS</title>
+  <link rel="stylesheet" href="luopan.css?v=1.0.0">
+  <script src="luopan-frame-guard.js?v=luopan-auth1"></script>
+  <script defer src="luopan-knowledge.js?v=1.0.0"></script>
+  <script defer src="luopan-astronomy.js?v=2.1.19"></script>
+  <script defer src="luopan.js?v=1.0.0"></script>
+</head>
+<body>
+  <main class="luopan-site-main">
+  <p class="luopan-intro">กาลสมุฏฐานเป็นแกนกลาง · ใส่วันเวลาเพื่อตั้งวง แล้วลากเข็มอ่านทุกชั้น</p>
+  <p class="text-small luopan-intro">เครื่องมือศึกษาและเทียบองค์ความรู้ · ข้อมูลที่กรอกคำนวณในหน้านี้ ไม่บันทึกลงเวชระเบียน</p>
+<div id="luopan-birthdate-ray">
+
+  <h1>วงวันเกิด · เข็มอ่านร่วม 360°</h1>
+  <form id="lr-form">
+    <div class="viz-controls">
+      <label class="form-label">วัน / เดือน / ปี และเวลา · พ.ศ. หรือ ค.ศ.
+        <input id="lr-birth" class="form-control tabular-nums" type="text" value="29/10/2530 22.19" placeholder="29/10/2530 22.19" autocomplete="off">
+      </label>
+      <button class="btn" type="submit">ตั้งวงจากวันเวลา</button>
+    </div>
+    <details class="lr-details">
+      <summary>สถานที่เกิดและเกณฑ์เวลา</summary>
+      <div class="viz-controls">
+        <label class="form-label">ละติจูดสถานที่เกิด
+          <input id="lr-lat" class="form-control tabular-nums" type="number" min="-66" max="66" step="any" placeholder="ยังไม่ระบุ">
+        </label>
+        <label class="form-label">ลองจิจูดสถานที่เกิด
+          <input id="lr-lon" class="form-control tabular-nums" type="number" min="-180" max="180" step="any" placeholder="ยังไม่ระบุ">
+        </label>
+        <label class="form-label">เขตเวลา UTC ± ชั่วโมง
+          <input id="lr-tz" class="form-control tabular-nums" type="number" min="-12" max="14" step="0.25" value="7">
+        </label>
+        <label class="form-label">เปลี่ยนวัน BaZi
+          <select id="lr-boundary" class="form-select"><option value="00">00:00 น.</option><option value="23">23:00 น.</option></select>
+        </label>
+      </div>
+      <div class="viz-row">
+        <button id="lr-bangkok" class="btn" type="button">ใช้กรุงเทพฯ เป็นตัวอย่าง</button>
+        <button class="btn" type="submit">คำนวณตามเกณฑ์นี้</button>
+      </div>
+    </details>
+  </form>
+  <div id="lr-error" class="text-destructive" role="alert" hidden></div>
+  <div id="lr-natal" class="lr-meta tabular-nums" aria-live="polite"></div>
+  <div id="lr-pillars" class="text-small"></div>
+  <svg id="lr-svg" class="lr-chart" role="img" aria-labelledby="lr-title lr-desc">
+    <title id="lr-title">เข็มเส้นเดียวอ่านทุกชั้นในวงวันเกิด</title>
+    <desc id="lr-desc">วงปีเริ่มเดือนเมษายน วันเกิดใช้ตั้งแนวเทียบของแต่ละวง กาลสมุฏฐานเป็นหัวใจ ลากเข็มเพื่อสำรวจช่องที่ผ่านโดยไม่เปลี่ยนวันเกิด</desc>
+  </svg>
+  <div class="viz-controls">
+    <label class="form-label">เข็มอ่าน <output id="lr-angle-label" class="tabular-nums">0°</output>
+      <input id="lr-angle" class="form-range" type="range" min="0" max="359.9" step="0.1" value="0" aria-label="หมุนเข็มอ่านทุกชั้น">
+    </label>
+    <button id="lr-home" class="btn" type="button">กลับจุดวันเกิด</button>
+  </div>
+  <div id="lr-state" class="text-small" aria-live="polite"></div>
+  <div class="lr-key text-small">
+    <span><i></i>ปฏิทิน / ทิศ</span><span><i></i>กาล / ยาม</span><span><i></i>โหรไทย</span><span><i></i>ฤดู</span><span><i></i>Wuxing / BaZi</span>
+  </div>
+  <div class="lr-readout"><table class="table table-sm"><tbody id="lr-quick"></tbody></table></div>
+  <details class="lr-details">
+    <summary>ทุกชั้นที่เข็มตัดผ่าน · 23 ชั้น</summary>
+    <div id="lr-all"></div>
+  </details>
+  <details class="lr-details">
+    <summary>ข้อมูลกำเนิดและวิธีเทียบวง</summary>
+    <table class="table table-sm"><tbody id="lr-profile"></tbody></table>
+    <div class="viz-row text-small"><a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener noreferrer">Astronomy Engine</a><a href="https://github.com/hmmbug/pythaidate" target="_blank" rel="noopener noreferrer">ปฏิทินจันทรคติไทย</a><a href="https://github.com/6tail/lunar-javascript" target="_blank" rel="noopener noreferrer">ชุดเทียบ BaZi</a></div>
+  </details>
+
+
+
+</div>
+
+  <noscript>กรุณาเปิด JavaScript เพื่อคำนวณวันเวลาและใช้งานวงล้อ</noscript>
+  </main>
+</body>
+</html>
