@@ -63,6 +63,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/codex/production-readiness-stack-20260905'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
     env:
       CNYOS_RELEASE_SHA: ${{ github.sha }}
     steps:
@@ -85,6 +87,19 @@ jobs:
 
       - name: Reject high or critical production dependency advisories
         run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit audited lockfile when changed
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'Resolved package lock is already committed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'Lock audited Netlify Blobs dependency update'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Retain resolved package lock
         uses: actions/upload-artifact@v4
