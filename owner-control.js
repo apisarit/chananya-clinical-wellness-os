@@ -40,7 +40,12 @@
   ]);
 
   let session = null;
+  let ownerUserId = null;
+  let signingOut = false;
   let clinics = [];
+  let subscriptionReady = false;
+  let subscriptionBusy = false;
+  let subscriptionLoading = false;
   let driveAssignments = [];
   let driveEnvironment = '';
   let driveReady = false;
@@ -51,6 +56,8 @@
   const OWNER_API_TIMEOUT_MS = 15000;
 
   const messages = Object.freeze({
+    CNYOS_OWNER_SESSION_REQUIRED: 'กรุณาเข้าสู่ระบบ Google ใหม่เพื่อเปิด Owner Control',
+    CNYOS_OWNER_SESSION_INVALID: 'Session หมดอายุหรือเปลี่ยนบัญชี กรุณาเข้าสู่ระบบ Google ใหม่',
     CNYOS_OWNER_NOT_AUTHORIZED: 'บัญชีนี้ไม่อยู่ใน Owner allowlist',
     CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED: 'Owner Console ต้องเข้าสู่ระบบด้วย Google',
     CNYOS_OWNER_EMAIL_UNCONFIRMED: 'บัญชี Google ยังไม่ได้ยืนยันอีเมล',
@@ -127,6 +134,20 @@
   }
 
   async function ownerApi(path, method = 'GET', body) {
+    // Supabase refreshes its stored session; never reuse the opening-page token.
+    const current = await window.ChananyaRuntime.getDb().auth.getSession();
+    const next = current.data?.session;
+    if (signingOut || current.error || !next?.access_token || (ownerUserId && next.user?.id !== ownerUserId)) {
+      session = null;
+      subscriptionReady = false;
+      driveReady = false;
+      setSubscriptionControlsState();
+      setDriveControlsState();
+      const error = new Error(messages.CNYOS_OWNER_SESSION_INVALID);
+      error.code = 'CNYOS_OWNER_SESSION_INVALID'; error.status = 401;
+      throw error;
+    }
+    session = next;
     const timeout = ownerRequestTimeout();
     let response;
     try {
@@ -154,6 +175,13 @@
     }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.ok !== true) {
+      if (response.status === 401) {
+        session = null;
+        subscriptionReady = false;
+        driveReady = false;
+        setSubscriptionControlsState();
+        setDriveControlsState();
+      }
       const error = new Error(messages[payload.code] || payload.code || `HTTP ${response.status}`);
       error.code = payload.code;
       error.field = payload.field;
@@ -283,14 +311,22 @@
   function setDriveControlsState() {
     const clinic = selectedDriveClinic();
     const requestActive = driveBusy || driveLoading;
-    const canEdit = Boolean(session && driveReady && driveEnvironment && clinic && !requestActive);
+    const canEdit = Boolean(session && !signingOut && driveReady && driveEnvironment && clinic && !requestActive);
     driveForm.setAttribute('aria-busy', String(requestActive));
-    driveRetry.disabled = !session || requestActive;
+    driveRetry.disabled = !session || signingOut || requestActive;
     driveClinicSelect.disabled = !session || !driveReady || clinics.length === 0 || requestActive;
     for (const spec of driveFolderSpecs) spec.input.disabled = !canEdit;
     driveConfirmCode.disabled = !canEdit;
     driveReason.disabled = !canEdit;
     driveSubmit.disabled = !canEdit;
+  }
+
+  function setSubscriptionControlsState() {
+    const busy = subscriptionBusy || subscriptionLoading || signingOut;
+    form.setAttribute('aria-busy', String(busy));
+    submit.disabled = busy || !session || !subscriptionReady || clinics.length === 0;
+    clinicSelect.disabled = busy || !subscriptionReady || clinics.length === 0;
+    $('#owner-refresh').disabled = busy;
   }
 
   function renderDriveCurrent() {
@@ -426,12 +462,22 @@
   }
 
   async function refresh() {
+    subscriptionLoading = true;
+    subscriptionReady = false;
+    setSubscriptionControlsState();
     status.textContent = 'กำลังอ่านสถานะจริงจาก Supabase…';
     status.classList.remove('danger');
-    const payload = await subscriptionApi();
-    clinics = payload.clinics || [];
-    renderClinics();
-    status.textContent = `เชื่อมต่อแล้ว · ${clinics.length} tenant · ทุกคำสั่งถูกบันทึกใน audit ledger`;
+    try {
+      const payload = await subscriptionApi();
+      if (!Array.isArray(payload.clinics)) throw new Error('Server ไม่ได้ส่งสถานะโครงการ กรุณาโหลดใหม่');
+      clinics = payload.clinics;
+      subscriptionReady = true;
+      renderClinics();
+      status.textContent = `เชื่อมต่อแล้ว · ${clinics.length} tenant · ทุกคำสั่งถูกบันทึกใน audit ledger`;
+    } finally {
+      subscriptionLoading = false;
+      setSubscriptionControlsState();
+    }
   }
 
   async function refreshDrive() {
@@ -464,25 +510,14 @@
   }
 
   async function start() {
-    if (!window.ChananyaRuntime) throw new Error('CNYOS runtime unavailable');
-    const db = window.ChananyaRuntime.getDb();
-    const result = await db.auth.getSession();
-    if (result.error) throw result.error;
-    session = result.data.session;
-    if (!session) {
-      sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html');
-      location.replace('/login.html');
-      return;
-    }
-
-    $('#owner-email').textContent = session.user?.email || 'Google Owner';
-    $('#owner-logout').addEventListener('click', async () => {
-      session = null;
-      setDriveControlsState();
-      const signedOut = await db.auth.signOut();
-      if (signedOut?.error) throw signedOut.error;
-      sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html');
-      location.replace('/login.html');
+    $('#owner-logout').addEventListener('click', () => signInAgain().catch(error => showToast(errorMessage(error), true)));
+    $('#owner-refresh').addEventListener('click', async () => {
+      if (subscriptionBusy || subscriptionLoading || signingOut) return;
+      try { await refresh(); showToast('โหลดสถานะ ON/OFF ล่าสุดแล้ว'); }
+      catch (error) {
+        status.textContent = errorMessage(error);
+        status.classList.add('danger');
+      }
     });
     clinicSelect.addEventListener('change', () => syncClinicSelection(clinicSelect.value));
     driveClinicSelect.addEventListener('change', () => syncClinicSelection(driveClinicSelect.value));
@@ -498,6 +533,8 @@
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
+      if (subscriptionBusy || subscriptionLoading || signingOut) return;
+      if (!subscriptionReady) return showToast('กรุณาโหลดสถานะ ON/OFF ล่าสุดก่อนยืนยัน', true);
       const clinic = selectedClinic();
       if (!clinic) return showToast('กรุณาเลือก Clinic', true);
       const expectedCode = clinic.clinic_code;
@@ -514,8 +551,10 @@
       const action = enabled ? 'ON' : 'OFF';
       if (!window.confirm(`ยืนยัน ${action} subscription ของ ${expectedCode} ที่ Supabase database (expected version ${expectedVersion})?`)) return;
 
-      submit.disabled = true;
+      subscriptionBusy = true;
+      setSubscriptionControlsState();
       status.textContent = `กำลังบันทึก ${action} ที่ฐานข้อมูล…`;
+      let saved = false;
       try {
         await subscriptionApi('POST', {
           requestId: crypto.randomUUID(),
@@ -525,12 +564,16 @@
           expectedVersion,
           reason: cleanReason
         });
+        saved = true;
         confirmCode.value = '';
         reason.value = '';
         await refresh();
         showToast(`${expectedCode} เปลี่ยนเป็น ${action} ที่ฐานข้อมูลแล้ว`);
       } catch (error) {
-        if (error?.code === 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT') {
+        if (saved) {
+          subscriptionReady = false;
+          status.textContent = `บันทึก ${action} สำเร็จแล้ว แต่โหลดผลล่าสุดไม่สำเร็จ กรุณากดโหลดสถานะ ON/OFF ล่าสุด`;
+        } else if (error?.code === 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT') {
           try {
             await refresh();
           } catch {
@@ -538,12 +581,16 @@
           }
           status.textContent = 'คำสั่งไม่ถูกบันทึก · สถานะเปลี่ยนจากอีก session แล้ว กรุณาตรวจและยืนยันใหม่';
         } else {
-          status.textContent = 'คำสั่งไม่ถูกบันทึก';
+          subscriptionReady = false;
+          status.textContent = [400, 401, 403].includes(error?.status)
+            ? `คำสั่งถูกปฏิเสธ · ${errorMessage(error)}`
+            : 'ยังยืนยันผลคำสั่งไม่ได้ กรุณาโหลดสถานะ ON/OFF ล่าสุดก่อนทำรายการอีกครั้ง';
         }
         status.classList.add('danger');
         showToast(errorMessage(error), true);
       } finally {
-        submit.disabled = clinics.length === 0;
+        subscriptionBusy = false;
+        setSubscriptionControlsState();
       }
     });
 
@@ -600,7 +647,26 @@
       }
     });
 
-    await refresh();
+    await loadConsole();
+  }
+
+  async function loadConsole() {
+    $('#owner-boot-retry').disabled = true;
+    try {
+      if (!window.ChananyaRuntime) throw new Error('CNYOS runtime unavailable');
+      const result = await window.ChananyaRuntime.getDb().auth.getSession();
+      if (result.error) throw result.error;
+      session = result.data.session;
+      if (!session) {
+        sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html');
+        location.replace('/login.html');
+        return;
+      }
+      if (!ownerUserId) ownerUserId = session.user?.id || null;
+      await refresh();
+      $('#owner-email').textContent = session.user?.email || 'Google Owner';
+    }
+    finally { $('#owner-boot-retry').disabled = false; }
     boot.classList.add('hidden');
     app.classList.remove('hidden');
     try {
@@ -610,9 +676,30 @@
     }
   }
 
-  start().catch(error => {
+  async function signInAgain() {
+    signingOut = true;
+    session = null;
+    subscriptionReady = false;
+    driveReady = false;
+    setSubscriptionControlsState();
+    setDriveControlsState();
+    try {
+      const signedOut = await window.ChananyaRuntime.getDb().auth.signOut({ scope: 'local' });
+      if (signedOut?.error) throw signedOut.error;
+      sessionStorage.setItem('cnyos:post_auth_path', '/owner-control.html');
+      location.replace('/login.html');
+    } finally { signingOut = false; setSubscriptionControlsState(); setDriveControlsState(); }
+  }
+
+  function showBootError(error) {
     const message = errorMessage(error);
     $('#boot-error').textContent = message;
     $('#boot-error').classList.add('error');
-  });
+    boot.querySelector('.spinner')?.classList.add('hidden');
+    $('#owner-boot-actions').classList.remove('hidden');
+  }
+
+  $('#owner-boot-retry').addEventListener('click', () => loadConsole().catch(showBootError));
+  $('#owner-boot-login').addEventListener('click', () => signInAgain().catch(showBootError));
+  start().catch(showBootError);
 })();

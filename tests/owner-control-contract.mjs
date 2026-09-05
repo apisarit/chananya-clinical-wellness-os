@@ -157,6 +157,14 @@ const payload = await supabaseOwnerRequest({
   }
 });
 assert.equal(payload.email, ownerUser.email);
+for (const status of [401, 403]) {
+  await assert.rejects(supabaseOwnerRequest({
+    url: 'https://stagingprojectrefabc.supabase.co',
+    serviceRoleKey: 'server-service-role-test-key',
+    bearer: 'expired-user-session', resource: '/auth/v1/user',
+    fetchImpl: async () => new Response(JSON.stringify({ message: 'Invalid JWT' }), { status })
+  }), /CNYOS_OWNER_SESSION_INVALID/, 'Auth rejection must be recoverable, not a database failure');
+}
 assert.equal(calls[0].options.headers.apikey, 'server-service-role-test-key');
 assert.equal(calls[0].options.headers.Authorization, 'Bearer user-session-test-token');
 const rpcCalls = [];
@@ -356,7 +364,7 @@ assert.match(consoleJs, /Authorization:\s*`Bearer \$\{session\.access_token\}`/)
 assert.match(consoleJs, /sessionStorage\.setItem\('cnyos:post_auth_path', '\/owner-control\.html'\)/);
 assert.match(
   consoleJs,
-  /signOut\(\)[\s\S]*sessionStorage\.setItem\('cnyos:post_auth_path', '\/owner-control\.html'\)[\s\S]*location\.replace\('\/login\.html'\)/,
+  /signOut\(\{ scope: 'local' \}\)[\s\S]*sessionStorage\.setItem\('cnyos:post_auth_path', '\/owner-control\.html'\)[\s\S]*location\.replace\('\/login\.html'\)/,
   'Owner logout must preserve the protected return path for the next Google sign-in'
 );
 assert.match(read('auth-callback.js'), /candidate === '\/owner-control\.html'/);

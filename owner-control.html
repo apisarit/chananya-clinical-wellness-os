@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#071d18">
   <title>CNYOS Owner Control Console</title>
-  <link rel="stylesheet" href="app.css?v=cnyos-owner1">
+  <link rel="stylesheet" href="app.css?v=cnyos-owner5">
   <script src="tenant-config.js?v=white-label1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
   <script src="auth-config.js?v=cnyos-owner1"></script>
-  <script src="chananya-runtime.js?v=cnyos-owner1"></script>
-  <script defer src="owner-control.js?v=cnyos-owner4"></script>
+  <script src="chananya-runtime.js?v=cnyos-owner5"></script>
+  <script defer src="owner-control.js?v=cnyos-owner5"></script>
 </head>
 <body class="owner-console-page">
-<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด CNYOS Owner Control</h2><p id="boot-error">กำลังตรวจ Google session และสิทธิ์ Owner</p></div></div>
+<div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด CNYOS Owner Control</h2><p id="boot-error">กำลังตรวจ Google session และสิทธิ์ Owner</p><div id="owner-boot-actions" class="account-status-actions hidden"><button id="owner-boot-retry" class="btn" type="button">ลองโหลดอีกครั้ง</button><button id="owner-boot-login" class="btn" type="button">เข้าสู่ระบบ Google ใหม่</button><a class="btn" href="/">กลับ CNYOS</a></div></div></div>
 
 <div id="owner-app" class="owner-console hidden">
   <header class="owner-console-header">
@@ -34,7 +34,7 @@
       <span>เมื่อ OFF ระบบจะเปลี่ยน <code>subscription_state='suspended'</code> ใน transaction ที่บันทึก audit ทำให้ <code>current_clinic_id()</code> และ tenant RLS ปฏิเสธการเข้าถึงข้อมูล แม้ session เดิมยังไม่หมดอายุ โดยงานสำรองข้อมูลยังทำต่อได้</span>
     </section>
 
-    <div id="owner-status" class="status">กำลังโหลดสถานะ subscription…</div>
+    <div class="row"><div id="owner-status" class="status" role="status" aria-live="polite">กำลังโหลดสถานะ subscription…</div><button id="owner-refresh" class="btn ghost" type="button">โหลดสถานะ ON/OFF ล่าสุด</button></div>
 
     <section class="owner-console-grid">
       <div class="card">

@@ -7,7 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = fs.readFileSync(path.join(root, 'owner-control.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'owner-control.js'), 'utf8');
 
-assert.match(html, /owner-control\.js\?v=cnyos-owner4/, 'Owner Console must cache-bust the Blob-aware JS and Functions contract together');
+assert.match(html, /owner-control\.js\?v=cnyos-owner5/, 'Owner Console must cache-bust the session recovery JS and Functions contract together');
 
 assert.match(html, /id="owner-drive-form"/);
 assert.match(html, /id="owner-drive-status"[^>]*role="status"[^>]*aria-live="polite"/);

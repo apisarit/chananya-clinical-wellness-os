@@ -143,6 +143,10 @@ Retain non-PHI evidence against the exact source commit. Folder metadata or `can
 
 ## Recovery
 
+The console obtains the latest Supabase session before every Owner request, including after automatic token refresh. A session changing to a different account requires signing in again before an ON/OFF or Drive mutation. Auth rejection is returned as HTTP 401 with a session message, not a database failure.
+
+If initial loading fails, the page exposes retry and local Google sign-in controls. The ON/OFF status has its own refresh control. A confirmed save followed by a failed read is shown as saved with an unconfirmed current status; a lost write response is shown as an unknown outcome. Neither case automatically resends the mutation, and another write is blocked until the current version is loaded. Local sign-out preserves the return path and leaves other devices signed in.
+
 Use the console to return the clinic to ON. If the UI is unavailable, call the eight-argument `set_clinic_subscription_state(...)` overload with the latest `subscription_version` and the isolated project's service role through a reviewed server-side change. Do not update `subscription_state` directly: the audit, idempotency and optimistic-concurrency contracts are intentional safety controls.
 
 For separate customer Supabase projects, deploy the same control boundary per project with a distinct service-role secret, expected project ref and clinic-code allowlist. Never aggregate customer service-role credentials into browser configuration.
