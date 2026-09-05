@@ -32,6 +32,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Reject high or critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
