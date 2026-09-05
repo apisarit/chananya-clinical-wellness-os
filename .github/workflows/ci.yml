@@ -49,3 +49,70 @@ jobs:
           path: artifacts/release-evidence/
           if-no-files-found: error
           retention-days: 90
+
+  authenticated-staging-one-shot:
+    name: One-shot authenticated staging — 11 roles + 10 journeys
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/production-readiness-stack-20260905'
+    needs: source-and-database-contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: staging
+    env:
+      CLINICAL_OS_STAGING_ACK: STAGING_ONLY
+      CLINICAL_OS_STAGING_CONFIG_JSON: ${{ secrets.CLINICAL_OS_STAGING_CONFIG_JSON }}
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+      STAGING_SITE_URL: ${{ vars.STAGING_SITE_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      STAGING_TEST_EMAIL_DOMAIN: ${{ vars.STAGING_TEST_EMAIL_DOMAIN }}
+      STAGING_TEST_EMAIL_PREFIX: clinical-os-e2e
+      STAGING_TEST_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
+      STAGING_BROWSER_E2E: "true"
+      STAGING_SYNTHETIC_UAT_ACK: CREATE_SYNTHETIC_RECORDS
+      STAGING_OWNER_CONTROL_ACK: TOGGLE_STAGING_SUBSCRIPTION
+      STAGING_UAT_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      STAGING_EVIDENCE_DIR: artifacts/staging-e2e
+    steps:
+      - name: Check out exact release candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked application dependencies
+        run: npm ci
+
+      - name: Install pinned browser runner
+        run: npm install --no-save --package-lock=false playwright@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Prove scheduled backup Functions have no public URLs
+        run: npm run verify:backup-route-denial -- "$STAGING_SITE_URL"
+
+      - name: Provision synthetic role identities
+        run: npm run staging:provision
+
+      - name: Verify authenticated role and workspace matrix
+        run: npm run staging:verify
+
+      - name: Run ten audited synthetic patient journeys
+        run: npm run staging:uat
+
+      - name: Generate exact-commit staging evidence
+        if: always()
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/staging-e2e/release
+
+      - name: Retain exact-commit staging evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-staging-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/staging-e2e/
+          if-no-files-found: warn
+          retention-days: 90
