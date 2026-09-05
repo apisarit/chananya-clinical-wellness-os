@@ -1052,4 +1052,14 @@ svg.lucide {
 .luopan-site-header a { font-weight:500; }
 .luopan-site-main { max-width:768px; margin:0 auto; padding:1rem; }
 .luopan-intro { margin:0 0 0.75rem; }
+.us-mode-control { margin:1rem 0; }
+#us-spatial[hidden], #luopan-birthdate-ray[hidden] { display:none; }
+#us-compass { display:block; width:100%; height:auto; max-width:580px; margin:auto; }
+#us-compass text { font-family:inherit; fill:var(--foreground); }
+#us-result { font-weight:600; }
+.us-knowledge { margin:1.5rem 0; padding-top:1rem; border-top:1px solid var(--border); }
+.us-knowledge summary { cursor:pointer; font-weight:600; }
+.us-knowledge li { margin:0.6rem 0; }
+.us-knowledge table { width:100%; }
+.us-knowledge h2 { font-size:1.1rem; margin-top:1.25rem; }
 @media (max-width:400px) { .luopan-site-main { padding:0.75rem; } }
