@@ -16,6 +16,7 @@ assert.equal(readiness.status, 'production_candidate_under_verification');
 assert.equal(readiness.releaseCommit, null, 'unverified release must not carry a production release commit');
 assert.equal(readiness.promotionPolicy?.allRequiredGatesMustPass, true);
 assert.equal(readiness.promotionPolicy?.evidenceMustMatchReleaseCommit, true);
+assert.equal(readiness.promotionPolicy?.postDeployAttestationRequiredBeforeRealPatientData, true);
 assert.deepEqual(
   readiness.promotionPolicy?.requiredEvidenceFields,
   ['commit', 'artifact', 'verifiedAt', 'verifiedBy'],
@@ -34,13 +35,17 @@ assert.deepEqual(
     'managed_database_backup_pitr',
     'release_provenance_ci_merge_protection'
   ],
-  'all hard commercial release gates must remain explicit and ordered'
+  'all hard pre-deployment commercial release gates must remain explicit and ordered'
 );
 for (const gate of readiness.requiredGates) {
   assert.equal(gate.status, 'pending', `${gate.id} must remain pending until evidence exists`);
   assert.equal(gate.evidence, null, `${gate.id} must not carry invented evidence`);
 }
+assert.equal(readiness.postDeploymentGate?.id, 'public_production_deployment_attestation');
+assert.equal(readiness.postDeploymentGate?.status, 'pending', 'post-deploy attestation must remain pending before deployment');
+assert.equal(readiness.postDeploymentGate?.evidence, null, 'post-deploy evidence must not be invented before deployment');
+assert.equal(readiness.postDeploymentGate?.blocksRealPatientData, true, 'real patient data must remain blocked until post-deploy attestation');
 assert.match(preview, /ไม่ใช่ Commercial Production 100%/, 'Preview must show the release limitation on every workspace');
 assert.match(coverage, /Preview \/ production candidate under verification/, 'coverage document must use the guarded release label');
 
-console.log(`Commercial release gate passed: ${readiness.requiredGates.length} evidence gates fail closed`);
+console.log(`Commercial release gate passed: ${readiness.requiredGates.length} pre-deployment gates plus post-deploy admission gate fail closed`);
