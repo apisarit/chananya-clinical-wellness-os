@@ -1,5 +1,6 @@
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLINIC_CODE_PATTERN = /^[A-Z][A-Z0-9_-]{1,23}$/;
+const SHA40_PATTERN = /^[0-9a-f]{40}$/i;
 
 export function normalizeOwnerEmails(value) {
   const emails = [...new Set(String(value || '')
@@ -131,9 +132,6 @@ export function validateOwnerUser(user, allowedEmails, verifiedAccessToken) {
     .map(reference => typeof reference === 'string' ? reference : reference?.method)
     .map(value => String(value || '').trim().toLowerCase())
     .filter(Boolean));
-  // The token has already been verified by Supabase /auth/v1/user. Requiring
-  // an OAuth AMR plus a Google-only identity prevents a password session on a
-  // linked account from entering the Owner console.
   if (authenticationMethods.size !== 1
     || !authenticationMethods.has('oauth')
     || providers.size !== 1
@@ -160,14 +158,44 @@ export function normalizeSubscriptionRequest(value) {
     throw new Error('CNYOS_OWNER_SUBSCRIPTION_VERSION_INVALID');
   }
   if (reason.length < 8 || reason.length > 500) throw new Error('CNYOS_OWNER_REASON_INVALID');
-  return Object.freeze({
-    requestId,
-    clinicId,
-    clinicCode,
-    enabled: body.enabled,
-    expectedVersion,
-    reason
-  });
+  return Object.freeze({ requestId, clinicId, clinicCode, enabled: body.enabled, expectedVersion, reason });
+}
+
+export async function assertProductionAdmissionUnlock(input, config, fetchImpl = fetch) {
+  if (config.environment !== 'production' || input.enabled !== true) return true;
+  if (config.productionAdmissionEnabled !== true) throw new Error('CNYOS_OWNER_REAL_DATA_ADMISSION_LOCKED');
+  const releaseCommit = String(config.productionAdmissionReleaseCommit || '').trim().toLowerCase();
+  const approvalReference = String(config.productionAdmissionApprovalReference || '').trim();
+  if (!SHA40_PATTERN.test(releaseCommit) || approvalReference.length < 8 || approvalReference.length > 200) {
+    throw new Error('CNYOS_OWNER_REAL_DATA_ADMISSION_CONFIG_INVALID');
+  }
+  if (!input.reason.includes(approvalReference)) {
+    throw new Error('CNYOS_OWNER_REAL_DATA_ADMISSION_REFERENCE_REQUIRED');
+  }
+  let response;
+  try {
+    response = await fetchImpl(`${config.expectedSiteOrigin.replace(/\/$/, '')}/deploy-manifest.json`, {
+      method: 'GET',
+      redirect: 'error',
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(8000)
+    });
+  } catch {
+    throw new Error('CNYOS_OWNER_REAL_DATA_ADMISSION_DEPLOYMENT_UNVERIFIED');
+  }
+  if (!response?.ok) throw new Error('CNYOS_OWNER_REAL_DATA_ADMISSION_DEPLOYMENT_UNVERIFIED');
+  const manifest = await response.json().catch(() => null);
+  if (!manifest
+    || manifest?.source?.commit !== releaseCommit
+    || manifest?.source?.verified !== true
+    || manifest?.build?.context !== 'production'
+    || manifest?.safety?.previewLocked !== false
+    || manifest?.safety?.databaseLocked !== false
+    || manifest?.deploymentId !== config.deploymentId
+    || String(manifest?.tenant?.expectedClinicCode || '').toUpperCase() !== input.clinicCode) {
+    throw new Error('CNYOS_OWNER_REAL_DATA_ADMISSION_DEPLOYMENT_UNVERIFIED');
+  }
+  return true;
 }
 
 export async function readOwnerJson(request, maxBytes = 8192) {
@@ -216,13 +244,31 @@ export async function supabaseOwnerRequest({
 export function ownerPublicError(error) {
   const code = String(error?.message || '');
   const status = code === 'CNYOS_OWNER_SESSION_REQUIRED' || code === 'CNYOS_OWNER_SESSION_INVALID' ? 401
-    : code === 'CNYOS_OWNER_NOT_AUTHORIZED' || code === 'CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED' || code === 'CNYOS_OWNER_EMAIL_UNCONFIRMED' || code === 'CNYOS_OWNER_CLINIC_NOT_ALLOWED' ? 403
+    : code === 'CNYOS_OWNER_NOT_AUTHORIZED'
+      || code === 'CNYOS_OWNER_GOOGLE_SIGN_IN_REQUIRED'
+      || code === 'CNYOS_OWNER_EMAIL_UNCONFIRMED'
+      || code === 'CNYOS_OWNER_CLINIC_NOT_ALLOWED'
+      || code === 'CNYOS_OWNER_REAL_DATA_ADMISSION_LOCKED' ? 403
       : code === 'CNYOS_OWNER_REQUEST_TOO_LARGE' ? 413
         : code === 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT' || code === 'CNYOS_OWNER_REQUEST_ID_CONFLICT' ? 409
-        : code === 'CNYOS_OWNER_DEPLOY_CONTEXT_DENIED' ? 403
-        : code === 'CNYOS_OWNER_CONTROL_DISABLED' || code === 'CNYOS_OWNER_DATABASE_CONFIG_MISSING' || code === 'CNYOS_OWNER_EMAILS_INVALID' || code === 'CNYOS_OWNER_CLINIC_CODES_INVALID' || code === 'CNYOS_OWNER_PROJECT_REF_INVALID' || code === 'CNYOS_OWNER_PROJECT_MISMATCH' || code === 'CNYOS_OWNER_ENVIRONMENT_INVALID' || code === 'CNYOS_OWNER_DEPLOYMENT_INVALID' || code === 'CNYOS_OWNER_PRODUCTION_DENYLIST_REQUIRED' || code === 'CNYOS_OWNER_PRODUCTION_DENYLIST_INVALID' || code === 'CNYOS_OWNER_PRODUCTION_TARGET_DENIED' || code === 'CNYOS_OWNER_SITE_CONFIG_INVALID' || code === 'CNYOS_OWNER_RUNTIME_MISMATCH' ? 503
-        : code.includes('INPUT') || code.includes('INVALID') || code.includes('MISMATCH') || code.includes('REASON') ? 400
-          : 500;
+          : code === 'CNYOS_OWNER_DEPLOY_CONTEXT_DENIED' ? 403
+            : code === 'CNYOS_OWNER_CONTROL_DISABLED'
+              || code === 'CNYOS_OWNER_DATABASE_CONFIG_MISSING'
+              || code === 'CNYOS_OWNER_EMAILS_INVALID'
+              || code === 'CNYOS_OWNER_CLINIC_CODES_INVALID'
+              || code === 'CNYOS_OWNER_PROJECT_REF_INVALID'
+              || code === 'CNYOS_OWNER_PROJECT_MISMATCH'
+              || code === 'CNYOS_OWNER_ENVIRONMENT_INVALID'
+              || code === 'CNYOS_OWNER_DEPLOYMENT_INVALID'
+              || code === 'CNYOS_OWNER_PRODUCTION_DENYLIST_REQUIRED'
+              || code === 'CNYOS_OWNER_PRODUCTION_DENYLIST_INVALID'
+              || code === 'CNYOS_OWNER_PRODUCTION_TARGET_DENIED'
+              || code === 'CNYOS_OWNER_SITE_CONFIG_INVALID'
+              || code === 'CNYOS_OWNER_RUNTIME_MISMATCH'
+              || code === 'CNYOS_OWNER_REAL_DATA_ADMISSION_CONFIG_INVALID'
+              || code === 'CNYOS_OWNER_REAL_DATA_ADMISSION_DEPLOYMENT_UNVERIFIED' ? 503
+              : code.includes('INPUT') || code.includes('INVALID') || code.includes('MISMATCH') || code.includes('REASON') || code.includes('REFERENCE') ? 400
+                : 500;
   const safeCode = /^CNYOS_OWNER_[A-Z0-9_]{3,80}$/.test(code) ? code : 'CNYOS_OWNER_CONTROL_FAILED';
   return Object.freeze({ code: safeCode, status });
 }
