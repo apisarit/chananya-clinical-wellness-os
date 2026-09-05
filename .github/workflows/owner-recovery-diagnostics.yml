@@ -1,0 +1,76 @@
+name: Owner Control read-only incident diagnostics
+on:
+  push:
+    branches: [codex/owner-live-recovery-20260906]
+permissions:
+  contents: read
+concurrency:
+  group: owner-recovery-diagnostics
+  cancel-in-progress: true
+jobs:
+  read-only-live-probes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Inspect public Owner assets and unauthenticated API denial
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { writeFileSync } from 'node:fs';
+          const origin = 'https://cnyos.netlify.app';
+          const report = { observedAt: new Date().toISOString(), mode: 'read_only_no_credentials_no_mutations', observations: [] };
+          for (const pathname of ['/owner-control.html','/owner-control.js','/login.html','/auth-login.js','/auth-callback.js','/tenant-config.js','/deploy-manifest.json','/api/owner-subscription','/api/owner-drive']) {
+            const observation = { path: pathname };
+            try {
+              const response = await fetch(origin + pathname, {
+                method: 'GET', redirect: 'error', signal: AbortSignal.timeout(12000),
+                headers: { Accept: '*/*', Origin: origin, 'Sec-Fetch-Site': 'same-origin', 'Cache-Control': 'no-cache' }
+              });
+              const bytes = Buffer.from(await response.arrayBuffer());
+              if (bytes.length > 500000) throw new Error('RESPONSE_TOO_LARGE');
+              const text = bytes.toString('utf8');
+              Object.assign(observation, { status: response.status, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), contentType: response.headers.get('content-type'), requestId: response.headers.get('x-nf-request-id'), cacheControl: response.headers.get('cache-control') });
+              if (pathname === '/deploy-manifest.json' && response.ok) {
+                const data = JSON.parse(text);
+                observation.manifest = { source: data.source, safety: data.safety, deploymentId: data.deploymentId, context: data.build?.context };
+              }
+              if (pathname.startsWith('/api/')) {
+                try { const data = JSON.parse(text); observation.code = data.code || null; observation.ok = data.ok === true; }
+                catch { observation.jsonParseFailed = true; }
+              }
+              if (pathname === '/owner-control.js') {
+                observation.controller = { listensForAuth: text.includes('onAuthStateChange'), handlesHistoryRestore: text.includes('pageshow'), hasSessionEpoch: /epoch|generation/.test(text), retainsBootSessionToken: text.includes('Bearer ${session.access_token}') };
+              }
+              if (pathname === '/owner-control.html' && response.ok) {
+                observation.scripts = [];
+                for (const match of text.matchAll(/<script\b([^>]*)>/gi)) {
+                  const attrs = match[1];
+                  const src = attrs.match(/\bsrc="([^"]+)"/)?.[1];
+                  if (!src) continue;
+                  const target = new URL(src, origin);
+                  if (!['cnyos.netlify.app','cdn.jsdelivr.net'].includes(target.hostname) || target.protocol !== 'https:') continue;
+                  const result = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(12000) });
+                  const body = Buffer.from(await result.arrayBuffer());
+                  const integrity = attrs.match(/\bintegrity="([^"]+)"/)?.[1];
+                  const sriOk = integrity ? integrity.split(/\s+/).some(value => {
+                    const [algorithm,expected] = value.split('-');
+                    return ['sha256','sha384','sha512'].includes(algorithm) && createHash(algorithm).update(body).digest('base64') === expected;
+                  }) : null;
+                  observation.scripts.push({ src, status: result.status, integrityMatches: sriOk });
+                }
+              }
+            } catch (error) { observation.error = String(error.message).slice(0,180); }
+            report.observations.push(observation);
+          }
+          writeFileSync('owner-live-diagnostics.json', JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+          NODE
+      - name: Retain sanitized incident evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-live-diagnostics-${{ github.sha }}-${{ github.run_id }}
+          path: owner-live-diagnostics.json
+          retention-days: 14
+          if-no-files-found: error
