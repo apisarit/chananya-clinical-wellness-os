@@ -143,6 +143,8 @@ Retain non-PHI evidence against the exact source commit. Folder metadata or `can
 
 ## Recovery
 
+Owner UI/session recovery and its verification boundaries are recorded in [OWNER_CONSOLE_RECOVERY_20260906.md](./OWNER_CONSOLE_RECOVERY_20260906.md). The server additionally translates rejected Supabase `/auth/v1/user` requests into HTTP 401 / `CNYOS_OWNER_SESSION_INVALID`, so the console offers explicit Google sign-in recovery instead of reporting a database failure. Authentication remains mandatory before any subscription or Drive RPC.
+
 Use the console to return the clinic to ON. If the UI is unavailable, call the eight-argument `set_clinic_subscription_state(...)` overload with the latest `subscription_version` and the isolated project's service role through a reviewed server-side change. Do not update `subscription_state` directly: the audit, idempotency and optimistic-concurrency contracts are intentional safety controls.
 
 For separate customer Supabase projects, deploy the same control boundary per project with a distinct service-role secret, expected project ref and clinic-code allowlist. Never aggregate customer service-role credentials into browser configuration.

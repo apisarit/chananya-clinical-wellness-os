@@ -205,6 +205,9 @@ export async function supabaseOwnerRequest({
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
+    if (resource === '/auth/v1/user' && [401, 403].includes(response.status)) {
+      throw new Error('CNYOS_OWNER_SESSION_INVALID');
+    }
     const databaseCode = /^CNYOS_[A-Z0-9_]{3,80}$/.test(String(payload?.message || ''))
       ? payload.message
       : 'CNYOS_OWNER_DATABASE_REQUEST_FAILED';
