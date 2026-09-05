@@ -24,12 +24,12 @@ jobs:
       CNYOS_RELEASE_REF: ${{ github.event.pull_request.head.ref || github.ref }}
     steps:
       - name: Check out exact candidate commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.CNYOS_RELEASE_SHA }}
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -51,7 +51,7 @@ jobs:
 
       - name: Retain exact-commit evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-contracts-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
           path: artifacts/release-evidence/
