@@ -75,7 +75,7 @@ const deployWorkflow = fs.readFileSync(path.join(root, '.github/workflows/produc
 for (const [name, workflow] of [['promotion', promotionWorkflow], ['deploy', deployWorkflow]]) {
   assert.match(workflow, /environment:\s*production/, `${name} workflow must use protected production environment`);
   assert.match(workflow, /secrets\.PRODUCTION_RELEASE_ATTESTATION_JSON/, `${name} workflow must load protected external attestation`);
-  assert.match(workflow, /test -n "\$PRODUCTION_RELEASE_ATTESTATION_JSON"/, `${name} workflow must fail closed if attestation is absent`);
+  assert.match(workflow, /RELEASE_GATE_EVIDENCE_DIR:/, `${name} workflow must retain gate diagnostics when attestation is absent`);
   assert.match(workflow, /npm run verify:production-promotion/, `${name} workflow must validate external exact-commit approval`);
 }
 

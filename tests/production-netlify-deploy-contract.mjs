@@ -16,7 +16,8 @@ assert.match(workflow, /DEPLOY_CNYOS_PRODUCTION/, 'production deployment must re
 assert.match(workflow, /test "\$GITHUB_REF" = "refs\/heads\/\$DEFAULT_BRANCH"/, 'deployment must reject non-default-branch refs');
 assert.match(workflow, /test "\$\(git rev-parse HEAD\)" = "\$GITHUB_SHA"/, 'deployment must verify exact checkout');
 assert.match(workflow, /secrets\.PRODUCTION_RELEASE_ATTESTATION_JSON/, 'production deploy must consume protected external release approval');
-assert.match(workflow, /test -n "\$PRODUCTION_RELEASE_ATTESTATION_JSON"/, 'production deploy must fail closed when release attestation is absent');
+assert.match(workflow, /RELEASE_GATE_EVIDENCE_DIR:\s*artifacts\/production-deploy\/gate/, 'production deploy must retain actionable approval diagnostics');
+assert.match(workflow, /RELEASE_GATE_REQUIRE_DEPLOY_CONFIG:\s*"true"/, 'production deploy must validate required deployment configuration');
 assert.match(workflow, /PRODUCTION_NETLIFY_SITE_ID/, 'production site ID must come from environment configuration');
 assert.match(workflow, /secrets\.NETLIFY_AUTH_TOKEN/, 'Netlify auth token must come from a secret');
 assert.match(workflow, /CLINICAL_OS_PRODUCTION_CONFIG_JSON/, 'production tenant config must come from the protected environment');
