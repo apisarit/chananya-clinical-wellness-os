@@ -31,10 +31,10 @@ jobs:
       STAGING_EVIDENCE_DIR: artifacts/line-staging
     steps:
       - name: Check out exact candidate commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -59,7 +59,7 @@ jobs:
 
       - name: Retain exact-commit LINE evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: line-staging-${{ github.sha }}-${{ github.run_id }}
           path: artifacts/line-staging/
