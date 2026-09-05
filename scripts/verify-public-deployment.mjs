@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha40 = /^[0-9a-f]{40}$/i;
+const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 
 export const forbiddenPublicPaths = Object.freeze([
   '/.env.example',
@@ -79,8 +81,14 @@ export async function verifyPublicDeployment({
   }
   if (!sha40.test(expectedCommit)) throw new Error('EXPECTED_RELEASE_COMMIT_INVALID');
 
+  const checkoutCommit = git('rev-parse', 'HEAD');
+  const checkoutTree = git('rev-parse', 'HEAD^{tree}');
+  assert.equal(checkoutCommit, expectedCommit, 'selected workflow checkout does not match the expected release commit');
+  assert.match(checkoutTree, sha40, 'selected workflow checkout tree is invalid');
+
   const deploy = await request(origin, '/deploy-manifest.json', { expectedStatus: 200, json: true });
   assert.equal(deploy.body?.source?.commit, expectedCommit, 'deployed source commit does not match exact release commit');
+  assert.equal(deploy.body?.source?.tree, checkoutTree, 'deployed source tree does not match exact checked-out release tree');
   assert.equal(deploy.body?.source?.verified, true, 'deploy manifest source must be verified');
   assert.equal(deploy.body?.build?.context, 'production', 'production deploy manifest must report production context');
   assert.equal(deploy.body?.safety?.previewLocked, false, 'production release must not be preview-locked');
@@ -113,6 +121,7 @@ export async function verifyPublicDeployment({
     verifiedAt: new Date().toISOString(),
     origin,
     releaseCommit: expectedCommit,
+    releaseTree: checkoutTree,
     deploymentId: deploy.body.deploymentId,
     tenantCode: deploy.body?.tenant?.expectedClinicCode || null,
     runtimeFileCount: runtime.body.fileCount,
@@ -123,7 +132,7 @@ export async function verifyPublicDeployment({
   const destination = path.resolve(process.env.PUBLIC_DEPLOYMENT_EVIDENCE_PATH || path.join(root, 'artifacts', 'public-deployment.json'));
   await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
   await fs.writeFile(destination, `${JSON.stringify(evidence, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  process.stdout.write(`Public production deployment attested for ${expectedCommit} at ${origin}\n`);
+  process.stdout.write(`Public production deployment attested for ${expectedCommit} (${checkoutTree}) at ${origin}\n`);
   return evidence;
 }
 
