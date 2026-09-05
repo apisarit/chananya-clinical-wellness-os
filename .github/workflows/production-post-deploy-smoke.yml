@@ -1,0 +1,68 @@
+name: Production post-deploy attestation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type VERIFY_DEPLOYED_PRODUCTION to attest the selected exact commit'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-post-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  attest-public-production:
+    name: Attest exact deployed commit and public surface
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    env:
+      CNYOS_PRODUCTION_SMOKE_ACK: VERIFY_PUBLIC_RELEASE
+      PRODUCTION_SITE_URL: ${{ vars.PRODUCTION_SITE_URL }}
+      EXPECTED_PRODUCTION_HOST: ${{ vars.PRODUCTION_SITE_HOST }}
+      EXPECTED_RELEASE_COMMIT: ${{ github.sha }}
+      PUBLIC_DEPLOYMENT_EVIDENCE_PATH: artifacts/production-post-deploy/public-deployment.json
+    steps:
+      - name: Require explicit post-deploy verification intent
+        shell: bash
+        run: |
+          test "${{ inputs.confirmation }}" = "VERIFY_DEPLOYED_PRODUCTION" || {
+            echo 'Post-deploy confirmation did not match VERIFY_DEPLOYED_PRODUCTION.' >&2
+            exit 1
+          }
+
+      - name: Check out exact selected release commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Re-run complete release contracts
+        run: npm run check
+
+      - name: Attest deployed public runtime against selected commit
+        run: npm run verify:public-deployment
+
+      - name: Generate exact source evidence
+        run: npm run evidence:release
+        env:
+          RELEASE_EVIDENCE_DIR: artifacts/production-post-deploy/release
+
+      - name: Retain post-deploy production evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-post-deploy-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/production-post-deploy/
+          if-no-files-found: error
+          retention-days: 365
