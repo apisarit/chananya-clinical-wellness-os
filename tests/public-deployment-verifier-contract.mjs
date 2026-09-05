@@ -25,7 +25,10 @@ for (const requiredForbidden of [
   assert.ok(forbiddenPublicPaths.includes(requiredForbidden), `missing forbidden-path assertion ${requiredForbidden}`);
 }
 
+assert.match(source, /rev-parse', 'HEAD'/, 'attestation must bind to the exact checked-out commit');
+assert.match(source, /rev-parse', 'HEAD\^\{tree\}'/, 'attestation must derive the exact checked-out Git tree');
 assert.match(source, /source\?\.commit, expectedCommit/, 'attestation must compare the deployed source commit');
+assert.match(source, /source\?\.tree, checkoutTree/, 'attestation must compare the deployed source tree');
 assert.match(source, /build\?\.context, 'production'/, 'attestation must require production context');
 assert.match(source, /previewLocked, false/, 'attestation must reject preview-locked deployments');
 assert.match(source, /runtime-publish-manifest\.json/, 'attestation must verify the runtime publish manifest');
@@ -33,4 +36,4 @@ assert.match(source, /strict-transport-security/, 'attestation must verify HSTS'
 assert.match(source, /content-security-policy/, 'attestation must verify CSP');
 assert.match(source, /expectedStatus: 404/, 'attestation must prove internal paths are not public');
 
-console.log('Public deployment verifier contract passed: exact commit, headers and forbidden paths required');
+console.log('Public deployment verifier contract passed: exact commit/tree, headers and forbidden paths required');
