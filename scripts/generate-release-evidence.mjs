@@ -11,7 +11,9 @@ const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8'
 
 function exactCommit() {
   const head = git('rev-parse', 'HEAD');
-  const workflowCommit = String(process.env.GITHUB_SHA || head).trim();
+  const workflowCommit = String(
+    process.env.CNYOS_RELEASE_SHA || process.env.GITHUB_SHA || head
+  ).trim();
   if (!/^[0-9a-f]{40}$/i.test(workflowCommit) || workflowCommit !== head) {
     throw new Error('RELEASE_EVIDENCE_COMMIT_MISMATCH');
   }
@@ -38,7 +40,7 @@ const evidence = {
   generatedAt: new Date().toISOString(),
   commit,
   tree: git('rev-parse', 'HEAD^{tree}'),
-  ref: process.env.GITHUB_REF || null,
+  ref: process.env.CNYOS_RELEASE_REF || process.env.GITHUB_REF || null,
   event: process.env.GITHUB_EVENT_NAME || 'local',
   workflowRunId: process.env.GITHUB_RUN_ID || null,
   workflowRunAttempt: process.env.GITHUB_RUN_ATTEMPT || null,
