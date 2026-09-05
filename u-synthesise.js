@@ -1,56 +1,23 @@
 import {identity, modules, layers, frames, mountains, bagua, elements, sources, rules} from './u-synthesise-catalog.js';
+import {mountClassicalLuopan} from './u-synthesise-luopan.js';
 import {angle, readBearing, readBirthTime, branchBearingOverlay, relateElements, attachLegacyKnowledge} from './u-synthesise-engine.js';
 
 export function mountUSynthesise(document, window) {
   const q = id => document.getElementById(id);
   if (!q('us-mode')) return;
-  const svg = q('us-compass'), NS = 'http://www.w3.org/2000/svg';
-  let reading = null, overlay = null;
+  let reading = null, overlay = null, bearingOrigin = 'manual';
   const node = (tag, text, parent) => {
     const element = document.createElement(tag);
     if (text !== undefined) element.textContent = text;
     if (parent) parent.appendChild(element);
     return element;
   };
-  const shape = (tag, attrs, text) => {
-    const element = document.createElementNS(NS, tag);
-    for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
-    if (text !== undefined) element.textContent = text;
-    svg.appendChild(element);
-    return element;
-  };
-  const point = (r, degrees) => [250 + r * Math.sin(degrees * Math.PI / 180), 250 - r * Math.cos(degrees * Math.PI / 180)];
-  function arc(inner, outer, start, span) {
-    const a = point(outer, start), b = point(outer, start + span), c = point(inner, start + span), d = point(inner, start);
-    return `M${a} A${outer},${outer} 0 0 1 ${b} L${c} A${inner},${inner} 0 0 0 ${d} Z`;
-  }
-  function draw() {
-    svg.replaceChildren();
-    shape('title', {}, '24 ขุนเขา · เหนือแม่เหล็ก 0 องศา · ตารางทิศคงที่');
-    for (const sector of bagua) {
-      shape('path', {d: arc(188, 225, sector.start, sector.span), fill: 'var(--viz-series-1)', 'fill-opacity': '.12', stroke: 'var(--border)'});
-      const p = point(207, sector.center);
-      shape('text', {x: p[0], y: p[1] + 5, 'text-anchor': 'middle'}, sector.direction + ' ' + sector.symbol);
-    }
-    for (const mountain of mountains) {
-      const selected = reading?.mountain.symbol === mountain.symbol;
-      const linked = overlay?.symbol === mountain.symbol;
-      const path = shape('path', {d: arc(126, 187, mountain.start, 15), fill: selected ? 'var(--viz-series-5)' : 'var(--viz-series-2)', 'fill-opacity': selected ? '.58' : linked ? '.40' : '.08', stroke: 'var(--border)', 'data-mountain': mountain.symbol});
-      const title = document.createElementNS(NS, 'title');
-      title.textContent = `${mountain.symbol} ${mountain.code} · ${mountain.start}°–${(mountain.start + 15) % 360}°`;
-      path.appendChild(title);
-      const p = point(158, mountain.center), code = point(140, mountain.center);
-      shape('text', {x: p[0], y: p[1] + 5, 'text-anchor': 'middle'}, mountain.symbol);
-      shape('text', {x: code[0], y: code[1] + 3, 'text-anchor': 'middle', 'font-size': '9'}, mountain.code);
-    }
-    shape('text', {x: 250, y: 238, 'text-anchor': 'middle', 'font-size': '21'}, reading ? reading.position.degrees.toFixed(1) + '°' : '24 ขุนเขา');
-    shape('text', {x: 250, y: 264, 'text-anchor': 'middle', 'font-size': '13'}, 'เหนือแม่เหล็ก · ตารางคงที่');
-    if (reading) {
-      const p = point(230, reading.position.degrees), start = point(83, reading.position.degrees);
-      shape('line', {x1: start[0], y1: start[1], x2: p[0], y2: p[1], stroke: 'var(--foreground)', 'stroke-width': '2', 'data-bearing': reading.position.degrees});
-      shape('circle', {cx: p[0], cy: p[1], r: 5, fill: 'var(--foreground)'});
-    }
-  }
+  const atlas = mountClassicalLuopan(document, {onExplore(degrees) {
+    q('us-bearing').value = String(degrees);
+    q('us-uncertainty').value = '';
+    submitBearing(null, 'study');
+  }});
+  function draw() { atlas.update(reading, overlay, bearingOrigin); }
   function birthOverlay() {
     try {
       const text = q('lr-birth').value;
@@ -64,7 +31,8 @@ export function mountUSynthesise(document, window) {
     }
     draw();
   }
-  function submitBearing(event) {
+  function submitBearing(event, origin = 'manual') {
+    bearingOrigin = origin;
     event?.preventDefault();
     try {
       const raw = q('us-bearing').value.trim(), degrees = Number(raw);
@@ -85,7 +53,7 @@ export function mountUSynthesise(document, window) {
   const frameNames = {magnetic_bearing: 'ทิศเหนือแม่เหล็ก', zodiac_sidereal: 'องศาราศีนิรายนะ', civil_year_april: 'วงปีเริ่มเมษายน', clock12: 'เวลา 12 ชั่วโมง × 2 รอบ', lunar_sequence: 'ลำดับฤดูจันทรคติ', category: 'หมวดองค์ความรู้'};
   try {
     const attached = attachLegacyKnowledge(window.LuopanKnowledgeV1);
-    q('us-version').textContent = `${identity.name} ${identity.version} · 23 ชั้น · สมุฏฐานเดิม ${attached.legacy.source.ttmRaw.length} กฎ`;
+    q('us-version').textContent = `${identity.name} ${identity.version} · วงเวลา 23 ชั้น · หล่อแก 14 ชั้น · สมุฏฐานเดิม ${attached.legacy.source.ttmRaw.length} กฎ`;
     for (const module of modules) {
       const item = node('li', undefined, q('us-modules'));
       node('strong', module.name + ' — ', item);

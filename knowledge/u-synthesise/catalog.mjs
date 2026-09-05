@@ -8,7 +8,7 @@ export function deepFreeze(value) {
 }
 
 export const identity = deepFreeze({
-  name: 'U Synthesise', id: 'u-synthesise', version: '0.1.0', status: 'foundation_draft',
+  name: 'U Synthesise', id: 'u-synthesise', version: '0.2.0', status: 'foundation_draft',
   baselineCommit: '40cb673f02e8b9e2641c46702441cff8c8ef19bd',
   legacyFile: 'luopan-knowledge.js',
   legacySha256: '79e0c23c763aa580665cdabfedc989275b3bbbdce867f02e4fc38d618acf1951',
@@ -39,13 +39,13 @@ export const frames = deepFreeze({
 
 export const modules = deepFreeze([
   {id: 'wuxing_bazi', name: 'Wuxing–BaZi', tables: ['stems', 'branches', 'wuxing', 'elementPairs', 'godMatrix', 'godNames', 'pillars', 'chineseRelations'], scope: 'ก้านฟ้า กิ่งดิน ธาตุแฝง สี่เสา สิบเทพ และสัมพันธ์ตามเงื่อนไขเดิม'},
-  {id: 'luopan', name: 'Luopan', tables: ['mountains'], scope: 'พิกัดทิศ 8 ทิศ และ 24 ขุนเขา Earth Plate'},
+  {id: 'luopan', name: 'Luopan', tables: ['mountains'], scope: 'หล่อแกดั้งเดิม 14 ชั้น สามจาน ปากว้า ลั่วซู ซวงซาน ฉางเซิง และคลัง 64 ข่วย'},
   {id: 'thai_astrology', name: 'โหราศาสตร์ไทย', tables: ['zodiac', 'thaiSigns', 'planets', 'thaiPairs', 'thaiNatural', 'thaiNatal', 'houses', 'taksa'], scope: 'ราศี ลัคนา ภพ เจ้าเรือน ดาว คู่สัมพันธ์ และทักษา ตามฐานตำราที่กำกับ'},
   {id: 'samutthan', name: 'สมุฏฐานเจ้าเรือน', tables: ['seasons', 'timeAge', 'ttmRaw'], scope: 'กาล ฤดู อายุ เจ้าเรือน ระคน เจือกระทบ พิกัด และจำนวนส่วน'},
 ]);
 
 export const modes = deepFreeze({
-  feng_shui: {name: 'โหมดทิศทาง', sensorPolicy: 'explicit_permission_and_reference_required', implementedSensor: false, acceptedReadingFrame: 'magnetic_bearing', fixedLayers: ['directions', 'mountains'], natalHouses: false},
+  feng_shui: {name: 'โหมดทิศทาง', sensorPolicy: 'explicit_permission_and_reference_required', implementedSensor: false, acceptedReadingFrame: 'magnetic_bearing', fixedLayers: ['directions', 'mountains', 'classical_atlas'], natalHouses: false},
   astro_medical: {name: 'โหมดเวลาและองค์ความรู้', sensorPolicy: 'off', core: 'kala', yearStart: '04-01', birthInput: true, clinicalDiagnosis: false},
 });
 
