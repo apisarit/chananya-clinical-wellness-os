@@ -1,0 +1,6 @@
+/* The console's explicit hidden state must override layout rules such as .form. */
+.owner-console-page [hidden] { display: none !important; }
+#owner-recovery-actions { max-width: 32rem; margin-top: 1rem; }
+#owner-recovery-actions .btn { display: block; width: 100%; margin-top: .75rem; }
+#owner-recovery-actions p { line-height: 1.5; overflow-wrap: anywhere; }
+.owner-console-page #owner-refresh { margin-bottom: 1rem; }
