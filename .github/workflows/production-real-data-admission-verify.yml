@@ -1,0 +1,102 @@
+name: Production real-data admission verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type VERIFY_CNYOS_REAL_PATIENT_DATA_ACTIVE'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnyos-production-admission-verify
+  cancel-in-progress: false
+
+jobs:
+  verify-admission-active:
+    name: Verify audited Owner activation against exact release approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    env:
+      EXPECTED_RELEASE_COMMIT: ${{ github.sha }}
+      PRODUCTION_RELEASE_ATTESTATION_JSON: ${{ secrets.PRODUCTION_RELEASE_ATTESTATION_JSON }}
+      PRODUCTION_ADMISSION_ATTESTATION_JSON: ${{ secrets.PRODUCTION_ADMISSION_ATTESTATION_JSON }}
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+      PRODUCTION_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_SERVICE_ROLE_KEY }}
+      PRODUCTION_EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_EXPECTED_SUPABASE_PROJECT_REF }}
+      PRODUCTION_EXPECTED_CLINIC_ID: ${{ vars.PRODUCTION_EXPECTED_CLINIC_ID }}
+      PRODUCTION_EXPECTED_CLINIC_CODE: ${{ vars.PRODUCTION_EXPECTED_CLINIC_CODE }}
+      PRODUCTION_ADMISSION_EXPECTED_OWNER_EMAIL: ${{ vars.PRODUCTION_ADMISSION_EXPECTED_OWNER_EMAIL }}
+      PRODUCTION_SITE_URL: ${{ vars.PRODUCTION_SITE_URL }}
+      PRODUCTION_SITE_HOST: ${{ vars.PRODUCTION_SITE_HOST }}
+      EXPECTED_PRODUCTION_HOST: ${{ vars.PRODUCTION_SITE_HOST }}
+      PRODUCTION_NETLIFY_SITE_ID: ${{ vars.PRODUCTION_NETLIFY_SITE_ID }}
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      CNYOS_PRODUCTION_SMOKE_ACK: VERIFY_PUBLIC_RELEASE
+      CNYOS_PRODUCTION_ADMISSION_VERIFY_ACK: VERIFY_CNYOS_REAL_PATIENT_DATA_ACTIVE
+      PRODUCTION_PUBLIC_DEPLOYMENT_EVIDENCE_PATH: artifacts/production-admission-verify/public-deployment.json
+      PUBLIC_DEPLOYMENT_EVIDENCE_PATH: artifacts/production-admission-verify/public-deployment.json
+      PRODUCTION_ADMISSION_EVIDENCE_PATH: artifacts/production-admission-verify/admission-active.json
+    steps:
+      - name: Require explicit final admission verification intent
+        shell: bash
+        run: |
+          test "${{ inputs.confirmation }}" = "VERIFY_CNYOS_REAL_PATIENT_DATA_ACTIVE" || {
+            echo 'Final admission verification confirmation mismatch.' >&2
+            exit 1
+          }
+
+      - name: Check out exact selected main commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require trusted default branch and exact checkout
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$PRODUCTION_RELEASE_ATTESTATION_JSON"
+          test -n "$PRODUCTION_ADMISSION_ATTESTATION_JSON"
+          test -n "$PRODUCTION_SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$PRODUCTION_ADMISSION_EXPECTED_OWNER_EMAIL"
+          test -n "$NETLIFY_AUTH_TOKEN"
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Reject high or critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Re-run complete release contracts
+        run: npm run check
+
+      - name: Require protected exact-commit production approval
+        run: npm run verify:production-promotion
+
+      - name: Re-attest currently published production runtime
+        run: npm run verify:public-deployment
+
+      - name: Verify audited Owner activation and final real-data admission state
+        run: npm run verify:production-admission-active
+
+      - name: Retain final admission evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cnyos-production-real-data-admission-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/production-admission-verify/
+          if-no-files-found: warn
+          retention-days: 365
