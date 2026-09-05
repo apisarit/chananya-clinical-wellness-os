@@ -57,3 +57,39 @@ jobs:
           path: artifacts/release-evidence/
           if-no-files-found: error
           retention-days: 90
+
+  resolve-lockfile-candidate:
+    name: Resolve audited lockfile candidate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/production-readiness-stack-20260905'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CNYOS_RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CNYOS_RELEASE_SHA }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Resolve package lock from declared dependencies
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify resolved lock installs cleanly
+        run: npm ci --ignore-scripts
+
+      - name: Reject high or critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Retain resolved package lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-package-lock-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 7
