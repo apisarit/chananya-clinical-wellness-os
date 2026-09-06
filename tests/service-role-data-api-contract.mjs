@@ -90,7 +90,7 @@ assert.match(
 );
 assert.match(triggerClosureCandidate, /CNYOS_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT/);
 assert.match(triggerClosureCandidate, /CNYOS_SET_UPDATED_AT_SEARCH_PATH_MUTABLE/);
-assert.match(triggerClosureCandidate, /CNYOS_TRIGGER_FUNCTION_DATA_API_CLOSED/);
+assert.match(triggerClosureCandidate, /CNYOS_TRIGGER_FUNCTION_DATA_API_CHECKS_PASSED/);
 assert.doesNotMatch(triggerClosureCandidate, /grant\s+execute/i);
 
 const browserRpcAclClosure = read('supabase/manual/202609060710_close_browser_rpc_acl_drift_candidate.sql');
@@ -103,7 +103,7 @@ assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ANON_EXECUTE_PRESENT/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_WRITE_SERVICE_EXECUTE_PRESENT/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_AUTHENTICATED_EXECUTE_MISSING/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_HELPER_SERVICE_EXECUTE_MISSING/);
-assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ACL_DRIFT_CLOSED/);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ACL_DRIFT_CHECKS_PASSED/);
 assert.doesNotMatch(browserRpcAclClosure, /grant\s+execute/i);
 
 const privilegedInventory = read('supabase/manual/security_definer_exposure_inventory.sql');

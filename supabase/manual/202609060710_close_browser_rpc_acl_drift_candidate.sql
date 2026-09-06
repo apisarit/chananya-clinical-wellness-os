@@ -13,6 +13,7 @@ begin;
 do $$
 declare
   v_signature text;
+  v_missing text;
 begin
   for v_signature in
     select unnest(array[
@@ -64,12 +65,6 @@ begin
       v_signature
     );
   end loop;
-end $$;
-
-do $$
-declare
-  v_missing text;
-begin
   select string_agg(signature, ', ' order by signature) into v_missing
   from unnest(array[
     'public.is_clinic_admin()',
@@ -158,8 +153,8 @@ begin
   if v_missing is not null then
     raise exception 'CNYOS_BROWSER_HELPER_SERVICE_EXECUTE_MISSING: %', v_missing;
   end if;
+  -- This is provisional until the caller confirms COMMIT without any errors.
+  raise notice 'CNYOS_BROWSER_RPC_ACL_DRIFT_CHECKS_PASSED; commit required';
 end $$;
 
 commit;
-
-select 'CNYOS_BROWSER_RPC_ACL_DRIFT_CLOSED' as status;

@@ -30,6 +30,11 @@ Sixteen are executable by at least one Data API runtime role. Trigger functions
 are invoked by PostgreSQL through trigger bindings and are classified as
 internal implementation functions, not supported RPC endpoints.
 
+An EXECUTE ACL is privilege evidence, not proof that PostgREST exposes a callable
+RPC route. Its schema cache excludes functions returning `trigger`. The trigger
+candidate hardens internal function ACLs; ordinary SECURITY DEFINER RPCs still
+need their own access-control review.
+
 The reviewed migration candidate in this branch:
 
 - revokes function execution from `PUBLIC`, `anon`, `authenticated`, and
@@ -69,13 +74,16 @@ probe.
 
 ## Required execution order
 
-1. Generate the exact-revision guarded ledger recovery SQL from the repository.
-2. Run its verification phase against Chananya staging and retain the output.
+1. Review the source and exact-head CI before running any database SQL. Generate
+   the separate verification-only artifact from that full 40-character revision.
+2. Run only that read-only artifact against Chananya staging and retain the
+   evidence described below. A schema guard pass does not reconcile the ledger.
 3. Repair the Chananya staging ledger only if every schema, ACL, owner and
    fingerprint precondition passes.
 4. Repeat independent verification for Jitarsa staging; do not infer equivalence
    from Chananya.
-5. Promote the trigger ACL candidate into the ordered migration chain.
+5. Review both ACL candidates and promote them into the ordered migration chain
+   only after independent ledger reconciliation; preserve the 45 historical files.
 6. Apply it to Chananya staging only, then re-run inventory and Security Advisor.
 7. Run authenticated role regression, negative RPC and cross-tenant tests.
 8. Repeat on Jitarsa staging after its ledger is verified.
@@ -89,3 +97,42 @@ probe.
 
 Retain the project reference, execution timestamp, exact source revision,
 result, and reviewer identity with every run.
+
+## Verification artifact and evidence contract
+
+CI retains separate `<target>-verification-only.sql` and
+`<target>-guarded-repair.sql` files plus `SHA256SUMS` for both staging tenants.
+Check the workflow's exact head SHA and the downloaded checksums before use.
+For verification, use a fresh trusted `psql` session with `-X` and
+`--set=ON_ERROR_STOP=1 --file=<target>-verification-only.sql`. Select the staging
+connection through the operator's existing credential mechanism and independently
+confirm its project reference. The artifact's configured `project_ref` labels
+the expected target; it does not attest the actual connection endpoint.
+
+The verifier starts a REPEATABLE READ, READ ONLY transaction, requires a
+superuser/BYPASSRLS reader, applies statement/lock timeouts, reads schema and
+privilege catalogs and staging preconditions, and ends with ROLLBACK. It does
+not call application healthchecks or write the ledger. The reader requirement
+avoids evaluating application RLS policies during its precondition reads.
+
+`CNYOS_STAGING_SCHEMA_GUARD_PASSED` is a provisional NOTICE emitted inside the
+successful guard. Accept an evidence bundle only when all of these are present:
+
+- The workflow run, full source SHA and artifact checksum match the reviewed head.
+- The independently verified connection target, clinic ID/code and deployment
+  match the NOTICE's expected values.
+- The complete client transcript contains exactly one guard-pass NOTICE, the
+  final ROLLBACK completion, no errors, and a zero client exit status.
+- Execution time and reviewer identity are retained with that transcript.
+
+A NOTICE alone is never completion evidence. Error-recovery clients receive no
+guard-pass NOTICE if the guard fails. Staging healthchecks, migration-ledger
+reconciliation and authenticated/negative/cross-tenant regressions remain
+separate gates. Never substitute the write-capable guarded-repair artifact for
+read-only verification.
+
+Both manual ACL candidates now perform changes and checks in a single atomic
+DO statement. Their `*_CHECKS_PASSED` NOTICE is also provisional: an authorized
+future apply requires a successful COMMIT and a zero-error client result.
+An error must not be interpreted as closure even if the client continues.
+These candidates remain unapplied source proposals in this workstream.

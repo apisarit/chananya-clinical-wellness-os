@@ -43,8 +43,10 @@ jobs:
       - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
-      - name: Verify rollback-only ledger artifact contract
-        run: node tests/migration-ledger-verification-contract.mjs
+      - name: Verify read-only SQL and atomic ACL candidate behavior
+        run: |
+          node tests/migration-ledger-verification-contract.mjs
+          node tests/acl-candidate-behavioral-contract.mjs
 
       - name: Generate guarded staging migration ledger artifacts
         run: |

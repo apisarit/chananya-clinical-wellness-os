@@ -8,6 +8,7 @@ import {
   loadMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 import { buildTenantBootstrapSql } from '../scripts/generate-tenant-bootstrap-sql.mjs';
+import { buildMigrationLedgerVerificationSql, verificationNoticePrefix } from '../scripts/generate-migration-ledger-verification-sql.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
@@ -1528,6 +1529,40 @@ await db.exec(`
   )
 `);
 await db.exec('set search_path=pg_catalog');
+const verificationSql = buildMigrationLedgerVerificationSql({ config, entries, sourceRevision: 'a'.repeat(40) });
+const verificationNotices = [];
+const verificationOptions = { onNotice: notice => verificationNotices.push(notice.message) };
+const verificationSnapshot = async () => ({
+  ledger: (await db.query('select * from supabase_migrations.schema_migrations order by version')).rows,
+  clinics: (await db.query('select * from public.clinics order by id')).rows,
+  patients: (await db.query('select * from public.patients order by id')).rows,
+  functionAcls: (await db.query("select oid,proacl::text from pg_proc where pronamespace='public'::regnamespace order by oid")).rows,
+  sequences: (await db.query("select schemaname,sequencename,last_value from pg_sequences where schemaname='public' order by sequencename")).rows
+});
+const beforeVerification = await verificationSnapshot();
+await db.exec(verificationSql, verificationOptions);
+assert.deepEqual(await verificationSnapshot(), beforeVerification, 'valid catalog verification must preserve ledger, rows, ACLs and sequences');
+assert.equal((await db.query('show transaction_read_only')).rows[0].transaction_read_only, 'off', 'verification must finish its rollback');
+const successfulNotices = verificationNotices.filter(message => message.startsWith(verificationNoticePrefix));
+assert.equal(successfulNotices.length, 1);
+const provisionalEvidence = JSON.parse(successfulNotices[0].slice(verificationNoticePrefix.length));
+assert.equal(provisionalEvidence.source_revision, 'a'.repeat(40));
+assert.equal(provisionalEvidence.clinic_id, config.tenant.expectedClinicId);
+assert.equal(provisionalEvidence.rollback_required, true);
+
+for (const drift of [
+  { setup: 'alter table public.clinic_drive_destination_events disable row level security', repair: 'alter table public.clinic_drive_destination_events enable row level security' },
+  { setup: 'revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from authenticated', repair: 'grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to authenticated' }
+]) {
+  verificationNotices.length = 0;
+  await db.exec(drift.setup);
+  await assert.rejects(db.exec(verificationSql, verificationOptions), /STAGING_/);
+  await db.exec('rollback;');
+  assert.ok(!verificationNotices.some(message => message.startsWith(verificationNoticePrefix)));
+  await db.exec(drift.repair);
+}
+console.log('Full-schema verification passed: exact 45-migration fixture, unchanged state, and RLS/ACL drift denied without a success notice');
+
 await db.exec(recoverySql);
 await db.exec(recoverySql);
 const ledger = await db.query(`
@@ -1558,6 +1593,17 @@ assert.ok(
     .includes("select 'pre-existing raw Supabase ledger statement'::text"),
   'ledger recovery must preserve pre-existing raw statements while appending canonical SHA evidence'
 );
+
+// Apply the manual candidates only to this disposable PostgreSQL fixture.
+// The real Owner OFF/ON checks below must still work with their triggers closed.
+const triggerBindingsBeforeClosure = (await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows;
+for (const candidate of [
+  '202609060700_revoke_trigger_function_data_api_execute_candidate.sql',
+  '202609060710_close_browser_rpc_acl_drift_candidate.sql'
+]) {
+  await db.exec(await fs.readFile(path.join(root, 'supabase/manual', candidate), 'utf8'));
+}
+assert.deepEqual((await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows, triggerBindingsBeforeClosure);
 
 await db.exec(`select set_config('request.jwt.claim.role','service_role',false)`);
 const offRequestId = '44444444-4444-4444-a444-444444444444';

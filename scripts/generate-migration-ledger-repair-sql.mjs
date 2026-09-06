@@ -1068,7 +1068,17 @@ export function loadMigrationEntries(cwd = root) {
   return entries;
 }
 
-export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationEntries(), sourceRevision = '' }) {
+export function buildMigrationLedgerRepairSql(options) {
+  return buildMigrationLedgerSql({ ...options, verificationOnly: false });
+}
+
+// Catalog verification never includes application healthchecks or ledger writes.
+// Keep the repair entrypoint's existing guards and behavior unchanged.
+export function buildMigrationLedgerSchemaGuardSql(options) {
+  return buildMigrationLedgerSql({ ...options, verificationOnly: true });
+}
+
+function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sourceRevision = '', verificationOnly }) {
   const target = validateTenantConfig(config);
   if (!stagingMarker.test(target.deploymentId)) {
     throw new Error('Migration ledger recovery is restricted to a staging/non-production deployment');
@@ -1096,23 +1106,41 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     })
     .join(',\n  ');
   const revision = String(sourceRevision || '').trim().toLowerCase();
+  if (verificationOnly && !/^[0-9a-f]{40}$/.test(revision)) {
+    throw new Error('Verification requires the full 40-character source revision');
+  }
   if (revision && !/^[0-9a-f]{7,40}$/.test(revision)) {
     throw new Error('Source revision must be a 7-40 character hexadecimal Git revision');
   }
 
-  return `-- Generated one-time staging migration ledger recovery.\n` +
+  return (verificationOnly
+    ? `-- Generated read-only staging schema verification.\n`
+    : `-- Generated one-time staging migration ledger recovery.\n`) +
     `-- Target: ${target.deploymentId} / ${target.tenant.expectedClinicCode}.\n` +
     `-- Source revision: ${revision || 'not-supplied'}; migration count: ${entries.length}.\n` +
     `-- Run only after every ordered migration has been applied to the isolated, empty staging database.\n` +
-    `begin;\n` +
+    (verificationOnly
+      ? `begin isolation level repeatable read read only;\n` +
+        `set local statement_timeout = '60s';\n` +
+        `set local lock_timeout = '5s';\n`
+      : `begin;\n`) +
     `set local search_path = pg_catalog, public;\n` +
-    `select pg_advisory_xact_lock(202608302100::bigint);\n` +
+    (verificationOnly ? '' : `select pg_advisory_xact_lock(202608302100::bigint);\n`) +
     `do $ledger_guard$\n` +
     `declare\n` +
     `  v_missing text;\n` +
     `  v_function_body text;\n` +
     `  v_transactional_rows bigint;\n` +
     `begin\n` +
+    (verificationOnly
+      ? `  if current_setting('transaction_read_only') <> 'on' then\n` +
+        `    raise exception 'STAGING_VERIFICATION_READ_ONLY_REQUIRED';\n` +
+        `  end if;\n` +
+        `  if not exists (select 1 from pg_roles where rolname=current_user and (rolsuper or rolbypassrls)) then\n` +
+        `    raise exception 'STAGING_VERIFICATION_CATALOG_READER_REQUIRED';\n` +
+        `  end if;\n` +
+        `  perform pg_catalog.pg_advisory_xact_lock(202608302100::bigint);\n`
+      : '') +
     `  select string_agg(object_name, ', ' order by object_name) into v_missing\n` +
     `  from unnest(${sqlArray(requiredRelations)}) expected(object_name)\n` +
     `  where to_regclass(object_name) is null;\n` +
@@ -2444,7 +2472,7 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `  if not exists (select 1 from public.profiles where system_role='super_admin') then\n` +
     `    raise exception 'STAGING_SUPER_ADMIN_REQUIRED';\n` +
     `  end if;\n` +
-    `  perform set_config(\n` +
+    (verificationOnly ? '' : `  perform set_config(\n` +
     `    'request.jwt.claim.sub',\n` +
     `    (select m.profile_id::text from public.clinic_memberships m\n` +
     `     join public.profiles p on p.id=m.profile_id\n` +
@@ -2453,7 +2481,7 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `     order by m.is_primary desc,m.joined_at limit 1),\n` +
     `    true\n` +
     `  );\n` +
-    `  perform set_config('request.jwt.claim.role','authenticated',true);\n` +
+    `  perform set_config('request.jwt.claim.role','authenticated',true);\n`) +
     `\n` +
     `  select (select count(*) from public.patients)\n` +
     `       + (select count(*) from public.encounters)\n` +
@@ -2477,7 +2505,7 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `    raise exception 'STAGING_OWNER_SUBSCRIPTION_RLS_MISSING';\n` +
     `  end if;\n` +
     `\n` +
-    `  if not exists (select 1 from public.hybrid_patient_identity_healthcheck() where ready) then raise exception 'HYBRID_IDENTITY_HEALTHCHECK_FAILED'; end if;\n` +
+    (verificationOnly ? '' : `  if not exists (select 1 from public.hybrid_patient_identity_healthcheck() where ready) then raise exception 'HYBRID_IDENTITY_HEALTHCHECK_FAILED'; end if;\n` +
     `  if not exists (select 1 from public.clinical_financial_handoffs_healthcheck() where ready) then raise exception 'CLINICAL_HANDOFF_HEALTHCHECK_FAILED'; end if;\n` +
     `  if not exists (select 1 from public.department_persistence_healthcheck() where ready) then raise exception 'DEPARTMENT_PERSISTENCE_HEALTHCHECK_FAILED'; end if;\n` +
     `  if not exists (select 1 from public.production_execution_healthcheck() where ready) then raise exception 'PRODUCTION_EXECUTION_HEALTHCHECK_FAILED'; end if;\n` +
@@ -2494,11 +2522,11 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `      and transaction_table_count=12\n` +
     `      and managed_database_restore_required\n` +
     `  ) then raise exception 'BACKUP_RESTORE_CONTRACT_MISMATCH'; end if;\n` +
-    `  if not exists (select 1 from public.line_oa_operational_healthcheck() where ready) then raise exception 'LINE_OA_OPERATIONAL_HEALTHCHECK_FAILED'; end if;\n` +
+    `  if not exists (select 1 from public.line_oa_operational_healthcheck() where ready) then raise exception 'LINE_OA_OPERATIONAL_HEALTHCHECK_FAILED'; end if;\n`) +
     `end\n` +
     `$ledger_guard$;\n` +
     `\n` +
-    `create schema if not exists supabase_migrations;\n` +
+    (verificationOnly ? '' : `create schema if not exists supabase_migrations;\n` +
     `create table if not exists supabase_migrations.schema_migrations (\n` +
     `  version text not null primary key\n` +
     `);\n` +
@@ -2581,7 +2609,7 @@ export function buildMigrationLedgerRepairSql({ config, entries = loadMigrationE
     `  'last_version',max(version),\n` +
     `  'source_revision',${quote(revision || 'not-supplied')}\n` +
     `) as migration_ledger_evidence\n` +
-    `from supabase_migrations.schema_migrations;\n`;
+    `from supabase_migrations.schema_migrations;\n`);
 }
 
 function main() {

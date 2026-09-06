@@ -2,9 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  buildMigrationLedgerRepairSql,
+  buildMigrationLedgerSchemaGuardSql,
   loadMigrationEntries
 } from './generate-migration-ledger-repair-sql.mjs';
+import { validateTenantConfig } from './generate-tenant-config.mjs';
+
+export const verificationNoticePrefix = 'CNYOS_STAGING_SCHEMA_GUARD_PASSED ';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ledgerGuardTerminator = 'end\n$ledger_guard$;\n';
@@ -14,31 +17,34 @@ export function buildMigrationLedgerVerificationSql({
   entries = loadMigrationEntries(root),
   sourceRevision = ''
 }) {
-  const repairSql = buildMigrationLedgerRepairSql({
-    config,
+  const target = validateTenantConfig(config);
+  const guardSql = buildMigrationLedgerSchemaGuardSql({
+    config: target,
     entries,
     sourceRevision
   });
-  const guardEnd = repairSql.indexOf(ledgerGuardTerminator);
+  const guardEnd = guardSql.indexOf(ledgerGuardTerminator);
   if (guardEnd < 0) {
-    throw new Error('Generated ledger repair SQL does not contain the expected guard terminator');
+    throw new Error('Generated schema SQL does not contain the expected guard terminator');
   }
 
-  const guardedPrefix = repairSql.slice(0, guardEnd + ledgerGuardTerminator.length);
-  const revision = String(sourceRevision || '').trim().toLowerCase() || 'not-supplied';
-  const deploymentId = String(config?.deploymentId || '').trim();
-  const clinicCode = String(config?.tenant?.expectedClinicCode || '').trim();
+  const evidence = {
+    status: 'CNYOS_STAGING_SCHEMA_GUARD_PASSED',
+    deployment_id: target.deploymentId,
+    clinic_code: target.tenant.expectedClinicCode,
+    clinic_id: target.tenant.expectedClinicId,
+    project_ref: new URL(target.database.url).hostname.split('.')[0],
+    migration_count: entries.length,
+    source_revision: String(sourceRevision).trim().toLowerCase(),
+    rollback_required: true
+  };
 
-  return guardedPrefix +
-    `rollback;\n\n` +
-    `select jsonb_build_object(\n` +
-    `  'status','CNYOS_STAGING_SCHEMA_FINGERPRINT_VERIFIED',\n` +
-    `  'deployment_id',${quote(deploymentId)},\n` +
-    `  'clinic_code',${quote(clinicCode)},\n` +
-    `  'migration_count',${entries.length},\n` +
-    `  'source_revision',${quote(revision)},\n` +
-    `  'database_mutation_committed',false\n` +
-    `) as migration_ledger_verification_evidence;\n`;
+  // Emit only inside the successful guard. A caller must also observe ROLLBACK
+  // before accepting verification evidence; the notice alone is provisional.
+  return guardSql.slice(0, guardEnd) +
+    `  raise notice '%', ${quote(verificationNoticePrefix + JSON.stringify(evidence))};\n` +
+    ledgerGuardTerminator +
+    `rollback;\n`;
 }
 
 function quote(value) {

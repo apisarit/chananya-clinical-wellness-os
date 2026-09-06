@@ -38,13 +38,9 @@ begin
       v_function.identity_arguments
     );
   end loop;
-end $$;
 
-alter function public.set_updated_at()
-  set search_path = pg_catalog, public;
-
-do $$
-begin
+  alter function public.set_updated_at()
+    set search_path = pg_catalog, public;
   if exists (
     select 1
     from pg_proc p
@@ -78,8 +74,8 @@ begin
   ) then
     raise exception 'CNYOS_SET_UPDATED_AT_SEARCH_PATH_MUTABLE';
   end if;
+  -- This is provisional until the caller confirms COMMIT without any errors.
+  raise notice 'CNYOS_TRIGGER_FUNCTION_DATA_API_CHECKS_PASSED; commit required';
 end $$;
 
 commit;
-
-select 'CNYOS_TRIGGER_FUNCTION_DATA_API_CLOSED' as status;
