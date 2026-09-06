@@ -43,6 +43,35 @@ jobs:
       - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
+      - name: Verify rollback-only ledger artifact contract
+        run: node tests/migration-ledger-verification-contract.mjs
+
+      - name: Generate guarded staging migration ledger artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/migration-ledger
+          for target in cnyos-staging jitarsa-staging; do
+            config="config/tenant.${target}.json"
+            CLINICAL_OS_SOURCE_COMMIT="${CNYOS_RELEASE_SHA}" \
+              node scripts/generate-migration-ledger-verification-sql.mjs "${config}" \
+              > "artifacts/migration-ledger/${target}-verification-only.sql"
+            CLINICAL_OS_SOURCE_COMMIT="${CNYOS_RELEASE_SHA}" \
+              node scripts/generate-migration-ledger-repair-sql.mjs "${config}" \
+              > "artifacts/migration-ledger/${target}-guarded-repair.sql"
+          done
+          (
+            cd artifacts/migration-ledger
+            sha256sum *.sql > SHA256SUMS
+          )
+
+      - name: Retain guarded migration ledger artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: migration-ledger-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
+          path: artifacts/migration-ledger/
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Generate exact-commit evidence
         if: always()
         run: npm run evidence:release
