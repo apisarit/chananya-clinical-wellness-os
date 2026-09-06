@@ -93,6 +93,19 @@ assert.match(triggerClosureCandidate, /CNYOS_SET_UPDATED_AT_SEARCH_PATH_MUTABLE/
 assert.match(triggerClosureCandidate, /CNYOS_TRIGGER_FUNCTION_DATA_API_CLOSED/);
 assert.doesNotMatch(triggerClosureCandidate, /grant\s+execute/i);
 
+const browserRpcAclClosure = read('supabase/manual/202609060710_close_browser_rpc_acl_drift_candidate.sql');
+assert.match(browserRpcAclClosure, /BROWSER RPC ACL DRIFT CLOSURE/);
+assert.match(browserRpcAclClosure, /revoke all privileges on function %s from public, anon/i);
+assert.match(browserRpcAclClosure, /revoke all privileges on function %s from service_role/i);
+assert.match(browserRpcAclClosure, /public\.book_clinic_appointment\(uuid,uuid,text,text,text\)/i);
+assert.match(browserRpcAclClosure, /public\.create_approval_task\(text,text,text,text,text,text,uuid,timestamptz,jsonb\)/i);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ANON_EXECUTE_PRESENT/);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_WRITE_SERVICE_EXECUTE_PRESENT/);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_AUTHENTICATED_EXECUTE_MISSING/);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_HELPER_SERVICE_EXECUTE_MISSING/);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ACL_DRIFT_CLOSED/);
+assert.doesNotMatch(browserRpcAclClosure, /grant\s+execute/i);
+
 const privilegedInventory = read('supabase/manual/security_definer_exposure_inventory.sql');
 assert.match(privilegedInventory, /has_function_privilege\('anon', p\.oid, 'EXECUTE'\)/i);
 assert.match(privilegedInventory, /has_function_privilege\('authenticated', p\.oid, 'EXECUTE'\)/i);
@@ -100,4 +113,4 @@ assert.match(privilegedInventory, /has_function_privilege\('service_role', p\.oi
 assert.match(privilegedInventory, /internal_trigger/);
 assert.match(privilegedInventory, /review_anon_security_definer/);
 
-console.log(`Service-role Data API contract passed: ${discovered.size} reviewed reads/writes, exact final DML allowlist, tenant-derived QR issuer, and reviewed trigger RPC closure candidate`);
+console.log(`Service-role Data API contract passed: ${discovered.size} reviewed reads/writes, exact final DML allowlist, tenant-derived QR issuer, trigger RPC closure, and browser RPC ACL drift closure candidates`);
