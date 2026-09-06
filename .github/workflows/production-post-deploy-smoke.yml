@@ -9,7 +9,9 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
+  issues: write
 
 concurrency:
   group: production-post-deploy-${{ github.ref }}
@@ -41,6 +43,45 @@ jobs:
       - name: Check out exact selected release commit
         uses: actions/checkout@v6
 
+      - name: Require trusted default branch and exact checkout
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Require successful promotion and deployment for the exact commit
+        id: release-chain
+        uses: actions/github-script@v9
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        with:
+          script: |
+            const sha = process.env.RELEASE_COMMIT;
+            const branch = process.env.DEFAULT_BRANCH;
+            const required = [
+              { workflow_id: 'production-promotion-gate.yml', output: 'promotion_run_url' },
+              { workflow_id: 'production-netlify-deploy.yml', output: 'deployment_run_url' }
+            ];
+            for (const item of required) {
+              const response = await github.rest.actions.listWorkflowRuns({
+                ...context.repo,
+                workflow_id: item.workflow_id,
+                branch,
+                status: 'success',
+                per_page: 100
+              });
+              const exact = response.data.workflow_runs
+                .filter(run => run.head_sha === sha && run.conclusion === 'success')
+                .sort((left, right) => new Date(right.updated_at) - new Date(left.updated_at))[0];
+              if (!exact) {
+                throw new Error(`${item.workflow_id} has no successful run for exact commit ${sha}`);
+              }
+              core.setOutput(item.output, exact.html_url);
+            }
+
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -68,3 +109,60 @@ jobs:
           path: artifacts/production-post-deploy/
           if-no-files-found: error
           retention-days: 365
+
+      - name: Notify owner and close the production-gate tracker
+        uses: actions/github-script@v9
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+          PROMOTION_RUN_URL: ${{ steps.release-chain.outputs.promotion_run_url }}
+          DEPLOYMENT_RUN_URL: ${{ steps.release-chain.outputs.deployment_run_url }}
+          POST_DEPLOY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const readiness = JSON.parse(fs.readFileSync('release-readiness.json', 'utf8'));
+            const policy = readiness.notificationPolicy;
+            if (!policy?.notifyOnlyAfterSuccessfulPostDeployAttestation) {
+              throw new Error('Production completion notification policy is disabled or missing');
+            }
+            if (!policy?.requiresSuccessfulPromotionAndDeploymentForSameCommit) {
+              throw new Error('Exact-commit release-chain policy is disabled or missing');
+            }
+
+            const issueNumber = Number(policy.trackerIssue);
+            const recipient = String(policy.recipient || '').trim();
+            const sha = process.env.RELEASE_COMMIT;
+            const marker = `<!-- ${policy.idempotentCompletionMarker}:${sha} -->`;
+            if (!Number.isInteger(issueNumber) || issueNumber < 1 || !recipient) {
+              throw new Error('Production notification policy is invalid');
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo,
+              issue_number: issueNumber,
+              per_page: 100
+            });
+            if (!comments.some(comment => String(comment.body || '').includes(marker))) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issueNumber,
+                body: [
+                  marker,
+                  `@${recipient} CNYOS production assurance is complete for exact commit \`${sha}\`.`,
+                  '',
+                  `- ${readiness.requiredGates.length}/${readiness.requiredGates.length} pre-deployment gates accepted by the protected exact-commit attestation`,
+                  `- Production promotion: ${process.env.PROMOTION_RUN_URL}`,
+                  `- Production deployment: ${process.env.DEPLOYMENT_RUN_URL}`,
+                  `- Public post-deploy attestation: ${process.env.POST_DEPLOY_RUN_URL}`,
+                  `- Retained evidence: workflow artifact \`production-post-deploy-${sha}-${context.runId}\``,
+                  '',
+                  'Issue #11 is closed only because promotion, deployment and public-runtime attestation succeeded for the same commit.'
+                ].join('\n')
+              });
+            }
+            await github.rest.issues.update({
+              ...context.repo,
+              issue_number: issueNumber,
+              state: 'closed',
+              state_reason: 'completed'
+            });

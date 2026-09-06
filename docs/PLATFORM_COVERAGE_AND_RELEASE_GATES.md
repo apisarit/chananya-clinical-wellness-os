@@ -1,6 +1,6 @@
 # Platform Coverage and Commercial Release Gates
 
-Status at PR #7 must be read in four separate dimensions:
+Status must be read in four separate dimensions:
 
 1. **Source present** — the route, UI controller, migration or RPC exists in the branch.
 2. **Preview visible** — the credential-free review surface demonstrates the workflow with synthetic data.
@@ -23,7 +23,7 @@ No item may be called production-ready merely because dimensions 1 or 2 pass.
 | Formula, material issue, batch and stock movement | Production / Inventory | `/production.html` | `ui-review.html#production` | Source present; authenticated staging pending |
 | Independent batch review and release | Quality | `/quality.html` | `ui-review.html#quality` | Source present; independent-QC evidence pending |
 | Role administration, approvals, audit and amendment | Admin / Super Admin | `/admin.html` | `ui-review.html#admin` | Source present; authenticated staging pending |
-| CNYOS subscription ON/OFF and audit | CNYOS Owner only | `/owner-control.html`, `/api/owner-subscription` | None — control plane is never a synthetic preview | Source present; migration, Google Owner login and live database enforcement evidence pending |
+| CNYOS subscription ON/OFF and audit | CNYOS Owner only | `/owner-control.html`, `/api/owner-subscription` | None — control plane is never a synthetic preview | Source present; Google Owner login and live database-enforcement evidence pending |
 
 Deploy Preview intentionally strips database credentials. Operational routes therefore fail closed. Review navigation must remain inside `ui-review.html` so reviewers can inspect all workspaces without a session, patient data or writes.
 
@@ -43,20 +43,29 @@ Thai Traditional Medicine remains the primary ontology. ICD/WHO is a secondary m
 
 ## Hard commercial release gates
 
-The product must not be described as **Commercial Production ready 100%** until all evidence below is recorded against the exact release commit:
+The product must not be described as **Commercial Production ready 100%** until all **16 granular pre-deployment gates** in `release-readiness.json` have retained exact-commit evidence:
 
-- CNYOS Owner subscription OFF removes the tenant from `current_clinic_id()`/RLS for an already-issued staff session, and ON restores only the original tenant/department boundary; the audited service-role RPC and exact target guards must pass.
-- Authenticated staging E2E passes for every role, including cross-department denials and Super Admin boundaries.
-- LINE OA signed Messaging callback, consent, link/revoke, QR issue/expiry/replay denial and HN/manual fallback pass on the staging tenant.
-- The first encrypted Google Drive export completes and an isolated restore drill passes with measured RPO/RTO and integrity verification.
-- Privacy, security and applicable Thai health-data/legal review are approved with unresolved blockers at zero.
-- Required migrations are applied to an isolated staging project and migration/rollback evidence is retained.
-- Independent Quality SOP and producer-versus-approver segregation evidence pass.
-- Managed database backup/PITR configuration is confirmed separately from Google Drive export.
-- Netlify Deploy Preview, automated checks, review status and merge protection pass on the final commit.
+1. Google Owner live OFF → existing-session denial → ON recovery and audit.
+2. Authenticated staging E2E for all 11 roles, negative cases and synthetic journeys.
+3. Bidirectional Chananya/CNYOS ↔ Jitarsa tenant-isolation tests across UI, API/RPC, RLS and database.
+4. LINE OA signed callback, consent, revoke, QR expiry/replay denial and manual HN fallback.
+5. Encrypted off-site backup creation, checksum, retrieval and retention.
+6. Fresh-target isolated restore with reconciliation and measured RPO/RTO.
+7. Managed database backup/PITR verification and recovery test independent of off-site export.
+8. Production-like migration apply, controlled failure, recovery/rollback and ledger reconciliation.
+9. Active production monitoring with tested alert delivery.
+10. Witnessed SEV-1 incident-response drill covering containment, rotation, rollback, recovery and reopening.
+11. Independent application-security assessment and penetration test with no unresolved Critical/High release blocker.
+12. PDPA/privacy/legal review covering DPA, retention, deletion, DSAR, breach response and DPO assessment.
+13. Licensed-practitioner clinical-governance approval of knowledge, workflow, dosage safeguards, intended use and limitations.
+14. Commercial operations from provisioning/billing/entitlement through SLA/support/upgrade/export/offboarding.
+15. Independent Quality SOP and producer-versus-approver segregation.
+16. Exact source/deploy provenance, required CI/review, protected main and protected production environment.
 
-The repository includes database-enforced Owner control plus protected authenticated-staging, real-LINE and isolated managed-restore harnesses and exact-commit CI evidence. Source/harness presence is not execution evidence. Until successful exact-commit artifacts are reviewed, the Owner control, authenticated staging, LINE and restore gates remain `pending`.
+The complete acceptance criteria and evidence owners are defined in `docs/PRODUCTION_GATE_EVIDENCE_MATRIX.md`.
+
+The repository includes database-enforced Owner control plus protected authenticated-staging, real-LINE and isolated managed-restore harnesses and exact-commit CI evidence. Source/harness presence is not execution evidence. Until successful exact-commit artifacts are reviewed, every gate remains `pending`.
 
 Until then, the release label is **Preview / production candidate under verification**.
 
-`release-readiness.json` is the machine-readable release claim. Its `commercialProductionReady` value must remain `false` and each required gate must remain `pending` until evidence tied to the exact release commit has been reviewed. A passing source/Preview test is not evidence that Owner suspension, authenticated staging, LINE callback, restore drill or legal review has passed.
+`release-readiness.json` is the machine-readable fail-closed release claim. Its `commercialProductionReady` value remains `false`; production approval is supplied only through the protected external exact-commit attestation. After promotion and deployment for the same commit, the separate public post-deploy attestation must pass before real patient data can be admitted or the owner completion notification can be issued.
