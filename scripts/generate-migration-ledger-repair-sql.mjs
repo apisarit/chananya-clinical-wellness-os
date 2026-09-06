@@ -1124,7 +1124,7 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
         `set local statement_timeout = '60s';\n` +
         `set local lock_timeout = '5s';\n`
       : `begin;\n`) +
-    `set local search_path = pg_catalog, public;\n` +
+    `set local search_path = pg_catalog, pg_temp, public;\n` +
     (verificationOnly ? '' : `select pg_advisory_xact_lock(202608302100::bigint);\n`) +
     `do $ledger_guard$\n` +
     `declare\n` +
@@ -1135,6 +1135,9 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     (verificationOnly
       ? `  if current_setting('transaction_read_only') <> 'on' then\n` +
         `    raise exception 'STAGING_VERIFICATION_READ_ONLY_REQUIRED';\n` +
+        `  end if;\n` +
+        `  if current_setting('transaction_isolation') <> 'repeatable read' then\n` +
+        `    raise exception 'STAGING_VERIFICATION_REPEATABLE_READ_REQUIRED';\n` +
         `  end if;\n` +
         `  if not exists (select 1 from pg_roles where rolname=current_user and (rolsuper or rolbypassrls)) then\n` +
         `    raise exception 'STAGING_VERIFICATION_CATALOG_READER_REQUIRED';\n` +

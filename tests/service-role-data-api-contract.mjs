@@ -79,6 +79,7 @@ assert.doesNotMatch(qrHardening, /CHANANYA:PT1:/i);
 
 const triggerClosureCandidate = read('supabase/manual/202609060700_revoke_trigger_function_data_api_execute_candidate.sql');
 assert.match(triggerClosureCandidate, /MIGRATION CANDIDATE/);
+assert.match(triggerClosureCandidate, /^begin;\nset local search_path = pg_catalog, pg_temp;/);
 assert.match(triggerClosureCandidate, /from pg_trigger t[\s\S]+t\.tgfoid = p\.oid[\s\S]+not t\.tgisinternal/i);
 assert.match(
   triggerClosureCandidate,
@@ -95,6 +96,7 @@ assert.doesNotMatch(triggerClosureCandidate, /grant\s+execute/i);
 
 const browserRpcAclClosure = read('supabase/manual/202609060710_close_browser_rpc_acl_drift_candidate.sql');
 assert.match(browserRpcAclClosure, /BROWSER RPC ACL DRIFT CLOSURE/);
+assert.match(browserRpcAclClosure, /^begin;\nset local search_path = pg_catalog, pg_temp;/);
 assert.match(browserRpcAclClosure, /revoke all privileges on function %s from public, anon/i);
 assert.match(browserRpcAclClosure, /revoke all privileges on function %s from service_role/i);
 assert.match(browserRpcAclClosure, /public\.book_clinic_appointment\(uuid,uuid,text,text,text\)/i);
@@ -103,6 +105,11 @@ assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ANON_EXECUTE_PRESENT/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_WRITE_SERVICE_EXECUTE_PRESENT/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_AUTHENTICATED_EXECUTE_MISSING/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_HELPER_SERVICE_EXECUTE_MISSING/);
+assert.match(browserRpcAclClosure, /aclexplode\(coalesce\(p\.proacl, acldefault\('f', p\.proowner\)\)\)/i);
+assert.match(browserRpcAclClosure, /acl\.grantor = p\.proowner/i);
+assert.match(browserRpcAclClosure, /not acl\.is_grantable/i);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ACL_MISSING/);
+assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ACL_INVALID/);
 assert.match(browserRpcAclClosure, /CNYOS_BROWSER_RPC_ACL_DRIFT_CHECKS_PASSED/);
 assert.doesNotMatch(browserRpcAclClosure, /grant\s+execute/i);
 

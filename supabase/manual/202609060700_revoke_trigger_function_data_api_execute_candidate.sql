@@ -1,4 +1,5 @@
 begin;
+set local search_path = pg_catalog, pg_temp;
 
 -- ============================================================
 -- TRIGGER FUNCTION DATA API EXECUTE CLOSURE — MIGRATION CANDIDATE

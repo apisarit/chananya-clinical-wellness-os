@@ -208,7 +208,7 @@ assert.match(recoverySql, /supabase_migrations\.schema_migrations/);
 assert.match(recoverySql, /statements text\[\]/);
 assert.match(recoverySql, /name text/);
 assert.match(recoverySql, /CHANANYA_STAGING_MIGRATION_LEDGER_READY/);
-assert.match(recoverySql, /set local search_path = pg_catalog, public;/i);
+assert.match(recoverySql, /set local search_path = pg_catalog, pg_temp, public;/i);
 for (const entry of entries) {
   assert.match(recoverySql, new RegExp(entry.version));
   assert.match(recoverySql, new RegExp(entry.sha256));

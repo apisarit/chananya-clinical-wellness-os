@@ -30,6 +30,8 @@ for (const configFile of [
 
   assert.match(sql, /^-- Generated read-only staging schema verification\./);
   assert.match(sql, /begin isolation level repeatable read read only;/);
+  assert.match(sql, /set local search_path = pg_catalog, pg_temp, public;/);
+  assert.match(sql, /current_setting\('transaction_isolation'\) <> 'repeatable read'/);
   assert.match(sql, /perform pg_catalog\.pg_advisory_xact_lock\(202608302100::bigint\)/);
   assert.match(sql, /do \$ledger_guard\$/);
   assert.match(sql, /end\n\$ledger_guard\$;\nrollback;/);
@@ -53,6 +55,9 @@ for (const configFile of [
 
   const db = new PGlite();
   try {
+    // An explicitly ordered pg_catalog must outrank attacker-controlled temp
+    // relations in a reused client session.
+    await db.exec('create temp table pg_roles(blocker integer);');
     const notices = [];
     const options = { onNotice: notice => notices.push(notice.message) };
     // A blank database must fail before the provisional success notice.
@@ -98,6 +103,15 @@ for (const configFile of [
     await db.exec(prefix);
     await db.exec('set transaction read write;');
     await assert.rejects(db.exec(guard, options), /STAGING_VERIFICATION_READ_ONLY_REQUIRED/);
+    await db.exec('rollback;');
+    assert.ok(!notices.some(message => message.startsWith(verificationNoticePrefix)));
+
+    // Refuse a client that weakens isolation before the guard establishes its
+    // first snapshot, even though the transaction remains read-only.
+    notices.length = 0;
+    await db.exec(prefix);
+    await db.exec('set transaction isolation level read committed;');
+    await assert.rejects(db.exec(guard, options), /STAGING_VERIFICATION_REPEATABLE_READ_REQUIRED/);
     await db.exec('rollback;');
     assert.ok(!notices.some(message => message.startsWith(verificationNoticePrefix)));
 

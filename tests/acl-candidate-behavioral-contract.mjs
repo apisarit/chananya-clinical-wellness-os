@@ -6,6 +6,34 @@ const triggerSql = await fs.readFile(new URL('../supabase/manual/202609060700_re
 const browserSql = await fs.readFile(new URL('../supabase/manual/202609060710_close_browser_rpc_acl_drift_candidate.sql', import.meta.url), 'utf8');
 const triggerNotice = 'CNYOS_TRIGGER_FUNCTION_DATA_API_CHECKS_PASSED';
 const browserNotice = 'CNYOS_BROWSER_RPC_ACL_DRIFT_CHECKS_PASSED';
+const browserHelpers = [
+  'public.is_clinic_admin()',
+  'public.is_reception_or_admin()',
+  'public.is_practitioner()',
+  'public.is_appointment_operator()',
+  'public.is_appointment_practitioner()',
+  'public.is_admin_or_super()',
+  'public.current_user_role()',
+  'public.clinical_financial_handoffs_healthcheck()',
+  'public.department_persistence_healthcheck()',
+  'public.production_execution_healthcheck()',
+  'public.quality_release_healthcheck()',
+  'public.prescription_dispensing_healthcheck()'
+];
+const browserWrites = [
+  'public.book_clinic_appointment(uuid,uuid,text,text,text)',
+  'public.cancel_clinic_appointment(uuid,text)',
+  'public.set_clinic_appointment_status(uuid,text,text)',
+  'public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)',
+  'public.decide_approval_task(uuid,text,text)',
+  'public.sign_clinical_record_complete(uuid,text,text,text)',
+  'public.unlock_clinical_record_for_amendment(uuid,text)'
+];
+const browserProcedures = [...browserHelpers, ...browserWrites];
+
+function createBooleanFunction(signature) {
+  return `create function ${signature} returns boolean language sql as 'select true';`;
+}
 
 const db = new PGlite();
 try {
@@ -88,8 +116,107 @@ try {
     grant execute on function public.is_clinic_admin() to anon, authenticated, service_role;
   `);
   await assertAtomicFailure(browserSql, /CNYOS_BROWSER_RPC_REQUIRED_FUNCTION_MISSING/, browserNotice);
+
+  await db.exec(browserProcedures.slice(1).map(createBooleanFunction).join('\n'));
+  await db.exec(`
+    grant execute on function ${browserProcedures.join(', ')} to anon, authenticated;
+    grant execute on function ${browserHelpers.join(', ')} to service_role;
+    grant execute on function ${browserWrites.join(', ')} to service_role;
+  `);
+
+  // A successful closure must leave exactly the direct, owner-issued,
+  // non-grantable browser/service matrix and no default PUBLIC entry.
+  const browserNotices = [];
+  await db.exec(browserSql, { onNotice: notice => browserNotices.push(notice.message) });
+  assert.equal(browserNotices.filter(message => message.startsWith(browserNotice)).length, 1);
+  for (const signature of browserProcedures) {
+    const rows = (await db.query(`
+      select coalesce(grantee.rolname, 'PUBLIC') grantee,
+             acl.privilege_type,
+             acl.is_grantable,
+             acl.grantor = p.proowner owner_grantor
+      from pg_proc p
+      cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+      left join pg_roles grantee on grantee.oid = acl.grantee
+      where p.oid = to_regprocedure($1)
+        and acl.grantee <> p.proowner
+      order by grantee
+    `, [signature])).rows;
+    const expectedGrantees = browserHelpers.includes(signature)
+      ? ['authenticated', 'service_role']
+      : ['authenticated'];
+    assert.deepEqual(rows, expectedGrantees.map(grantee => ({
+      grantee,
+      privilege_type: 'EXECUTE',
+      is_grantable: false,
+      owner_grantor: true
+    })));
+  }
+
+  await db.exec('create role rogue_browser_executor; grant execute on function public.is_clinic_admin() to rogue_browser_executor;');
+  await assertAtomicFailure(browserSql, /CNYOS_BROWSER_RPC_ACL_INVALID/, browserNotice);
+  await db.exec('revoke execute on function public.is_clinic_admin() from rogue_browser_executor;');
+
+  await db.exec('grant execute on function public.is_clinic_admin() to authenticated with grant option;');
+  await assertAtomicFailure(browserSql, /CNYOS_BROWSER_RPC_ACL_(?:MISSING|INVALID)/, browserNotice);
+  await db.exec('revoke grant option for execute on function public.is_clinic_admin() from authenticated;');
+
+  await db.exec(`
+    create role delegated_acl_grantor;
+    grant execute on function public.is_clinic_admin() to delegated_acl_grantor with grant option;
+    set role delegated_acl_grantor;
+    grant execute on function public.is_clinic_admin() to authenticated;
+    reset role;
+  `);
+  await assertAtomicFailure(browserSql, /CNYOS_BROWSER_RPC_ACL_INVALID/, browserNotice);
+  await db.exec(`
+    set role delegated_acl_grantor;
+    revoke execute on function public.is_clinic_admin() from authenticated;
+    reset role;
+    revoke grant option for execute on function public.is_clinic_admin() from delegated_acl_grantor cascade;
+    revoke execute on function public.is_clinic_admin() from delegated_acl_grantor;
+  `);
+
+  await db.exec(`
+    create role inherited_browser_executor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to inherited_browser_executor;
+    grant inherited_browser_executor to authenticated;
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from authenticated;
+  `);
+  await assertAtomicFailure(browserSql, /CNYOS_BROWSER_RPC_ACL_MISSING/, browserNotice);
 } finally {
   await db.close();
 }
 
-console.log('ACL candidate PostgreSQL contract passed: inherited grants and missing functions fail atomically, error-recovery clients cannot report success, and all three runtime roles retain bound-trigger behavior');
+const shadowDb = new PGlite();
+try {
+  await shadowDb.exec(`
+    create role anon;
+    create role authenticated;
+    create role service_role bypassrls;
+    create table public.shadow_probe(id integer, updated_at timestamptz);
+    create function public.set_updated_at() returns trigger language plpgsql as $$
+    begin new.updated_at := pg_catalog.clock_timestamp(); return new; end $$;
+    create trigger shadow_probe_timestamp before insert or update on public.shadow_probe
+      for each row execute function public.set_updated_at();
+    grant execute on function public.set_updated_at() to anon, authenticated, service_role;
+    ${browserProcedures.map(createBooleanFunction).join('\n')}
+    grant execute on function ${browserProcedures.join(', ')} to anon, authenticated;
+    grant execute on function ${browserHelpers.join(', ')} to service_role;
+    grant execute on function ${browserWrites.join(', ')} to service_role;
+    create temp table pg_proc(blocker integer);
+    create temp table pg_namespace(blocker integer);
+    create temp table pg_trigger(blocker integer);
+    create temp table pg_roles(blocker integer);
+  `);
+  const shadowNotices = [];
+  const shadowOptions = { onNotice: notice => shadowNotices.push(notice.message) };
+  await shadowDb.exec(triggerSql, shadowOptions);
+  await shadowDb.exec(browserSql, shadowOptions);
+  assert.equal(shadowNotices.filter(message => message.startsWith(triggerNotice)).length, 1);
+  assert.equal(shadowNotices.filter(message => message.startsWith(browserNotice)).length, 1);
+} finally {
+  await shadowDb.close();
+}
+
+console.log('ACL candidate PostgreSQL contract passed: exact browser ACLs, rogue/grantable/inherited/non-owner-grantor drift rollback, missing functions, inherited trigger grants, and bound-trigger behavior');

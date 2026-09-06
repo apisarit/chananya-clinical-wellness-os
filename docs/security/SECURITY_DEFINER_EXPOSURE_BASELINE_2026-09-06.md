@@ -110,10 +110,11 @@ confirm its project reference. The artifact's configured `project_ref` labels
 the expected target; it does not attest the actual connection endpoint.
 
 The verifier starts a REPEATABLE READ, READ ONLY transaction, requires a
-superuser/BYPASSRLS reader, applies statement/lock timeouts, reads schema and
-privilege catalogs and staging preconditions, and ends with ROLLBACK. It does
-not call application healthchecks or write the ledger. The reader requirement
-avoids evaluating application RLS policies during its precondition reads.
+superuser/BYPASSRLS reader, verifies both transaction settings, applies
+statement/lock timeouts, reads schema and privilege catalogs and staging
+preconditions, and ends with ROLLBACK. It does not call application healthchecks
+or write the ledger. The reader requirement avoids evaluating application RLS
+policies during its precondition reads.
 
 `CNYOS_STAGING_SCHEMA_GUARD_PASSED` is a provisional NOTICE emitted inside the
 successful guard. Accept an evidence bundle only when all of these are present:
@@ -135,4 +136,8 @@ Both manual ACL candidates now perform changes and checks in a single atomic
 DO statement. Their `*_CHECKS_PASSED` NOTICE is also provisional: an authorized
 future apply requires a successful COMMIT and a zero-error client result.
 An error must not be interpreted as closure even if the client continues.
+The browser-RPC candidate additionally requires the exact raw ACL matrix:
+expected grants must be direct, non-grantable and owner-issued, and no other
+non-owner ACL tuple may remain. Both candidates pin their transaction-local
+catalog search path before privileged inspection or mutation.
 These candidates remain unapplied source proposals in this workstream.

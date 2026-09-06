@@ -1,4 +1,5 @@
 begin;
+set local search_path = pg_catalog, pg_temp;
 
 -- ============================================================
 -- BROWSER RPC ACL DRIFT CLOSURE — MIGRATION CANDIDATE
@@ -152,6 +153,137 @@ begin
   where not has_function_privilege('service_role', signature, 'EXECUTE');
   if v_missing is not null then
     raise exception 'CNYOS_BROWSER_HELPER_SERVICE_EXECUTE_MISSING: %', v_missing;
+  end if;
+
+  -- Effective privilege checks above prove the runtime behavior. This raw ACL
+  -- matrix additionally proves that access is direct, non-grantable, issued by
+  -- the function owner, and contains no unexpected non-owner grantee.
+  select string_agg(
+    procedure_signature || ' -> ' || expected_grantee,
+    ', ' order by procedure_signature, expected_grantee
+  ) into v_missing
+  from (values
+    ('public.is_clinic_admin()', 'authenticated'),
+    ('public.is_reception_or_admin()', 'authenticated'),
+    ('public.is_practitioner()', 'authenticated'),
+    ('public.is_appointment_operator()', 'authenticated'),
+    ('public.is_appointment_practitioner()', 'authenticated'),
+    ('public.is_admin_or_super()', 'authenticated'),
+    ('public.current_user_role()', 'authenticated'),
+    ('public.clinical_financial_handoffs_healthcheck()', 'authenticated'),
+    ('public.department_persistence_healthcheck()', 'authenticated'),
+    ('public.production_execution_healthcheck()', 'authenticated'),
+    ('public.quality_release_healthcheck()', 'authenticated'),
+    ('public.prescription_dispensing_healthcheck()', 'authenticated'),
+    ('public.book_clinic_appointment(uuid,uuid,text,text,text)', 'authenticated'),
+    ('public.cancel_clinic_appointment(uuid,text)', 'authenticated'),
+    ('public.set_clinic_appointment_status(uuid,text,text)', 'authenticated'),
+    ('public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)', 'authenticated'),
+    ('public.decide_approval_task(uuid,text,text)', 'authenticated'),
+    ('public.sign_clinical_record_complete(uuid,text,text,text)', 'authenticated'),
+    ('public.unlock_clinical_record_for_amendment(uuid,text)', 'authenticated'),
+    ('public.is_clinic_admin()', 'service_role'),
+    ('public.is_reception_or_admin()', 'service_role'),
+    ('public.is_practitioner()', 'service_role'),
+    ('public.is_appointment_operator()', 'service_role'),
+    ('public.is_appointment_practitioner()', 'service_role'),
+    ('public.is_admin_or_super()', 'service_role'),
+    ('public.current_user_role()', 'service_role'),
+    ('public.clinical_financial_handoffs_healthcheck()', 'service_role'),
+    ('public.department_persistence_healthcheck()', 'service_role'),
+    ('public.production_execution_healthcheck()', 'service_role'),
+    ('public.quality_release_healthcheck()', 'service_role'),
+    ('public.prescription_dispensing_healthcheck()', 'service_role')
+  ) expected(procedure_signature, expected_grantee)
+  join pg_proc p on p.oid = to_regprocedure(procedure_signature)
+  where not exists (
+    select 1
+    from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+    join pg_roles granted_role on granted_role.oid = acl.grantee
+    where granted_role.rolname = expected_grantee
+      and acl.privilege_type = 'EXECUTE'
+      and not acl.is_grantable
+      and acl.grantor = p.proowner
+  );
+  if v_missing is not null then
+    raise exception 'CNYOS_BROWSER_RPC_ACL_MISSING: %', v_missing;
+  end if;
+
+  select string_agg(
+    procedure_signature || ' -> ' || coalesce(grantee.rolname, 'PUBLIC') ||
+      ':' || acl.privilege_type,
+    ', ' order by procedure_signature, coalesce(grantee.rolname, 'PUBLIC'), acl.privilege_type
+  ) into v_missing
+  from unnest(array[
+    'public.is_clinic_admin()',
+    'public.is_reception_or_admin()',
+    'public.is_practitioner()',
+    'public.is_appointment_operator()',
+    'public.is_appointment_practitioner()',
+    'public.is_admin_or_super()',
+    'public.current_user_role()',
+    'public.clinical_financial_handoffs_healthcheck()',
+    'public.department_persistence_healthcheck()',
+    'public.production_execution_healthcheck()',
+    'public.quality_release_healthcheck()',
+    'public.prescription_dispensing_healthcheck()',
+    'public.book_clinic_appointment(uuid,uuid,text,text,text)',
+    'public.cancel_clinic_appointment(uuid,text)',
+    'public.set_clinic_appointment_status(uuid,text,text)',
+    'public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)',
+    'public.decide_approval_task(uuid,text,text)',
+    'public.sign_clinical_record_complete(uuid,text,text,text)',
+    'public.unlock_clinical_record_for_amendment(uuid,text)'
+  ]::text[]) expected_procedure(procedure_signature)
+  join pg_proc p on p.oid = to_regprocedure(procedure_signature)
+  cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+  left join pg_roles grantee on grantee.oid = acl.grantee
+  where acl.grantee <> p.proowner
+    and (
+      acl.privilege_type <> 'EXECUTE'
+      or acl.is_grantable
+      or acl.grantor <> p.proowner
+      or not exists (
+        select 1
+        from (values
+          ('public.is_clinic_admin()', 'authenticated'),
+          ('public.is_reception_or_admin()', 'authenticated'),
+          ('public.is_practitioner()', 'authenticated'),
+          ('public.is_appointment_operator()', 'authenticated'),
+          ('public.is_appointment_practitioner()', 'authenticated'),
+          ('public.is_admin_or_super()', 'authenticated'),
+          ('public.current_user_role()', 'authenticated'),
+          ('public.clinical_financial_handoffs_healthcheck()', 'authenticated'),
+          ('public.department_persistence_healthcheck()', 'authenticated'),
+          ('public.production_execution_healthcheck()', 'authenticated'),
+          ('public.quality_release_healthcheck()', 'authenticated'),
+          ('public.prescription_dispensing_healthcheck()', 'authenticated'),
+          ('public.book_clinic_appointment(uuid,uuid,text,text,text)', 'authenticated'),
+          ('public.cancel_clinic_appointment(uuid,text)', 'authenticated'),
+          ('public.set_clinic_appointment_status(uuid,text,text)', 'authenticated'),
+          ('public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)', 'authenticated'),
+          ('public.decide_approval_task(uuid,text,text)', 'authenticated'),
+          ('public.sign_clinical_record_complete(uuid,text,text,text)', 'authenticated'),
+          ('public.unlock_clinical_record_for_amendment(uuid,text)', 'authenticated'),
+          ('public.is_clinic_admin()', 'service_role'),
+          ('public.is_reception_or_admin()', 'service_role'),
+          ('public.is_practitioner()', 'service_role'),
+          ('public.is_appointment_operator()', 'service_role'),
+          ('public.is_appointment_practitioner()', 'service_role'),
+          ('public.is_admin_or_super()', 'service_role'),
+          ('public.current_user_role()', 'service_role'),
+          ('public.clinical_financial_handoffs_healthcheck()', 'service_role'),
+          ('public.department_persistence_healthcheck()', 'service_role'),
+          ('public.production_execution_healthcheck()', 'service_role'),
+          ('public.quality_release_healthcheck()', 'service_role'),
+          ('public.prescription_dispensing_healthcheck()', 'service_role')
+        ) expected_grant(expected_signature, expected_grantee)
+        where expected_signature = procedure_signature
+          and expected_grantee = coalesce(grantee.rolname, 'PUBLIC')
+      )
+    );
+  if v_missing is not null then
+    raise exception 'CNYOS_BROWSER_RPC_ACL_INVALID: %', v_missing;
   end if;
   -- This is provisional until the caller confirms COMMIT without any errors.
   raise notice 'CNYOS_BROWSER_RPC_ACL_DRIFT_CHECKS_PASSED; commit required';
