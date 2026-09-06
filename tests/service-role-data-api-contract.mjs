@@ -77,20 +77,21 @@ assert.match(qrHardening, /select c\.code into v_issuer/i);
 assert.match(qrHardening, /QR_ISSUER_MISMATCH/);
 assert.doesNotMatch(qrHardening, /CHANANYA:PT1:/i);
 
-const triggerClosure = read('supabase/migrations/202609060700_revoke_trigger_function_data_api_execute.sql');
-assert.match(triggerClosure, /from pg_trigger t[\s\S]+t\.tgfoid = p\.oid[\s\S]+not t\.tgisinternal/i);
+const triggerClosureCandidate = read('supabase/manual/202609060700_revoke_trigger_function_data_api_execute_candidate.sql');
+assert.match(triggerClosureCandidate, /MIGRATION CANDIDATE/);
+assert.match(triggerClosureCandidate, /from pg_trigger t[\s\S]+t\.tgfoid = p\.oid[\s\S]+not t\.tgisinternal/i);
 assert.match(
-  triggerClosure,
+  triggerClosureCandidate,
   /revoke all privileges on function %I\.%I\(%s\) from public, anon, authenticated, service_role/i
 );
 assert.match(
-  triggerClosure,
+  triggerClosureCandidate,
   /alter function public\.set_updated_at\(\)[\s\S]+set search_path = pg_catalog, public/i
 );
-assert.match(triggerClosure, /CNYOS_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT/);
-assert.match(triggerClosure, /CNYOS_SET_UPDATED_AT_SEARCH_PATH_MUTABLE/);
-assert.match(triggerClosure, /CNYOS_TRIGGER_FUNCTION_DATA_API_CLOSED/);
-assert.doesNotMatch(triggerClosure, /grant\s+execute/i);
+assert.match(triggerClosureCandidate, /CNYOS_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT/);
+assert.match(triggerClosureCandidate, /CNYOS_SET_UPDATED_AT_SEARCH_PATH_MUTABLE/);
+assert.match(triggerClosureCandidate, /CNYOS_TRIGGER_FUNCTION_DATA_API_CLOSED/);
+assert.doesNotMatch(triggerClosureCandidate, /grant\s+execute/i);
 
 const privilegedInventory = read('supabase/manual/security_definer_exposure_inventory.sql');
 assert.match(privilegedInventory, /has_function_privilege\('anon', p\.oid, 'EXECUTE'\)/i);
@@ -99,4 +100,4 @@ assert.match(privilegedInventory, /has_function_privilege\('service_role', p\.oi
 assert.match(privilegedInventory, /internal_trigger/);
 assert.match(privilegedInventory, /review_anon_security_definer/);
 
-console.log(`Service-role Data API contract passed: ${discovered.size} reviewed reads/writes, exact final DML allowlist, tenant-derived QR issuer, and closed trigger RPC surface`);
+console.log(`Service-role Data API contract passed: ${discovered.size} reviewed reads/writes, exact final DML allowlist, tenant-derived QR issuer, and reviewed trigger RPC closure candidate`);
