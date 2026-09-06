@@ -44,18 +44,20 @@ for (const args of [['--verify-protection', '--apply'], ['--verify-protection', 
 }
 
 const base = `repos/${target.repository}`;
+const userEndpoint = 'user';
 const protectionEndpoint = `${base}/branches/main/protection`;
 const environmentEndpoint = `${base}/environments/production`;
 const branchPolicyEndpoint = `${environmentEndpoint}/deployment-branch-policies?per_page=100`;
 const responses = {
-  [base]: { default_branch: 'main', permissions: { admin: true } },
+  [userEndpoint]: { id: 1, login: 'release-admin' },
+  [base]: { default_branch: 'main', owner: { id: 1, login: 'apisarit', type: 'User' }, permissions: { admin: true } },
   [`${base}/branches/main`]: { commit: { sha: commit }, protected: true },
   [protectionEndpoint]: {
     required_status_checks: { strict: true, checks: [{ context: requiredReleaseCheck.context, app_id: requiredReleaseCheck.appId }] },
     required_pull_request_reviews: { required_approving_review_count: 1, dismiss_stale_reviews: true, require_last_push_approval: true, bypass_pull_request_allowances: { users: [], teams: [], apps: [] } },
     enforce_admins: { enabled: true }, allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false }
   },
-  [environmentEndpoint]: { name: 'production', protection_rules: [{ type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', reviewer: { id: 1 } }] }], deployment_branch_policy: { protected_branches: true, custom_branch_policies: false } }
+  [environmentEndpoint]: { name: 'production', protection_rules: [{ type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', reviewer: { id: 2, login: 'quality-reviewer' } }] }], deployment_branch_policy: { protected_branches: true, custom_branch_policies: false } }
 };
 function stub(overrides = {}, failAt = null) {
   const writes = [];
@@ -79,11 +81,15 @@ const snapshot = verifySetupProtection({ commit }, readOnly.run);
 assert.equal(snapshot.status, 'observable_controls_verified');
 assert.equal(snapshot.releaseCommit, commit);
 assert.equal(snapshot.productionGatePassed, false);
+assert.equal(snapshot.independentUserReviewerCount, 1);
 assert.equal(snapshot.configurationWritten, false);
 assert.equal(readOnly.writes.length, 0, 'read-only verification must never write a variable or secret');
 assert.ok(!JSON.stringify(snapshot).includes(token));
+assert.ok(!/release-admin|quality-reviewer/.test(JSON.stringify(snapshot)), 'reviewer identities must stay redacted');
 for (const overrides of [
+  { [userEndpoint]: { login: 'missing-stable-id' } },
   { [base]: { default_branch: 'main', permissions: { admin: false } } },
+  { [base]: { default_branch: 'main', owner: { login: 'apisarit', type: 'User' }, permissions: { admin: true } } },
   { [`${base}/branches/main`]: { commit: { sha: 'b'.repeat(40) }, protected: true } },
   { [`${base}/branches/main`]: { commit: { sha: commit }, protected: false } },
   { [`${base}/environments/production`]: { name: 'production', protection_rules: [], deployment_branch_policy: null } }
@@ -92,6 +98,15 @@ for (const overrides of [
   assert.throws(() => applySetup(good, blocked.run));
   assert.equal(blocked.writes.length, 0);
 }
+const callerOnlyEnvironment = structuredClone(responses[environmentEndpoint]);
+const callerOnly = stub({ [userEndpoint]: { id: 2, login: 'quality-reviewer' }, [environmentEndpoint]: callerOnlyEnvironment });
+assert.throws(() => applySetup(good, callerOnly.run), /PRODUCTION_INDEPENDENT_REVIEWER_REQUIRED/);
+assert.equal(callerOnly.writes.length, 0);
+const ownerOnlyEnvironment = structuredClone(responses[environmentEndpoint]);
+ownerOnlyEnvironment.protection_rules[0].reviewers = [{ type: 'User', reviewer: { id: 1, login: 'apisarit' } }];
+const ownerOnly = stub({ [userEndpoint]: { id: 3, login: 'release-admin' }, [environmentEndpoint]: ownerOnlyEnvironment });
+assert.throws(() => applySetup(good, ownerOnly.run), /PRODUCTION_INDEPENDENT_REVIEWER_REQUIRED/);
+assert.equal(ownerOnly.writes.length, 0);
 for (const mutate of [
   p => { p.required_status_checks = null; },
   p => { p.required_status_checks.strict = false; },
@@ -118,6 +133,9 @@ for (const mutate of [
 for (const mutate of [
   e => { e.protection_rules[0].prevent_self_review = false; },
   e => { delete e.protection_rules[0].prevent_self_review; },
+  e => { e.protection_rules[0].reviewers = [{ type: 'User', reviewer: { id: 1, login: 'release-admin' } }]; },
+  e => { e.protection_rules[0].reviewers = [{ type: 'Team', reviewer: { id: 2, slug: 'quality' } }]; },
+  e => { e.protection_rules[0].reviewers = [{ type: 'User', reviewer: { login: 'missing-stable-id' } }]; },
   e => { e.deployment_branch_policy = { protected_branches: true, custom_branch_policies: true }; },
   e => { e.deployment_branch_policy = { protected_branches: false, custom_branch_policies: false }; }
 ]) {
@@ -185,4 +203,4 @@ catch (error) {
   assert.equal(error.failedKey, 'PRODUCTION_SITE_URL');
   assert(!JSON.stringify(error).includes(token));
 }
-console.log('Production environment setup contracts passed: read-only CLI, required CI publisher and reviews, no bypass/self-review, restrictive custom branch policy, main-race denial, zero writes on preflight failure, and redacted credential handling');
+console.log('Production environment setup contracts passed: read-only CLI, required CI publisher and independent user reviews, no bypass/self-review, restrictive custom branch policy, main-race denial, zero writes on preflight failure, and redacted credential handling');

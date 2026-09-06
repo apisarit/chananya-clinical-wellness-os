@@ -22,7 +22,9 @@ Repository/environment protection can be inspected before collecting credentials
 or approval records: run `npm run setup:production-environment -- --verify-protection`
 as an authenticated repository owner/admin on the reviewed `main` checkout. This
 read-only preflight checks required CI, review enforcement and observable
-production environment controls. Follow `PRODUCTION_ENVIRONMENT_SETUP.md` for
+production environment controls, including an explicit reviewer distinct from
+the authenticated administrator and personal repository owner. Follow
+`PRODUCTION_ENVIRONMENT_SETUP.md` for
 the remaining independent protection checks; the snapshot is not release approval.
 
 Store the completed record as the `PRODUCTION_RELEASE_ATTESTATION_JSON` secret in the GitHub `production` environment. Do not commit the completed record, edit the source policy to approve itself, or treat contract tests as operational review evidence. Protection and approval controls on that environment must be verified as required by `docs/PRODUCTION_MILESTONE_STACK.md`.

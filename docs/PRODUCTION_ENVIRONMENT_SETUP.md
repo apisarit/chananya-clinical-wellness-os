@@ -37,14 +37,19 @@ The same preflight runs before the first configuration write in apply mode:
   push by another person, and no review-bypass allowances are required.
 - Branch restrictions must apply to administrators, with force pushes and
   deletion disabled.
-- Production requires a reviewer and prevention of self-review. Its deployment
-  policy must allow protected branches or contain exactly one custom rule for
-  the `main` branch. Wildcards, tags, extra rules and incomplete lists fail.
+- Production requires prevention of self-review and at least one explicit user
+  reviewer whose stable GitHub identity differs from both the authenticated
+  administrator and, for a personal repository, its owner. Team-only,
+  owner-only and caller-only reviewer lists fail because the environment
+  response alone cannot prove an independently actionable approver. Its
+  deployment policy must allow protected branches or contain exactly one custom
+  rule for the `main` branch. Wildcards, tags, extra rules and incomplete lists
+  fail.
 - The remote `main` SHA is checked again after reading protection controls.
 
 This implementation verifies classic branch-protection API fields. A ruleset-only
 configuration is not automatically treated as equivalent. Independently inspect
-ruleset/bypass actors, reviewer identities and environment administrator-bypass
+ruleset/bypass actors, reviewer permissions and environment administrator-bypass
 settings; this REST snapshot does not establish those controls. Protected-branches
 mode allows other protected branches, so the production workflows' exact default
 branch checks must remain enforced. No protection snapshot passes the production

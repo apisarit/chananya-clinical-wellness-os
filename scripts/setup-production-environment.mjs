@@ -106,9 +106,14 @@ export function verifySetupProtection({ commit }, run = gh) {
     catch { throw new Error('GITHUB_PREFLIGHT_READ_FAILED'); }
   };
   run(['auth', 'status', '--hostname', 'github.com']);
+  const authenticated = read('user');
+  requireCondition(Number.isInteger(authenticated.id), 'GITHUB_AUTHENTICATED_USER_REQUIRED');
   const repository = read(base);
   requireCondition(repository.permissions?.admin === true, 'GITHUB_REPOSITORY_ADMIN_REQUIRED');
   requireCondition(repository.default_branch === 'main', 'DEFAULT_BRANCH_MISMATCH');
+  const personalRepository = repository.owner?.type === 'User';
+  requireCondition(!personalRepository || Number.isInteger(repository.owner?.id), 'GITHUB_REPOSITORY_OWNER_REQUIRED');
+  const personalOwnerId = personalRepository ? repository.owner.id : null;
   const branch = read(`${base}/branches/main`);
   requireCondition(branch.commit?.sha === commit, 'REMOTE_MAIN_COMMIT_MISMATCH');
   requireCondition(branch.protected === true, 'MAIN_BRANCH_PROTECTION_REQUIRED');
@@ -133,6 +138,12 @@ export function verifySetupProtection({ commit }, run = gh) {
   const reviewers = environment.protection_rules?.find(rule => rule.type === 'required_reviewers');
   requireCondition(Array.isArray(reviewers?.reviewers) && reviewers.reviewers.length > 0, 'PRODUCTION_REVIEWER_PROTECTION_REQUIRED');
   requireCondition(reviewers.prevent_self_review === true, 'PRODUCTION_SELF_REVIEW_REJECTED');
+  const independentUserReviewers = reviewers.reviewers.filter(candidate =>
+    candidate?.type === 'User' && Number.isInteger(candidate.reviewer?.id) &&
+    candidate.reviewer.id !== authenticated.id &&
+    (personalOwnerId == null || candidate.reviewer.id !== personalOwnerId)
+  );
+  requireCondition(independentUserReviewers.length > 0, 'PRODUCTION_INDEPENDENT_REVIEWER_REQUIRED');
   const branchPolicy = environment.deployment_branch_policy;
   const protectedBranches = branchPolicy?.protected_branches === true && branchPolicy?.custom_branch_policies === false;
   const customBranches = branchPolicy?.protected_branches === false && branchPolicy?.custom_branch_policies === true;
@@ -149,9 +160,10 @@ export function verifySetupProtection({ commit }, run = gh) {
     repository: target.repository, environment: target.environment, releaseCommit: commit,
     observedAt: new Date().toISOString(), requiredReleaseCheck,
     approvingReviewCount: reviews.required_approving_review_count,
+    independentUserReviewerCount: independentUserReviewers.length,
     deploymentBranchPolicy: customBranches ? 'main_branch_only' : 'protected_branches',
     configurationWritten: false, deploymentStarted: false, productionGatePassed: false,
-    note: 'Read-only control snapshot. Independently review reviewer identities, ruleset/admin bypass paths, actual CI/reviews and all release evidence. No approval or credential was read or written.'
+    note: 'Read-only control snapshot. Independently review reviewer permissions, ruleset/admin bypass paths, actual CI/reviews and all release evidence. No approval or credential was read or written.'
   };
 }
 
