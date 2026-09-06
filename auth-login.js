@@ -9,7 +9,7 @@
     try {
       const candidate = sessionStorage.getItem('cnyos:post_auth_path');
       sessionStorage.removeItem('cnyos:post_auth_path');
-      return candidate === '/owner-control.html' ? candidate : '/';
+      return candidate === '/owner-control.html' || candidate === '/platform-console.html' ? candidate : '/';
     } catch {
       return '/';
     }

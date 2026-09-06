@@ -56,7 +56,7 @@ try {
     'brand-config.js',
     'deploy-manifest.json'
   ];
-  for (const name of required) fs.writeFileSync(path.join(fixture, name), `fixture:${name}`);
+  for (const name of required) fs.writeFileSync(path.join(fixture, name), name === 'deploy-manifest.json' ? '{}' : `fixture:${name}`);
   fs.writeFileSync(path.join(fixture, '_headers'), 'fixture headers');
   fs.writeFileSync(path.join(fixture, '.env.example'), 'SHOULD_NOT_DEPLOY=true');
   fs.writeFileSync(path.join(fixture, 'release-readiness.json'), '{"commercialProductionReady":false}');

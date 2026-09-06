@@ -1,0 +1,74 @@
+name: CNYOS Platform preview package
+run-name: CNYOS preview ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      plan_json:
+        description: Immutable, non-secret plan from Platform Console
+        required: true
+        type: string
+      plan_sha256:
+        description: SHA-256 of the stored plan
+        required: true
+        type: string
+      request_id:
+        description: Unique audited deployment request UUID
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: platform-preview-${{ inputs.request_id }}
+  cancel-in-progress: false
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/main' && github.repository == 'apisarit/chananya-clinical-wellness-os'
+    name: Build and verify an isolated draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: platform-preview
+    env:
+      PLATFORM_PLAN_JSON: ${{ inputs.plan_json }}
+      PLATFORM_PLAN_SHA256: ${{ inputs.plan_sha256 }}
+      PLATFORM_REQUEST_ID: ${{ inputs.request_id }}
+      CNYOS_PLATFORM_PREVIEW_TARGETS_JSON: ${{ vars.CNYOS_PLATFORM_PREVIEW_TARGETS_JSON }}
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      CONTEXT: deploy-preview
+      CLINICAL_OS_ALLOW_PREVIEW_DATABASE: 'false'
+      CLINICAL_OS_ALLOW_STAGING_DATABASE: 'false'
+      CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Validate exact source, plan and registered target
+        run: node scripts/platform-preview-deploy.mjs prepare
+      - name: Run product and security contracts
+        run: npm run check
+        env:
+          CONTEXT: local
+          CLINICAL_OS_TENANT_CONFIG_PATH: config/tenant.chananya.json
+      - name: Build selected package with database locked
+        run: npm run build
+      - name: Upload draft only, without tenant Functions
+        run: |
+          npm exec --yes --package=netlify-cli@27.5.0 -- netlify deploy \
+            --no-build --dir=dist --context=deploy-preview \
+            --functions=artifacts/platform-preview/empty-functions \
+            --skip-functions-cache --json > artifacts/platform-preview/deploy.json
+      - name: Verify exact draft files and unchanged primary site
+        run: node scripts/platform-preview-deploy.mjs verify
+      - name: Retain source-bound deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: platform-preview-${{ github.run_id }}
+          path: artifacts/platform-preview/
+          retention-days: 90
+          if-no-files-found: warn

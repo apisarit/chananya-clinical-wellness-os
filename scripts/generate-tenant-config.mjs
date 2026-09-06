@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolvePlatformFeatures } from '../platform-config.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hex = /^#[0-9a-f]{6}$/i;
@@ -129,6 +130,7 @@ export function validateTenantConfig(input) {
 
   return {
     schemaVersion: 1,
+    ...(input.features === undefined ? {} : { features: resolvePlatformFeatures(input.features) }),
     deploymentId: requiredString(input.deploymentId, 'deploymentId', 80),
     brand: {
       appName,
@@ -163,6 +165,7 @@ export function renderTenantConfig(config) {
 export function renderBrandConfig(config) {
   const publicBrand = {
     schemaVersion: config.schemaVersion,
+    ...(config.features ? { features: config.features } : {}),
     deploymentId: config.deploymentId,
     brand: config.brand,
     tenant: { expectedClinicCode: config.tenant.expectedClinicCode },
@@ -206,6 +209,7 @@ export function buildDeployManifest(config, env = process.env, now = new Date())
       tree: tree || null,
       verified: Boolean(commit)
     },
+    ...(config.features ? { package: { features: config.features } } : {}),
     build: {
       context: String(env.CONTEXT || 'local').trim() || 'local',
       timestamp: timestamp.toISOString()

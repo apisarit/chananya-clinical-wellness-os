@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123a32"><title>CNYOS · Platform Console</title>
+  <link rel="stylesheet" href="platform-console.css?v=1">
+  <script src="tenant-config.js?v=platform1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
+  <script src="auth-config.js?v=platform1"></script><script src="chananya-runtime.js?v=platform1"></script>
+  <script type="module" src="platform-console.js?v=1"></script>
+</head>
+<body>
+  <header class="topbar"><a class="wordmark" href="/">CNYOS <span>PLATFORM</span></a><nav aria-label="การจัดการ"><a href="/owner-control.html">Subscription &amp; Backup</a><button id="logout" type="button" disabled>ออกจากระบบ</button></nav></header>
+  <main>
+    <section id="access" class="access" role="status" aria-live="polite"><p class="eyebrow">OWNER WORKSPACE</p><h1>Platform Console</h1><p id="access-message">กำลังตรวจสิทธิ์เจ้าของแพลตฟอร์ม…</p><div class="actions"><button id="reload" type="button">ลองอีกครั้ง</button><button id="login" type="button">เข้าสู่ระบบด้วย Google</button></div></section>
+    <div id="workspace" hidden>
+      <section class="intro"><div><p class="eyebrow">CNYOS CONTROL CENTER</p><h1>สร้างแอปของลูกค้า<br><span>จากระบบกลางเดียวกัน</span></h1><p>ตั้งชื่อ เชื่อมแหล่งข้อมูล เลือกฟีเจอร์ แล้วติดตามการ Deploy ในหน้าเดียว</p></div><div class="identity"><span class="badge">Platform Owner</span><small id="actor"></small></div></section>
+      <div class="metrics"><div><span>แบบร่างที่บันทึก</span><strong id="draft-count">0</strong></div><div><span>ฟีเจอร์ที่เลือก</span><strong id="feature-count">0</strong></div><div><span>บริการ Deploy</span><strong id="dispatcher-label" class="metric-label">กำลังตรวจ</strong></div></div>
+      <div class="layout">
+        <form id="builder" autocomplete="off">
+          <section class="card"><div class="section-title"><span>01</span><div><h2>ชื่อและเว็บไซต์</h2><p>เลือกเว็บไซต์เดิม หรือเตรียมแอปสำหรับลูกค้าใหม่</p></div></div>
+            <label>เว็บไซต์ปลายทาง<select id="target"><option value="">ลูกค้าใหม่ / ยังไม่ลงทะเบียนเว็บไซต์</option></select></label>
+            <div class="fields"><label>ชื่อแอป<input id="name" required maxlength="80" placeholder="เช่น Jitarsa Wellness"></label><label>รหัสแอป<input id="slug" required maxlength="48" pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" placeholder="jitarsa-wellness"><small>อักษรอังกฤษตัวเล็ก ตัวเลข และขีดกลาง</small></label></div>
+            <label>ลิงก์เว็บไซต์ Netlify<input id="site" type="url" placeholder="https://your-clinic.netlify.app" maxlength="500"></label>
+          </section>
+          <section class="card"><div class="section-title"><span>02</span><div><h2>วางลิงก์แหล่งข้อมูล</h2><p>เชื่อมสิทธิ์ครั้งแรก แล้วใช้การเชื่อมต่อเดิมในครั้งต่อไป</p></div></div>
+            <label><span>ฐานข้อมูล <em>Supabase</em></span><input id="database" type="url" placeholder="วางลิงก์โครงการ Supabase" maxlength="500"><small>รับลิงก์หน้าโครงการหรือ API URL โดยไม่ใส่รหัสผ่าน</small></label>
+            <label><span>โฟลเดอร์สำรอง <em>Google Drive</em></span><input id="drive" placeholder="วางลิงก์โฟลเดอร์ Google Drive" maxlength="500"><small>ต้องยืนยันบัญชีและสิทธิ์เขียนก่อนเปิดสำรองอัตโนมัติ</small></label>
+            <label><span>ที่เก็บข้อมูลของคุณ <em>NAS · ทางเลือก</em></span><input id="nas" type="url" placeholder="https://nas.example.com/backup" maxlength="500"><small>ต้องมีตัวเชื่อมต่อ NAS; ลิงก์แชร์อย่างเดียวยังใช้สำรองไม่ได้</small></label>
+            <p class="hint">การเชื่อมต่อและข้อมูลสำรองแยกตามลูกค้าและสภาพแวดล้อม</p>
+          </section>
+          <section class="card"><div class="section-title"><span>03</span><div><h2>เลือกฟีเจอร์</h2><p>ระบบจะเพิ่มส่วนที่จำเป็นของแต่ละฟีเจอร์ให้ครบ</p></div></div><div id="features" class="feature-grid"></div><p class="hint">สิทธิ์ของพนักงานยังจัดการแยกตามหน้าที่ในแต่ละคลินิก</p></section>
+          <div id="form-status" class="form-status" role="status" aria-live="polite"></div>
+          <button class="primary wide" type="submit" id="save">ตรวจและบันทึกแบบร่าง</button>
+        </form>
+        <aside>
+          <section class="card review"><p class="eyebrow">DEPLOY REVIEW</p><h2 id="review-name">แอปใหม่ของคุณ</h2><p id="review-description">บันทึกแบบร่างเพื่อดูความพร้อมก่อน Deploy</p><ol id="checks" class="checks"></ol>
+            <div id="saved-info" hidden><p class="hint">แบบร่างนี้บันทึกไว้แล้ว หากแก้ไขจะสร้างฉบับใหม่พร้อมประวัติ</p><label>พิมพ์รหัสแอปเพื่อยืนยัน<input id="confirm" autocomplete="off" placeholder="รหัสแอป"></label></div>
+            <button id="deploy" class="primary wide" type="button" disabled>Deploy ทดสอบ</button>
+            <p class="hint">การทดสอบใช้เว็บไซต์ร่างและล็อกฐานข้อมูล การเปิดใช้จริงต้องผ่านขั้นตอนอนุมัติ Production</p><div id="deployment-status" role="status" aria-live="polite"></div>
+            <button id="refresh-plan" type="button" class="wide" hidden>ตรวจสถานะ Deploy</button>
+            <button id="export-plan" type="button" class="wide" hidden>ดาวน์โหลดแผนการตั้งค่า</button>
+          </section>
+          <details class="card security"><summary>สิทธิ์และการควบคุม</summary><dl><dt>Platform Owner</dt><dd>จัดการแผนเว็บไซต์ ส่งงาน Deploy และตรวจประวัติแพลตฟอร์ม</dd><dt>Clinic Super Admin / Admin</dt><dd>ดูแลผู้ใช้และงานภายในคลินิกตามสิทธิ์ ไม่มีสิทธิ์ Deploy แพลตฟอร์ม</dd><dt>ผู้ปฏิบัติงาน</dt><dd>เข้าถึงเฉพาะงานของแผนกที่ได้รับอนุญาต</dd></dl><p>ทุกคำสั่งตรวจบัญชี Owner ที่เซิร์ฟเวอร์ และบันทึกผู้ทำรายการ การ Deploy ต้องใช้การเข้าสู่ระบบ Google ล่าสุด</p></details>
+        </aside>
+      </div>
+      <section class="card history"><div class="section-title"><div><h2>แบบร่างและประวัติ</h2><p>เลือกฉบับเดิมเพื่อดูรายละเอียดหรือสร้างฉบับใหม่</p></div><button id="refresh-list" type="button">โหลดล่าสุด</button></div><div id="history"></div></section>
+    </div>
+  </main>
+</body>
+</html>
