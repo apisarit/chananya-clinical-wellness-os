@@ -30,43 +30,62 @@ Sixteen are executable by at least one Data API runtime role. Trigger functions
 are invoked by PostgreSQL through trigger bindings and are classified as
 internal implementation functions, not supported RPC endpoints.
 
-The source migration in this branch:
+The reviewed migration candidate in this branch:
 
 - revokes function execution from `PUBLIC`, `anon`, `authenticated`, and
   `service_role` for every non-internal public trigger function;
 - leaves trigger bindings and ownership unchanged;
 - pins `public.set_updated_at()` to `pg_catalog, public`;
-- fails closed if any Data API runtime role retains trigger-function execution.
+- fails closed if any Data API runtime role retains trigger-function execution;
+- remains outside `supabase/migrations` until provenance is reconciled.
 
 ## Migration-ledger divergence
 
 | Project | Recorded migration state | Decision |
 |---|---|---|
-| Chananya staging | 32 entries, ending at `202608311800_owner_subscription_control` | Reconcile against the 45 source migrations before applying this branch |
-| Jitarsa staging | No migration-ledger entries returned | Do not apply a new migration until schema provenance is reconstructed and verified |
-| Current production | No migration-ledger entries returned | No direct patch; production remains blocked |
+| Chananya staging | 32 entries, ending at `202608311800_owner_subscription_control` | Guarded ledger repair candidate; do not replay migrations blindly |
+| Jitarsa staging | No migration-ledger entries returned | Guarded ledger reconstruction candidate; do not replay migrations blindly |
+| Current production | No migration-ledger entries returned | Older schema; no ledger repair or direct patch; production remains blocked |
 
 The repository migration contract expects 45 ordered, fingerprinted migration
 files, including the 2026-09-01 owner-control, backup, service-role, and
-subscription-closure sequence. Applying a newer migration before reconciling
-those states would make rollback, restore, and exact-commit attestation
-unreliable.
+subscription-closure sequence.
+
+## Read-only provenance probe
+
+The probe sampled nine later functions, three later relations and seven later
+columns from the 2026-09-01 closure sequence.
+
+| Project | Sampled later objects | Interpretation |
+|---|---|---|
+| Chananya staging | 19 of 19 present | Schema appears manually advanced beyond its recorded ledger; run the guarded fingerprint recovery before adding entries |
+| Jitarsa staging | 19 of 19 present | Schema appears manually advanced with no recorded ledger; reconstruct only after full guarded verification |
+| Current production | 0 of 19 present | Schema is genuinely older; migrate only through the complete ordered promotion process, never by ledger repair |
+
+Object presence is not a fingerprint attestation. It only determines whether
+the next action is guarded verification/repair or ordered migration replay.
+Use `supabase/manual/migration_provenance_probe_20260901.sql` to reproduce the
+probe.
 
 ## Required execution order
 
-1. Validate each project schema against the repository's migration fingerprints.
-2. Repair or reconstruct the ledger only through the existing guarded recovery
-   process and retain its output as evidence.
-3. Apply this ACL closure to Chananya staging only.
-4. Re-run the read-only inventory and Supabase Security Advisor.
-5. Run authenticated role regression tests and negative RPC tests.
-6. Repeat on Jitarsa staging after its provenance is established.
-7. Submit the exact remediated commit and evidence to an independent security
-   assessor.
-8. Consider production only through the existing promotion gate.
+1. Generate the exact-revision guarded ledger recovery SQL from the repository.
+2. Run its verification phase against Chananya staging and retain the output.
+3. Repair the Chananya staging ledger only if every schema, ACL, owner and
+   fingerprint precondition passes.
+4. Repeat independent verification for Jitarsa staging; do not infer equivalence
+   from Chananya.
+5. Promote the trigger ACL candidate into the ordered migration chain.
+6. Apply it to Chananya staging only, then re-run inventory and Security Advisor.
+7. Run authenticated role regression, negative RPC and cross-tenant tests.
+8. Repeat on Jitarsa staging after its ledger is verified.
+9. Submit the exact remediated commit and evidence to an independent assessor.
+10. Treat production as an ordered upgrade through the existing promotion gate.
 
-## Evidence query
+## Evidence queries
 
-Use `supabase/manual/security_definer_exposure_inventory.sql`. Retain the
-project reference, execution timestamp, exact source revision, result, and
-reviewer identity with every run.
+- `supabase/manual/security_definer_exposure_inventory.sql`
+- `supabase/manual/migration_provenance_probe_20260901.sql`
+
+Retain the project reference, execution timestamp, exact source revision,
+result, and reviewer identity with every run.
