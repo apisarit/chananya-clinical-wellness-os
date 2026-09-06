@@ -25,6 +25,14 @@
       "verifiedBy": null
     },
     {
+      "id": "tenant_isolation",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
       "id": "line_callback",
       "status": "pending",
       "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
@@ -33,7 +41,7 @@
       "verifiedBy": null
     },
     {
-      "id": "encrypted_backup_restore_drill",
+      "id": "encrypted_backup",
       "status": "pending",
       "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
       "artifact": null,
@@ -41,23 +49,7 @@
       "verifiedBy": null
     },
     {
-      "id": "privacy_security_legal_review",
-      "status": "pending",
-      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
-      "artifact": null,
-      "verifiedAt": null,
-      "verifiedBy": null
-    },
-    {
-      "id": "isolated_staging_migrations",
-      "status": "pending",
-      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
-      "artifact": null,
-      "verifiedAt": null,
-      "verifiedBy": null
-    },
-    {
-      "id": "independent_quality_segregation",
+      "id": "isolated_restore_drill",
       "status": "pending",
       "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
       "artifact": null,
@@ -73,7 +65,63 @@
       "verifiedBy": null
     },
     {
-      "id": "operational_monitoring_incident_response",
+      "id": "isolated_staging_migrations",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "operational_monitoring",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "incident_response_drill",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "independent_security_review",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "privacy_legal_review",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "clinical_governance",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "commercial_operations",
+      "status": "pending",
+      "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
+      "artifact": null,
+      "verifiedAt": null,
+      "verifiedBy": null
+    },
+    {
+      "id": "independent_quality_segregation",
       "status": "pending",
       "commit": "REPLACE_WITH_EXACT_40_CHARACTER_MAIN_SHA",
       "artifact": null,
