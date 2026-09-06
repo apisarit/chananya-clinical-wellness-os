@@ -5,7 +5,7 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { PLATFORM_FEATURES, normalizePlatformLink, normalizePlatformPlan, resolvePlatformFeatures, platformPlanInput, platformPreflight } from '../platform-config.js';
 import { handlePlatformConsole, platformTargets } from '../netlify/functions/platform-console.mts';
-import { validatePreviewJob } from '../scripts/platform-preview-deploy.mjs';
+import { validatePreviewJob, canonicalPreviewAsset } from '../scripts/platform-preview-deploy.mjs';
 import { buildNetlifyPublish } from '../scripts/build-netlify-publish.mjs';
 import { validateTenantConfig, buildDeployManifest } from '../scripts/generate-tenant-config.mjs';
 
@@ -166,5 +166,13 @@ await test('legacy tenant config keeps all features unless explicitly selected',
   assert.equal(validateTenantConfig(baseline).features, undefined);
   const selected = validateTenantConfig({ ...baseline, features: ['u-synthesise'] });
   assert.deepEqual(buildDeployManifest(selected).package.features, ['core', 'u-synthesise']);
+});
+await test('HTML proof permits only observed Pretty URL aliasing and keeps code exact', () => {
+  const source = '<a href="/owner-control.html">Owner</a>';
+  const deployed = "<a href='/owner-control'>Owner</a>";
+  assert.deepEqual(canonicalPreviewAsset('page.html', source), canonicalPreviewAsset('page.html', deployed));
+  assert.notDeepEqual(canonicalPreviewAsset('page.html', source), canonicalPreviewAsset('page.html', deployed.replace('Owner', 'Changed')));
+  assert.notDeepEqual(canonicalPreviewAsset('page.html', source), canonicalPreviewAsset('page.html', '<a href="/admin">Owner</a>'));
+  assert.notDeepEqual(canonicalPreviewAsset('page.js', source), canonicalPreviewAsset('page.js', deployed));
 });
 console.log(`Platform Console: ${count} behavioral checks passed.`);

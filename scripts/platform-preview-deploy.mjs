@@ -10,6 +10,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const work = path.join(root, 'artifacts/platform-preview');
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 
+// Netlify Pretty URLs rewrites local .html anchors and changes their quote style.
+// Normalize that observed HTML-only transformation; script/CSS bytes stay exact.
+export function canonicalPreviewAsset(name, content) {
+  if (!name.endsWith('.html')) return Buffer.from(content);
+  return Buffer.from(Buffer.from(content).toString('utf8').replace(
+    /\bhref=(["'])([A-Za-z0-9_./-]+)\1/g,
+    (_, quote, href) => `href="${href.replace(/\.html$/, '')}"`
+  ));
+}
+
 export function validatePreviewJob(env) {
   const input = JSON.parse(env.PLATFORM_PLAN_JSON || '{}');
   const normalized = { ...normalizePlatformPlan(platformPlanInput(input)), sourceCommit: input.sourceCommit };
@@ -85,7 +95,7 @@ async function verify() {
     if (selected) {
       if (!response.ok) throw new Error('PLATFORM_PREVIEW_SELECTED_FILE_MISSING');
       const [remote, local] = await Promise.all([response.arrayBuffer(), fs.readFile(path.join(root, 'dist', name))]);
-      if (sha256(Buffer.from(remote)) !== sha256(local)) throw new Error('PLATFORM_PREVIEW_ASSET_MISMATCH');
+      if (sha256(canonicalPreviewAsset(name, remote)) !== sha256(canonicalPreviewAsset(name, local))) throw new Error('PLATFORM_PREVIEW_ASSET_MISMATCH');
     } else if (response.status !== 404) throw new Error('PLATFORM_PREVIEW_EXCLUDED_FEATURE_PRESENT');
     checked.push({ name, selected, status: response.status });
   }
