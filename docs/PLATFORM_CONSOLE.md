@@ -70,4 +70,6 @@ The UI remains usable for validated drafting when the deployment connection is m
 
 Run the full existing `npm run check` before merging. A real signed-in browser save and a successful connected GitHub/Netlify preview job remain separate live acceptance checks; passing simulated transports must not be represented as those checks.
 
+Live HTML comparison normalizes Netlify's observed Pretty URL rewriting of local `.html` anchors and their quote style. Other HTML content and all script/CSS bytes must still match the built artifact. The production release verifier is unchanged.
+
 References: [Google server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Netlify conditional Blob writes](https://docs.netlify.com/build/data-and-storage/netlify-blobs/), [GitHub workflow dispatch](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event).
