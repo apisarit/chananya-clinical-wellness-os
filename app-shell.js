@@ -18,7 +18,10 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const allowed = (route, profile) => !route.capability || Boolean(window.ChananyaRuntime?.can(profile, route.capability));
+  const featureByRoute = { appointments: 'appointments', foundation: 'knowledge', luopan: 'u-synthesise', clinical: 'clinical', outcomes: 'outcomes', pharmacy: 'pharmacy', production: 'production', quality: 'quality' };
+  const allowed = (route, profile) => (!Array.isArray(window.CLINICAL_OS_CONFIG?.features)
+    || !featureByRoute[route.key] || window.CLINICAL_OS_CONFIG.features.includes(featureByRoute[route.key]))
+    && (!route.capability || Boolean(window.ChananyaRuntime?.can(profile, route.capability)));
 
   function routeMarkup(route, active) {
     return `<a href="${route.href}"${route.key === active ? ' aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${route.icon}</span><span class="nav-copy"><b>${esc(route.label)}</b><small>${esc(route.note)}</small></span></a>`;
