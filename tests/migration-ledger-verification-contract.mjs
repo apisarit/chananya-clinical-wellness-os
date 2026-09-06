@@ -92,11 +92,12 @@ for (const configFile of [
     assert.equal((await db.query('select is_called from verifier_sequence_probe')).rows[0].is_called, false);
     assert.equal((await db.query('show transaction_read_only')).rows[0].transaction_read_only, 'off');
 
-    // BEGIN cannot change the mode of an already open read/write transaction.
-    // The guard must refuse that client context, even if BEGIN only warns.
+    // A client can change transaction mode before the first query. The guard
+    // must refuse execution if that client disables the read-only boundary.
     notices.length = 0;
-    await db.exec('begin read write;');
-    await assert.rejects(db.exec(sql, options), /STAGING_VERIFICATION_READ_ONLY_REQUIRED/);
+    await db.exec(prefix);
+    await db.exec('set transaction read write;');
+    await assert.rejects(db.exec(guard, options), /STAGING_VERIFICATION_READ_ONLY_REQUIRED/);
     await db.exec('rollback;');
     assert.ok(!notices.some(message => message.startsWith(verificationNoticePrefix)));
 
