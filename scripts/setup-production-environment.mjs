@@ -18,6 +18,10 @@ export const variables = Object.freeze({
   PRODUCTION_SITE_URL: target.origin,
   PRODUCTION_SITE_HOST: target.hostname
 });
+export const requiredReleaseCheck = Object.freeze({
+  context: 'Source + PostgreSQL + release evidence',
+  appId: 15368 // github-actions on github.com; do not accept an arbitrary status publisher.
+});
 
 function requireCondition(condition, code) {
   if (!condition) throw new Error(code);
@@ -92,8 +96,10 @@ function gh(args, input) {
   return result.stdout;
 }
 
-export function applySetup(plan, run = gh) {
-  requireCondition(plan.blockers.length === 0, 'SETUP_INPUTS_BLOCKED');
+// Read only. This checks observable controls, not operational evidence or approval.
+// A protected=true branch alone may have neither required CI nor required review.
+export function verifySetupProtection({ commit }, run = gh) {
+  requireCondition(/^[a-f0-9]{40}$/i.test(commit || ''), 'EXACT_COMMIT_REQUIRED');
   const base = `repos/${target.repository}`;
   const read = endpoint => {
     try { return JSON.parse(run(['api', '--hostname', 'github.com', endpoint])); }
@@ -104,16 +110,54 @@ export function applySetup(plan, run = gh) {
   requireCondition(repository.permissions?.admin === true, 'GITHUB_REPOSITORY_ADMIN_REQUIRED');
   requireCondition(repository.default_branch === 'main', 'DEFAULT_BRANCH_MISMATCH');
   const branch = read(`${base}/branches/main`);
-  requireCondition(branch.commit?.sha === plan.commit, 'REMOTE_MAIN_COMMIT_MISMATCH');
+  requireCondition(branch.commit?.sha === commit, 'REMOTE_MAIN_COMMIT_MISMATCH');
   requireCondition(branch.protected === true, 'MAIN_BRANCH_PROTECTION_REQUIRED');
+  const protection = read(`${base}/branches/main/protection`);
+  const checks = protection.required_status_checks;
+  requireCondition(checks?.strict === true, 'MAIN_UP_TO_DATE_CHECKS_REQUIRED');
+  requireCondition(Array.isArray(checks?.checks) && checks.checks.some(check =>
+    check.context === requiredReleaseCheck.context && check.app_id === requiredReleaseCheck.appId
+  ), 'MAIN_EXACT_RELEASE_CI_REQUIRED');
+  const reviews = protection.required_pull_request_reviews;
+  requireCondition(Number.isInteger(reviews?.required_approving_review_count) && reviews.required_approving_review_count >= 1, 'MAIN_APPROVING_REVIEW_REQUIRED');
+  requireCondition(reviews.dismiss_stale_reviews === true, 'MAIN_STALE_REVIEW_DISMISSAL_REQUIRED');
+  requireCondition(reviews.require_last_push_approval === true, 'MAIN_LAST_PUSH_REVIEW_REQUIRED');
+  const bypass = reviews.bypass_pull_request_allowances;
+  requireCondition(bypass == null || (typeof bypass === 'object' && !Array.isArray(bypass) && ['users', 'teams', 'apps'].every(kind =>
+    bypass[kind] == null || (Array.isArray(bypass[kind]) && bypass[kind].length === 0)
+  )), 'MAIN_REVIEW_BYPASS_REJECTED');
+  requireCondition(protection.enforce_admins?.enabled === true, 'MAIN_ADMIN_ENFORCEMENT_REQUIRED');
+  requireCondition(protection.allow_force_pushes?.enabled === false && protection.allow_deletions?.enabled === false, 'MAIN_DESTRUCTIVE_PUSH_REJECTED');
   const environment = read(`${base}/environments/${target.environment}`);
   requireCondition(environment.name === target.environment, 'PRODUCTION_ENVIRONMENT_REQUIRED');
-  requireCondition(environment.protection_rules?.some(rule => rule.type === 'required_reviewers' && rule.reviewers?.length > 0), 'PRODUCTION_REVIEWER_PROTECTION_REQUIRED');
-  requireCondition(environment.deployment_branch_policy?.protected_branches || environment.deployment_branch_policy?.custom_branch_policies, 'PRODUCTION_BRANCH_POLICY_REQUIRED');
-  if (environment.deployment_branch_policy.custom_branch_policies) {
-    const policy = read(`${base}/environments/${target.environment}/deployment-branch-policies`);
-    requireCondition(policy.branch_policies?.some(rule => rule.name === 'main' && (!rule.type || rule.type === 'branch')), 'PRODUCTION_MAIN_BRANCH_RULE_REQUIRED');
+  const reviewers = environment.protection_rules?.find(rule => rule.type === 'required_reviewers');
+  requireCondition(Array.isArray(reviewers?.reviewers) && reviewers.reviewers.length > 0, 'PRODUCTION_REVIEWER_PROTECTION_REQUIRED');
+  requireCondition(reviewers.prevent_self_review === true, 'PRODUCTION_SELF_REVIEW_REJECTED');
+  const branchPolicy = environment.deployment_branch_policy;
+  const protectedBranches = branchPolicy?.protected_branches === true && branchPolicy?.custom_branch_policies === false;
+  const customBranches = branchPolicy?.protected_branches === false && branchPolicy?.custom_branch_policies === true;
+  requireCondition(protectedBranches || customBranches, 'PRODUCTION_BRANCH_POLICY_REQUIRED');
+  if (customBranches) {
+    const policy = read(`${base}/environments/${target.environment}/deployment-branch-policies?per_page=100`);
+    requireCondition(policy.total_count === 1 && Array.isArray(policy.branch_policies) && policy.branch_policies.length === 1 &&
+      policy.branch_policies[0].name === 'main' && policy.branch_policies[0].type === 'branch', 'PRODUCTION_MAIN_BRANCH_RULE_REQUIRED');
   }
+  // Main may advance while the protection endpoints are being inspected.
+  requireCondition(read(`${base}/branches/main`).commit?.sha === commit, 'REMOTE_MAIN_COMMIT_MISMATCH');
+  return {
+    mode: 'verify-protection', status: 'observable_controls_verified',
+    repository: target.repository, environment: target.environment, releaseCommit: commit,
+    observedAt: new Date().toISOString(), requiredReleaseCheck,
+    approvingReviewCount: reviews.required_approving_review_count,
+    deploymentBranchPolicy: customBranches ? 'main_branch_only' : 'protected_branches',
+    configurationWritten: false, deploymentStarted: false, productionGatePassed: false,
+    note: 'Read-only control snapshot. Independently review reviewer identities, ruleset/admin bypass paths, actual CI/reviews and all release evidence. No approval or credential was read or written.'
+  };
+}
+
+export function applySetup(plan, run = gh) {
+  requireCondition(plan.blockers.length === 0, 'SETUP_INPUTS_BLOCKED');
+  verifySetupProtection({ commit: plan.commit }, run);
 
   const completed = [];
   const write = (kind, name, value) => {
@@ -140,16 +184,18 @@ export function applySetup(plan, run = gh) {
 }
 
 export function parseArgs(args) {
-  const options = { apply: false };
+  const options = { apply: false, verifyProtection: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--apply') { requireCondition(!options.apply, 'DUPLICATE_ARGUMENT'); options.apply = true; }
+    else if (arg === '--verify-protection') { requireCondition(!options.verifyProtection, 'DUPLICATE_ARGUMENT'); options.verifyProtection = true; }
     else if (arg === '--config' || arg === '--attestation') {
       const key = arg.slice(2);
       requireCondition(!options[key] && args[i + 1] && !args[i + 1].startsWith('--'), 'INPUT_FILE_ARGUMENT_REQUIRED');
       options[key] = path.resolve(args[++i]);
     } else throw new Error('UNKNOWN_SETUP_ARGUMENT');
   }
+  requireCondition(!options.verifyProtection || (!options.apply && !options.config && !options.attestation), 'PROTECTION_CHECK_ARGUMENT_CONFLICT');
   return options;
 }
 
@@ -167,15 +213,19 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root, encoding: 'utf8' });
       requireCondition(status.status === 0 && !status.stdout.trim(), 'CLEAN_TRACKED_CHECKOUT_REQUIRED');
     }
-    const plan = prepareSetup({
-      commit: gitResult.stdout.trim(),
-      token: (process.env.NETLIFY_AUTH_TOKEN || '').trim(),
-      config: options.config ? readJson(options.config) : null,
-      attestation: options.attestation ? readJson(options.attestation) : null,
-      readiness: readJson(path.join(root, 'release-readiness.json')),
-      stagingConfig: readJson(path.join(root, 'config/tenant.cnyos-staging.json'))
-    });
-    process.stdout.write(`${JSON.stringify(options.apply ? applySetup(plan) : publicPlan(plan), null, 2)}\n`);
+    if (options.verifyProtection) {
+      process.stdout.write(`${JSON.stringify(verifySetupProtection({ commit: gitResult.stdout.trim() }), null, 2)}\n`);
+    } else {
+      const plan = prepareSetup({
+        commit: gitResult.stdout.trim(),
+        token: (process.env.NETLIFY_AUTH_TOKEN || '').trim(),
+        config: options.config ? readJson(options.config) : null,
+        attestation: options.attestation ? readJson(options.attestation) : null,
+        readiness: readJson(path.join(root, 'release-readiness.json')),
+        stagingConfig: readJson(path.join(root, 'config/tenant.cnyos-staging.json'))
+      });
+      process.stdout.write(`${JSON.stringify(options.apply ? applySetup(plan) : publicPlan(plan), null, 2)}\n`);
+    }
   } catch (error) {
     // Only our constant error codes and fixed key names are exposed.
     const code = /^[A-Z_]+$/.test(error.message || '') ? error.message : 'PRODUCTION_SETUP_FAILED';

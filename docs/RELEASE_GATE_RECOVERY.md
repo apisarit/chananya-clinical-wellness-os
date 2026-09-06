@@ -16,7 +16,14 @@ When using an explicit `EXPECTED_RELEASE_COMMIT`, it must match both the checked
 
 ## Supply actual approval evidence
 
-The accountable reviewers must complete the ten required gates listed in `release-readiness.json` and retain their evidence. Fill in each gate's artifact reference, verifier and timestamp, and mark it passed only after its review succeeds. Complete the release approval reference, approver and timestamp, then set `approvedForProduction: true` only for the approved release. Placeholder references and reviewers are rejected. Keep `realPatientDataAdmission` set to `blocked_pending_post_deploy_attestation`.
+The accountable reviewers must complete all 16 required gates listed in `release-readiness.json` and retain their evidence. Fill in each gate's artifact reference, verifier and timestamp, and mark it passed only after its review succeeds. Complete the release approval reference, approver and timestamp, then set `approvedForProduction: true` only for the approved release. Placeholder references and reviewers are rejected. Keep `realPatientDataAdmission` set to `blocked_pending_post_deploy_attestation`.
+
+Repository/environment protection can be inspected before collecting credentials
+or approval records: run `npm run setup:production-environment -- --verify-protection`
+as an authenticated repository owner/admin on the reviewed `main` checkout. This
+read-only preflight checks required CI, review enforcement and observable
+production environment controls. Follow `PRODUCTION_ENVIRONMENT_SETUP.md` for
+the remaining independent protection checks; the snapshot is not release approval.
 
 Store the completed record as the `PRODUCTION_RELEASE_ATTESTATION_JSON` secret in the GitHub `production` environment. Do not commit the completed record, edit the source policy to approve itself, or treat contract tests as operational review evidence. Protection and approval controls on that environment must be verified as required by `docs/PRODUCTION_MILESTONE_STACK.md`.
 
