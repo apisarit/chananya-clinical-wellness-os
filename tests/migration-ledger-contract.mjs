@@ -4,11 +4,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import {
+  CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST,
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST,
+  MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION,
+  REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   buildMigrationLedgerRepairSql,
   loadMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 import { buildTenantBootstrapSql } from '../scripts/generate-tenant-bootstrap-sql.mjs';
-import { buildMigrationLedgerVerificationSql, verificationNoticePrefix } from '../scripts/generate-migration-ledger-verification-sql.mjs';
+import {
+  buildMigrationLedgerVerificationSql,
+  preReconciliationVerificationStatus,
+  strictVerificationStatus
+} from '../scripts/generate-migration-ledger-verification-sql.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
@@ -29,7 +37,7 @@ const expectedOwnerControlMigrationHashes = new Map([
 ]);
 
 assert.equal(entries.length, 45);
-assert.deepEqual(entries, [...entries].sort((a, b) => a.file.localeCompare(b.file)));
+assert.deepEqual(entries, [...entries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 assert.equal(config.tenant.expectedClinicId, '00000000-0000-4000-8000-00000000a001');
 assert.ok(entries.every(entry => /^[0-9a-f]{64}$/.test(entry.sha256)));
 for (const [file, sha256] of expectedOwnerControlMigrationHashes) {
@@ -40,11 +48,260 @@ for (const [file, sha256] of expectedOwnerControlMigrationHashes) {
   );
 }
 
-const recoverySql = buildMigrationLedgerRepairSql({
+const repairAuthorizationBlockerStatement =
+  "  raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED: complete live callable ACL and function-creator default ACL inventory review is required before any ledger repair';\n";
+
+// Generated repair artifacts are deliberately inert until the live callable
+// and default-ACL inventories are complete. Behavioral tests may execute only
+// an exact, disposable copy with both independently enforced blockers removed.
+function unblockRepairForDisposableTest(artifact, label) {
+  assert.equal(
+    artifact.split(repairAuthorizationBlockerStatement).length - 1,
+    2,
+    `${label} must carry the identical guard and mutation blockers`
+  );
+  return artifact.replaceAll(repairAuthorizationBlockerStatement, '');
+}
+
+const blockedStrictRecoverySql = buildMigrationLedgerRepairSql({
   config,
   entries,
   sourceRevision: 'a'.repeat(40)
 });
+const recoverySql = unblockRepairForDisposableTest(
+  blockedStrictRecoverySql,
+  'strict repair source artifact'
+);
+const preReconciliationRecoverySql = buildMigrationLedgerRepairSql({
+  config,
+  entries,
+  sourceRevision: 'a'.repeat(40),
+  aclPhase: MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION
+});
+
+const repairRunNonceGuc = 'cnyos.migration_ledger_repair_run_nonce';
+const repairCommittedNonceGuc = 'cnyos.migration_ledger_repair_committed_nonce';
+const repairCommittedXidGuc = 'cnyos.migration_ledger_repair_committed_xid';
+const repairEvidenceMarker = 'cnyos_migration_ledger_repair_evidence';
+const repairReceiptTable = 'cnyos_migration_ledger_repair_receipts';
+const reviewedChananyaSystemIdentifier = '7666007964130682852';
+const clinicalTreatmentSessionProcedure =
+  REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.procedureSignature;
+const canonicalCatalogOutputGucStatements = [
+  "set local timezone = 'UTC';",
+  "set local datestyle = 'ISO, YMD';",
+  "set local intervalstyle = 'postgres';",
+  'set local extra_float_digits = 3;',
+  "set local bytea_output = 'hex';",
+  'set local quote_all_identifiers = off;',
+  'set local standard_conforming_strings = on;'
+];
+let pgliteSystemIdentifier;
+let pgliteDatabaseIdentity;
+let repairTestNonceOrdinal = 0;
+const nextRepairTestNonce = () =>
+  `00000000-0000-4000-8000-${String(++repairTestNonceOrdinal).padStart(12, '0')}`;
+const sqlLiteral = value => `'${String(value).replaceAll("'", "''")}'`;
+
+// The production artifacts must stay pinned to database/session/current user
+// "postgres" and to the reviewed Chananya cluster. PGlite uses template1 as
+// its database name, so bind only those exact identity comparisons/evidence
+// literals in the disposable executable copy.
+function bindProductionDatabaseIdentityForPGlite(artifact) {
+  assert.ok(pgliteDatabaseIdentity);
+  const database = sqlLiteral(pgliteDatabaseIdentity.database);
+  const sessionUser = sqlLiteral(pgliteDatabaseIdentity.sessionUser);
+  const currentUser = sqlLiteral(pgliteDatabaseIdentity.currentUser);
+  return artifact
+    .replaceAll(reviewedChananyaSystemIdentifier, pgliteSystemIdentifier)
+    .replaceAll("pg_catalog.current_database() = 'postgres'", `pg_catalog.current_database() = ${database}`)
+    .replaceAll("pg_catalog.current_database()='postgres'", `pg_catalog.current_database()=${database}`)
+    .replaceAll("v_observed_current_database is distinct from 'postgres'", `v_observed_current_database is distinct from ${database}`)
+    .replaceAll("v_observed_session_user is distinct from 'postgres'", `v_observed_session_user is distinct from ${sessionUser}`)
+    .replaceAll("v_observed_current_user is distinct from 'postgres'", `v_observed_current_user is distinct from ${currentUser}`)
+    .replaceAll("'expected_current_database','postgres'", `'expected_current_database',${database}`)
+    .replaceAll("'expected_session_user','postgres'", `'expected_session_user',${sessionUser}`)
+    .replaceAll("'expected_current_user','postgres'", `'expected_current_user',${currentUser}`)
+    .replaceAll("receipt.evidence->>'expected_current_database'='postgres'", `receipt.evidence->>'expected_current_database'=${database}`)
+    .replaceAll("receipt.evidence->>'expected_session_user'='postgres'", `receipt.evidence->>'expected_session_user'=${sessionUser}`)
+    .replaceAll("receipt.evidence->>'expected_current_user'='postgres'", `receipt.evidence->>'expected_current_user'=${currentUser}`)
+    .replaceAll("receipt.evidence->>'observed_current_database'='postgres'", `receipt.evidence->>'observed_current_database'=${database}`)
+    .replaceAll("receipt.evidence->>'observed_session_user'='postgres'", `receipt.evidence->>'observed_session_user'=${sessionUser}`)
+    .replaceAll("receipt.evidence->>'observed_current_user'='postgres'", `receipt.evidence->>'observed_current_user'=${currentUser}`)
+    .replaceAll('"expected_current_database":"postgres"', `"expected_current_database":"${pgliteDatabaseIdentity.database}"`)
+    .replaceAll('"expected_session_user":"postgres"', `"expected_session_user":"${pgliteDatabaseIdentity.sessionUser}"`)
+    .replaceAll('"expected_current_user":"postgres"', `"expected_current_user":"${pgliteDatabaseIdentity.currentUser}"`);
+}
+
+// PGlite executes PostgreSQL, not psql metacommands. Preserve the generated
+// artifact verbatim for the envelope assertions below, while materializing its
+// SQL-bearing repair path with the client-generated nonce and session GUCs that
+// psql would establish before entering the repair transaction.
+function materializePsqlRepairArtifactForPGlite(artifact, runNonce) {
+  assert.match(runNonce, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.match(pgliteSystemIdentifier, /^\d+$/);
+
+  // PGlite has its own real PostgreSQL cluster identity. The source artifact
+  // remains pinned to Chananya above; only the in-memory behavioral fixture is
+  // rebound to the disposable cluster that is actually executing the SQL.
+  const executableArtifact = bindProductionDatabaseIdentityForPGlite(artifact);
+
+  const generatedStart = executableArtifact.indexOf('-- Generated one-time staging migration ledger recovery');
+  const beginStart = executableArtifact.indexOf('begin isolation level repeatable read read write;', generatedStart);
+  const guardStart = executableArtifact.indexOf('do $ledger_guard$', generatedStart);
+  const guardEnd = executableArtifact.indexOf('end\n$ledger_guard$;\n', guardStart) +
+    'end\n$ledger_guard$;\n'.length;
+  const writeStart = executableArtifact.indexOf('do $ledger_repair$', guardEnd);
+  const writeEnd = executableArtifact.indexOf('end\n$ledger_repair$;\n', writeStart) +
+    'end\n$ledger_repair$;\n'.length;
+  const commitStart = executableArtifact.indexOf('commit;\n', writeEnd);
+  const commitEnd = commitStart + 'commit;\n'.length;
+  const proofBeginStart = executableArtifact.indexOf(
+    'begin isolation level repeatable read read only;',
+    commitEnd
+  );
+  const proofQueryStart = executableArtifact.indexOf(
+    'select case when count(*)=1 then min(receipt.evidence::text) end as cnyos_repair_evidence',
+    proofBeginStart
+  );
+  const proofQueryEnd = executableArtifact.indexOf('\n\\gset\n', proofQueryStart);
+  const gateToken = executableArtifact.slice(writeStart, writeEnd).match(
+    /where gate_token='([0-9a-f]{64})' and run_nonce=v_run_nonce\n/
+  )?.[1];
+
+  assert.ok(
+    generatedStart > 0 && beginStart > generatedStart && guardStart > beginStart &&
+    guardEnd > guardStart &&
+    writeStart > guardEnd && writeEnd > writeStart && commitStart === writeEnd &&
+    proofBeginStart === commitEnd && proofQueryStart > proofBeginStart &&
+    proofQueryEnd > proofQueryStart && gateToken,
+    'generated psql repair artifact must retain its expected SQL envelope'
+  );
+
+  const setupSessionSql = `
+    select pg_catalog.set_config('${repairRunNonceGuc}','${runNonce}',false);
+    select pg_catalog.set_config('${repairCommittedNonceGuc}','',false);
+    select pg_catalog.set_config('${repairCommittedXidGuc}','',false);
+    select pg_catalog.set_config('cnyos.migration_ledger_repair_observed_psql_host','db.hsmnjwxurlmsizndjlun.supabase.co',false);
+    select pg_catalog.set_config('cnyos.migration_ledger_repair_observed_psql_port','5432',false);
+    select pg_catalog.set_config('cnyos.migration_ledger_repair_observed_psql_user','postgres',false);
+    select pg_catalog.set_config('cnyos.migration_ledger_repair_observed_psql_database','postgres',false);
+  `;
+  const beforeTransactionSql = executableArtifact.slice(generatedStart, beginStart);
+  const transactionPrefix = executableArtifact.slice(beginStart, guardStart);
+  const guardStatement = executableArtifact.slice(guardStart, guardEnd);
+  const writeStatement = executableArtifact.slice(writeStart, writeEnd);
+  const commitStatement = executableArtifact.slice(commitStart, commitEnd);
+  const proofPrefixSql = executableArtifact.slice(proofBeginStart, proofQueryStart)
+    .replace(`\\unset cnyos_repair_evidence\n`, '');
+  const exactProofQuery = executableArtifact.slice(proofQueryStart, proofQueryEnd)
+    .replaceAll(":'cnyos_repair_run_nonce'", sqlLiteral(runNonce));
+  const coreSql = executableArtifact.slice(generatedStart, commitEnd);
+  const successEvidenceQuery = `
+    select evidence as migration_ledger_evidence
+    from supabase_migrations.${repairReceiptTable}
+    where gate_token='${gateToken}'
+      and run_nonce='${runNonce}'::uuid
+      and evidence is not null
+      and coalesce(current_setting('${repairCommittedNonceGuc}',true),'')='${runNonce}'
+      and repair_xid=coalesce(current_setting('${repairCommittedXidGuc}',true),'')
+      and evidence->>'repair_run_nonce'='${runNonce}'
+      and evidence->>'repair_transaction_xid'=repair_xid
+  `;
+  assert.doesNotMatch(coreSql, /^\\/m);
+  assert.doesNotMatch(coreSql, /:'cnyos_repair_/);
+  assert.doesNotMatch(proofPrefixSql, /^\\/m);
+  return {
+    artifact,
+    runNonce,
+    gateToken,
+    setupSessionSql,
+    beforeTransactionSql,
+    transactionPrefix,
+    guardStatement,
+    writeStatement,
+    commitStatement,
+    proofPrefixSql,
+    exactProofQuery,
+    successEvidenceQuery
+  };
+}
+
+function materializePsqlVerificationArtifactForPGlite(artifact) {
+  const executableArtifact = bindProductionDatabaseIdentityForPGlite(artifact);
+  const generatedStart = executableArtifact.indexOf(
+    '-- Generated read-only staging schema verification'
+  );
+  const guardStart = executableArtifact.indexOf('do $ledger_guard$', generatedStart);
+  const guardEnd = executableArtifact.indexOf('end\n$ledger_guard$;\n', guardStart) +
+    'end\n$ledger_guard$;\n'.length;
+  assert.ok(
+    generatedStart > 0 && guardStart > generatedStart && guardEnd > guardStart,
+    'generated psql verification artifact must retain its expected SQL envelope'
+  );
+  // Execute the exact generated guard in PGlite, then append the same rollback
+  // boundary. The subsequent evidence capture and psql lifecycle gate are
+  // covered statically here and end-to-end by the PostgreSQL 17 psql test.
+  const coreSql = executableArtifact.slice(generatedStart, guardEnd) + 'rollback;\n';
+  assert.doesNotMatch(coreSql, /^\\/m);
+  assert.doesNotMatch(coreSql, /:'cnyos_verification_/);
+  return coreSql;
+}
+
+async function exactMaterializedRepairEvidenceRows(targetDb, materialized) {
+  await targetDb.exec(materialized.proofPrefixSql);
+  try {
+    const rows = (await targetDb.query(materialized.exactProofQuery)).rows;
+    assert.equal(rows.length, 1, 'the exact proof query must always return one row for psql \\gset');
+    return rows[0].cnyos_repair_evidence === null
+      ? []
+      : [{ migration_ledger_evidence: JSON.parse(rows[0].cnyos_repair_evidence) }];
+  } finally {
+    await targetDb.exec('rollback;');
+  }
+}
+
+async function executeMaterializedPsqlRepair(targetDb, artifact, runNonce) {
+  const materialized = materializePsqlRepairArtifactForPGlite(artifact, runNonce);
+  await targetDb.exec(materialized.setupSessionSql);
+  await targetDb.exec(materialized.beforeTransactionSql);
+  await targetDb.exec(materialized.transactionPrefix);
+  await targetDb.exec(materialized.guardStatement);
+  await targetDb.exec(materialized.writeStatement);
+  await targetDb.exec(materialized.commitStatement);
+  const evidenceRows = await exactMaterializedRepairEvidenceRows(targetDb, materialized);
+  assert.equal(evidenceRows.length, 1, 'a committed repair must emit exactly one nonce-bound evidence row');
+  assert.equal(evidenceRows[0].migration_ledger_evidence.repair_run_nonce, runNonce);
+  assert.match(evidenceRows[0].migration_ledger_evidence.repair_transaction_xid, /^\d+$/);
+  return evidenceRows[0].migration_ledger_evidence;
+}
+
+async function materializedRepairEvidenceRows(targetDb, materialized) {
+  const receipt = (await targetDb.query(
+    `select to_regclass('supabase_migrations.${repairReceiptTable}')::text receipt`
+  )).rows[0].receipt;
+  if (receipt === null) return [];
+  return (await targetDb.query(materialized.successEvidenceQuery)).rows;
+}
+
+function injectMidRepairFailure(materialized, message = 'TEST_LEDGER_REPAIR_ABORT') {
+  const anchor = '\nset constraints all immediate;\n  if (';
+  const injectionOffset = materialized.writeStatement.indexOf(anchor);
+  assert.ok(
+    injectionOffset > materialized.writeStatement.indexOf(
+      'insert into supabase_migrations.schema_migrations as ledger'
+    ),
+    'the test-only failure must be injected after the ledger upsert'
+  );
+  return {
+    ...materialized,
+    writeStatement:
+      materialized.writeStatement.slice(0, injectionOffset) +
+      `\nraise exception '${message}';` +
+      materialized.writeStatement.slice(injectionOffset)
+  };
+}
+
 const bootstrapSql = buildTenantBootstrapSql(config);
 const chananyaBootstrapSql = buildTenantBootstrapSql(chananyaConfig);
 assert.match(bootstrapSql, /insert into public\.clinics/i);
@@ -97,6 +354,11 @@ assert.match(recoverySql, /public\.prepare_line_subscription_off_exception\(uuid
 assert.match(recoverySql, /public\.enforce_active_subscription_tenant_write\(\)/);
 assert.match(recoverySql, /public\.book_clinic_appointment\(uuid,uuid,text,text,text\)/);
 assert.match(recoverySql, /public\.create_approval_task\(text,text,text,text,text,text,uuid,timestamptz,jsonb\)/);
+assert.ok(recoverySql.includes(clinicalTreatmentSessionProcedure));
+assert.match(recoverySql, /STAGING_CLINICAL_TREATMENT_SESSION_SEMANTIC_CONTRACT_INVALID/);
+assert.match(recoverySql, /STAGING_CLINICAL_TREATMENT_SESSION_ACL_MISSING/);
+assert.match(recoverySql, /STAGING_CLINICAL_TREATMENT_SESSION_RUNTIME_EXECUTE_INVALID/);
+assert.match(recoverySql, /STAGING_CLINICAL_TREATMENT_SESSION_ACL_INVALID/);
 assert.match(recoverySql, /public\.consume_patient_identity_rate_limit_for_clinic\(uuid,text,integer,integer\)/);
 assert.match(recoverySql, /public\.register_line_oa_webhook_event_for_clinic\(uuid,text,text,text,text,text,timestamptz,boolean,text\)/);
 assert.match(recoverySql, /STAGING_SUBSCRIPTION_KILL_SWITCH_SERVICE_EXECUTE_MISSING/);
@@ -104,7 +366,7 @@ assert.match(recoverySql, /STAGING_SUBSCRIPTION_KILL_SWITCH_BROWSER_EXECUTE_PRES
 assert.match(recoverySql, /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/);
 assert.match(recoverySql, /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_INVALID/);
 assert.match(recoverySql, /STAGING_SUBSCRIPTION_BROWSER_EXECUTE_MISSING/);
-assert.match(recoverySql, /STAGING_SUBSCRIPTION_ANON_EXECUTE_PRESENT/);
+assert.match(recoverySql, /STAGING_SUBSCRIPTION_UNEXPECTED_ANON_EXECUTE_PRESENT/);
 assert.match(recoverySql, /STAGING_SUBSCRIPTION_LEGACY_PROCEDURE_MISSING/);
 assert.match(recoverySql, /STAGING_SUBSCRIPTION_LEGACY_EXECUTE_PRESENT/);
 assert.match(recoverySql, /public\.line_oa_queue_notification_v20260829\(uuid,text,timestamptz,timestamptz,text\)/);
@@ -207,7 +469,330 @@ assert.doesNotMatch(recoverySql, /statements=coalesce/);
 assert.match(recoverySql, /supabase_migrations\.schema_migrations/);
 assert.match(recoverySql, /statements text\[\]/);
 assert.match(recoverySql, /name text/);
-assert.match(recoverySql, /CHANANYA_STAGING_MIGRATION_LEDGER_READY/);
+assert.match(recoverySql, /CNYOS_STAGING_MIGRATION_LEDGER_RECONCILED/);
+assert.match(recoverySql, /'expected_deployment_id','chananya-clinical-staging'/);
+assert.match(recoverySql, /'acl_phase','strict-post-remediation'/);
+assert.match(recoverySql, /'acl_remediation_pending',false/);
+assert.doesNotMatch(recoverySql, /\bREADY\b/);
+assert.match(
+  preReconciliationRecoverySql,
+  /CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING/
+);
+assert.match(preReconciliationRecoverySql, /'acl_remediation_pending',true/);
+assert.match(preReconciliationRecoverySql, /'ledger_reconciled',true/);
+assert.match(preReconciliationRecoverySql, /'production_eligible',false/);
+assert.match(
+  preReconciliationRecoverySql,
+  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+);
+for (const [label, blockedArtifact] of [
+  ['strict', blockedStrictRecoverySql],
+  ['pre-reconciliation', preReconciliationRecoverySql]
+]) {
+  assert.equal(
+    blockedArtifact.split(repairAuthorizationBlockerStatement).length - 1,
+    2,
+    `both the guard and repair DO blocks must independently refuse ${label} writes`
+  );
+  const blockedWriteBlock = blockedArtifact.slice(
+    blockedArtifact.indexOf('do $ledger_repair$'),
+    blockedArtifact.indexOf('end\n$ledger_repair$;')
+  );
+  assert.match(
+    blockedWriteBlock,
+    /^do \$ledger_repair\$\ndeclare\n(?:  v_[^\n]+;\n)+begin\n  raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED:/
+  );
+  assert.doesNotMatch(
+    blockedWriteBlock.slice(
+      0,
+      blockedWriteBlock.indexOf(
+        'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED'
+      )
+    ),
+    /:=|\b(?:select|perform|execute|insert|update|delete|create|alter|drop)\b/i,
+    `${label} repair refusal must precede declaration initializers and every SQL action`
+  );
+}
+assert.doesNotMatch(
+  recoverySql,
+  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+);
+assert.match(preReconciliationRecoverySql, /'live_callable_acl_inventory_required',true/);
+assert.match(preReconciliationRecoverySql, /'live_callable_acl_inventory_complete',false/);
+assert.doesNotMatch(preReconciliationRecoverySql, /'live_callable_acl_inventory_complete',true/);
+assert.match(preReconciliationRecoverySql, /'authorization',false/);
+assert.doesNotMatch(preReconciliationRecoverySql, /'authorization',true/);
+assert.match(preReconciliationRecoverySql, /'live_callable_acl_known_subset_only',true/);
+assert.match(preReconciliationRecoverySql, /'known_live_callable_acl_subset_count',22/);
+assert.match(
+  preReconciliationRecoverySql,
+  /'known_live_callable_acl_subset_sha256','3d6fe1f67c0c2bc418c412b30b0c439f9f5c3c6ba2757bc212cb5f5f9c029695'/
+);
+assert.doesNotMatch(preReconciliationRecoverySql, /transitional_observation_manifest_sha256/);
+assert.match(
+  preReconciliationRecoverySql,
+  /'ledger_reconciliation_blocked_pending_live_callable_acl_inventory',true/
+);
+assert.match(
+  preReconciliationRecoverySql,
+  /'repository_derived_treatment_session_public_execute_debt_pending',true/
+);
+assert.match(
+  recoverySql,
+  /'repository_derived_treatment_session_public_execute_debt_pending',false/
+);
+assert.match(
+  preReconciliationRecoverySql,
+  new RegExp(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256)
+);
+assert.doesNotMatch(preReconciliationRecoverySql, /\bREADY\b/);
+assert.match(recoverySql, /STAGING_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT/);
+assert.match(recoverySql, /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/);
+assert.match(preReconciliationRecoverySql, /STAGING_TRANSITIONAL_TRIGGER_ACL_MISSING/);
+assert.match(preReconciliationRecoverySql, /STAGING_TRIGGER_FUNCTION_ACL_INVALID/);
+assert.match(
+  recoverySql,
+  /execute 'drop table if exists pg_temp\.cnyos_migration_ledger_repair_evidence';/
+);
+assert.match(recoverySql, /do \$ledger_repair\$/);
+assert.match(recoverySql, /STAGING_LEDGER_REPAIR_GUARD_REQUIRED/);
+assert.match(
+  recoverySql,
+  /select case when count\(\*\)=1 then min\(receipt\.evidence::text\) end as cnyos_repair_evidence/
+);
+assert.match(recoverySql, /select :'cnyos_repair_evidence'::jsonb as migration_ledger_evidence/);
+assert.match(
+  recoverySql.slice(recoverySql.lastIndexOf('\ncommit;\n')),
+  /from supabase_migrations\.schema_migrations/
+);
+for (const [repairPhase, repairArtifact] of [
+  ['strict', blockedStrictRecoverySql],
+  ['pre-reconciliation', preReconciliationRecoverySql]
+]) {
+  assert.match(repairArtifact, /^\\set ON_ERROR_STOP 1$/m);
+  assert.match(repairArtifact, /^\\set ON_ERROR_ROLLBACK off$/m);
+  assert.match(repairArtifact, /^\\if :AUTOCOMMIT$/m);
+  assert.match(repairArtifact, /CNYOS ledger repair requires psql AUTOCOMMIT=on/);
+  assert.match(repairArtifact, /pg_catalog\.pg_current_xact_id\(\)::text as cnyos_repair_probe_xid/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_PSQL_AUTOCOMMIT_REQUIRED/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_PSQL_CONNECTION_IDENTITY_REFUSED/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_SERVER_IDENTITY_REFUSED/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_PSQL_EXISTING_TRANSACTION_REFUSED/);
+  assert.match(repairArtifact, /pg_catalog\.gen_random_uuid\(\)::text as cnyos_repair_run_nonce/);
+  assert.match(repairArtifact, /'cnyos\.migration_ledger_repair_run_nonce'/);
+  assert.match(repairArtifact, /'cnyos\.migration_ledger_repair_committed_nonce'/);
+  assert.match(repairArtifact, /'cnyos\.migration_ledger_repair_committed_xid'/);
+  assert.match(repairArtifact, /primary key \(gate_token,run_nonce,repair_xid\)/);
+  assert.match(repairArtifact, new RegExp(reviewedChananyaSystemIdentifier));
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_WRONG_CLUSTER/);
+  assert.match(repairArtifact, /v_observed_current_database is distinct from 'postgres'/);
+  assert.match(repairArtifact, /'expected_project_ref','hsmnjwxurlmsizndjlun'/);
+  assert.match(repairArtifact, /'expected_database_origin','https:\/\/hsmnjwxurlmsizndjlun\.supabase\.co'/);
+  assert.match(repairArtifact, /'expected_clinic_code','CHANANYA-STG'/);
+  assert.match(repairArtifact, /'expected_clinic_id','00000000-0000-4000-8000-00000000a001'/);
+  assert.match(repairArtifact, /'observed_system_identifier',v_observed_system_identifier/);
+  assert.match(repairArtifact, /'observed_ssl',\(select ssl from pg_catalog\.pg_stat_ssl/);
+  assert.match(repairArtifact, /'repair_transaction_xid',v_repair_xid/);
+  assert.doesNotMatch(repairArtifact, /'project_ref','hsmnjwxurlmsizndjlun'/);
+  assert.doesNotMatch(repairArtifact, /'database_origin','https:\/\/hsmnjwxurlmsizndjlun\.supabase\.co'/);
+  assert.doesNotMatch(repairArtifact, /'deployment_id','chananya-clinical-staging'/);
+  assert.doesNotMatch(repairArtifact, /'clinic_code','CHANANYA-STG'/);
+  assert.doesNotMatch(
+    repairArtifact,
+    /'clinic_id','00000000-0000-4000-8000-00000000a001'/
+  );
+  assert.match(
+    repairArtifact,
+    /perform set_config\('cnyos\.migration_ledger_repair_committed_nonce',v_run_nonce::text,false\);/
+  );
+  assert.match(
+    repairArtifact,
+    /perform set_config\('cnyos\.migration_ledger_repair_committed_xid',v_repair_xid,false\);/
+  );
+  assert.match(repairArtifact, /evidence->>'repair_transaction_xid'=repair_xid/);
+  assert.match(repairArtifact, /CNYOS ledger repair committed state failed durable proof/);
+  const autocommitCheck = repairArtifact.indexOf('\\if :AUTOCOMMIT');
+  for (const variable of [
+    'cnyos_repair_probe_xid',
+    'cnyos_repair_existing_transaction',
+    'cnyos_repair_session_nonce',
+    'cnyos_repair_committed_nonce',
+    'cnyos_repair_committed_xid',
+    'cnyos_repair_connection_ok',
+    'cnyos_repair_server_identity_ok',
+    'cnyos_repair_evidence',
+    'cnyos_repair_lock_unheld',
+    'cnyos_repair_lock_acquired',
+    'cnyos_repair_lock_released',
+    'cnyos_repair_lock_fully_released',
+    'cnyos_repair_run_nonce'
+  ]) {
+    const firstUnset = repairArtifact.indexOf(`\\unset ${variable}`);
+    assert.ok(
+      firstUnset >= 0 && firstUnset < autocommitCheck,
+      `${variable} must be cleared before every psql refusal branch`
+    );
+  }
+  assert.match(
+    repairArtifact,
+    /\\else\n\\warn 'CNYOS ledger repair requires psql AUTOCOMMIT=on; rolling back and refusing execution'\nrollback;\ndo \$cnyos_psql_preflight_abort\$\nbegin\n  raise exception 'CNYOS_LEDGER_REPAIR_PSQL_AUTOCOMMIT_REQUIRED';\nend\n\$cnyos_psql_preflight_abort\$;\n\\endif/
+  );
+  assert.match(
+    repairArtifact,
+    /\\if :cnyos_repair_existing_transaction\n\\warn 'CNYOS ledger repair detected and rolled back an existing transaction; refusing execution'\nrollback;\ndo \$cnyos_psql_preflight_abort\$\nbegin\n  raise exception 'CNYOS_LEDGER_REPAIR_PSQL_EXISTING_TRANSACTION_REFUSED';\nend\n\$cnyos_psql_preflight_abort\$;\n\\endif/
+  );
+  assert.match(
+    repairArtifact,
+    /select not exists \([\s\S]*from pg_catalog\.pg_locks[\s\S]*pid=pg_catalog\.pg_backend_pid\(\)[\s\S]*objsubid=1\n\) as cnyos_repair_lock_unheld\n\\gset\n\\if :cnyos_repair_lock_unheld\n\\else[\s\S]*CNYOS_LEDGER_REPAIR_ADVISORY_LOCK_ALREADY_HELD[\s\S]*\\endif/
+  );
+  assert.match(
+    repairArtifact,
+    /select pg_catalog\.pg_try_advisory_lock\(202608302100::bigint\) as cnyos_repair_lock_acquired\n\\gset\n\\if :cnyos_repair_lock_acquired\n\\else[\s\S]*CNYOS_LEDGER_REPAIR_ADVISORY_LOCK_BUSY[\s\S]*\\endif/
+  );
+  assert.equal(
+    (repairArtifact.match(/pg_catalog\.pg_try_advisory_lock\(202608302100::bigint\)/g) ?? []).length,
+    1,
+    `${repairPhase} repair must attempt its session lock exactly once without waiting`
+  );
+  assert.equal(
+    (repairArtifact.match(/pg_catalog\.pg_advisory_lock\(202608302100::bigint\)/g) ?? []).length,
+    0,
+    `${repairPhase} repair must not use a blocking session advisory lock`
+  );
+  assert.equal(
+    (repairArtifact.match(/pg_catalog\.pg_advisory_unlock\(202608302100::bigint\)/g) ?? []).length,
+    2,
+    `${repairPhase} repair must unlock in both post-COMMIT proof branches`
+  );
+  assert.equal(
+    (repairArtifact.match(/\) as cnyos_repair_lock_fully_released/g) ?? []).length,
+    2,
+    `${repairPhase} repair must prove zero own holds after either unlock`
+  );
+  assert.match(
+    repairArtifact,
+    /\\if :cnyos_repair_lock_fully_released\nselect :'cnyos_repair_evidence'::jsonb as migration_ledger_evidence;/,
+    `${repairPhase} repair must not emit evidence before proving zero own lock holds`
+  );
+  assert.doesNotMatch(repairArtifact, /^\\q(?:uit)?(?:\s|$)/m);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_COMMIT_PROOF_FAILED/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_RECEIPT_SHAPE_INVALID/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_RELATION_HOOK_INVALID/);
+  assert.match(repairArtifact, /supabase_migrations\.cnyos_migration_ledger_repair_receipts/);
+  assert.match(repairArtifact, /CNYOS_LEDGER_REPAIR_NONCE_REPLAY/);
+  assert.match(
+    repairArtifact,
+    /pg_catalog\.pg_get_constraintdef\(actual\.oid,true\)=expected\.constraint_definition/
+  );
+  assert.match(repairArtifact, /CHECK \(gate_token ~ ''\^\[0-9a-f\]\{64\}\$''::text\)/);
+  assert.match(repairArtifact, /CHECK \(repair_xid ~ ''\^\[0-9\]\+\$''::text\)/);
+  assert.match(
+    repairArtifact,
+    /CHECK \(\(jsonb_typeof\(evidence\) = ''object''::text AND \(evidence ->> ''repair_gate_token''::text\) = gate_token AND \(evidence ->> ''repair_run_nonce''::text\) = run_nonce::text AND \(evidence ->> ''repair_transaction_xid''::text\) = repair_xid\) IS TRUE\)/
+  );
+  assert.match(repairArtifact, /begin isolation level repeatable read read only;/);
+  assert.match(repairArtifact, /or actual\.statements is null/);
+  assert.match(repairArtifact, /where statement\.value is null/);
+  const repairBegin = repairArtifact.indexOf(
+    'begin isolation level repeatable read read write;'
+  );
+  const transactionalMarkerReset = repairArtifact.indexOf(
+    `drop table if exists pg_temp.${repairEvidenceMarker}`
+  );
+  const repairCommit = repairArtifact.indexOf('\ncommit;\n', repairBegin);
+  const exactProofBegin = repairArtifact.indexOf(
+    'begin isolation level repeatable read read only;',
+    repairCommit
+  );
+  const guard = repairArtifact.indexOf('do $ledger_guard$', repairBegin);
+  const exactProofCatalogRead = repairArtifact.indexOf(
+    'lock table only supabase_migrations.schema_migrations in share mode;',
+    exactProofBegin
+  );
+  let previousRepairSetting = repairBegin;
+  let previousProofSetting = exactProofBegin;
+  for (const setting of canonicalCatalogOutputGucStatements) {
+    assert.equal(
+      repairArtifact.split(setting).length - 1,
+      2,
+      `${repairPhase} repair must pin ${setting} in both repeatable-read transactions`
+    );
+    const repairSetting = repairArtifact.indexOf(setting, repairBegin);
+    const proofSetting = repairArtifact.indexOf(setting, exactProofBegin);
+    assert.ok(
+      previousRepairSetting < repairSetting && repairSetting < guard,
+      `${repairPhase} repair must pin ${setting} before guard catalog evidence and hashing`
+    );
+    assert.ok(
+      previousProofSetting < proofSetting && proofSetting < exactProofCatalogRead,
+      `${repairPhase} repair must pin ${setting} before post-COMMIT proof catalog reads`
+    );
+    previousRepairSetting = repairSetting;
+    previousProofSetting = proofSetting;
+  }
+  const transactionModeCheck = repairArtifact.indexOf(
+    "current_setting('transaction_isolation') <> 'repeatable read'",
+    guard
+  );
+  const systemIdentityCheck = repairArtifact.indexOf(
+    'if v_observed_system_identifier is distinct from',
+    guard
+  );
+  const blocker = repairArtifact.indexOf(
+    'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED',
+    guard
+  );
+  const nonceCheck = repairArtifact.indexOf(
+    'STAGING_LEDGER_REPAIR_RUN_NONCE_REQUIRED',
+    guard
+  );
+  const writeBlock = repairArtifact.indexOf('do $ledger_repair$', guard);
+  const mutationBlocker = repairArtifact.indexOf(
+    'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED',
+    writeBlock
+  );
+  const firstRepairDdl = repairArtifact.indexOf(
+    "execute 'create schema if not exists supabase_migrations'",
+    writeBlock
+  );
+  const firstRepairInsert = repairArtifact.indexOf(
+    'insert into supabase_migrations.schema_migrations',
+    writeBlock
+  );
+  assert.ok(
+    repairArtifact.indexOf('CNYOS_LEDGER_REPAIR_PSQL_EXISTING_TRANSACTION_REFUSED') <
+      transactionalMarkerReset,
+    'outer-transaction refusal must precede the destructive stale-marker reset'
+  );
+  assert.ok(
+    guard < transactionModeCheck &&
+      transactionModeCheck < systemIdentityCheck &&
+      systemIdentityCheck < blocker &&
+      blocker < nonceCheck &&
+      blocker < repairArtifact.indexOf('v_repair_xid := pg_catalog.pg_current_xact_id()', guard) &&
+      blocker < repairArtifact.indexOf('perform pg_catalog.pg_advisory_xact_lock', guard) &&
+      blocker < transactionalMarkerReset &&
+      blocker < repairArtifact.indexOf('select string_agg(procedure_signature', guard) &&
+      blocker < repairArtifact.indexOf('from public.hybrid_patient_identity_healthcheck()', guard) &&
+      blocker < repairArtifact.indexOf(`create temporary table ${repairEvidenceMarker}`, guard) &&
+      blocker < writeBlock &&
+      writeBlock < mutationBlocker &&
+      mutationBlocker < firstRepairDdl &&
+      mutationBlocker < firstRepairInsert,
+    `${repairPhase} blockers must precede temp/durable DDL, DML, catalog/application checks, healthchecks, and every repair mutation`
+  );
+  assert.ok(
+    repairArtifact.includes(
+      `create temporary table ${repairEvidenceMarker} (gate_token text not null, run_nonce uuid not null, repair_xid text not null, evidence jsonb, primary key (gate_token,run_nonce,repair_xid)) on commit drop`
+    ),
+    'the transaction-bound evidence marker must be dropped automatically at commit'
+  );
+  assert.equal(
+    repairArtifact.slice(repairCommit + '\ncommit;\n'.length, exactProofBegin),
+    '',
+    'no DDL may run between the repair commit and exact read-only proof'
+  );
+}
 assert.match(recoverySql, /set local search_path = pg_catalog, pg_temp, public;/i);
 for (const entry of entries) {
   assert.match(recoverySql, new RegExp(entry.version));
@@ -232,6 +817,18 @@ assert.throws(
 );
 
 const db = new PGlite();
+const pgliteIdentityRow = (await db.query(`
+  select pg_catalog.current_database() database,
+    session_user::text session_user,
+    current_user::text current_user,
+    (select system_identifier::text from pg_catalog.pg_control_system()) system_identifier
+`)).rows[0];
+pgliteSystemIdentifier = pgliteIdentityRow.system_identifier;
+pgliteDatabaseIdentity = {
+  database: pgliteIdentityRow.database,
+  sessionUser: pgliteIdentityRow.session_user,
+  currentUser: pgliteIdentityRow.current_user
+};
 await db.exec(`
   create role anon nologin;
   create role authenticated nologin;
@@ -560,12 +1157,163 @@ await db.exec(`
   delete from public.clinics where id='${LEGACY_CLINIC_ID}';
 `);
 
+const applyStrictTriggerAclFixture = async () => {
+  const revokes = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory
+    .map(([procedureSignature]) =>
+      `revoke all on function ${procedureSignature} from public,anon,authenticated,service_role;`)
+    .join('\n');
+  await db.exec(`${revokes}\nalter function public.set_updated_at() set search_path=pg_catalog,public;`);
+};
+const triggerBindingsBeforeInitialClosure = (await db.query(
+  'select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid'
+)).rows;
+const wrongClusterRepairSql = preReconciliationRecoverySql.replaceAll(
+  reviewedChananyaSystemIdentifier,
+  '1'
+);
+await assert.rejects(
+  executeMaterializedPsqlRepair(db, wrongClusterRepairSql, nextRepairTestNonce()),
+  /CNYOS_LEDGER_REPAIR_WRONG_CLUSTER/
+);
+await db.exec('rollback;');
+await applyStrictTriggerAclFixture();
+assert.deepEqual(
+  (await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows,
+  triggerBindingsBeforeInitialClosure,
+  'strict trigger ACL closure must preserve every trigger binding'
+);
+const clinicalTreatmentSessionFunctionDefinition = (await db.query(`
+  select pg_get_functiondef(to_regprocedure('${clinicalTreatmentSessionProcedure}')) definition
+`)).rows[0].definition;
+const clinicalTreatmentSessionDirectAcl = async () => (await db.query(`
+  select coalesce(grantee.rolname,'PUBLIC') grantee,
+    acl.privilege_type privilege_type,
+    acl.is_grantable,
+    acl.grantor=p.proowner owner_granted
+  from pg_proc p
+  cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+  left join pg_roles grantee on grantee.oid=acl.grantee
+  where p.oid=to_regprocedure('${clinicalTreatmentSessionProcedure}')
+    and acl.grantee<>p.proowner
+  order by coalesce(grantee.rolname,'PUBLIC'),acl.privilege_type
+`)).rows;
+const clinicalTreatmentSessionRuntimeAcl = async () => (await db.query(`
+  select runtime_role,
+    has_function_privilege(runtime_role,'${clinicalTreatmentSessionProcedure}','EXECUTE') can_execute
+  from unnest(array['anon','authenticated','service_role']::text[]) runtime(runtime_role)
+  order by runtime_role
+`)).rows;
+assert.deepEqual(await clinicalTreatmentSessionDirectAcl(), [
+  { grantee: 'PUBLIC', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true },
+  { grantee: 'authenticated', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true }
+]);
+assert.deepEqual(await clinicalTreatmentSessionRuntimeAcl(), [
+  { runtime_role: 'anon', can_execute: true },
+  { runtime_role: 'authenticated', can_execute: true },
+  { runtime_role: 'service_role', can_execute: true }
+]);
+await db.exec(`revoke execute on function ${clinicalTreatmentSessionProcedure} from public`);
+assert.deepEqual(await clinicalTreatmentSessionDirectAcl(), [
+  { grantee: 'authenticated', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true }
+]);
+assert.deepEqual(await clinicalTreatmentSessionRuntimeAcl(), [
+  { runtime_role: 'anon', can_execute: false },
+  { runtime_role: 'authenticated', can_execute: true },
+  { runtime_role: 'service_role', can_execute: false }
+]);
 async function assertRecoveryGuard({ setup, expected, repair }) {
   await db.exec(setup);
-  await assert.rejects(db.exec(recoverySql), expected);
+  const materialized = materializePsqlRepairArtifactForPGlite(
+    recoverySql,
+    nextRepairTestNonce()
+  );
+  await assert.rejects(
+    executeMaterializedPsqlRepair(db, materialized.artifact, materialized.runNonce),
+    expected
+  );
   await db.exec('rollback;');
   await db.exec(repair);
 }
+
+await assertRecoveryGuard({
+  setup: `grant execute on function ${clinicalTreatmentSessionProcedure} to service_role`,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_RUNTIME_EXECUTE_INVALID/,
+  repair: `revoke execute on function ${clinicalTreatmentSessionProcedure} from service_role`
+});
+await assertRecoveryGuard({
+  setup: `grant execute on function ${clinicalTreatmentSessionProcedure} to anon`,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_RUNTIME_EXECUTE_INVALID/,
+  repair: `revoke execute on function ${clinicalTreatmentSessionProcedure} from anon`
+});
+await assertRecoveryGuard({
+  setup: `grant execute on function ${clinicalTreatmentSessionProcedure}
+    to authenticated with grant option`,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_ACL_MISSING/,
+  repair: `revoke grant option for execute on function
+    ${clinicalTreatmentSessionProcedure} from authenticated`
+});
+await assertRecoveryGuard({
+  setup: `
+    create role treatment_session_rogue_executor;
+    grant execute on function ${clinicalTreatmentSessionProcedure}
+      to treatment_session_rogue_executor
+  `,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_ACL_INVALID/,
+  repair: `
+    revoke execute on function ${clinicalTreatmentSessionProcedure}
+      from treatment_session_rogue_executor;
+    drop role treatment_session_rogue_executor
+  `
+});
+await assertRecoveryGuard({
+  setup: `
+    create role treatment_session_inherited_executor;
+    grant execute on function ${clinicalTreatmentSessionProcedure}
+      to treatment_session_inherited_executor;
+    grant treatment_session_inherited_executor to service_role
+  `,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_RUNTIME_EXECUTE_INVALID/,
+  repair: `
+    revoke treatment_session_inherited_executor from service_role;
+    revoke execute on function ${clinicalTreatmentSessionProcedure}
+      from treatment_session_inherited_executor;
+    drop role treatment_session_inherited_executor
+  `
+});
+await assertRecoveryGuard({
+  setup: `
+    create role treatment_session_owner_drift;
+    alter function ${clinicalTreatmentSessionProcedure} owner to treatment_session_owner_drift
+  `,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_SEMANTIC_CONTRACT_INVALID/,
+  repair: `
+    alter function ${clinicalTreatmentSessionProcedure} owner to ${trustedMigrationOwnerSql};
+    drop role treatment_session_owner_drift
+  `
+});
+await assertRecoveryGuard({
+  setup: `
+    create or replace function public.create_clinical_treatment_session(
+      p_encounter_id uuid,
+      p_treatment_modalities text[] default '{}',
+      p_treatment_detail text default null,
+      p_procedure_referral boolean default false,
+      p_procedure_referral_detail text default null,
+      p_precautions text default null,
+      p_pain_before smallint default null,
+      p_pain_after smallint default null,
+      p_outcome_summary text default null,
+      p_advice text default null
+    ) returns public.clinical_treatment_sessions
+    language plpgsql security invoker set search_path=public as $$
+    begin
+      raise exception 'DRIFTED_TREATMENT_SESSION_BODY';
+    end
+    $$
+  `,
+  expected: /STAGING_CLINICAL_TREATMENT_SESSION_SEMANTIC_CONTRACT_INVALID/,
+  repair: clinicalTreatmentSessionFunctionDefinition
+});
 
 await assertRecoveryGuard({
   setup: 'alter table public.clinic_drive_destination_events disable row level security',
@@ -1005,12 +1753,12 @@ await assertRecoveryGuard({
 });
 await assertRecoveryGuard({
   setup: 'alter table public.clinic_appointments disable trigger trg_cnyos_active_subscription_write',
-  expected: /STAGING_ACTIVE_SUBSCRIPTION_WRITE_TRIGGER_INVALID/,
+  expected: /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/,
   repair: 'alter table public.clinic_appointments enable trigger trg_cnyos_active_subscription_write'
 });
 await assertRecoveryGuard({
   setup: 'alter table public.products disable trigger trg_cnyos_authenticated_subscription_statement_write',
-  expected: /STAGING_AUTHENTICATED_SUBSCRIPTION_STATEMENT_TRIGGER_INVALID/,
+  expected: /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/,
   repair: 'alter table public.products enable trigger trg_cnyos_authenticated_subscription_statement_write'
 });
 await assertRecoveryGuard({
@@ -1251,7 +1999,7 @@ await assertRecoveryGuard({
 });
 await assertRecoveryGuard({
   setup: 'alter table public.clinics disable trigger trg_clinics_owner_subscription_forward_only',
-  expected: /STAGING_OWNER_SUBSCRIPTION_FORWARD_TRIGGER_INVALID/,
+  expected: /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/,
   repair: 'alter table public.clinics enable trigger trg_clinics_owner_subscription_forward_only'
 });
 await assertRecoveryGuard({
@@ -1347,7 +2095,7 @@ await assertRecoveryGuard({
 });
 await assertRecoveryGuard({
   setup: 'alter table public.clinic_drive_destination_events disable trigger trg_clinic_drive_destination_events_append_only',
-  expected: /STAGING_APPEND_ONLY_TRIGGER_INVALID/,
+  expected: /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/,
   repair: 'alter table public.clinic_drive_destination_events enable trigger trg_clinic_drive_destination_events_append_only'
 });
 await assertRecoveryGuard({
@@ -1360,7 +2108,7 @@ await assertRecoveryGuard({
     before update or delete on public.clinic_drive_destination_events
     for each row execute function public.corrupted_append_only_trigger()
   `,
-  expected: /STAGING_APPEND_ONLY_TRIGGER_INVALID/,
+  expected: /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/,
   repair: `
     drop trigger trg_clinic_drive_destination_events_append_only
       on public.clinic_drive_destination_events;
@@ -1371,8 +2119,31 @@ await assertRecoveryGuard({
   `
 });
 await assertRecoveryGuard({
+  setup: `
+    drop trigger stock_movement_apply on public.stock_movements;
+    drop trigger trg_assign_audit_clinic on public.audit_logs;
+    create trigger stock_movement_apply
+    after insert on public.stock_movements
+    for each row execute function public.assign_audit_clinic();
+    create trigger trg_assign_audit_clinic
+    before insert on public.audit_logs
+    for each row execute function public.apply_stock_movement()
+  `,
+  expected: /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/,
+  repair: `
+    drop trigger stock_movement_apply on public.stock_movements;
+    drop trigger trg_assign_audit_clinic on public.audit_logs;
+    create trigger stock_movement_apply
+    after insert on public.stock_movements
+    for each row execute function public.apply_stock_movement();
+    create trigger trg_assign_audit_clinic
+    before insert on public.audit_logs
+    for each row execute function public.assign_audit_clinic()
+  `
+});
+await assertRecoveryGuard({
   setup: 'alter table public.clinic_subscription_control_events disable trigger trg_clinic_subscription_control_events_append_only',
-  expected: /STAGING_APPEND_ONLY_TRIGGER_INVALID/,
+  expected: /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/,
   repair: 'alter table public.clinic_subscription_control_events enable trigger trg_clinic_subscription_control_events_append_only'
 });
 await assertRecoveryGuard({
@@ -1382,9 +2153,45 @@ await assertRecoveryGuard({
     set search_path=pg_catalog
     as $$ begin return old; end $$
   `,
-  expected: /STAGING_APPEND_ONLY_FUNCTION_INVALID/,
+  expected: /STAGING_TRIGGER_FUNCTION_SEMANTICS_INVALID/,
   repair: appendOnlyFunctionDefinition
 });
+
+const reviewedTriggerCost = Number((await db.query(`
+  select procost::text cost
+  from pg_catalog.pg_proc
+  where oid='public.handle_new_user()'::regprocedure
+`)).rows[0].cost);
+await db.exec(`
+  set extra_float_digits = -1;
+  alter function public.handle_new_user() cost ${reviewedTriggerCost + 0.001};
+`);
+assert.equal(
+  (await db.query(`
+    select procost::text cost
+    from pg_catalog.pg_proc
+    where oid='public.handle_new_user()'::regprocedure
+  `)).rows[0].cost,
+  String(reviewedTriggerCost),
+  'hostile float formatting must mask the tiny procost/prorows-class drift outside repair'
+);
+const hostileFloatRepair = materializePsqlRepairArtifactForPGlite(
+  recoverySql,
+  nextRepairTestNonce()
+);
+await assert.rejects(
+  executeMaterializedPsqlRepair(
+    db,
+    hostileFloatRepair.artifact,
+    hostileFloatRepair.runNonce
+  ),
+  /STAGING_TRIGGER_FUNCTION_SEMANTICS_INVALID/
+);
+await db.exec('rollback;');
+await db.exec(`
+  alter function public.handle_new_user() cost ${reviewedTriggerCost};
+  reset extra_float_digits;
+`);
 
 const archivedBackupDirectCalls = [
   `select public.export_clinic_backup_domain_v20260831('${config.tenant.expectedClinicId}'::uuid,'patients')`,
@@ -1529,7 +2336,55 @@ await db.exec(`
   )
 `);
 await db.exec('set search_path=pg_catalog');
-const verificationSql = buildMigrationLedgerVerificationSql({ config, entries, sourceRevision: 'a'.repeat(40) });
+const productionVerificationSql = buildMigrationLedgerVerificationSql({
+  config,
+  entries,
+  sourceRevision: 'a'.repeat(40)
+});
+const productionPreReconciliationVerificationSql = buildMigrationLedgerVerificationSql({
+  config,
+  entries,
+  sourceRevision: 'a'.repeat(40),
+  aclPhase: MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION
+});
+for (const artifact of [
+  productionVerificationSql,
+  productionPreReconciliationVerificationSql
+]) {
+  assert.equal(
+    artifact.split(reviewedChananyaSystemIdentifier).length - 1,
+    2,
+    'each production CNYOS verifier must pin and report the reviewed cluster identity'
+  );
+}
+assert.ok(productionVerificationSql.includes(`"status":"${strictVerificationStatus}"`));
+assert.ok(productionPreReconciliationVerificationSql.includes(
+  `"status":"${preReconciliationVerificationStatus}"`
+));
+for (const artifact of [
+  productionVerificationSql,
+  productionPreReconciliationVerificationSql
+]) {
+  assert.doesNotMatch(artifact, /raise notice/i);
+  assert.match(
+    artifact,
+    /\)::text as cnyos_verification_evidence\n\\gset\nrollback;\n\\unset cnyos_verification_lock_released/
+  );
+  assert.match(
+    artifact,
+    /\\if :cnyos_verification_lock_released\n\\unset cnyos_verification_lock_fully_released\nselect not exists \([\s\S]*\) as cnyos_verification_lock_fully_released\n\\gset\n\\if :cnyos_verification_lock_fully_released\nselect \([\s\S]*'verification_transaction_rolled_back',true,[\s\S]*'advisory_lock_released',true[\s\S]*\) as migration_ledger_verification_evidence;\n\\else\n/
+  );
+}
+// Execution remains confined to the disposable PGlite cluster. Preserve the
+// generated production SQL above and rebind only the in-memory behavioral
+// fixtures to the cluster identity they actually observe.
+const verificationSql = materializePsqlVerificationArtifactForPGlite(
+  productionVerificationSql
+);
+const preReconciliationVerificationSql =
+  materializePsqlVerificationArtifactForPGlite(
+    productionPreReconciliationVerificationSql
+  );
 const verificationNotices = [];
 const verificationOptions = { onNotice: notice => verificationNotices.push(notice.message) };
 const verificationSnapshot = async () => ({
@@ -1543,12 +2398,7 @@ const beforeVerification = await verificationSnapshot();
 await db.exec(verificationSql, verificationOptions);
 assert.deepEqual(await verificationSnapshot(), beforeVerification, 'valid catalog verification must preserve ledger, rows, ACLs and sequences');
 assert.equal((await db.query('show transaction_read_only')).rows[0].transaction_read_only, 'off', 'verification must finish its rollback');
-const successfulNotices = verificationNotices.filter(message => message.startsWith(verificationNoticePrefix));
-assert.equal(successfulNotices.length, 1);
-const provisionalEvidence = JSON.parse(successfulNotices[0].slice(verificationNoticePrefix.length));
-assert.equal(provisionalEvidence.source_revision, 'a'.repeat(40));
-assert.equal(provisionalEvidence.clinic_id, config.tenant.expectedClinicId);
-assert.equal(provisionalEvidence.rollback_required, true);
+assert.equal(verificationNotices.length, 0, 'verification must not emit success inside its transaction');
 
 for (const drift of [
   { setup: 'alter table public.clinic_drive_destination_events disable row level security', repair: 'alter table public.clinic_drive_destination_events enable row level security' },
@@ -1558,13 +2408,1056 @@ for (const drift of [
   await db.exec(drift.setup);
   await assert.rejects(db.exec(verificationSql, verificationOptions), /STAGING_/);
   await db.exec('rollback;');
-  assert.ok(!verificationNotices.some(message => message.startsWith(verificationNoticePrefix)));
+  assert.equal(verificationNotices.length, 0);
   await db.exec(drift.repair);
 }
 console.log('Full-schema verification passed: exact 45-migration fixture, unchanged state, and RLS/ACL drift denied without a success notice');
 
-await db.exec(recoverySql);
-await db.exec(recoverySql);
+const transitionGrantSql = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+  .map(([grantee, procedureSignature]) =>
+    `grant execute on function ${procedureSignature} to ${grantee};`)
+  .join('\n');
+const transitionRevokeSql = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+  .map(([grantee, procedureSignature]) =>
+    `revoke execute on function ${procedureSignature} from ${grantee};`)
+  .join('\n');
+const triggerTransitionGrantSql = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples
+  .map(([grantee, procedureSignature]) =>
+    `grant execute on function ${procedureSignature} to ${grantee};`)
+  .join('\n');
+await db.exec(`
+  alter function public.set_updated_at() reset search_path;
+  ${triggerTransitionGrantSql}
+  ${transitionGrantSql}
+  grant execute on function ${clinicalTreatmentSessionProcedure} to public
+`);
+
+// The transitional state is intentionally rejected by the default strict
+// verifier, but accepted by the explicitly selected Chananya-only preflight.
+verificationNotices.length = 0;
+await assert.rejects(
+  db.exec(verificationSql, verificationOptions),
+  /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/
+);
+await db.exec('rollback;');
+assert.equal(verificationNotices.length, 0);
+
+const preReconciliationNotices = [];
+const preReconciliationOptions = {
+  onNotice: notice => preReconciliationNotices.push(notice.message)
+};
+const beforePreReconciliationVerification = await verificationSnapshot();
+await db.exec(preReconciliationVerificationSql, preReconciliationOptions);
+assert.deepEqual(
+  await verificationSnapshot(),
+  beforePreReconciliationVerification,
+  'the known 22-tuple subset plus repository-derived debt preflight must remain read-only'
+);
+assert.equal(
+  preReconciliationNotices.length,
+  0,
+  'pre-reconciliation verification must not emit success inside its transaction'
+);
+
+async function assertPreReconciliationGuard({ setup, expected, repair, assertSetup }) {
+  preReconciliationNotices.length = 0;
+  await db.exec(setup);
+  if (assertSetup) await assertSetup();
+  await assert.rejects(
+    db.exec(preReconciliationVerificationSql, preReconciliationOptions),
+    expected
+  );
+  await db.exec('rollback;');
+  assert.equal(preReconciliationNotices.length, 0);
+  await db.exec(repair);
+}
+
+await assertPreReconciliationGuard({
+  setup: 'revoke execute on function public.assign_audit_clinic() from public',
+  expected: /STAGING_TRANSITIONAL_TRIGGER_ACL_MISSING/,
+  repair: 'grant execute on function public.assign_audit_clinic() to public'
+});
+await assertPreReconciliationGuard({
+  setup: 'grant execute on function public.reject_append_only_mutation() to anon',
+  expected: /STAGING_TRIGGER_FUNCTION_ACL_INVALID/,
+  repair: 'revoke execute on function public.reject_append_only_mutation() from anon'
+});
+await assertPreReconciliationGuard({
+  setup: 'alter function public.set_updated_at() set search_path=public',
+  expected: /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/,
+  repair: 'alter function public.set_updated_at() reset search_path'
+});
+
+// 21 of 22 transitional tuples is not an accepted approximation.
+await assertPreReconciliationGuard({
+  setup: 'revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon',
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
+  repair: 'grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon'
+});
+
+// Canonical authenticated grants remain mandatory during the transition.
+await assertPreReconciliationGuard({
+  setup: 'revoke execute on function public.sign_clinical_record_complete(uuid,text,text,text) from authenticated',
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
+  repair: 'grant execute on function public.sign_clinical_record_complete(uuid,text,text,text) to authenticated'
+});
+
+// A 23rd non-owner ACL tuple, whether PUBLIC or another role, is rejected.
+await assertPreReconciliationGuard({
+  setup: 'grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to public',
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_INVALID/,
+  repair: 'revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from public'
+});
+await assertPreReconciliationGuard({
+  setup: `
+    create role pre_reconciliation_rogue_executor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+      to pre_reconciliation_rogue_executor
+  `,
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_INVALID/,
+  repair: `
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+      from pre_reconciliation_rogue_executor;
+    drop role pre_reconciliation_rogue_executor
+  `
+});
+
+await assertPreReconciliationGuard({
+  setup: `grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+    to anon with grant option`,
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
+  repair: `revoke grant option for execute on function
+    public.book_clinic_appointment(uuid,uuid,text,text,text) from anon`
+});
+
+await assertPreReconciliationGuard({
+  setup: `
+    create role pre_reconciliation_delegated_grantor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+      to pre_reconciliation_delegated_grantor with grant option;
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon;
+    set role pre_reconciliation_delegated_grantor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon;
+    reset role
+  `,
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_(?:MISSING|INVALID)/,
+  repair: `
+    set role pre_reconciliation_delegated_grantor;
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon;
+    reset role;
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+      from pre_reconciliation_delegated_grantor cascade;
+    drop role pre_reconciliation_delegated_grantor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon
+  `
+});
+
+await assertPreReconciliationGuard({
+  setup: `
+    create role pre_reconciliation_inherited_executor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+      to pre_reconciliation_inherited_executor;
+    grant pre_reconciliation_inherited_executor to anon;
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon
+  `,
+  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
+  assertSetup: async () => {
+    assert.equal((await db.query(`
+      select has_function_privilege(
+        'anon',
+        'public.book_clinic_appointment(uuid,uuid,text,text,text)',
+        'EXECUTE'
+      ) inherited_execute
+    `)).rows[0].inherited_execute, true);
+    assert.equal((await db.query(`
+      select exists (
+        select 1
+        from pg_proc p
+        cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+        join pg_roles grantee on grantee.oid=acl.grantee
+        where p.oid=to_regprocedure(
+          'public.book_clinic_appointment(uuid,uuid,text,text,text)'
+        ) and grantee.rolname='anon' and acl.grantor=p.proowner
+      ) direct_owner_grant
+    `)).rows[0].direct_owner_grant, false);
+  },
+  repair: `
+    revoke pre_reconciliation_inherited_executor from anon;
+    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
+      from pre_reconciliation_inherited_executor;
+    drop role pre_reconciliation_inherited_executor;
+    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon
+  `
+});
+
+assert.deepEqual(await clinicalTreatmentSessionDirectAcl(), [
+  { grantee: 'PUBLIC', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true },
+  { grantee: 'authenticated', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true }
+]);
+assert.deepEqual(await clinicalTreatmentSessionRuntimeAcl(), [
+  { runtime_role: 'anon', can_execute: true },
+  { runtime_role: 'authenticated', can_execute: true },
+  { runtime_role: 'service_role', can_execute: true }
+]);
+
+// The exact repository-derived debt is accepted by the read-only transitional
+// verifier, but the write-capable artifact remains blocked until an exact live
+// callable-ACL inventory has been independently classified.
+const blockedPreReconciliationRepair = materializePsqlRepairArtifactForPGlite(
+  preReconciliationRecoverySql,
+  nextRepairTestNonce()
+);
+const beforeBlockedPreReconciliationRepair = await verificationSnapshot();
+await db.exec(blockedPreReconciliationRepair.setupSessionSql);
+await db.exec(blockedPreReconciliationRepair.beforeTransactionSql);
+await db.exec(blockedPreReconciliationRepair.transactionPrefix);
+await assert.rejects(
+  db.exec(blockedPreReconciliationRepair.guardStatement),
+  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+);
+await db.exec('rollback;');
+assert.deepEqual(
+  await verificationSnapshot(),
+  beforeBlockedPreReconciliationRepair,
+  'the live callable-ACL inventory blocker must fire before any durable repair mutation'
+);
+
+await applyStrictTriggerAclFixture();
+await db.exec(transitionRevokeSql);
+verificationNotices.length = 0;
+await assert.rejects(
+  db.exec(verificationSql, verificationOptions),
+  /STAGING_CLINICAL_TREATMENT_SESSION_RUNTIME_EXECUTE_INVALID/
+);
+await db.exec('rollback;');
+assert.equal(verificationNotices.length, 0);
+await db.exec(`revoke execute on function ${clinicalTreatmentSessionProcedure} from public`);
+verificationNotices.length = 0;
+await db.exec(verificationSql, verificationOptions);
+assert.equal(
+  verificationNotices.length,
+  0,
+  'strict post-remediation verification must accept the direct authenticated-only ACL'
+);
+
+// The psql two-statement XID probe distinguishes normal autocommit from an
+// already-open transaction before the artifact drops any prior temp marker.
+const firstAutocommitProbeXid = (await db.query(
+  'select pg_catalog.pg_current_xact_id()::text xid'
+)).rows[0].xid;
+const secondAutocommitProbeXid = (await db.query(
+  'select pg_catalog.pg_current_xact_id()::text xid'
+)).rows[0].xid;
+assert.notEqual(
+  firstAutocommitProbeXid,
+  secondAutocommitProbeXid,
+  'separate autocommit statements must receive different transaction IDs'
+);
+await db.exec('begin;');
+const firstOuterTransactionProbeXid = (await db.query(
+  'select pg_catalog.pg_current_xact_id()::text xid'
+)).rows[0].xid;
+const secondOuterTransactionProbeXid = (await db.query(
+  'select pg_catalog.pg_current_xact_id()::text xid'
+)).rows[0].xid;
+assert.equal(
+  firstOuterTransactionProbeXid,
+  secondOuterTransactionProbeXid,
+  'an existing outer transaction must be visible to the psql XID probe'
+);
+await db.exec('rollback;');
+
+const repairDurableSnapshot = async () => {
+  const receiptExists = (await db.query(
+    `select to_regclass('supabase_migrations.${repairReceiptTable}') is not null present`
+  )).rows[0].present;
+  return {
+  ledger: (await db.query(`
+    select version,name,statements
+    from supabase_migrations.schema_migrations
+    order by version
+  `)).rows,
+  schema: (await db.query(`
+    select nspname,nspowner::regrole::text owner,nspacl::text acl
+    from pg_namespace
+    where nspname='supabase_migrations'
+  `)).rows,
+  receipts: receiptExists ? (await db.query(`
+    select run_nonce::text run_nonce,gate_token,repair_xid,evidence,committed_at
+    from supabase_migrations.${repairReceiptTable}
+    order by committed_at,run_nonce
+  `)).rows : [],
+  relation: (await db.query(`
+    select n.nspname,c.relname,c.relowner::regrole::text owner,c.relacl::text acl,
+      obj_description(c.oid,'pg_class') description
+    from pg_class c
+    join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='supabase_migrations'
+      and c.relname in ('schema_migrations','${repairReceiptTable}')
+    order by c.relname
+  `)).rows,
+  columns: (await db.query(`
+    select a.attname,format_type(a.atttypid,a.atttypmod) data_type,a.attnotnull,
+      pg_get_expr(d.adbin,d.adrelid) default_expression
+    from pg_attribute a
+    join pg_class c on c.oid=a.attrelid
+    join pg_namespace n on n.oid=c.relnamespace
+    left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+    where n.nspname='supabase_migrations'
+      and c.relname in ('schema_migrations','${repairReceiptTable}')
+      and a.attnum > 0 and not a.attisdropped
+    order by c.relname,a.attnum
+  `)).rows,
+  constraints: (await db.query(`
+    select constraint_definition.conname,
+      constraint_definition.contype::text constraint_type,
+      constraint_definition.condeferrable,
+      constraint_definition.condeferred,
+      constraint_definition.convalidated,
+      constraint_definition.conislocal,
+      constraint_definition.coninhcount,
+      constraint_definition.connoinherit,
+      pg_get_constraintdef(constraint_definition.oid,true) definition
+    from pg_constraint constraint_definition
+    join pg_class relation on relation.oid=constraint_definition.conrelid
+    join pg_namespace relation_namespace on relation_namespace.oid=relation.relnamespace
+    where relation_namespace.nspname='supabase_migrations'
+      and relation.relname in ('schema_migrations','${repairReceiptTable}')
+    order by relation.relname collate "C",constraint_definition.conname collate "C",
+      constraint_definition.contype::text collate "C",
+      pg_get_constraintdef(constraint_definition.oid,true) collate "C"
+  `)).rows,
+  sequences: (await db.query(`
+    select schemaname,sequencename,sequenceowner,data_type,
+      start_value,min_value,max_value,increment_by,cycle,cache_size,last_value
+    from pg_sequences
+    where schemaname in ('public','supabase_migrations')
+    order by schemaname collate "C",sequencename collate "C"
+  `)).rows
+  };
+};
+
+const canonicalReceiptEvidenceCheck = `(
+  pg_catalog.jsonb_typeof(evidence)='object'
+  and evidence->>'repair_gate_token'=gate_token
+  and evidence->>'repair_run_nonce'=run_nonce::text
+  and evidence->>'repair_transaction_xid'=repair_xid
+) is true`;
+const nullableReceiptEvidenceCheck = `
+  pg_catalog.jsonb_typeof(evidence)='object'
+  and evidence->>'repair_gate_token'=gate_token
+  and evidence->>'repair_run_nonce'=run_nonce::text
+  and evidence->>'repair_transaction_xid'=repair_xid
+`;
+
+async function createRepairReceiptFixture({
+  evidenceCheck = canonicalReceiptEvidenceCheck,
+  committedAtDefault = 'pg_catalog.clock_timestamp()'
+} = {}) {
+  await db.exec(`
+    create table supabase_migrations.${repairReceiptTable} (
+      run_nonce uuid not null primary key,
+      gate_token text not null,
+      repair_xid text not null,
+      evidence jsonb not null,
+      committed_at timestamptz not null default ${committedAtDefault},
+      unique (gate_token,repair_xid),
+      constraint cnyos_repair_receipt_gate_token_check
+        check (gate_token ~ '^[0-9a-f]{64}$'),
+      constraint cnyos_repair_receipt_xid_check
+        check (repair_xid ~ '^[0-9]+$'),
+      constraint cnyos_repair_receipt_evidence_check check (${evidenceCheck})
+    );
+    comment on table supabase_migrations.${repairReceiptTable} is
+      'Committed CNYOS migration-ledger repair receipts. UUID and top-level XID replay guard; not migration provenance.';
+    revoke all on table supabase_migrations.${repairReceiptTable}
+      from public,anon,authenticated,service_role
+  `);
+}
+
+async function rebuildMigrationLedgerFixture() {
+  await db.exec(`
+    create temporary table cnyos_ledger_repair_rows as
+      select version,name,statements
+      from supabase_migrations.schema_migrations;
+    drop table supabase_migrations.schema_migrations;
+    create table supabase_migrations.schema_migrations (
+      version text not null primary key,
+      statements text[],
+      name text
+    );
+    insert into supabase_migrations.schema_migrations(version,name,statements)
+    select version,name,statements from pg_temp.cnyos_ledger_repair_rows;
+    drop table pg_temp.cnyos_ledger_repair_rows
+  `);
+}
+
+async function assertRepairWriteRejectedBeforeMutation({ expected, message }) {
+  const materialized = materializePsqlRepairArtifactForPGlite(
+    recoverySql,
+    nextRepairTestNonce()
+  );
+  const durableBefore = await repairDurableSnapshot();
+  const notices = [];
+  await db.exec(materialized.setupSessionSql);
+  await db.exec(materialized.beforeTransactionSql);
+  await db.exec(materialized.transactionPrefix);
+  await db.exec(materialized.guardStatement);
+  await assert.rejects(
+    db.exec(materialized.writeStatement, {
+      onNotice: notice => notices.push(notice.message)
+    }),
+    expected
+  );
+  await db.exec('rollback;');
+  assert.deepEqual(await repairDurableSnapshot(), durableBefore, message);
+  assert.equal(
+    notices.some(notice => /LEDGER_RECONCILED|MIGRATION_LEDGER_RECONCILED/.test(notice)),
+    false,
+    'a pre-mutation refusal must not emit success-shaped evidence'
+  );
+}
+
+// A client may recover the guard statement with a savepoint and keep sending
+// statements in the same transaction. The pre-reconciliation repair DO must
+// independently refuse before evaluating declarations or touching any object.
+{
+  const materialized = materializePsqlRepairArtifactForPGlite(
+    preReconciliationRecoverySql,
+    nextRepairTestNonce()
+  );
+  const durableBeforeBypassAttempt = await repairDurableSnapshot();
+  const notices = [];
+
+  assert.equal((await db.query(
+    `select to_regclass('pg_temp.${repairEvidenceMarker}')::text marker`
+  )).rows[0].marker, null);
+  await db.exec(materialized.setupSessionSql);
+  await db.exec(materialized.beforeTransactionSql);
+  await db.exec(materialized.transactionPrefix);
+
+  await db.exec('savepoint recover_pre_reconciliation_guard;');
+  await assert.rejects(
+    db.exec(materialized.guardStatement, {
+      onNotice: notice => notices.push(notice.message)
+    }),
+    /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  );
+  await db.exec('rollback to savepoint recover_pre_reconciliation_guard;');
+  await db.exec('release savepoint recover_pre_reconciliation_guard;');
+
+  await db.exec('savepoint recover_pre_reconciliation_repair;');
+  await assert.rejects(
+    db.exec(materialized.writeStatement, {
+      onNotice: notice => notices.push(notice.message)
+    }),
+    /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  );
+  await db.exec('rollback to savepoint recover_pre_reconciliation_repair;');
+  await db.exec('release savepoint recover_pre_reconciliation_repair;');
+
+  assert.equal((await db.query(
+    `select to_regclass('pg_temp.${repairEvidenceMarker}')::text marker`
+  )).rows[0].marker, null, 'savepoint recovery must not leave a repair marker');
+  await db.exec(materialized.commitStatement);
+  assert.deepEqual(
+    await repairDurableSnapshot(),
+    durableBeforeBypassAttempt,
+    'guard recovery followed by the repair DO must not mutate ledger, receipt, or schema state'
+  );
+  assert.deepEqual(
+    await materializedRepairEvidenceRows(db, materialized),
+    [],
+    'guard recovery followed by the repair DO must not expose success evidence'
+  );
+  assert.equal(
+    notices.some(notice => /LEDGER_RECONCILED|MIGRATION_LEDGER_RECONCILED/.test(notice)),
+    false,
+    'guard recovery followed by the repair DO must not emit success-shaped notices'
+  );
+  assert.equal(
+    (await db.query(
+      `select current_setting('${repairCommittedNonceGuc}',true) committed_nonce`
+    )).rows[0].committed_nonce,
+    '',
+    'guard recovery followed by the repair DO must not set a committed nonce'
+  );
+  assert.equal(
+    (await db.query(
+      `select current_setting('${repairCommittedXidGuc}',true) committed_xid`
+    )).rows[0].committed_xid,
+    '',
+    'guard recovery followed by the repair DO must not set a committed XID'
+  );
+}
+
+// A client that continues after an error must not turn an aborted repair into
+// success-shaped evidence. Exercise both ordinary transaction abort and a
+// client savepoint recovery, beginning each run with plausible stale evidence
+// from a different nonce. Inject after the ledger upsert so the production
+// artifact remains free to reject every durable ledger/receipt trigger.
+for (const useSavepoint of [false, true]) {
+  const staleNonce = nextRepairTestNonce();
+  const materialized = injectMidRepairFailure(
+    materializePsqlRepairArtifactForPGlite(
+      recoverySql,
+      nextRepairTestNonce()
+    )
+  );
+  await db.exec(`
+    drop table if exists pg_temp.${repairEvidenceMarker};
+    create temporary table ${repairEvidenceMarker} (
+      gate_token text not null,
+      run_nonce uuid not null,
+      repair_xid text not null,
+      evidence jsonb,
+      primary key (gate_token,run_nonce,repair_xid)
+    ) on commit preserve rows;
+    insert into pg_temp.${repairEvidenceMarker}(gate_token,run_nonce,repair_xid,evidence)
+    values (
+      '${materialized.gateToken}',
+      '${staleNonce}'::uuid,
+      '7000001',
+      jsonb_build_object(
+        'status','PRIOR_TEST_SUCCESS',
+        'repair_run_nonce','${staleNonce}'::uuid,
+        'repair_transaction_xid','7000001'
+      )
+    );
+    select set_config('${repairRunNonceGuc}','${staleNonce}',false);
+    select set_config('${repairCommittedNonceGuc}','${staleNonce}',false);
+    select set_config('${repairCommittedXidGuc}','7000001',false);
+  `);
+  const durableBeforeFailure = await repairDurableSnapshot();
+
+  await db.exec(materialized.setupSessionSql);
+  assert.deepEqual((await db.query(`
+    select current_setting('${repairRunNonceGuc}',true) run_nonce,
+      current_setting('${repairCommittedNonceGuc}',true) committed_nonce
+  `)).rows, [{ run_nonce: materialized.runNonce, committed_nonce: '' }]);
+  await db.exec(materialized.beforeTransactionSql);
+  await db.exec(materialized.transactionPrefix);
+  await db.exec(materialized.guardStatement);
+  if (useSavepoint) await db.exec('savepoint client_statement;');
+  await assert.rejects(db.exec(materialized.writeStatement), /TEST_LEDGER_REPAIR_ABORT/);
+  if (useSavepoint) await db.exec('rollback to savepoint client_statement;');
+  await db.exec(materialized.commitStatement);
+
+  assert.deepEqual(
+    await repairDurableSnapshot(),
+    durableBeforeFailure,
+    'failed repair must preserve durable rows, ACLs, comment, columns, constraints, and sequences'
+  );
+  assert.deepEqual(
+    await materializedRepairEvidenceRows(db, materialized),
+    [],
+    'a failed repair must not expose nonce-bound success evidence'
+  );
+  assert.notEqual(
+    (await db.query(
+      `select current_setting('${repairCommittedNonceGuc}',true) committed_nonce`
+    )).rows[0].committed_nonce,
+    materialized.runNonce,
+    'a failed repair must not retain its transactional commit nonce'
+  );
+  assert.equal(
+    (await db.query(
+      `select current_setting('${repairCommittedXidGuc}',true) committed_xid`
+    )).rows[0].committed_xid,
+    '',
+    'a failed repair must not retain a committed top-level XID'
+  );
+  const marker = (await db.query(
+    `select to_regclass('pg_temp.${repairEvidenceMarker}')::text marker`
+  )).rows[0].marker;
+  const survivingMarkers = marker === null ? [] : (await db.query(`
+    select run_nonce::text run_nonce,repair_xid,evidence
+    from pg_temp.${repairEvidenceMarker}
+    order by run_nonce
+  `)).rows;
+  if (useSavepoint) {
+    assert.deepEqual(
+      survivingMarkers,
+      [],
+      'savepoint recovery must drop this run\'s empty guard marker at commit'
+    );
+  } else {
+    assert.deepEqual(
+      survivingMarkers,
+      [{
+        run_nonce: staleNonce,
+        repair_xid: '7000001',
+        evidence: {
+          status: 'PRIOR_TEST_SUCCESS',
+          repair_run_nonce: staleNonce,
+          repair_transaction_xid: '7000001'
+        }
+      }],
+      'ordinary abort must restore the stale marker dropped inside the failed transaction'
+    );
+  }
+  await db.exec(`drop table if exists pg_temp.${repairEvidenceMarker};`);
+}
+
+// A complete marker and commit nonce from a prior run cannot satisfy a new
+// run. This is the status-laundering case that a deterministic marker allowed.
+const priorSuccessfulNonce = nextRepairTestNonce();
+const currentRepair = materializePsqlRepairArtifactForPGlite(
+  recoverySql,
+  nextRepairTestNonce()
+);
+await db.exec(`
+  create temporary table ${repairEvidenceMarker} (
+    gate_token text not null,
+    run_nonce uuid not null,
+    repair_xid text not null,
+    evidence jsonb,
+    primary key (gate_token,run_nonce,repair_xid)
+  ) on commit preserve rows;
+  insert into pg_temp.${repairEvidenceMarker}(gate_token,run_nonce,repair_xid,evidence)
+  values (
+    '${currentRepair.gateToken}',
+    '${priorSuccessfulNonce}'::uuid,
+    '7000002',
+    jsonb_build_object(
+      'status','PRIOR_TEST_SUCCESS',
+      'repair_run_nonce','${priorSuccessfulNonce}'::uuid,
+      'repair_transaction_xid','7000002'
+    )
+  );
+  select set_config('${repairRunNonceGuc}','${currentRepair.runNonce}',false);
+  select set_config('${repairCommittedNonceGuc}','${priorSuccessfulNonce}',false);
+  select set_config('${repairCommittedXidGuc}','7000002',false);
+`);
+assert.deepEqual(
+  await materializedRepairEvidenceRows(db, currentRepair),
+  [],
+  'prior success evidence and its committed nonce must not authenticate a new run nonce'
+);
+await db.exec(`
+  select set_config('${repairCommittedNonceGuc}','${currentRepair.runNonce}',false);
+`);
+assert.deepEqual(
+  await materializedRepairEvidenceRows(db, currentRepair),
+  [],
+  'even a matching commit GUC must not authenticate a marker belonging to another nonce'
+);
+await db.exec(`
+  update pg_temp.${repairEvidenceMarker}
+  set run_nonce='${currentRepair.runNonce}'::uuid,
+      evidence=jsonb_build_object(
+        'status','STALE_REPLAY',
+        'repair_run_nonce','${currentRepair.runNonce}'::uuid,
+        'repair_transaction_xid','7000002'
+      );
+  select set_config('${repairCommittedXidGuc}','7000003',false);
+`);
+assert.deepEqual(
+  await materializedRepairEvidenceRows(db, currentRepair),
+  [],
+  'a replayed nonce must still fail when the committed top-level XID differs'
+);
+await db.exec(`
+  drop table pg_temp.${repairEvidenceMarker};
+  select set_config('${repairCommittedNonceGuc}','',false);
+  select set_config('${repairCommittedXidGuc}','',false);
+`);
+
+// A test-only deferred foreign key fails at COMMIT, after the repair statement
+// has populated its marker and transactional commit GUC. This preserves the
+// commit-time atomicity check without adding a now-forbidden ledger trigger.
+await db.exec(`
+  create temporary table cnyos_ledger_repair_commit_parent (
+    id integer primary key
+  ) on commit preserve rows;
+  create temporary table cnyos_ledger_repair_commit_child (
+    parent_id integer,
+    constraint cnyos_ledger_repair_commit_fk foreign key (parent_id)
+      references cnyos_ledger_repair_commit_parent(id)
+      deferrable initially deferred
+  ) on commit preserve rows
+`);
+const commitFailureRepair = materializePsqlRepairArtifactForPGlite(
+  recoverySql,
+  nextRepairTestNonce()
+);
+const durableBeforeCommitFailure = await repairDurableSnapshot();
+await db.exec(commitFailureRepair.setupSessionSql);
+await db.exec(commitFailureRepair.beforeTransactionSql);
+await db.exec(commitFailureRepair.transactionPrefix);
+await db.exec(commitFailureRepair.guardStatement);
+await db.exec(commitFailureRepair.writeStatement);
+await db.exec(`
+  set constraints cnyos_ledger_repair_commit_fk deferred;
+  insert into pg_temp.cnyos_ledger_repair_commit_child(parent_id) values (1)
+`);
+assert.equal(
+  (await db.query(
+    `select current_setting('${repairCommittedNonceGuc}',true) committed_nonce`
+  )).rows[0].committed_nonce,
+  commitFailureRepair.runNonce,
+  'commit nonce should be provisional inside the still-uncommitted repair transaction'
+);
+assert.match(
+  (await db.query(
+    `select current_setting('${repairCommittedXidGuc}',true) committed_xid`
+  )).rows[0].committed_xid,
+  /^\d+$/,
+  'top-level XID should be provisional inside the still-uncommitted repair transaction'
+);
+await assert.rejects(
+  db.exec(commitFailureRepair.commitStatement),
+  /cnyos_ledger_repair_commit_fk/
+);
+assert.deepEqual(
+  await repairDurableSnapshot(),
+  durableBeforeCommitFailure,
+  'commit-time failure must roll back every durable repair mutation'
+);
+assert.deepEqual(
+  await materializedRepairEvidenceRows(db, commitFailureRepair),
+  [],
+  'commit-time failure must leave no success evidence marker'
+);
+assert.notEqual(
+  (await db.query(
+    `select current_setting('${repairCommittedNonceGuc}',true) committed_nonce`
+  )).rows[0].committed_nonce,
+  commitFailureRepair.runNonce,
+  'commit-time failure must roll back the transactional commit nonce'
+);
+assert.equal(
+  (await db.query(
+    `select current_setting('${repairCommittedXidGuc}',true) committed_xid`
+  )).rows[0].committed_xid,
+  '',
+  'commit-time failure must roll back the transactional top-level XID'
+);
+await db.exec(`
+  drop table pg_temp.cnyos_ledger_repair_commit_child;
+  drop table pg_temp.cnyos_ledger_repair_commit_parent
+`);
+
+// Same-named permissive checks must not impersonate the locked receipt
+// registry. Validate definitions before any ledger write and roll back cleanly.
+await createRepairReceiptFixture({ evidenceCheck: 'true' });
+await assertRepairWriteRejectedBeforeMutation({
+  expected: /CNYOS_LEDGER_REPAIR_RECEIPT_CONSTRAINT_INVALID/,
+  message: 'same-named permissive receipt constraints must fail before durable mutation'
+});
+await db.exec(`drop table supabase_migrations.${repairReceiptTable};`);
+
+// The earlier three-valued CHECK accepted missing/JSON-null binding keys.
+// Its exact definition must be rejected even though all other receipt catalog
+// properties are canonical.
+await createRepairReceiptFixture({ evidenceCheck: nullableReceiptEvidenceCheck });
+await assertRepairWriteRejectedBeforeMutation({
+  expected: /CNYOS_LEDGER_REPAIR_RECEIPT_CONSTRAINT_INVALID/,
+  message: 'the old nullable evidence CHECK must fail before ledger mutation'
+});
+await db.exec(`drop table supabase_migrations.${repairReceiptTable};`);
+
+// A stable transaction timestamp is not the reviewed receipt timestamp.
+await createRepairReceiptFixture({ committedAtDefault: 'pg_catalog.now()' });
+await assertRepairWriteRejectedBeforeMutation({
+  expected: /CNYOS_LEDGER_REPAIR_RECEIPT_SHAPE_INVALID/,
+  message: 'a noncanonical committed_at default must fail before ledger mutation'
+});
+await db.exec(`drop table supabase_migrations.${repairReceiptTable};`);
+
+// Durable relation hooks can rewrite, suppress, or add ledger/receipt writes.
+// Reject both trigger and rule mechanisms on both protected relations.
+await createRepairReceiptFixture();
+await db.exec(`
+  create function supabase_migrations.cnyos_ledger_repair_hook_test()
+  returns trigger language plpgsql set search_path=pg_catalog as $$
+  begin
+    return new;
+  end $$
+`);
+for (const hook of [
+  {
+    setup: `create trigger cnyos_ledger_repair_hook_test before insert
+      on supabase_migrations.schema_migrations for each row
+      execute function supabase_migrations.cnyos_ledger_repair_hook_test()`,
+    cleanup: `drop trigger cnyos_ledger_repair_hook_test
+      on supabase_migrations.schema_migrations`,
+    label: 'ledger trigger'
+  },
+  {
+    setup: `create trigger cnyos_ledger_repair_hook_test before insert
+      on supabase_migrations.${repairReceiptTable} for each row
+      execute function supabase_migrations.cnyos_ledger_repair_hook_test()`,
+    cleanup: `drop trigger cnyos_ledger_repair_hook_test
+      on supabase_migrations.${repairReceiptTable}`,
+    label: 'receipt trigger'
+  },
+  {
+    setup: `create rule cnyos_ledger_repair_hook_test as on delete
+      to supabase_migrations.schema_migrations do also nothing`,
+    cleanup: `drop rule cnyos_ledger_repair_hook_test
+      on supabase_migrations.schema_migrations`,
+    label: 'ledger rule'
+  },
+  {
+    setup: `create rule cnyos_ledger_repair_hook_test as on delete
+      to supabase_migrations.${repairReceiptTable} do also nothing`,
+    cleanup: `drop rule cnyos_ledger_repair_hook_test
+      on supabase_migrations.${repairReceiptTable}`,
+    label: 'receipt rule'
+  }
+]) {
+  await db.exec(hook.setup);
+  await assertRepairWriteRejectedBeforeMutation({
+    expected: /CNYOS_LEDGER_REPAIR_RELATION_HOOK_INVALID/,
+    message: `${hook.label} must be rejected before ledger mutation`
+  });
+  await db.exec(hook.cleanup);
+  if (hook.label.startsWith('ledger')) {
+    await rebuildMigrationLedgerFixture();
+  } else {
+    await db.exec(`drop table supabase_migrations.${repairReceiptTable}`);
+    await createRepairReceiptFixture();
+  }
+}
+await db.exec(`
+  drop function supabase_migrations.cnyos_ledger_repair_hook_test();
+  drop table supabase_migrations.${repairReceiptTable}
+`);
+
+// Write-path atomicity is exercised only after the strict ACL end-state has
+// passed. The transitional artifact is intentionally hard-blocked above.
+const firstStrictRepairNonce = nextRepairTestNonce();
+const firstStrictRepairEvidence = await executeMaterializedPsqlRepair(
+  db,
+  recoverySql,
+  firstStrictRepairNonce
+);
+assert.equal(
+  firstStrictRepairEvidence.status,
+  'CNYOS_STAGING_MIGRATION_LEDGER_RECONCILED'
+);
+assert.equal(firstStrictRepairEvidence.ledger_reconciled, true);
+assert.equal(firstStrictRepairEvidence.acl_remediation_pending, false);
+assert.equal(
+  firstStrictRepairEvidence.repository_derived_treatment_session_public_execute_debt_pending,
+  false
+);
+assert.equal(firstStrictRepairEvidence.production_eligible, false);
+assert.equal(firstStrictRepairEvidence.expected_project_ref, 'hsmnjwxurlmsizndjlun');
+assert.equal(
+  firstStrictRepairEvidence.expected_database_host,
+  'db.hsmnjwxurlmsizndjlun.supabase.co'
+);
+assert.equal(firstStrictRepairEvidence.expected_system_identifier, pgliteSystemIdentifier);
+assert.equal(firstStrictRepairEvidence.observed_system_identifier, pgliteSystemIdentifier);
+assert.equal(
+  firstStrictRepairEvidence.observed_psql_host,
+  'db.hsmnjwxurlmsizndjlun.supabase.co'
+);
+assert.match(firstStrictRepairEvidence.repair_transaction_xid, /^\d+$/);
+assert.match(firstStrictRepairEvidence.repair_gate_token, /^[0-9a-f]{64}$/);
+const committedReceipt = (await db.query(`
+  select run_nonce::text run_nonce,gate_token,repair_xid,evidence,
+    committed_at is not null has_committed_at
+  from supabase_migrations.${repairReceiptTable}
+  where run_nonce='${firstStrictRepairNonce}'::uuid
+`)).rows;
+assert.equal(committedReceipt.length, 1);
+assert.equal(committedReceipt[0].gate_token, firstStrictRepairEvidence.repair_gate_token);
+assert.equal(committedReceipt[0].repair_xid, firstStrictRepairEvidence.repair_transaction_xid);
+assert.deepEqual(committedReceipt[0].evidence, firstStrictRepairEvidence);
+assert.equal(committedReceipt[0].has_committed_at, true);
+const receiptRelation = (await db.query(`
+  select relation.relowner::regrole::text owner,relation.relacl::text acl,
+    pg_catalog.obj_description(relation.oid,'pg_class') description
+  from pg_catalog.pg_class relation
+  where relation.oid='supabase_migrations.${repairReceiptTable}'::regclass
+`)).rows[0];
+assert.equal(receiptRelation.owner, 'postgres');
+assert.equal(receiptRelation.acl, '{postgres=arwdDxtm/postgres}');
+assert.equal(
+  receiptRelation.description,
+  'Committed CNYOS migration-ledger repair receipts. UUID and top-level XID replay guard; not migration provenance.'
+);
+assert.deepEqual(
+  (await db.query(`
+    select conname
+    from pg_catalog.pg_constraint
+    where conrelid='supabase_migrations.${repairReceiptTable}'::regclass
+    order by conname
+  `)).rows.map(row => row.conname),
+  [
+    'cnyos_migration_ledger_repair_receipt_gate_token_repair_xid_key',
+    'cnyos_migration_ledger_repair_receipts_pkey',
+    'cnyos_repair_receipt_evidence_check',
+    'cnyos_repair_receipt_gate_token_check',
+    'cnyos_repair_receipt_xid_check'
+  ]
+);
+assert.equal(
+  (await db.query(`
+    select pg_catalog.pg_get_constraintdef(oid,true) definition
+    from pg_catalog.pg_constraint
+    where conrelid='supabase_migrations.${repairReceiptTable}'::regclass
+      and conname='cnyos_repair_receipt_evidence_check'
+  `)).rows[0].definition,
+  "CHECK ((jsonb_typeof(evidence) = 'object'::text AND (evidence ->> 'repair_gate_token'::text) = gate_token AND (evidence ->> 'repair_run_nonce'::text) = run_nonce::text AND (evidence ->> 'repair_transaction_xid'::text) = repair_xid) IS TRUE)"
+);
+
+// SQL CHECK accepts UNKNOWN unless the predicate is explicitly IS TRUE.
+// Every receipt binding key must therefore reject both absence and JSON null.
+for (const invalidKey of [
+  'repair_gate_token',
+  'repair_run_nonce',
+  'repair_transaction_xid'
+]) {
+  for (const invalidValue of ['missing', 'json-null']) {
+    const runNonce = nextRepairTestNonce();
+    const evidence = {
+      repair_gate_token: 'e'.repeat(64),
+      repair_run_nonce: runNonce,
+      repair_transaction_xid: '9000001'
+    };
+    if (invalidValue === 'missing') delete evidence[invalidKey];
+    else evidence[invalidKey] = null;
+    await assert.rejects(
+      db.query(`
+        insert into supabase_migrations.${repairReceiptTable}(
+          run_nonce,gate_token,repair_xid,evidence
+        ) values ($1::uuid,$2,$3,$4::jsonb)
+      `, [runNonce, 'e'.repeat(64), '9000001', JSON.stringify(evidence)]),
+      /cnyos_repair_receipt_evidence_check/,
+      `${invalidValue} ${invalidKey} must violate the exact receipt evidence CHECK`
+    );
+  }
+}
+assert.equal(
+  (await db.query(`
+    select count(*)::int count
+    from supabase_migrations.${repairReceiptTable}
+  `)).rows[0].count,
+  1,
+  'rejected malformed evidence must not add a durable receipt'
+);
+
+// The post-commit proof must re-read an exact ledger snapshot. It may not
+// authenticate a receipt after a nullable statements row or any committed
+// name drift appears between the repair commit and proof transaction.
+const committedRepairProof = materializePsqlRepairArtifactForPGlite(
+  recoverySql,
+  firstStrictRepairNonce
+);
+const nullableStatementEntry = entries[1];
+await db.exec(`
+  update supabase_migrations.schema_migrations
+  set statements=null
+  where version='${nullableStatementEntry.version}'
+`);
+assert.deepEqual(
+  await exactMaterializedRepairEvidenceRows(db, committedRepairProof),
+  [],
+  'the durable exact proof must reject a NULL statements array'
+);
+await db.exec(`
+  update supabase_migrations.schema_migrations
+  set statements=array[${sqlLiteral(
+    `-- recovered from supabase/migrations/${nullableStatementEntry.file}; sha256=${nullableStatementEntry.sha256}`
+  )}]::text[]
+  where version='${nullableStatementEntry.version}'
+`);
+const committedDriftEntry = entries[2];
+await db.exec(`
+  update supabase_migrations.schema_migrations
+  set name='committed_drift'
+  where version='${committedDriftEntry.version}'
+`);
+assert.deepEqual(
+  await exactMaterializedRepairEvidenceRows(db, committedRepairProof),
+  [],
+  'the durable exact proof must reject committed ledger drift'
+);
+await db.exec(`
+  update supabase_migrations.schema_migrations
+  set name='${committedDriftEntry.name}'
+  where version='${committedDriftEntry.version}'
+`);
+assert.equal(
+  (await exactMaterializedRepairEvidenceRows(db, committedRepairProof)).length,
+  1,
+  'the durable exact proof must recover only after the exact ledger is restored'
+);
+assert.equal(
+  (await db.query(`
+    select coalesce(array_to_string(proconfig,','),'') function_config
+    from pg_proc
+    where oid='public.set_updated_at()'::regprocedure
+  `)).rows[0].function_config,
+  'search_path=pg_catalog, public',
+  'strict repair must preserve the remediated set_updated_at configuration'
+);
+assert.equal(
+  (await db.query('select count(*)::int count from supabase_migrations.schema_migrations')).rows[0].count,
+  entries.length
+);
+
+// The durable UUID registry is the replay control. Canonical migration SHA
+// comments prove ledger provenance, but cannot authorize reuse of a run nonce.
+const replayRepair = materializePsqlRepairArtifactForPGlite(
+  recoverySql,
+  firstStrictRepairNonce
+);
+const durableBeforeNonceReplay = await repairDurableSnapshot();
+await db.exec(replayRepair.setupSessionSql);
+await db.exec(replayRepair.beforeTransactionSql);
+await db.exec(replayRepair.transactionPrefix);
+await db.exec(replayRepair.guardStatement);
+await assert.rejects(
+  db.exec(replayRepair.writeStatement),
+  /CNYOS_LEDGER_REPAIR_NONCE_REPLAY/
+);
+await db.exec('rollback;');
+assert.deepEqual(
+  await repairDurableSnapshot(),
+  durableBeforeNonceReplay,
+  'replaying a committed nonce must preserve ledger rows and the durable receipt registry exactly'
+);
+assert.deepEqual(
+  await materializedRepairEvidenceRows(db, replayRepair),
+  [],
+  'a refused nonce replay must not satisfy the current invocation commit proof'
+);
+assert.equal(
+  (await db.query(`
+    select count(*)::int count
+    from supabase_migrations.${repairReceiptTable}
+    where run_nonce='${firstStrictRepairNonce}'::uuid
+  `)).rows[0].count,
+  1,
+  'nonce replay must not duplicate or replace its original durable receipt'
+);
+
+await applyStrictTriggerAclFixture();
+await db.exec(transitionRevokeSql);
+verificationNotices.length = 0;
+await db.exec(verificationSql, verificationOptions);
+assert.equal(
+  verificationNotices.length,
+  0,
+  'strict post-remediation verification must pass without an in-transaction success notice'
+);
+
+for (let run = 0; run < 2; run += 1) {
+  const strictRepairEvidence = await executeMaterializedPsqlRepair(
+    db,
+    recoverySql,
+    nextRepairTestNonce()
+  );
+  assert.equal(strictRepairEvidence.status, 'CNYOS_STAGING_MIGRATION_LEDGER_RECONCILED');
+  assert.equal(strictRepairEvidence.ledger_reconciled, true);
+  assert.equal(strictRepairEvidence.acl_remediation_pending, false);
+  assert.equal(strictRepairEvidence.production_eligible, false);
+}
 const ledger = await db.query(`
   select version,name,statements
   from supabase_migrations.schema_migrations
@@ -1594,16 +3487,16 @@ assert.ok(
   'ledger recovery must preserve pre-existing raw statements while appending canonical SHA evidence'
 );
 
-// Apply the manual candidates only to this disposable PostgreSQL fixture.
-// The real Owner OFF/ON checks below must still work with their triggers closed.
-const triggerBindingsBeforeClosure = (await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows;
-for (const candidate of [
-  '202609060700_revoke_trigger_function_data_api_execute_candidate.sql',
-  '202609060710_close_browser_rpc_acl_drift_candidate.sql'
-]) {
-  await db.exec(await fs.readFile(path.join(root, 'supabase/manual', candidate), 'utf8'));
-}
-assert.deepEqual((await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows, triggerBindingsBeforeClosure);
+// The dedicated ACL contract owns candidate-source execution. Reapply only the
+// reviewed browser ACL end-state here; Owner OFF/ON must work in the closed state.
+const triggerBindingsBeforeBrowserClosure = (await db.query(
+  'select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid'
+)).rows;
+await db.exec(transitionRevokeSql);
+assert.deepEqual(
+  (await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows,
+  triggerBindingsBeforeBrowserClosure
+);
 
 await db.exec(`select set_config('request.jwt.claim.role','service_role',false)`);
 const offRequestId = '44444444-4444-4444-a444-444444444444';

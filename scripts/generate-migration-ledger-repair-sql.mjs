@@ -14,6 +14,310 @@ const immutableMigrationHashes = new Map([
   ]
 ]);
 
+export const MIGRATION_LEDGER_ACL_PHASE_STRICT = 'strict-post-remediation';
+export const MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION =
+  'chananya-pre-reconciliation';
+
+const migrationLedgerRepairAuthorizationBlocker =
+  'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED: complete live callable ACL and function-creator default ACL inventory review is required before any ledger repair';
+
+const compareCanonicalTuple = (left, right) => {
+  const leftKey = left.join('\t');
+  const rightKey = right.join('\t');
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+};
+
+const chananyaPreReconciliationBrowserRpcAclTuples = [
+  ['anon', 'public.book_clinic_appointment(uuid,uuid,text,text,text)'],
+  ['anon', 'public.cancel_clinic_appointment(uuid,text)'],
+  ['anon', 'public.clinical_financial_handoffs_healthcheck()'],
+  ['anon', 'public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)'],
+  ['anon', 'public.current_user_role()'],
+  ['anon', 'public.decide_approval_task(uuid,text,text)'],
+  ['anon', 'public.department_persistence_healthcheck()'],
+  ['anon', 'public.is_admin_or_super()'],
+  ['anon', 'public.is_appointment_operator()'],
+  ['anon', 'public.is_appointment_practitioner()'],
+  ['anon', 'public.is_clinic_admin()'],
+  ['anon', 'public.is_practitioner()'],
+  ['anon', 'public.is_reception_or_admin()'],
+  ['anon', 'public.prescription_dispensing_healthcheck()'],
+  ['anon', 'public.production_execution_healthcheck()'],
+  ['anon', 'public.quality_release_healthcheck()'],
+  ['anon', 'public.set_clinic_appointment_status(uuid,text,text)'],
+  ['service_role', 'public.book_clinic_appointment(uuid,uuid,text,text,text)'],
+  ['service_role', 'public.cancel_clinic_appointment(uuid,text)'],
+  ['service_role', 'public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)'],
+  ['service_role', 'public.decide_approval_task(uuid,text,text)'],
+  ['service_role', 'public.set_clinic_appointment_status(uuid,text,text)']
+].sort(compareCanonicalTuple);
+
+const serializeBrowserRpcAclTuples = tuples => tuples
+  .map(([grantee, procedureSignature]) =>
+    `${grantee}\t${procedureSignature}\tEXECUTE\tfalse\towner`)
+  .join('\n') + '\n';
+
+export const CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST = Object.freeze({
+  evidenceScope: 'known-live-callable-acl-subset-not-complete-inventory',
+  liveCallableAclInventoryComplete: false,
+  projectRef: 'hsmnjwxurlmsizndjlun',
+  databaseOrigin: 'https://hsmnjwxurlmsizndjlun.supabase.co',
+  deploymentId: 'chananya-clinical-staging',
+  clinicCode: 'CHANANYA-STG',
+  clinicId: '00000000-0000-4000-8000-00000000a001',
+  observedAt: '2026-09-06T15:42:14.891459Z',
+  observationSourceRevision: '79750ef1f5bb3baa82f57687276b6efb1a2d345c',
+  privilege: 'EXECUTE',
+  isGrantable: false,
+  grantor: 'function-owner',
+  tupleSerialization: '<grantee>\\t<regprocedure>\\tEXECUTE\\tfalse\\towner\\n',
+  tupleSha256: '3d6fe1f67c0c2bc418c412b30b0c439f9f5c3c6ba2757bc212cb5f5f9c029695',
+  browserRpcAclTuples: Object.freeze(
+    chananyaPreReconciliationBrowserRpcAclTuples.map(tuple => Object.freeze([...tuple]))
+  )
+});
+
+const computedChananyaPreReconciliationAclHash = createHash('sha256')
+  .update(serializeBrowserRpcAclTuples(chananyaPreReconciliationBrowserRpcAclTuples))
+  .digest('hex');
+if (computedChananyaPreReconciliationAclHash !== CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256) {
+  throw new Error('Chananya pre-reconciliation known ACL subset SHA-256 mismatch');
+}
+
+const chananyaPreReconciliationTriggerInventory = [
+  ['public.apply_stock_movement()', 'postgres', 'search_path=public', true, 1],
+  ['public.assign_audit_clinic()', 'postgres', 'search_path=public', false, 1],
+  ['public.assign_inventory_lot_clinic()', 'postgres', 'search_path=public', true, 1],
+  ['public.assign_patient_child_clinic()', 'postgres', 'search_path=public', false, 2],
+  ['public.assign_patient_clinic()', 'postgres', 'search_path=public', false, 1],
+  ['public.assign_pharmacy_allocation_clinic()', 'postgres', 'search_path=public', true, 1],
+  ['public.assign_pharmacy_item_clinic()', 'postgres', 'search_path=public', true, 1],
+  ['public.assign_pharmacy_sale_clinic()', 'postgres', 'search_path=public', true, 1],
+  ['public.assign_product_clinic()', 'postgres', 'search_path=public', true, 1],
+  ['public.assign_stock_movement_clinic()', 'postgres', 'search_path=public', true, 1],
+  ['public.enforce_active_subscription_tenant_write()', 'postgres', 'search_path=pg_catalog, public', true, 17],
+  ['public.enforce_authenticated_subscription_statement_write()', 'postgres', 'search_path=pg_catalog, public', true, 87],
+  ['public.enforce_patient_registry_write()', 'postgres', 'search_path=public', true, 2],
+  ['public.enforce_prescription_item_product_tenant()', 'postgres', 'search_path=public', true, 1],
+  ['public.enqueue_line_oa_from_appointment()', 'postgres', 'search_path=public', true, 1],
+  ['public.guard_owner_subscription_forward_only()', 'postgres', 'search_path=pg_catalog, public', true, 1],
+  ['public.handle_new_user()', 'postgres', 'search_path=public', true, 1],
+  ['public.prevent_encounter_clinical_evidence_delete()', 'postgres', 'search_path=pg_catalog', true, 1],
+  ['public.prevent_locked_clinical_record_mutation()', 'postgres', 'search_path=public', true, 8],
+  ['public.reject_append_only_mutation()', 'postgres', 'search_path=pg_catalog', true, 8],
+  ['public.set_body_pain_point_updated_at()', 'postgres', 'search_path=public', false, 1],
+  ['public.set_updated_at()', 'postgres', '', false, 28],
+  ['public.withdraw_line_oa_on_identity_revoke()', 'postgres', 'search_path=public', true, 1]
+];
+
+const triggerProceduresWithoutNonOwnerAcl = new Set([
+  'public.enforce_active_subscription_tenant_write()',
+  'public.enforce_authenticated_subscription_statement_write()',
+  'public.enqueue_line_oa_from_appointment()',
+  'public.guard_owner_subscription_forward_only()',
+  'public.prevent_encounter_clinical_evidence_delete()',
+  'public.reject_append_only_mutation()',
+  'public.withdraw_line_oa_on_identity_revoke()'
+]);
+const triggerProceduresWithoutPublicAcl = new Set([
+  'public.apply_stock_movement()',
+  'public.enforce_prescription_item_product_tenant()'
+]);
+const chananyaPreReconciliationTriggerAclTuples =
+  chananyaPreReconciliationTriggerInventory.flatMap(([procedureSignature]) => {
+    if (triggerProceduresWithoutNonOwnerAcl.has(procedureSignature)) return [];
+    const grantees = triggerProceduresWithoutPublicAcl.has(procedureSignature)
+      ? ['anon', 'authenticated', 'service_role']
+      : ['PUBLIC', 'anon', 'authenticated', 'service_role'];
+    return grantees.map(grantee => [grantee, procedureSignature]);
+  }).sort(compareCanonicalTuple);
+
+const serializeTriggerInventory = inventory => inventory
+  .map(([procedureSignature, owner, searchPath, securityDefiner, bindingCount]) =>
+    `${procedureSignature}\t${owner}\t${searchPath}\t${securityDefiner}\t${bindingCount}`)
+  .join('\n') + '\n';
+
+export const CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST = Object.freeze({
+  observedAt: '2026-09-06T15:42:59.875869Z',
+  inventorySha256: '4ff91cbb4fca03b8f7f2d0eaa6dc47b198ea7ce592a1d624d5b72bc273558a0d',
+  aclTupleSha256: 'bd0391e6a7f6a06797fde1d9f9e90e2a475cf2679b298f86b7b8492980a39b11',
+  serverMajor: 17,
+  serverEncoding: 'UTF8',
+  allowedFunctionSchema: 'public',
+  expectedOwnerRole: 'postgres',
+  relationScope: 'all public relations, auth.users, and every binding to a public function',
+  functionSemanticObservedAt: '2026-09-06T16:47:15.312545Z',
+  functionSemanticCount: 23,
+  functionSemanticPreReconciliationPayloadBytes: 21183,
+  functionSemanticPreReconciliationSha256:
+    '4c92389f247e80c27c63721eff19f321ed538c8e70d616df5aa36e193cb2eb0b',
+  functionSemanticStrictPayloadBytes: 21213,
+  functionSemanticStrictSha256:
+    '07535c64e7607d8cc9bc34b197a40e3923f4f56df84262d041d56541b1890737',
+  functionSemanticSerialization:
+    'cnyos-trigger-function/v1 positional JSON including names, arguments/result, owner, language, executable flags/costs, support, defaults, body/binary/sqlbody and config; bytewise ordered; LF joined with one final LF',
+  bindingObservedAt: '2026-09-06T16:47:15.312545Z',
+  bindingCount: 168,
+  bindingPayloadBytes: 46998,
+  bindingSha256: '9430970d3b25cbe3d5d4ab704740e62ce5a6864d9a804a732ed6f8919523fe54',
+  bindingSerialization:
+    'cnyos-trigger-binding/v1 positional JSON including relation/function names, trigger mode/type/update columns/args/WHEN/transition tables and semantic constraint/index/parent references; bytewise ordered; LF joined with one final LF',
+  triggerInventory: Object.freeze(
+    chananyaPreReconciliationTriggerInventory.map(row => Object.freeze([...row]))
+  ),
+  aclTuples: Object.freeze(
+    chananyaPreReconciliationTriggerAclTuples.map(row => Object.freeze([...row]))
+  )
+});
+
+if (createHash('sha256').update(serializeTriggerInventory(
+  chananyaPreReconciliationTriggerInventory
+)).digest('hex') !== CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256) {
+  throw new Error('Chananya pre-reconciliation trigger inventory SHA-256 mismatch');
+}
+if (createHash('sha256').update(serializeBrowserRpcAclTuples(
+  chananyaPreReconciliationTriggerAclTuples
+)).digest('hex') !== CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256) {
+  throw new Error('Chananya pre-reconciliation trigger ACL SHA-256 mismatch');
+}
+
+const reviewedMigrationManifestSha256 =
+  'b21bf64a89aaa01cf757a14c74dcbd02caa5c7dfb6e43bc2215bbd70291a1e0a';
+const reviewedMigrationManifestCount = 45;
+export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';
+
+const chananyaPreReconciliationKnownEvidencePayload = {
+  schemaVersion: 3,
+  projectRef: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.projectRef,
+  databaseOrigin: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.databaseOrigin,
+  deploymentId: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.deploymentId,
+  clinicCode: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.clinicCode,
+  clinicId: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.clinicId,
+  browserAclObservedAt: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observedAt,
+  triggerObservedAt: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.observedAt,
+  observationSourceRevision:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision,
+  browserRpcAcl: {
+    privilege: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.privilege,
+    isGrantable: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.isGrantable,
+    grantor: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.grantor,
+    tuples: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+  },
+  triggerInventory: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory,
+  triggerAcl: {
+    privilege: 'EXECUTE',
+    isGrantable: false,
+    grantor: 'function-owner',
+    tuples: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples
+  },
+  triggerCatalogContract: {
+    serverMajor: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor,
+    serverEncoding: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding,
+    relationScope: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.relationScope,
+    allowedFunctionSchema:
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.allowedFunctionSchema,
+    expectedOwnerRole: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.expectedOwnerRole
+  },
+  triggerFunctionSemantics: {
+    observedAt: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticObservedAt,
+    count: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount,
+    preReconciliationPayloadBytes:
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+        .functionSemanticPreReconciliationPayloadBytes,
+    preReconciliationSha256:
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticPreReconciliationSha256,
+    strictPostRemediationPayloadBytes:
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictPayloadBytes,
+    strictPostRemediationSha256:
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256,
+    serialization:
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticSerialization
+  },
+  migrationManifestSha256: reviewedMigrationManifestSha256,
+  triggerBindings: {
+    observedAt: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingObservedAt,
+    count: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount,
+    payloadBytes: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes,
+    sha256: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256,
+    serialization: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSerialization
+  }
+};
+const computedChananyaPreReconciliationKnownEvidenceSha256 = createHash('sha256')
+  .update(JSON.stringify(chananyaPreReconciliationKnownEvidencePayload))
+  .digest('hex');
+const reviewedChananyaPreReconciliationKnownEvidenceSha256 =
+  '2f4ec29006a5a2b3a0e3b2d7aa9018861bee5153b60887c625d6a46d2516a733';
+if (computedChananyaPreReconciliationKnownEvidenceSha256 !==
+    reviewedChananyaPreReconciliationKnownEvidenceSha256) {
+  throw new Error(
+    `Chananya pre-reconciliation known evidence bundle SHA-256 mismatch: ${computedChananyaPreReconciliationKnownEvidenceSha256}`
+  );
+}
+
+// This reviewed bundle authenticates the evidence that was captured. It is
+// not a complete live public-function raw/effective ACL inventory and cannot
+// authorize reconciliation or repair.
+export const CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE = Object.freeze({
+  evidenceScope: 'reviewed-evidence-bundle-not-complete-live-callable-acl-inventory',
+  authorization: false,
+  liveCallableAclInventoryComplete: false,
+  ...chananyaPreReconciliationKnownEvidencePayload,
+  sha256: reviewedChananyaPreReconciliationKnownEvidenceSha256
+});
+
+// This debt is derived from the ordered repository migration, not from the
+// independently captured 22-tuple Chananya staging observation above. The
+// CREATE FUNCTION default leaves PUBLIC EXECUTE in place and the migration
+// adds a direct authenticated grant. Keep the provenance separate so a
+// repository inference can never be misreported as a live staging fact.
+const createClinicalTreatmentSessionSignature =
+  'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)';
+const repositoryDerivedClinicalTreatmentSessionAclPayload = {
+  schemaVersion: 1,
+  provenance: 'repository-derived-not-live-observed',
+  derivation:
+    'ordered migration CREATE FUNCTION default PUBLIC EXECUTE plus explicit authenticated GRANT',
+  sourceMigration: '202608252110_stabilize_treatment_sessions.sql',
+  sourceMigrationSha256:
+    '93b28aaa7cab2430e1b5eb86e387f75c75a3e61dc0538d42ae4bcb6fcc5a40be',
+  procedureSignature: createClinicalTreatmentSessionSignature,
+  semanticContract: {
+    owner: 'postgres',
+    language: 'plpgsql',
+    kind: 'f',
+    security: 'invoker',
+    searchPath: 'search_path=public',
+    resultType: 'public.clinical_treatment_sessions',
+    returnsSet: false,
+    volatility: 'v',
+    parallel: 'u',
+    isStrict: false,
+    leakproof: false,
+    argumentCount: 10,
+    defaultArgumentCount: 9,
+    normalizedBodyPayloadBytes: 1431,
+    normalizedBodySha256:
+      'cb43d26f1df8eb76c1bf7451eccbbb007538928c8de73bbcbe00321d252182fc'
+  },
+  preReconciliationAcl: {
+    directOwnerGrantedNonGrantableExecuteGrantees: ['PUBLIC', 'authenticated'],
+    effectiveRuntimeExecuteRoles: ['anon', 'authenticated', 'service_role']
+  },
+  strictPostRemediationAcl: {
+    directOwnerGrantedNonGrantableExecuteGrantees: ['authenticated'],
+    effectiveRuntimeExecuteRoles: ['authenticated'],
+    deniedRuntimeExecuteRoles: ['anon', 'service_role']
+  }
+};
+
+export const REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST =
+  Object.freeze({
+    ...repositoryDerivedClinicalTreatmentSessionAclPayload,
+    sha256: createHash('sha256')
+      .update(JSON.stringify(repositoryDerivedClinicalTreatmentSessionAclPayload))
+      .digest('hex')
+  });
+
 const requiredRelations = [
   'public.profiles',
   'public.audit_logs',
@@ -206,7 +510,7 @@ const requiredSecurityDefiners = [
   'set_clinic_drive_assignment'
 ];
 
-const requiredProcedures = [
+const requiredSecurityDefinerProcedures = [
   'public.backup_restore_contract_healthcheck()',
   'public.export_clinic_backup_domain(uuid,text)',
   'public.export_clinic_backup_domain_v20260831(uuid,text)',
@@ -269,6 +573,11 @@ const requiredProcedures = [
   'public.list_owner_drive_assignments()',
   'public.get_clinic_drive_backup_destination(uuid,text)',
   'public.set_clinic_drive_assignment(uuid,uuid,text,text,text,text,text,text,text,bigint,text,uuid,text)'
+];
+
+const requiredProcedures = [
+  createClinicalTreatmentSessionSignature,
+  ...requiredSecurityDefinerProcedures
 ];
 
 const requiredRlsRelations = [
@@ -515,7 +824,7 @@ const subscriptionKillSwitchBrowserProcedureGrants = [
 
 // Exact callable SECURITY DEFINER inventory for the reviewed 45-migration
 // chain. Trigger/event-trigger functions are intentionally excluded because
-// PostgreSQL cannot invoke them as ordinary RPCs and nine historical trigger
+// PostgreSQL cannot invoke them as ordinary RPCs and fourteen historical trigger
 // functions retain their default PUBLIC catalog ACL.
 const callableSecurityDefinerAuthenticatedOnlyProcedures = [
   'public.admin_assign_staff_role(uuid,text,text)',
@@ -1044,6 +1353,228 @@ const lineOffExceptionCleanupFingerprint = [
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const sqlArray = values => `array[${values.map(quote).join(',')}]::text[]`;
 const sqlRows = rows => rows.map(row => `(${row.map(quote).join(',')})`).join(',');
+const canonicalCatalogOutputGucSql = [
+  "set local timezone = 'UTC';",
+  "set local datestyle = 'ISO, YMD';",
+  "set local intervalstyle = 'postgres';",
+  'set local extra_float_digits = 3;',
+  "set local bytea_output = 'hex';",
+  'set local quote_all_identifiers = off;',
+  'set local standard_conforming_strings = on;'
+].join('\n') + '\n';
+const migrationManifestSha256 = entries => createHash('sha256')
+  .update(entries.map(({ version, name, sha256 }) =>
+    `${version}\t${name}\t${sha256}`).join('\n') + '\n')
+  .digest('hex');
+
+const triggerScopePredicateSql = ({
+  triggerAlias,
+  relationAlias,
+  relationNamespaceAlias,
+  functionNamespaceAlias
+}) => `not ${triggerAlias}.tgisinternal
+    and (
+      ${relationNamespaceAlias}.nspname='public'
+      or (
+        ${relationNamespaceAlias}.nspname='auth'
+        and ${relationAlias}.relname='users'
+      )
+      or ${functionNamespaceAlias}.nspname='public'
+    )`;
+
+function buildTriggerSemanticAndBindingGuardSql({
+  expectedSemanticPayloadBytes,
+  expectedSemanticSha256
+}) {
+  const scope = triggerScopePredicateSql({
+    triggerAlias: 'trigger',
+    relationAlias: 'relation',
+    relationNamespaceAlias: 'relation_namespace',
+    functionNamespaceAlias: 'function_namespace'
+  });
+  const manifest = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST;
+
+  return `  if current_setting('server_version_num')::integer / 10000 <>
+      ${manifest.serverMajor} then
+    raise exception 'STAGING_TRIGGER_SERVER_MAJOR_INVALID: %',
+      current_setting('server_version_num');
+  end if;
+  if current_setting('server_encoding') <> ${quote(manifest.serverEncoding)} then
+    raise exception 'STAGING_TRIGGER_SERVER_ENCODING_INVALID: %',
+      current_setting('server_encoding');
+  end if;
+
+  select string_agg(
+    relation_namespace.nspname || '.' || relation.relname || ' -> ' ||
+      function_namespace.nspname || '.' || procedure.proname || '(' ||
+      pg_get_function_identity_arguments(procedure.oid) || ')',
+    ', ' order by
+      relation_namespace.nspname collate "C",
+      relation.relname collate "C",
+      function_namespace.nspname collate "C",
+      procedure.proname collate "C",
+      pg_get_function_identity_arguments(procedure.oid) collate "C"
+  ) into v_missing
+  from pg_trigger trigger
+  join pg_class relation on relation.oid=trigger.tgrelid
+  join pg_namespace relation_namespace on relation_namespace.oid=relation.relnamespace
+  join pg_proc procedure on procedure.oid=trigger.tgfoid
+  join pg_namespace function_namespace on function_namespace.oid=procedure.pronamespace
+  where ${scope}
+    and function_namespace.nspname <> ${quote(manifest.allowedFunctionSchema)};
+  if v_missing is not null then
+    raise exception 'STAGING_TRIGGER_FUNCTION_SCHEMA_INVALID: %', v_missing;
+  end if;
+
+  select count(*)::bigint,
+    coalesce(string_agg(semantic_row,E'\\n' order by semantic_row collate "C"),'') || E'\\n'
+  into v_trigger_function_count,v_trigger_function_payload
+  from (
+    select jsonb_build_array(
+      'cnyos-trigger-function/v1',
+      function_namespace.nspname,
+      procedure.proname,
+      pg_get_function_identity_arguments(procedure.oid),
+      pg_get_function_arguments(procedure.oid),
+      pg_get_function_result(procedure.oid),
+      owner_role.rolname,
+      language.lanname,
+      procedure.prokind::text,
+      procedure.prosecdef,
+      procedure.proleakproof,
+      procedure.proisstrict,
+      procedure.proretset,
+      procedure.provolatile::text,
+      procedure.proparallel::text,
+      procedure.procost::text,
+      procedure.prorows::text,
+      case when procedure.provariadic=0 then null
+           else format_type(procedure.provariadic,null) end,
+      case when procedure.prosupport=0 then null
+           else support_namespace.nspname || '.' || support_function.proname || '(' ||
+                pg_get_function_identity_arguments(support_function.oid) || ')' end,
+      procedure.pronargs,
+      procedure.pronargdefaults,
+      to_jsonb(procedure.proargmodes),
+      to_jsonb(procedure.proargnames),
+      (
+        select jsonb_agg(format_type(argument_type,null) order by argument.ordinality)
+        from unnest(procedure.proallargtypes) with ordinality
+          argument(argument_type,ordinality)
+      ),
+      (
+        select jsonb_agg(format_type(transform_type,null) order by transform.ordinality)
+        from unnest(procedure.protrftypes) with ordinality
+          transform(transform_type,ordinality)
+      ),
+      to_jsonb(procedure)->'proargdefaults',
+      procedure.prosrc,
+      procedure.probin,
+      to_jsonb(procedure)->'prosqlbody',
+      to_jsonb(procedure.proconfig)
+    )::text semantic_row
+    from pg_proc procedure
+    join pg_namespace function_namespace on function_namespace.oid=procedure.pronamespace
+    join pg_roles owner_role on owner_role.oid=procedure.proowner
+    join pg_language language on language.oid=procedure.prolang
+    left join pg_proc support_function on support_function.oid=procedure.prosupport
+    left join pg_namespace support_namespace
+      on support_namespace.oid=support_function.pronamespace
+    where exists (
+      select 1
+      from pg_trigger trigger
+      join pg_class relation on relation.oid=trigger.tgrelid
+      join pg_namespace relation_namespace on relation_namespace.oid=relation.relnamespace
+      join pg_proc bound_procedure on bound_procedure.oid=trigger.tgfoid
+      join pg_namespace bound_function_namespace
+        on bound_function_namespace.oid=bound_procedure.pronamespace
+      where trigger.tgfoid=procedure.oid
+        and ${triggerScopePredicateSql({
+          triggerAlias: 'trigger',
+          relationAlias: 'relation',
+          relationNamespaceAlias: 'relation_namespace',
+          functionNamespaceAlias: 'bound_function_namespace'
+        })}
+    )
+  ) reviewed_trigger_functions;
+  if v_trigger_function_count <> ${manifest.functionSemanticCount}
+     or octet_length(v_trigger_function_payload) <> ${expectedSemanticPayloadBytes}
+     or encode(sha256(convert_to(v_trigger_function_payload,'UTF8')),'hex') <>
+        ${quote(expectedSemanticSha256)} then
+    raise exception 'STAGING_TRIGGER_FUNCTION_SEMANTICS_INVALID: count=%, bytes=%, sha256=%',
+      v_trigger_function_count,octet_length(v_trigger_function_payload),
+      encode(sha256(convert_to(v_trigger_function_payload,'UTF8')),'hex');
+  end if;
+
+  select count(*)::bigint,
+    coalesce(string_agg(binding_row,E'\\n' order by binding_row collate "C"),'') || E'\\n'
+  into v_trigger_binding_count,v_trigger_binding_payload
+  from (
+    select jsonb_build_array(
+      'cnyos-trigger-binding/v1',
+      relation_namespace.nspname,
+      relation.relname,
+      relation.relkind::text,
+      trigger.tgname,
+      function_namespace.nspname,
+      procedure.proname,
+      pg_get_function_identity_arguments(procedure.oid),
+      trigger.tgenabled::text,
+      trigger.tgtype,
+      (
+        select jsonb_agg(attribute.attname order by selected.ordinality)
+        from unnest(trigger.tgattr::smallint[]) with ordinality
+          selected(attnum,ordinality)
+        join pg_attribute attribute
+          on attribute.attrelid=trigger.tgrelid and attribute.attnum=selected.attnum
+      ),
+      trigger.tgnargs,
+      encode(trigger.tgargs,'hex'),
+      trigger.tgdeferrable,
+      trigger.tginitdeferred,
+      pg_get_expr(trigger.tgqual,trigger.tgrelid,true),
+      trigger.tgoldtable,
+      trigger.tgnewtable,
+      constraint_namespace.nspname,
+      constraint_definition.conname,
+      referenced_namespace.nspname,
+      referenced_relation.relname,
+      index_namespace.nspname,
+      index_relation.relname,
+      parent_namespace.nspname,
+      parent_relation.relname,
+      parent_trigger.tgname
+    )::text binding_row
+    from pg_trigger trigger
+    join pg_class relation on relation.oid=trigger.tgrelid
+    join pg_namespace relation_namespace on relation_namespace.oid=relation.relnamespace
+    join pg_proc procedure on procedure.oid=trigger.tgfoid
+    join pg_namespace function_namespace on function_namespace.oid=procedure.pronamespace
+    left join pg_constraint constraint_definition
+      on constraint_definition.oid=trigger.tgconstraint
+    left join pg_namespace constraint_namespace
+      on constraint_namespace.oid=constraint_definition.connamespace
+    left join pg_class referenced_relation on referenced_relation.oid=trigger.tgconstrrelid
+    left join pg_namespace referenced_namespace
+      on referenced_namespace.oid=referenced_relation.relnamespace
+    left join pg_class index_relation on index_relation.oid=trigger.tgconstrindid
+    left join pg_namespace index_namespace on index_namespace.oid=index_relation.relnamespace
+    left join pg_trigger parent_trigger on parent_trigger.oid=trigger.tgparentid
+    left join pg_class parent_relation on parent_relation.oid=parent_trigger.tgrelid
+    left join pg_namespace parent_namespace on parent_namespace.oid=parent_relation.relnamespace
+    where ${scope}
+  ) reviewed_trigger_bindings;
+  if v_trigger_binding_count <> ${manifest.bindingCount}
+     or octet_length(v_trigger_binding_payload) <> ${manifest.bindingPayloadBytes}
+     or encode(sha256(convert_to(v_trigger_binding_payload,'UTF8')),'hex') <>
+        ${quote(manifest.bindingSha256)} then
+    raise exception 'STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID: count=%, bytes=%, sha256=%',
+      v_trigger_binding_count,octet_length(v_trigger_binding_payload),
+      encode(sha256(convert_to(v_trigger_binding_payload,'UTF8')),'hex');
+  end if;
+
+`;
+}
 
 export function loadMigrationEntries(cwd = root) {
   const directory = path.join(cwd, 'supabase', 'migrations');
@@ -1072,14 +1603,50 @@ export function buildMigrationLedgerRepairSql(options) {
   return buildMigrationLedgerSql({ ...options, verificationOnly: false });
 }
 
-// Catalog verification never includes application healthchecks or ledger writes.
-// Keep the repair entrypoint's existing guards and behavior unchanged.
+// Catalog verification reuses the fail-closed schema and privilege guards but
+// never includes application healthchecks or ledger writes.
 export function buildMigrationLedgerSchemaGuardSql(options) {
   return buildMigrationLedgerSql({ ...options, verificationOnly: true });
 }
 
-function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sourceRevision = '', verificationOnly }) {
+export function isExactReviewedChananyaStagingTarget(target) {
+  const databaseUrl = new URL(target.database.url);
+  const manifest = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST;
+  return databaseUrl.hostname === `${manifest.projectRef}.supabase.co` &&
+    databaseUrl.origin === manifest.databaseOrigin &&
+    target.database.url === manifest.databaseOrigin &&
+    target.deploymentId === manifest.deploymentId &&
+    target.tenant.expectedClinicCode === manifest.clinicCode &&
+    target.tenant.expectedClinicId === manifest.clinicId;
+}
+
+function resolveMigrationLedgerAclPhase(target, requestedPhase = MIGRATION_LEDGER_ACL_PHASE_STRICT) {
+  if (![
+    MIGRATION_LEDGER_ACL_PHASE_STRICT,
+    MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION
+  ].includes(requestedPhase)) {
+    throw new Error(`Unsupported migration-ledger ACL phase: ${requestedPhase}`);
+  }
+  if (requestedPhase === MIGRATION_LEDGER_ACL_PHASE_STRICT) return requestedPhase;
+
+  if (!isExactReviewedChananyaStagingTarget(target)) {
+    throw new Error(
+      'Chananya pre-reconciliation ACL phase is restricted to the exact reviewed staging target'
+    );
+  }
+  return requestedPhase;
+}
+
+function buildMigrationLedgerSql({
+  config,
+  entries = loadMigrationEntries(),
+  sourceRevision = '',
+  verificationOnly,
+  aclPhase = MIGRATION_LEDGER_ACL_PHASE_STRICT
+}) {
   const target = validateTenantConfig(config);
+  const targetDatabaseUrl = new URL(target.database.url);
+  const targetProjectRef = targetDatabaseUrl.hostname.replace(/\.supabase\.co$/, '');
   if (!stagingMarker.test(target.deploymentId)) {
     throw new Error('Migration ledger recovery is restricted to a staging/non-production deployment');
   }
@@ -1087,6 +1654,21 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     throw new Error('Migration ledger recovery requires an explicit staging clinic code');
   }
   if (!entries.length) throw new Error('Migration ledger recovery requires at least one migration');
+  for (const entry of entries) {
+    if (!/^\d{12,14}$/.test(entry.version) ||
+        !/^[a-z0-9_]+$/i.test(entry.name) ||
+        entry.file !== `${entry.version}_${entry.name}.sql` ||
+        !/^[0-9a-f]{64}$/.test(entry.sha256)) {
+      throw new Error(`Migration ledger entry is not canonical: ${entry.file || entry.version}`);
+    }
+  }
+  if (new Set(entries.map(entry => entry.version)).size !== entries.length) {
+    throw new Error('Migration ledger entry versions must be unique');
+  }
+  if (entries.some((entry, index) => index > 0 &&
+      entries[index - 1].file >= entry.file)) {
+    throw new Error('Migration ledger entries must be in strict canonical order');
+  }
   for (const [file, sha256] of immutableMigrationHashes) {
     if (entries.find(entry => entry.file === file)?.sha256 !== sha256) {
       throw new Error(`Immutable historical migration SHA mismatch: ${file}`);
@@ -1106,32 +1688,395 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     })
     .join(',\n  ');
   const revision = String(sourceRevision || '').trim().toLowerCase();
-  if (verificationOnly && !/^[0-9a-f]{40}$/.test(revision)) {
-    throw new Error('Verification requires the full 40-character source revision');
-  }
-  if (revision && !/^[0-9a-f]{7,40}$/.test(revision)) {
-    throw new Error('Source revision must be a 7-40 character hexadecimal Git revision');
+  if (!/^[0-9a-f]{40}$/.test(revision)) {
+    throw new Error(
+      `${verificationOnly ? 'Verification' : 'Migration ledger repair'} requires the full ` +
+      '40-character artifact source revision'
+    );
   }
 
-  return (verificationOnly
-    ? `-- Generated read-only staging schema verification.\n`
-    : `-- Generated one-time staging migration ledger recovery.\n`) +
+  const resolvedAclPhase = resolveMigrationLedgerAclPhase(target, aclPhase);
+  if (!verificationOnly && !isExactReviewedChananyaStagingTarget(target)) {
+    throw new Error(
+      'Migration ledger repair is restricted to the exact reviewed Chananya staging ' +
+      'target until this tenant has an independent baseline'
+    );
+  }
+  const isChananyaPreReconciliation =
+    resolvedAclPhase === MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION;
+  const clinicalTreatmentSessionAclContract = isChananyaPreReconciliation
+    ? REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.preReconciliationAcl
+    : REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.strictPostRemediationAcl;
+  const clinicalTreatmentSessionDirectAclGrants =
+    clinicalTreatmentSessionAclContract.directOwnerGrantedNonGrantableExecuteGrantees
+      .map(grantee => [grantee]);
+  const clinicalTreatmentSessionRuntimeAcl = runtimeJwtRoles.map(roleName => [
+    roleName,
+    clinicalTreatmentSessionAclContract.effectiveRuntimeExecuteRoles.includes(roleName)
+  ]);
+  if (
+    entries.length !== reviewedMigrationManifestCount ||
+    migrationManifestSha256(entries) !== reviewedMigrationManifestSha256
+  ) {
+    throw new Error(
+      `${verificationOnly ? 'Migration ledger verification' : 'Migration ledger repair'} ` +
+      'requires the exact reviewed 45-entry migration manifest'
+    );
+  }
+  const transitionalBrowserRpcGrants = isChananyaPreReconciliation
+    ? CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+      .map(([grantee, procedureSignature]) => [procedureSignature, grantee])
+    : [];
+  const allowedSubscriptionBrowserProcedureGrants = [
+    ...subscriptionKillSwitchBrowserProcedureGrants,
+    ...transitionalBrowserRpcGrants
+  ];
+  const allowedCallableSecurityDefinerProcedureGrants = [
+    ...callableSecurityDefinerProcedureGrants,
+    ...transitionalBrowserRpcGrants
+  ];
+  const expectedTriggerInventory = isChananyaPreReconciliation
+    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory
+    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory.map(row =>
+      row[0] === 'public.set_updated_at()'
+        ? [row[0], row[1], 'search_path=pg_catalog, public', row[3], row[4]]
+        : [...row]);
+  const expectedTriggerSemanticPayloadBytes = isChananyaPreReconciliation
+    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+      .functionSemanticPreReconciliationPayloadBytes
+    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictPayloadBytes;
+  const expectedTriggerSemanticSha256 = isChananyaPreReconciliation
+    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticPreReconciliationSha256
+    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256;
+  const allowedTriggerProcedureGrants = isChananyaPreReconciliation
+    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples
+      .map(([grantee, procedureSignature]) => [procedureSignature, grantee])
+    : [];
+  const triggerAclMissingGuardSql = isChananyaPreReconciliation
+    ? `  select string_agg(procedure_signature || ' -> ' || expected_grantee, ', ' order by procedure_signature,expected_grantee) into v_missing\n` +
+      `  from (values ${sqlRows(allowedTriggerProcedureGrants)}) expected(procedure_signature,expected_grantee)\n` +
+      `  join pg_proc p on p.oid=to_regprocedure(procedure_signature)\n` +
+      `  where not exists (\n` +
+      `    select 1\n` +
+      `    from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl\n` +
+      `    left join pg_roles grantee on grantee.oid=acl.grantee\n` +
+      `    where coalesce(grantee.rolname,'PUBLIC')=expected_grantee\n` +
+      `      and acl.privilege_type='EXECUTE' and not acl.is_grantable\n` +
+      `      and acl.grantor=p.proowner\n` +
+      `  );\n` +
+      `  if v_missing is not null then raise exception 'STAGING_TRANSITIONAL_TRIGGER_ACL_MISSING: %', v_missing; end if;\n\n`
+    : '';
+  const triggerAclInvalidPredicate = isChananyaPreReconciliation
+    ? `acl.privilege_type <> 'EXECUTE' or acl.is_grantable or acl.grantor <> p.proowner\n` +
+      `      or not exists (\n` +
+      `        select 1\n` +
+      `        from (values ${sqlRows(allowedTriggerProcedureGrants)}) expected(\n` +
+      `          procedure_signature,expected_grantee\n` +
+      `        )\n` +
+      `        where to_regprocedure(procedure_signature)=p.oid\n` +
+      `          and expected_grantee=coalesce(grantee.rolname,'PUBLIC')\n` +
+      `      )`
+    : 'true';
+  const repairStatus = isChananyaPreReconciliation
+    ? 'CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING'
+    : 'CNYOS_STAGING_MIGRATION_LEDGER_RECONCILED';
+  const repairEvidenceMarker = 'cnyos_migration_ledger_repair_evidence';
+  const repairReceiptTable = 'cnyos_migration_ledger_repair_receipts';
+  const expectedDatabaseName = 'postgres';
+  const expectedDatabaseUser = 'postgres';
+  const ledgerComment =
+    'Canonical Supabase CLI migration history. Recovered only after staging schema fingerprint and empty-data guards passed.';
+  const repairReceiptComment =
+    'Committed CNYOS migration-ledger repair receipts. UUID and top-level XID replay guard; not migration provenance.';
+  const repairReceiptCheckDefinitions = [
+    [
+      'cnyos_repair_receipt_gate_token_check',
+      "CHECK (gate_token ~ '^[0-9a-f]{64}$'::text)"
+    ],
+    [
+      'cnyos_repair_receipt_xid_check',
+      "CHECK (repair_xid ~ '^[0-9]+$'::text)"
+    ],
+    [
+      'cnyos_repair_receipt_evidence_check',
+      "CHECK ((jsonb_typeof(evidence) = 'object'::text AND " +
+        "(evidence ->> 'repair_gate_token'::text) = gate_token AND " +
+        "(evidence ->> 'repair_run_nonce'::text) = run_nonce::text AND " +
+        "(evidence ->> 'repair_transaction_xid'::text) = repair_xid) IS TRUE)"
+    ]
+  ];
+  const repairRunNonceGuc = 'cnyos.migration_ledger_repair_run_nonce';
+  const repairCommittedNonceGuc = 'cnyos.migration_ledger_repair_committed_nonce';
+  const repairCommittedXidGuc = 'cnyos.migration_ledger_repair_committed_xid';
+  const repairObservedHostGuc = 'cnyos.migration_ledger_repair_observed_psql_host';
+  const repairObservedPortGuc = 'cnyos.migration_ledger_repair_observed_psql_port';
+  const repairObservedUserGuc = 'cnyos.migration_ledger_repair_observed_psql_user';
+  const repairObservedDatabaseGuc = 'cnyos.migration_ledger_repair_observed_psql_database';
+  const expectedDatabaseHost = `db.${targetProjectRef}.supabase.co`;
+  const repairGateToken = createHash('sha256').update([
+    target.deploymentId,
+    target.tenant.expectedClinicId,
+    revision || 'not-supplied',
+    resolvedAclPhase,
+    migrationManifestSha256(entries)
+  ].join('\n')).digest('hex');
+  const repairAuthorizationBlockerSql =
+    `  raise exception ${quote(migrationLedgerRepairAuthorizationBlocker)};\n`;
+  const exactLedgerInvariantPredicate =
+    `(select count(*) from supabase_migrations.schema_migrations) = ${entries.length}\n` +
+    `    and not exists (\n` +
+    `      select 1\n` +
+    `      from supabase_migrations.schema_migrations actual\n` +
+    `      left join (values\n        ${expectedRows}\n` +
+    `      ) expected(version,name,sha256,evidence) on expected.version=actual.version\n` +
+    `      where expected.version is null\n` +
+    `    )\n` +
+    `    and not exists (\n` +
+    `      select 1\n` +
+    `      from (values\n        ${expectedRows}\n` +
+    `      ) expected(version,name,sha256,evidence)\n` +
+    `      left join supabase_migrations.schema_migrations actual\n` +
+    `        on actual.version=expected.version\n` +
+    `      where actual.version is null\n` +
+    `         or actual.name is distinct from expected.name\n` +
+    `         or actual.statements is null\n` +
+    `         or cardinality(actual.statements)=0\n` +
+    `         or exists (\n` +
+    `           select 1 from unnest(actual.statements) statement(value)\n` +
+    `           where statement.value is null\n` +
+    `         )\n` +
+    `         or not exists (\n` +
+    `           select 1 from unnest(coalesce(actual.statements,array[]::text[])) statement(value)\n` +
+    `           where statement.value is not distinct from expected.evidence\n` +
+    `         )\n` +
+    `         or (\n` +
+    `           select count(*)\n` +
+    `           from unnest(coalesce(actual.statements,array[]::text[])) statement(value)\n` +
+    `           where statement.value ~* '^[[:space:]]*-- recovered from supabase/migrations/[^;]+;[[:space:]]*sha256[[:space:]]*='\n` +
+    `         ) <> 1\n` +
+    `    )`;
+  const verificationPsqlPreamble = verificationOnly ?
+    `\\set ON_ERROR_STOP 1
+\\set ON_ERROR_ROLLBACK off
+\\unset cnyos_verification_probe_xid
+\\unset cnyos_verification_existing_transaction
+\\unset cnyos_verification_server_identity_ok
+\\unset cnyos_verification_lock_released
+\\if :AUTOCOMMIT
+\\else
+\\warn 'CNYOS staging verification requires psql AUTOCOMMIT=on; rolling back and refusing execution'
+rollback;
+do $cnyos_verification_psql_autocommit_abort$
+begin
+  raise exception 'CNYOS_STAGING_VERIFICATION_PSQL_AUTOCOMMIT_REQUIRED';
+end
+$cnyos_verification_psql_autocommit_abort$;
+\\endif
+set search_path = pg_catalog, pg_temp, public;
+select (
+  pg_catalog.current_database() = ${quote(expectedDatabaseName)}
+  and session_user = ${quote(expectedDatabaseUser)}
+  and current_user = ${quote(expectedDatabaseUser)}
+) as cnyos_verification_server_identity_ok
+\\gset
+\\if :cnyos_verification_server_identity_ok
+\\else
+\\warn 'CNYOS staging verification requires server database/session_user/current_user postgres'
+do $cnyos_verification_psql_identity_abort$
+begin
+  raise exception 'CNYOS_STAGING_VERIFICATION_SERVER_IDENTITY_REFUSED';
+end
+$cnyos_verification_psql_identity_abort$;
+\\endif
+select pg_catalog.pg_current_xact_id()::text as cnyos_verification_probe_xid
+\\gset
+\\unset cnyos_verification_existing_transaction
+select (
+  pg_catalog.pg_current_xact_id()::text = :'cnyos_verification_probe_xid'
+) as cnyos_verification_existing_transaction
+\\gset
+\\if :cnyos_verification_existing_transaction
+\\warn 'CNYOS staging verification detected and rolled back an existing transaction; refusing execution'
+rollback;
+do $cnyos_verification_psql_transaction_abort$
+begin
+  raise exception 'CNYOS_STAGING_VERIFICATION_PSQL_EXISTING_TRANSACTION_REFUSED';
+end
+$cnyos_verification_psql_transaction_abort$;
+\\endif
+select pg_catalog.pg_advisory_lock(202608302100::bigint);
+` : '';
+  const repairPsqlPreamble = verificationOnly ? '' :
+    `\\set ON_ERROR_STOP 1
+\\set ON_ERROR_ROLLBACK off
+\\unset cnyos_repair_probe_xid
+\\unset cnyos_repair_existing_transaction
+\\unset cnyos_repair_session_nonce
+\\unset cnyos_repair_committed_nonce
+\\unset cnyos_repair_committed_xid
+\\unset cnyos_repair_connection_ok
+\\unset cnyos_repair_server_identity_ok
+\\unset cnyos_repair_lock_unheld
+\\unset cnyos_repair_lock_acquired
+\\unset cnyos_repair_evidence
+\\unset cnyos_repair_lock_released
+\\unset cnyos_repair_lock_fully_released
+\\unset cnyos_repair_run_nonce
+\\if :AUTOCOMMIT
+\\else
+\\warn 'CNYOS ledger repair requires psql AUTOCOMMIT=on; rolling back and refusing execution'
+rollback;
+do $cnyos_psql_preflight_abort$
+begin
+  raise exception 'CNYOS_LEDGER_REPAIR_PSQL_AUTOCOMMIT_REQUIRED';
+end
+$cnyos_psql_preflight_abort$;
+\\endif
+set search_path = pg_catalog, pg_temp, public;
+select (
+  :'HOST' = ${quote(expectedDatabaseHost)}
+  and :'PORT' = '5432'
+  and :'USER' = 'postgres'
+  and :'DBNAME' = 'postgres'
+) as cnyos_repair_connection_ok
+\\gset
+\\if :cnyos_repair_connection_ok
+\\else
+\\warn 'CNYOS ledger repair requires the exact direct Chananya PostgreSQL endpoint db.${targetProjectRef}.supabase.co:5432, database postgres, user postgres'
+do $cnyos_psql_connection_abort$
+begin
+  raise exception 'CNYOS_LEDGER_REPAIR_PSQL_CONNECTION_IDENTITY_REFUSED';
+end
+$cnyos_psql_connection_abort$;
+\\endif
+select (
+  pg_catalog.current_database() = ${quote(expectedDatabaseName)}
+  and session_user = ${quote(expectedDatabaseUser)}
+  and current_user = ${quote(expectedDatabaseUser)}
+) as cnyos_repair_server_identity_ok
+\\gset
+\\if :cnyos_repair_server_identity_ok
+\\else
+\\warn 'CNYOS ledger repair requires server database/session_user/current_user postgres'
+do $cnyos_psql_server_identity_abort$
+begin
+  raise exception 'CNYOS_LEDGER_REPAIR_SERVER_IDENTITY_REFUSED';
+end
+$cnyos_psql_server_identity_abort$;
+\\endif
+select pg_catalog.pg_current_xact_id()::text as cnyos_repair_probe_xid
+\\gset
+\\unset cnyos_repair_existing_transaction
+select (
+  pg_catalog.pg_current_xact_id()::text = :'cnyos_repair_probe_xid'
+) as cnyos_repair_existing_transaction
+\\gset
+\\if :cnyos_repair_existing_transaction
+\\warn 'CNYOS ledger repair detected and rolled back an existing transaction; refusing execution'
+rollback;
+do $cnyos_psql_preflight_abort$
+begin
+  raise exception 'CNYOS_LEDGER_REPAIR_PSQL_EXISTING_TRANSACTION_REFUSED';
+end
+$cnyos_psql_preflight_abort$;
+\\endif
+select pg_catalog.gen_random_uuid()::text as cnyos_repair_run_nonce
+\\gset
+select pg_catalog.set_config(
+  ${quote(repairRunNonceGuc)},
+  :'cnyos_repair_run_nonce',
+  false
+) as cnyos_repair_session_nonce
+\\gset
+select pg_catalog.set_config(
+  ${quote(repairCommittedNonceGuc)},
+  '',
+  false
+) as cnyos_repair_committed_nonce
+\\gset
+select pg_catalog.set_config(
+  ${quote(repairCommittedXidGuc)},
+  '',
+  false
+) as cnyos_repair_committed_xid
+\\gset
+select pg_catalog.set_config(${quote(repairObservedHostGuc)},:'HOST',false),
+  pg_catalog.set_config(${quote(repairObservedPortGuc)},:'PORT',false),
+  pg_catalog.set_config(${quote(repairObservedUserGuc)},:'USER',false),
+  pg_catalog.set_config(${quote(repairObservedDatabaseGuc)},:'DBNAME',false);
+select not exists (
+  select 1
+  from pg_catalog.pg_locks
+  where locktype='advisory' and pid=pg_catalog.pg_backend_pid() and granted
+    and classid::bigint=(202608302100::bigint >> 32)
+    and objid::bigint=(202608302100::bigint & 4294967295::bigint)
+    and objsubid=1
+) as cnyos_repair_lock_unheld
+\\gset
+\\if :cnyos_repair_lock_unheld
+\\else
+\\warn 'CNYOS ledger repair requires the advisory key to be unheld by this session'
+do $cnyos_psql_lock_state_abort$
+begin
+  raise exception 'CNYOS_LEDGER_REPAIR_ADVISORY_LOCK_ALREADY_HELD';
+end
+$cnyos_psql_lock_state_abort$;
+\\endif
+select pg_catalog.pg_try_advisory_lock(202608302100::bigint) as cnyos_repair_lock_acquired
+\\gset
+\\if :cnyos_repair_lock_acquired
+\\else
+\\warn 'CNYOS ledger repair advisory key is busy; refusing rather than waiting'
+do $cnyos_psql_lock_busy_abort$
+begin
+  raise exception 'CNYOS_LEDGER_REPAIR_ADVISORY_LOCK_BUSY';
+end
+$cnyos_psql_lock_busy_abort$;
+\\endif
+`;
+
+  return verificationPsqlPreamble + repairPsqlPreamble + (verificationOnly
+    ? `-- Generated read-only staging schema verification (${resolvedAclPhase}).\n`
+    : `-- Generated one-time staging migration ledger recovery (${resolvedAclPhase}).\n`) +
     `-- Target: ${target.deploymentId} / ${target.tenant.expectedClinicCode}.\n` +
     `-- Source revision: ${revision || 'not-supplied'}; migration count: ${entries.length}.\n` +
-    `-- Run only after every ordered migration has been applied to the isolated, empty staging database.\n` +
+    `-- ACL phase: ${resolvedAclPhase}.\n` +
+    (isChananyaPreReconciliation
+      ? `-- Known pre-reconciliation evidence only (not a complete live public-function ACL inventory; not authorization): bundle-sha256=${CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256}; known-live-callable-acl-subset-count=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples.length}; known-live-callable-acl-subset-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256}; trigger-inventory-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256}; trigger-acl-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256}; trigger-function-semantic-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount}; trigger-function-semantic-bytes=${expectedTriggerSemanticPayloadBytes}; trigger-function-semantic-sha256=${expectedTriggerSemanticSha256}; trigger-binding-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount}; trigger-binding-bytes=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes}; trigger-binding-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256}; server-major=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor}; server-encoding=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding}; browser-observed-at=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observedAt}; trigger-observed-at=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.observedAt}; trigger-semantic-observed-at=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticObservedAt}; trigger-binding-observed-at=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingObservedAt}; known-subset-source=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision}.\n`
+      : '') +
+    `-- Repository-derived (not live-observed) clinical treatment session ACL manifest: sha256=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sha256}; source-migration=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sourceMigration}; source-sha256=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sourceMigrationSha256}; live callable ACL inventory is a separate prerequisite.\n` +
+    `-- Run only after every ordered migration's intended schema effect is present in the isolated, empty staging database and provenance has been reviewed.\n` +
     (verificationOnly
       ? `begin isolation level repeatable read read only;\n` +
+        canonicalCatalogOutputGucSql +
         `set local statement_timeout = '60s';\n` +
         `set local lock_timeout = '5s';\n`
-      : `begin;\n`) +
+      : `begin isolation level repeatable read read write;\n` +
+        canonicalCatalogOutputGucSql) +
     `set local search_path = pg_catalog, pg_temp, public;\n` +
-    (verificationOnly ? '' : `select pg_advisory_xact_lock(202608302100::bigint);\n`) +
     `do $ledger_guard$\n` +
     `declare\n` +
     `  v_missing text;\n` +
     `  v_function_body text;\n` +
     `  v_transactional_rows bigint;\n` +
+    `  v_trigger_function_count bigint;\n` +
+    `  v_trigger_function_payload text;\n` +
+    `  v_trigger_binding_count bigint;\n` +
+    `  v_trigger_binding_payload text;\n` +
+    `  v_repair_xid text;\n` +
+    `  v_observed_system_identifier text;\n` +
+    `  v_observed_current_database text := pg_catalog.current_database();\n` +
+    `  v_observed_session_user text := session_user;\n` +
+    `  v_observed_current_user text := current_user;\n` +
     `begin\n` +
+    `  if v_observed_current_database is distinct from ${quote(expectedDatabaseName)}\n` +
+    `     or v_observed_session_user is distinct from ${quote(expectedDatabaseUser)}\n` +
+    `     or v_observed_current_user is distinct from ${quote(expectedDatabaseUser)} then\n` +
+    `    raise exception '${verificationOnly ? 'CNYOS_STAGING_VERIFICATION' : 'CNYOS_LEDGER_REPAIR'}_SERVER_IDENTITY_REFUSED: expected database=% session_user=% current_user=%; observed database=% session_user=% current_user=%',\n` +
+    `      ${quote(expectedDatabaseName)},${quote(expectedDatabaseUser)},${quote(expectedDatabaseUser)},\n` +
+    `      coalesce(v_observed_current_database,'NULL'),coalesce(v_observed_session_user,'NULL'),\n` +
+    `      coalesce(v_observed_current_user,'NULL');\n` +
+    `  end if;\n` +
     (verificationOnly
       ? `  if current_setting('transaction_read_only') <> 'on' then\n` +
         `    raise exception 'STAGING_VERIFICATION_READ_ONLY_REQUIRED';\n` +
@@ -1142,8 +2087,97 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
         `  if not exists (select 1 from pg_roles where rolname=current_user and (rolsuper or rolbypassrls)) then\n` +
         `    raise exception 'STAGING_VERIFICATION_CATALOG_READER_REQUIRED';\n` +
         `  end if;\n` +
+        `  select system_identifier::text into v_observed_system_identifier\n` +
+        `  from pg_catalog.pg_control_system();\n` +
+        (isExactReviewedChananyaStagingTarget(target)
+          ? `  if v_observed_system_identifier is distinct from ${quote(CHANANYA_REVIEWED_SYSTEM_IDENTIFIER)} then\n` +
+            `    raise exception 'CNYOS_STAGING_VERIFICATION_WRONG_CLUSTER: observed system_identifier=%',\n` +
+            `      coalesce(v_observed_system_identifier,'NULL');\n` +
+            `  end if;\n`
+          : '') +
         `  perform pg_catalog.pg_advisory_xact_lock(202608302100::bigint);\n`
-      : '') +
+      : `  if current_setting('transaction_read_only') <> 'off' then\n` +
+        `    raise exception 'STAGING_LEDGER_REPAIR_READ_WRITE_REQUIRED';\n` +
+        `  end if;\n` +
+        `  if current_setting('transaction_isolation') <> 'repeatable read' then\n` +
+        `    raise exception 'STAGING_LEDGER_REPAIR_REPEATABLE_READ_REQUIRED';\n` +
+        `  end if;\n` +
+        `  select system_identifier::text into v_observed_system_identifier\n` +
+        `  from pg_catalog.pg_control_system();\n` +
+        `  if v_observed_system_identifier is distinct from ${quote(CHANANYA_REVIEWED_SYSTEM_IDENTIFIER)} then\n` +
+        `    raise exception 'CNYOS_LEDGER_REPAIR_WRONG_CLUSTER: observed system_identifier=%',\n` +
+        `      coalesce(v_observed_system_identifier,'NULL');\n` +
+        `  end if;\n` +
+        repairAuthorizationBlockerSql +
+        `  if coalesce(current_setting(${quote(repairRunNonceGuc)},true),'') !~\n` +
+        `      '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then\n` +
+        `    raise exception 'STAGING_LEDGER_REPAIR_RUN_NONCE_REQUIRED';\n` +
+        `  end if;\n` +
+        `  v_repair_xid := pg_catalog.pg_current_xact_id()::text;\n` +
+        `  perform pg_catalog.pg_advisory_xact_lock(202608302100::bigint);\n` +
+        `  execute 'drop table if exists pg_temp.${repairEvidenceMarker}';\n`) +
+    `  select string_agg(procedure_signature, ', ' order by procedure_signature) into v_missing\n` +
+    `  from (values ${sqlRows(expectedTriggerInventory)}) expected(\n` +
+    `    procedure_signature,expected_owner,expected_search_path,expected_security_definer,expected_binding_count\n` +
+    `  )\n` +
+    `  where not exists (\n` +
+    `    select 1\n` +
+    `    from pg_proc p\n` +
+    `    join pg_namespace n on n.oid=p.pronamespace\n` +
+    `    join pg_roles owner_role on owner_role.oid=p.proowner\n` +
+    `    where p.oid=to_regprocedure(procedure_signature)\n` +
+    `      and n.nspname='public' and p.prokind='f'\n` +
+    `      and owner_role.rolname=expected_owner\n` +
+    `      and p.prosecdef=expected_security_definer::boolean\n` +
+    `      and coalesce(array_to_string(p.proconfig,','),'')=expected_search_path\n` +
+    `      and (select count(*) from pg_trigger t where t.tgfoid=p.oid and not t.tgisinternal)=\n` +
+    `          expected_binding_count::bigint\n` +
+    `  );\n` +
+    `  if v_missing is not null then raise exception 'STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID: %', v_missing; end if;\n` +
+    `\n` +
+    `  select string_agg(\n` +
+    `    n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',\n` +
+    `    ', ' order by n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)\n` +
+    `  ) into v_missing\n` +
+    `  from pg_proc p\n` +
+    `  join pg_namespace n on n.oid=p.pronamespace\n` +
+    `  where n.nspname='public' and p.prokind='f'\n` +
+    `    and exists (select 1 from pg_trigger t where t.tgfoid=p.oid and not t.tgisinternal)\n` +
+    `    and not exists (\n` +
+    `      select 1 from (values ${sqlRows(expectedTriggerInventory)}) expected(\n` +
+    `        procedure_signature,expected_owner,expected_search_path,expected_security_definer,expected_binding_count\n` +
+    `      ) where to_regprocedure(procedure_signature)=p.oid\n` +
+    `    );\n` +
+    `  if v_missing is not null then raise exception 'STAGING_TRIGGER_FUNCTION_INVENTORY_UNEXPECTED: %', v_missing; end if;\n` +
+    `\n` +
+    buildTriggerSemanticAndBindingGuardSql({
+      expectedSemanticPayloadBytes: expectedTriggerSemanticPayloadBytes,
+      expectedSemanticSha256: expectedTriggerSemanticSha256
+    }) +
+    triggerAclMissingGuardSql +
+    `  select string_agg(\n` +
+    `    p.oid::regprocedure::text || ' -> ' || coalesce(grantee.rolname,'PUBLIC') || ':' || acl.privilege_type,\n` +
+    `    ', ' order by p.oid::regprocedure::text,coalesce(grantee.rolname,'PUBLIC'),acl.privilege_type\n` +
+    `  ) into v_missing\n` +
+    `  from pg_proc p\n` +
+    `  join pg_namespace n on n.oid=p.pronamespace\n` +
+    `  cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl\n` +
+    `  left join pg_roles grantee on grantee.oid=acl.grantee\n` +
+    `  where n.nspname='public' and p.prokind='f'\n` +
+    `    and exists (select 1 from pg_trigger t where t.tgfoid=p.oid and not t.tgisinternal)\n` +
+    `    and acl.grantee <> p.proowner\n` +
+    `    and (${triggerAclInvalidPredicate});\n` +
+    `  if v_missing is not null then raise exception 'STAGING_TRIGGER_FUNCTION_ACL_INVALID: %', v_missing; end if;\n` +
+    `\n` +
+    (isChananyaPreReconciliation ? '' :
+      `  select string_agg(p.oid::regprocedure::text || ' -> ' || runtime_role, ', ' order by p.oid::regprocedure::text,runtime_role) into v_missing\n` +
+      `  from pg_proc p\n` +
+      `  join pg_namespace n on n.oid=p.pronamespace\n` +
+      `  cross join unnest(array['anon','authenticated','service_role']::text[]) runtime(runtime_role)\n` +
+      `  where n.nspname='public' and p.prokind='f'\n` +
+      `    and exists (select 1 from pg_trigger t where t.tgfoid=p.oid and not t.tgisinternal)\n` +
+      `    and has_function_privilege(runtime_role,p.oid,'EXECUTE');\n` +
+      `  if v_missing is not null then raise exception 'STAGING_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT: %', v_missing; end if;\n\n`) +
     `  select string_agg(object_name, ', ' order by object_name) into v_missing\n` +
     `  from unnest(${sqlArray(requiredRelations)}) expected(object_name)\n` +
     `  where to_regclass(object_name) is null;\n` +
@@ -1161,6 +2195,78 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `  from unnest(${sqlArray(requiredProcedures)}) expected(procedure_signature)\n` +
     `  where to_regprocedure(procedure_signature) is null;\n` +
     `  if v_missing is not null then raise exception 'STAGING_SCHEMA_PROCEDURES_MISSING: %', v_missing; end if;\n` +
+    `\n` +
+    `  if not exists (\n` +
+    `    select 1\n` +
+    `    from pg_proc p\n` +
+    `    join pg_namespace function_namespace on function_namespace.oid=p.pronamespace\n` +
+    `    join pg_roles owner_role on owner_role.oid=p.proowner\n` +
+    `    join pg_language language on language.oid=p.prolang\n` +
+    `    where p.oid=to_regprocedure(${quote(createClinicalTreatmentSessionSignature)})\n` +
+    `      and function_namespace.nspname='public'\n` +
+    `      and owner_role.rolname=${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.owner)}\n` +
+    `      and language.lanname=${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.language)}\n` +
+    `      and p.prokind=${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.kind)}::\"char\"\n` +
+    `      and not p.prosecdef and not p.proleakproof and not p.proisstrict\n` +
+    `      and not p.proretset and p.provolatile='v' and p.proparallel='u'\n` +
+    `      and p.prorettype=to_regtype(${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.resultType)})\n` +
+    `      and p.pronargs=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.argumentCount}\n` +
+    `      and p.pronargdefaults=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.defaultArgumentCount}\n` +
+    `      and p.proargmodes is null\n` +
+    `      and p.proargnames=array[\n` +
+    `        'p_encounter_id','p_treatment_modalities','p_treatment_detail',\n` +
+    `        'p_procedure_referral','p_procedure_referral_detail','p_precautions',\n` +
+    `        'p_pain_before','p_pain_after','p_outcome_summary','p_advice'\n` +
+    `      ]::text[]\n` +
+    `      and p.proconfig=array[${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.searchPath)}]::text[]\n` +
+    `      and octet_length(btrim(regexp_replace(lower(p.prosrc),'[[:space:]]+',' ','g')))=\n` +
+    `          ${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.normalizedBodyPayloadBytes}\n` +
+    `      and encode(sha256(convert_to(\n` +
+    `        btrim(regexp_replace(lower(p.prosrc),'[[:space:]]+',' ','g')),\n` +
+    `        'UTF8'\n` +
+    `      )),'hex')=${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.semanticContract.normalizedBodySha256)}\n` +
+    `  ) then raise exception 'STAGING_CLINICAL_TREATMENT_SESSION_SEMANTIC_CONTRACT_INVALID'; end if;\n` +
+    `\n` +
+    `  select string_agg(expected_grantee, ', ' order by expected_grantee) into v_missing\n` +
+    `  from (values ${sqlRows(clinicalTreatmentSessionDirectAclGrants)}) expected(expected_grantee)\n` +
+    `  join pg_proc p on p.oid=to_regprocedure(${quote(createClinicalTreatmentSessionSignature)})\n` +
+    `  where not exists (\n` +
+    `    select 1\n` +
+    `    from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl\n` +
+    `    left join pg_roles granted_role on granted_role.oid=acl.grantee\n` +
+    `    where coalesce(granted_role.rolname,'PUBLIC')=expected_grantee\n` +
+    `      and acl.privilege_type='EXECUTE' and not acl.is_grantable\n` +
+    `      and acl.grantor=p.proowner\n` +
+    `  );\n` +
+    `  if v_missing is not null then raise exception 'STAGING_CLINICAL_TREATMENT_SESSION_ACL_MISSING: %', v_missing; end if;\n` +
+    `\n` +
+    `  select string_agg(runtime_role, ', ' order by runtime_role) into v_missing\n` +
+    `  from (values ${sqlRows(clinicalTreatmentSessionRuntimeAcl)}) expected(\n` +
+    `    runtime_role,expected_execute\n` +
+    `  )\n` +
+    `  where has_function_privilege(\n` +
+    `    runtime_role,${quote(createClinicalTreatmentSessionSignature)},'EXECUTE'\n` +
+    `  ) is distinct from expected_execute::boolean;\n` +
+    `  if v_missing is not null then raise exception 'STAGING_CLINICAL_TREATMENT_SESSION_RUNTIME_EXECUTE_INVALID: %', v_missing; end if;\n` +
+    `\n` +
+    `  select string_agg(\n` +
+    `    coalesce(granted_role.rolname,'PUBLIC') || ':' || acl.privilege_type,\n` +
+    `    ', ' order by coalesce(granted_role.rolname,'PUBLIC'),acl.privilege_type\n` +
+    `  ) into v_missing\n` +
+    `  from pg_proc p\n` +
+    `  cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl\n` +
+    `  left join pg_roles granted_role on granted_role.oid=acl.grantee\n` +
+    `  where p.oid=to_regprocedure(${quote(createClinicalTreatmentSessionSignature)})\n` +
+    `    and acl.grantee<>p.proowner\n` +
+    `    and (\n` +
+    `      acl.privilege_type<>'EXECUTE' or acl.is_grantable or acl.grantor<>p.proowner\n` +
+    `      or not exists (\n` +
+    `        select 1\n` +
+    `        from (values ${sqlRows(clinicalTreatmentSessionDirectAclGrants)}) expected(expected_grantee)\n` +
+    `        where expected_grantee=coalesce(granted_role.rolname,'PUBLIC')\n` +
+    `      )\n` +
+    `    );\n` +
+    `  if v_missing is not null then raise exception 'STAGING_CLINICAL_TREATMENT_SESSION_ACL_INVALID: %', v_missing; end if;\n` +
     `\n` +
     `  select string_agg(column_ref, ', ' order by column_ref) into v_missing\n` +
     `  from unnest(${sqlArray(requiredColumns)}) expected(column_ref)\n` +
@@ -1215,7 +2321,7 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `  if v_missing is not null then raise exception 'STAGING_SECURITY_DEFINERS_MISSING: %', v_missing; end if;\n` +
     `\n` +
     `  select string_agg(procedure_signature, ', ' order by procedure_signature) into v_missing\n` +
-    `  from unnest(${sqlArray(requiredProcedures)}) expected(procedure_signature)\n` +
+    `  from unnest(${sqlArray(requiredSecurityDefinerProcedures)}) expected(procedure_signature)\n` +
     `  where not exists (\n` +
     `    select 1 from pg_proc p\n` +
     `    where p.oid=to_regprocedure(procedure_signature) and p.prosecdef\n` +
@@ -1409,7 +2515,7 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `  if v_missing is not null then raise exception 'STAGING_SUBSCRIPTION_KILL_SWITCH_BROWSER_EXECUTE_PRESENT: %', v_missing; end if;\n` +
     `\n` +
     `  select string_agg(procedure_signature || ' -> ' || expected_grantee, ', ' order by procedure_signature,expected_grantee) into v_missing\n` +
-    `  from (values ${sqlRows(subscriptionKillSwitchBrowserProcedureGrants)}) expected(procedure_signature,expected_grantee)\n` +
+    `  from (values ${sqlRows(allowedSubscriptionBrowserProcedureGrants)}) expected(procedure_signature,expected_grantee)\n` +
     `  join pg_proc p on p.oid=to_regprocedure(procedure_signature)\n` +
     `  where not exists (\n` +
     `    select 1\n` +
@@ -1434,7 +2540,7 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `      acl.privilege_type <> 'EXECUTE' or acl.is_grantable or acl.grantor <> p.proowner\n` +
     `      or not exists (\n` +
     `        select 1\n` +
-    `        from (values ${sqlRows(subscriptionKillSwitchBrowserProcedureGrants)}) expected_grant(expected_signature,expected_grantee)\n` +
+    `        from (values ${sqlRows(allowedSubscriptionBrowserProcedureGrants)}) expected_grant(expected_signature,expected_grantee)\n` +
     `        where expected_signature=procedure_signature\n` +
     `          and expected_grantee=coalesce(grantee.rolname,'PUBLIC')\n` +
     `      )\n` +
@@ -1448,8 +2554,13 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `\n` +
     `  select string_agg(procedure_signature, ', ' order by procedure_signature) into v_missing\n` +
     `  from unnest(${sqlArray(subscriptionKillSwitchBrowserProcedures)}) expected(procedure_signature)\n` +
-    `  where has_function_privilege('anon', procedure_signature, 'EXECUTE');\n` +
-    `  if v_missing is not null then raise exception 'STAGING_SUBSCRIPTION_ANON_EXECUTE_PRESENT: %', v_missing; end if;\n` +
+    `  where has_function_privilege('anon', procedure_signature, 'EXECUTE')\n` +
+    `    and not exists (\n` +
+    `      select 1\n` +
+    `      from (values ${sqlRows(allowedSubscriptionBrowserProcedureGrants)}) allowed(allowed_signature,allowed_grantee)\n` +
+    `      where allowed_signature=procedure_signature and allowed_grantee='anon'\n` +
+    `    );\n` +
+    `  if v_missing is not null then raise exception 'STAGING_SUBSCRIPTION_UNEXPECTED_ANON_EXECUTE_PRESENT: %', v_missing; end if;\n` +
     `\n` +
     `  select string_agg(procedure_signature, ', ' order by procedure_signature) into v_missing\n` +
     `  from unnest(${sqlArray(subscriptionKillSwitchClosedProcedures)}) expected(procedure_signature)\n` +
@@ -2324,7 +3435,7 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `  if v_missing is not null then raise exception 'STAGING_PUBLIC_CALLABLE_SECURITY_DEFINER_INVENTORY_INVALID: unexpected %', v_missing; end if;\n` +
     `\n` +
     `  select string_agg(procedure_signature || ' -> ' || expected_grantee, ', ' order by procedure_signature,expected_grantee) into v_missing\n` +
-    `  from (values ${sqlRows(callableSecurityDefinerProcedureGrants)}) expected(procedure_signature,expected_grantee)\n` +
+    `  from (values ${sqlRows(allowedCallableSecurityDefinerProcedureGrants)}) expected(procedure_signature,expected_grantee)\n` +
     `  join pg_proc p on p.oid=to_regprocedure(procedure_signature)\n` +
     `  where not exists (\n` +
     `    select 1\n` +
@@ -2352,7 +3463,7 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `      acl.privilege_type <> 'EXECUTE' or acl.is_grantable or acl.grantor <> p.proowner\n` +
     `      or not exists (\n` +
     `        select 1\n` +
-    `        from (values ${sqlRows(callableSecurityDefinerProcedureGrants)}) expected(\n` +
+    `        from (values ${sqlRows(allowedCallableSecurityDefinerProcedureGrants)}) expected(\n` +
     `          procedure_signature,expected_grantee\n` +
     `        )\n` +
     `        where to_regprocedure(procedure_signature)=p.oid\n` +
@@ -2525,19 +3636,298 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `      and transaction_table_count=12\n` +
     `      and managed_database_restore_required\n` +
     `  ) then raise exception 'BACKUP_RESTORE_CONTRACT_MISMATCH'; end if;\n` +
-    `  if not exists (select 1 from public.line_oa_operational_healthcheck() where ready) then raise exception 'LINE_OA_OPERATIONAL_HEALTHCHECK_FAILED'; end if;\n`) +
+    `  if not exists (select 1 from public.line_oa_operational_healthcheck() where ready) then raise exception 'LINE_OA_OPERATIONAL_HEALTHCHECK_FAILED'; end if;\n` +
+    `  execute 'create temporary table ${repairEvidenceMarker} (gate_token text not null, run_nonce uuid not null, repair_xid text not null, evidence jsonb, primary key (gate_token,run_nonce,repair_xid)) on commit drop';\n` +
+    `  execute 'insert into pg_temp.${repairEvidenceMarker}(gate_token,run_nonce,repair_xid,evidence) values ($1,$2,$3,null)'\n` +
+    `    using ${quote(repairGateToken)},current_setting(${quote(repairRunNonceGuc)})::uuid,v_repair_xid;\n`) +
     `end\n` +
     `$ledger_guard$;\n` +
     `\n` +
-    (verificationOnly ? '' : `create schema if not exists supabase_migrations;\n` +
-    `create table if not exists supabase_migrations.schema_migrations (\n` +
-    `  version text not null primary key\n` +
-    `);\n` +
-    `alter table supabase_migrations.schema_migrations add column if not exists statements text[];\n` +
-    `alter table supabase_migrations.schema_migrations add column if not exists name text;\n` +
-    `\n` +
-    `do $ledger_conflict_guard$\n` +
+    (verificationOnly ? '' : `do $ledger_repair$\n` +
+    `declare\n` +
+    `  v_run_nonce uuid;\n` +
+    `  v_repair_xid text;\n` +
+    `  v_observed_system_identifier text;\n` +
+    `  v_observed_current_database text;\n` +
+    `  v_observed_session_user text;\n` +
+    `  v_observed_current_user text;\n` +
     `begin\n` +
+    repairAuthorizationBlockerSql +
+    `  v_run_nonce := current_setting(${quote(repairRunNonceGuc)})::uuid;\n` +
+    `  v_repair_xid := pg_catalog.pg_current_xact_id()::text;\n` +
+    `  v_observed_current_database := pg_catalog.current_database();\n` +
+    `  v_observed_session_user := session_user;\n` +
+    `  v_observed_current_user := current_user;\n` +
+    `  if v_observed_current_database is distinct from ${quote(expectedDatabaseName)}\n` +
+    `     or v_observed_session_user is distinct from ${quote(expectedDatabaseUser)}\n` +
+    `     or v_observed_current_user is distinct from ${quote(expectedDatabaseUser)} then\n` +
+    `    raise exception 'CNYOS_LEDGER_REPAIR_SERVER_IDENTITY_REFUSED: expected database=% session_user=% current_user=%; observed database=% session_user=% current_user=%',\n` +
+    `      ${quote(expectedDatabaseName)},${quote(expectedDatabaseUser)},${quote(expectedDatabaseUser)},\n` +
+    `      coalesce(v_observed_current_database,'NULL'),coalesce(v_observed_session_user,'NULL'),\n` +
+    `      coalesce(v_observed_current_user,'NULL');\n` +
+    `  end if;\n` +
+    `  select system_identifier::text into v_observed_system_identifier\n` +
+    `  from pg_catalog.pg_control_system();\n` +
+    `  if v_observed_system_identifier is distinct from ${quote(CHANANYA_REVIEWED_SYSTEM_IDENTIFIER)} then\n` +
+    `    raise exception 'CNYOS_LEDGER_REPAIR_WRONG_CLUSTER: observed system_identifier=%',\n` +
+    `      coalesce(v_observed_system_identifier,'NULL');\n` +
+    `  end if;\n` +
+    `  if to_regclass('pg_temp.${repairEvidenceMarker}') is null or not exists (\n` +
+    `    select 1 from pg_temp.${repairEvidenceMarker}\n` +
+    `    where gate_token=${quote(repairGateToken)} and run_nonce=v_run_nonce\n` +
+    `      and repair_xid=v_repair_xid and evidence is null\n` +
+    `  ) then raise exception 'STAGING_LEDGER_REPAIR_GUARD_REQUIRED'; end if;\n` +
+    `  execute 'create schema if not exists supabase_migrations';\n` +
+    `  execute 'create table if not exists supabase_migrations.schema_migrations (version text not null primary key)';\n` +
+    `  execute 'alter table supabase_migrations.schema_migrations add column if not exists statements text[]';\n` +
+    `  execute 'alter table supabase_migrations.schema_migrations add column if not exists name text';\n` +
+    `  execute 'create table if not exists supabase_migrations.${repairReceiptTable} (` +
+    `run_nonce uuid not null primary key, gate_token text not null, repair_xid text not null, ` +
+    `evidence jsonb not null, committed_at timestamptz not null default pg_catalog.clock_timestamp(), ` +
+    `unique (gate_token,repair_xid), ` +
+    `constraint cnyos_repair_receipt_gate_token_check check (gate_token ~ ''^[0-9a-f]{64}$''), ` +
+    `constraint cnyos_repair_receipt_xid_check check (repair_xid ~ ''^[0-9]+$''), ` +
+    `constraint cnyos_repair_receipt_evidence_check check (` +
+    `(pg_catalog.jsonb_typeof(evidence)=''object'' and ` +
+    `evidence->>''repair_gate_token''=gate_token and ` +
+    `evidence->>''repair_run_nonce''=run_nonce::text and ` +
+    `evidence->>''repair_transaction_xid''=repair_xid) is true))';\n` +
+    `  execute ${quote(`comment on table supabase_migrations.schema_migrations is ${quote(ledgerComment)}`)};\n` +
+    `  execute ${quote(`comment on table supabase_migrations.${repairReceiptTable} is ${quote(repairReceiptComment)}`)};\n` +
+    `  execute 'revoke all on schema supabase_migrations from public,anon,authenticated,service_role';\n` +
+    `  execute 'revoke all on table supabase_migrations.schema_migrations from public,anon,authenticated,service_role';\n` +
+    `  execute 'revoke all on table supabase_migrations.${repairReceiptTable} from public,anon,authenticated,service_role';\n` +
+    `  execute 'lock table only supabase_migrations.schema_migrations in access exclusive mode';\n` +
+    `  execute 'lock table only supabase_migrations.${repairReceiptTable} in access exclusive mode';\n` +
+    `  if not exists (\n` +
+    `    select 1 from pg_catalog.pg_namespace namespace\n` +
+    `    join pg_catalog.pg_roles owner_role on owner_role.oid=namespace.nspowner\n` +
+    `    where namespace.nspname='supabase_migrations'\n` +
+    `      and owner_role.rolname=${quote(expectedDatabaseUser)}\n` +
+    `      and not exists (\n` +
+    `        select 1 from pg_catalog.aclexplode(coalesce(\n` +
+    `          namespace.nspacl,pg_catalog.acldefault('n',namespace.nspowner)\n` +
+    `        )) acl where acl.grantee<>namespace.nspowner\n` +
+    `      )\n` +
+    `  ) then raise exception 'CNYOS_LEDGER_REPAIR_SCHEMA_SECURITY_INVALID'; end if;\n` +
+    `  if not exists (\n` +
+    `    select 1 from pg_catalog.pg_class relation\n` +
+    `    join pg_catalog.pg_roles owner_role on owner_role.oid=relation.relowner\n` +
+    `    where relation.oid='supabase_migrations.schema_migrations'::regclass\n` +
+    `      and relation.relkind='r' and relation.relpersistence='p'\n` +
+    `      and not relation.relispartition and not relation.relrowsecurity\n` +
+    `      and not relation.relforcerowsecurity and relation.relreplident='d'\n` +
+    `      and owner_role.rolname=${quote(expectedDatabaseUser)}\n` +
+    `      and pg_catalog.obj_description(relation.oid,'pg_class')=${quote(ledgerComment)}\n` +
+    `      and not exists (\n` +
+    `        select 1 from pg_catalog.aclexplode(coalesce(\n` +
+    `          relation.relacl,pg_catalog.acldefault('r',relation.relowner)\n` +
+    `        )) acl where acl.grantee<>relation.relowner\n` +
+    `      )\n` +
+    `      and not exists (select 1 from pg_catalog.pg_inherits where inhrelid=relation.oid or inhparent=relation.oid)\n` +
+    `      and not exists (select 1 from pg_catalog.pg_policy where polrelid=relation.oid)\n` +
+    `  ) then raise exception 'CNYOS_LEDGER_REPAIR_LEDGER_SECURITY_INVALID'; end if;\n` +
+    `  if (\n` +
+    `    select count(*) from pg_catalog.pg_attribute attribute\n` +
+    `    where attribute.attrelid='supabase_migrations.schema_migrations'::regclass\n` +
+    `      and attribute.attnum>0\n` +
+    `  ) <> 3 or (\n` +
+    `    select count(*)\n` +
+    `    from pg_catalog.pg_attribute attribute\n` +
+    `    join pg_catalog.pg_type type_definition on type_definition.oid=attribute.atttypid\n` +
+    `    left join pg_catalog.pg_attrdef column_default\n` +
+    `      on column_default.adrelid=attribute.attrelid and column_default.adnum=attribute.attnum\n` +
+    `    where attribute.attrelid='supabase_migrations.schema_migrations'::regclass\n` +
+    `      and attribute.attnum>0 and not attribute.attisdropped\n` +
+    `      and attribute.atttypmod=-1\n` +
+    `      and attribute.attislocal and attribute.attinhcount=0\n` +
+    `      and attribute.attidentity='' and attribute.attgenerated=''\n` +
+    `      and not attribute.atthasmissing and attribute.attacl is null\n` +
+    `      and attribute.attcollation=type_definition.typcollation\n` +
+    `      and not attribute.atthasdef and column_default.oid is null\n` +
+    `      and ((attribute.attnum=1 and attribute.attname='version' and attribute.attndims=0\n` +
+    `            and attribute.atttypid='pg_catalog.text'::regtype and attribute.attnotnull)\n` +
+    `        or (attribute.attnum=2 and attribute.attname='statements' and attribute.attndims=1\n` +
+    `            and attribute.atttypid='pg_catalog.text[]'::regtype and not attribute.attnotnull)\n` +
+    `        or (attribute.attnum=3 and attribute.attname='name' and attribute.attndims=0\n` +
+    `            and attribute.atttypid='pg_catalog.text'::regtype and not attribute.attnotnull))\n` +
+    `  ) <> 3 or exists (\n` +
+    `    select 1 from pg_catalog.pg_attrdef\n` +
+    `    where adrelid='supabase_migrations.schema_migrations'::regclass\n` +
+    `  ) then raise exception 'CNYOS_LEDGER_REPAIR_LEDGER_SHAPE_INVALID'; end if;\n` +
+    `  if not exists (\n` +
+    `    select 1 from pg_catalog.pg_constraint constraint_definition\n` +
+    `    join pg_catalog.pg_index index_definition on index_definition.indexrelid=constraint_definition.conindid\n` +
+    `    join pg_catalog.pg_class index_relation on index_relation.oid=index_definition.indexrelid\n` +
+    `    join pg_catalog.pg_am index_method on index_method.oid=index_relation.relam\n` +
+    `    where constraint_definition.conrelid='supabase_migrations.schema_migrations'::regclass\n` +
+    `      and constraint_definition.contype='p' and not constraint_definition.condeferrable\n` +
+    `      and not constraint_definition.condeferred and constraint_definition.convalidated\n` +
+    `      and constraint_definition.conislocal and constraint_definition.coninhcount=0\n` +
+    `      and pg_catalog.pg_get_constraintdef(constraint_definition.oid,true)='PRIMARY KEY (version)'\n` +
+    `      and (select array_agg(attribute.attname order by key_column.ordinality)\n` +
+    `           from unnest(constraint_definition.conkey) with ordinality key_column(attnum,ordinality)\n` +
+    `           join pg_catalog.pg_attribute attribute on attribute.attrelid=constraint_definition.conrelid\n` +
+    `             and attribute.attnum=key_column.attnum)=array['version']::name[]\n` +
+    `      and index_method.amname='btree' and index_definition.indisunique\n` +
+    `      and index_definition.indisprimary and index_definition.indisvalid\n` +
+    `      and index_definition.indisready and index_definition.indislive\n` +
+    `      and index_definition.indimmediate and index_definition.indexprs is null\n` +
+    `      and index_definition.indpred is null and index_definition.indnkeyatts=1\n` +
+    `      and index_definition.indnatts=1\n` +
+    `  ) or (select count(*) from pg_catalog.pg_constraint\n` +
+    `        where conrelid='supabase_migrations.schema_migrations'::regclass) <> 1\n` +
+    `    or (select count(*) from pg_catalog.pg_index\n` +
+    `        where indrelid='supabase_migrations.schema_migrations'::regclass) <> 1 then\n` +
+    `    raise exception 'CNYOS_LEDGER_REPAIR_LEDGER_CONSTRAINT_INVALID';\n` +
+    `  end if;\n` +
+    `  if not exists (\n` +
+    `    select 1 from pg_catalog.pg_class relation\n` +
+    `    join pg_catalog.pg_roles owner_role on owner_role.oid=relation.relowner\n` +
+    `    where relation.oid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and relation.relkind='r' and relation.relpersistence='p'\n` +
+    `      and not relation.relispartition and not relation.relrowsecurity\n` +
+    `      and not relation.relforcerowsecurity and relation.relreplident='d'\n` +
+    `      and owner_role.rolname=${quote(expectedDatabaseUser)}\n` +
+    `      and pg_catalog.obj_description(relation.oid,'pg_class')=${quote(repairReceiptComment)}\n` +
+    `      and not exists (\n` +
+    `        select 1 from pg_catalog.aclexplode(coalesce(\n` +
+    `          relation.relacl,pg_catalog.acldefault('r',relation.relowner)\n` +
+    `        )) acl where acl.grantee<>relation.relowner\n` +
+    `      )\n` +
+    `      and not exists (select 1 from pg_catalog.pg_inherits where inhrelid=relation.oid or inhparent=relation.oid)\n` +
+    `      and not exists (select 1 from pg_catalog.pg_policy where polrelid=relation.oid)\n` +
+    `  ) then raise exception 'CNYOS_LEDGER_REPAIR_RECEIPT_SECURITY_INVALID'; end if;\n` +
+    `  if (\n` +
+    `    select count(*) from pg_catalog.pg_attribute attribute\n` +
+    `    where attribute.attrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and attribute.attnum>0\n` +
+    `  ) <> 5 or (\n` +
+    `    select count(*)\n` +
+    `    from pg_catalog.pg_attribute attribute\n` +
+    `    join pg_catalog.pg_type type_definition on type_definition.oid=attribute.atttypid\n` +
+    `    left join pg_catalog.pg_attrdef column_default\n` +
+    `      on column_default.adrelid=attribute.attrelid and column_default.adnum=attribute.attnum\n` +
+    `    where attribute.attrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and attribute.attnum>0 and not attribute.attisdropped\n` +
+    `      and attribute.atttypmod=-1 and attribute.attndims=0\n` +
+    `      and attribute.attislocal and attribute.attinhcount=0\n` +
+    `      and attribute.attidentity='' and attribute.attgenerated=''\n` +
+    `      and not attribute.atthasmissing and attribute.attacl is null\n` +
+    `      and attribute.attcollation=type_definition.typcollation\n` +
+    `      and ((attribute.attnum=1 and attribute.attname='run_nonce'\n` +
+    `            and attribute.atttypid='pg_catalog.uuid'::regtype and attribute.attnotnull\n` +
+    `            and not attribute.atthasdef and column_default.oid is null)\n` +
+    `        or (attribute.attnum=2 and attribute.attname='gate_token'\n` +
+    `            and attribute.atttypid='pg_catalog.text'::regtype and attribute.attnotnull\n` +
+    `            and not attribute.atthasdef and column_default.oid is null)\n` +
+    `        or (attribute.attnum=3 and attribute.attname='repair_xid'\n` +
+    `            and attribute.atttypid='pg_catalog.text'::regtype and attribute.attnotnull\n` +
+    `            and not attribute.atthasdef and column_default.oid is null)\n` +
+    `        or (attribute.attnum=4 and attribute.attname='evidence'\n` +
+    `            and attribute.atttypid='pg_catalog.jsonb'::regtype and attribute.attnotnull\n` +
+    `            and not attribute.atthasdef and column_default.oid is null)\n` +
+    `        or (attribute.attnum=5 and attribute.attname='committed_at'\n` +
+    `            and attribute.atttypid='pg_catalog.timestamptz'::regtype and attribute.attnotnull\n` +
+    `            and attribute.atthasdef and column_default.oid is not null\n` +
+    `            and pg_catalog.pg_get_expr(column_default.adbin,column_default.adrelid,true)='clock_timestamp()'))\n` +
+    `  ) <> 5 or (\n` +
+    `    select count(*) from pg_catalog.pg_attrdef\n` +
+    `    where adrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and adnum=5 and pg_catalog.pg_get_expr(adbin,adrelid,true)='clock_timestamp()'\n` +
+    `  ) <> 1 or (\n` +
+    `    select count(*) from pg_catalog.pg_attrdef\n` +
+    `    where adrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `  ) <> 1 then raise exception 'CNYOS_LEDGER_REPAIR_RECEIPT_SHAPE_INVALID'; end if;\n` +
+    `  if exists (\n` +
+    `    select 1 from pg_catalog.pg_class relation\n` +
+    `    where relation.oid in (\n` +
+    `      'supabase_migrations.schema_migrations'::regclass,\n` +
+    `      ${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `    ) and (relation.relhastriggers or relation.relhasrules\n` +
+    `      or exists (select 1 from pg_catalog.pg_trigger where tgrelid=relation.oid)\n` +
+    `      or exists (select 1 from pg_catalog.pg_rewrite where ev_class=relation.oid))\n` +
+    `  ) then raise exception 'CNYOS_LEDGER_REPAIR_RELATION_HOOK_INVALID'; end if;\n` +
+    `  if not exists (\n` +
+    `    select 1 from pg_catalog.pg_constraint constraint_definition\n` +
+    `    where constraint_definition.conrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and constraint_definition.contype='p'\n` +
+    `      and not constraint_definition.condeferrable\n` +
+    `      and not constraint_definition.condeferred\n` +
+    `      and constraint_definition.convalidated\n` +
+    `      and constraint_definition.conislocal\n` +
+    `      and constraint_definition.coninhcount=0\n` +
+    `      and pg_catalog.pg_get_constraintdef(constraint_definition.oid,true)='PRIMARY KEY (run_nonce)'\n` +
+    `      and (select array_agg(attribute.attname order by key_column.ordinality)\n` +
+    `           from unnest(constraint_definition.conkey) with ordinality key_column(attnum,ordinality)\n` +
+    `           join pg_catalog.pg_attribute attribute\n` +
+    `             on attribute.attrelid=constraint_definition.conrelid and attribute.attnum=key_column.attnum\n` +
+    `      )=array['run_nonce']::name[]\n` +
+    `  ) or not exists (\n` +
+    `    select 1 from pg_catalog.pg_constraint constraint_definition\n` +
+    `    where constraint_definition.conrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and constraint_definition.contype='u'\n` +
+    `      and not constraint_definition.condeferrable\n` +
+    `      and not constraint_definition.condeferred\n` +
+    `      and constraint_definition.convalidated\n` +
+    `      and constraint_definition.conislocal\n` +
+    `      and constraint_definition.coninhcount=0\n` +
+    `      and pg_catalog.pg_get_constraintdef(constraint_definition.oid,true)='UNIQUE (gate_token, repair_xid)'\n` +
+    `      and (select array_agg(attribute.attname order by key_column.ordinality)\n` +
+    `           from unnest(constraint_definition.conkey) with ordinality key_column(attnum,ordinality)\n` +
+    `           join pg_catalog.pg_attribute attribute\n` +
+    `             on attribute.attrelid=constraint_definition.conrelid and attribute.attnum=key_column.attnum\n` +
+    `      )=array['gate_token','repair_xid']::name[]\n` +
+    `  ) or (\n` +
+    `    select count(*)\n` +
+    `    from (values ${sqlRows(repairReceiptCheckDefinitions)}) expected(\n` +
+    `      constraint_name,constraint_definition\n` +
+    `    )\n` +
+    `    join pg_catalog.pg_constraint actual\n` +
+    `      on actual.conrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `     and actual.conname=expected.constraint_name\n` +
+    `     and actual.contype='c'\n` +
+    `     and actual.convalidated\n` +
+    `     and not actual.condeferrable\n` +
+    `     and not actual.condeferred\n` +
+    `     and actual.conislocal\n` +
+    `     and actual.coninhcount=0\n` +
+    `     and not actual.connoinherit\n` +
+    `     and pg_catalog.pg_get_constraintdef(actual.oid,true)=expected.constraint_definition\n` +
+    `  ) <> ${repairReceiptCheckDefinitions.length} or (\n` +
+    `    select count(*) from pg_catalog.pg_constraint constraint_definition\n` +
+    `    where constraint_definition.conrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and constraint_definition.contype='c'\n` +
+    `  ) <> ${repairReceiptCheckDefinitions.length} or (\n` +
+    `    select count(*) from pg_catalog.pg_constraint constraint_definition\n` +
+    `    where constraint_definition.conrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `  ) <> ${repairReceiptCheckDefinitions.length + 2} or (\n` +
+    `    select count(*) from pg_catalog.pg_index index_definition\n` +
+    `    where index_definition.indrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `  ) <> 2 or (\n` +
+    `    select count(*)\n` +
+    `    from pg_catalog.pg_constraint constraint_definition\n` +
+    `    join pg_catalog.pg_index index_definition on index_definition.indexrelid=constraint_definition.conindid\n` +
+    `    join pg_catalog.pg_class index_relation on index_relation.oid=index_definition.indexrelid\n` +
+    `    join pg_catalog.pg_am index_method on index_method.oid=index_relation.relam\n` +
+    `    where constraint_definition.conrelid=${quote(`supabase_migrations.${repairReceiptTable}`)}::regclass\n` +
+    `      and constraint_definition.contype in ('p','u') and index_method.amname='btree'\n` +
+    `      and index_definition.indisunique and index_definition.indisvalid\n` +
+    `      and index_definition.indisready and index_definition.indislive\n` +
+    `      and index_definition.indimmediate and index_definition.indexprs is null\n` +
+    `      and index_definition.indpred is null\n` +
+    `      and ((constraint_definition.contype='p' and index_definition.indisprimary\n` +
+    `            and index_definition.indnkeyatts=1 and index_definition.indnatts=1)\n` +
+    `        or (constraint_definition.contype='u' and not index_definition.indisprimary\n` +
+    `            and index_definition.indnkeyatts=2 and index_definition.indnatts=2))\n` +
+    `  ) <> 2 then\n` +
+    `    raise exception 'CNYOS_LEDGER_REPAIR_RECEIPT_CONSTRAINT_INVALID';\n` +
+    `  end if;\n` +
+    `  if exists (\n` +
+    `    select 1 from supabase_migrations.${repairReceiptTable}\n` +
+    `    where run_nonce=v_run_nonce\n` +
+    `  ) then raise exception 'CNYOS_LEDGER_REPAIR_NONCE_REPLAY'; end if;\n` +
+    `\n` +
     `  if exists (\n` +
     `    select 1\n` +
     `    from supabase_migrations.schema_migrations actual\n` +
@@ -2558,8 +3948,6 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `        or lower(substring(evidence.statement from '^[[:space:]]*-- recovered from supabase/migrations/[^;]+;[[:space:]]*sha256[[:space:]]*=[[:space:]]*([0-9A-Fa-f]{64})[[:space:]]*$')) <> expected.sha256\n` +
     `      )\n` +
     `  ) then raise exception 'MIGRATION_LEDGER_SHA256_CONFLICT'; end if;\n` +
-    `end\n` +
-    `$ledger_conflict_guard$;\n` +
     `\n` +
     `insert into supabase_migrations.schema_migrations as ledger(version,name,statements) values\n  ${inserts}\n` +
     `on conflict (version) do update set\n` +
@@ -2575,44 +3963,248 @@ function buildMigrationLedgerSql({ config, entries = loadMigrationEntries(), sou
     `      with ordinality evidence(statement,ordinality)\n` +
     `  );\n` +
     `\n` +
-    `do $ledger_verify$\n` +
-    `begin\n` +
-    `  if (select count(*) from supabase_migrations.schema_migrations) <> ${entries.length} then\n` +
-    `    raise exception 'MIGRATION_LEDGER_ROW_COUNT_MISMATCH';\n` +
+    `set constraints all immediate;\n` +
+    `  if (${exactLedgerInvariantPredicate}) is not true then\n` +
+    `    raise exception 'MIGRATION_LEDGER_EXACT_INVARIANT_INVALID';\n` +
     `  end if;\n` +
-    `  if exists (select 1 from supabase_migrations.schema_migrations where name is null or statements is null or cardinality(statements)=0) then\n` +
-    `    raise exception 'MIGRATION_LEDGER_INCOMPLETE_ROW';\n` +
-    `  end if;\n` +
-    `  if exists (\n` +
-    `    select 1\n` +
-    `    from supabase_migrations.schema_migrations actual\n` +
-    `    join (values\n      ${expectedRows}\n` +
-    `    ) expected(version,name,sha256,evidence) on expected.version=actual.version\n` +
-    `    where actual.name is distinct from expected.name\n` +
-    `       or not (expected.evidence = any(actual.statements))\n` +
-    `       or (\n` +
-    `         select count(*)\n` +
-    `         from unnest(actual.statements) statement(value)\n` +
-    `         where statement.value ~* '^[[:space:]]*-- recovered from supabase/migrations/[^;]+;[[:space:]]*sha256[[:space:]]*='\n` +
-    `       ) <> 1\n` +
-    `  ) then raise exception 'MIGRATION_LEDGER_SHA256_EVIDENCE_INVALID'; end if;\n` +
+    `\n` +
+    `update pg_temp.${repairEvidenceMarker}\n` +
+    `set evidence=(\n` +
+    `  select pg_catalog.jsonb_build_object(\n` +
+    `    'status',${quote(repairStatus)},\n` +
+    `    'expected_deployment_id',${quote(target.deploymentId)},\n` +
+    `    'expected_project_ref',${quote(targetProjectRef)},\n` +
+    `    'expected_database_origin',${quote(targetDatabaseUrl.origin)},\n` +
+    `    'expected_database_host',${quote(expectedDatabaseHost)},\n` +
+    `    'expected_current_database',${quote(expectedDatabaseName)},\n` +
+    `    'expected_session_user',${quote(expectedDatabaseUser)},\n` +
+    `    'expected_current_user',${quote(expectedDatabaseUser)},\n` +
+    `    'expected_system_identifier',${quote(CHANANYA_REVIEWED_SYSTEM_IDENTIFIER)},\n` +
+    `    'observed_system_identifier',v_observed_system_identifier,\n` +
+    `    'observed_psql_host',current_setting(${quote(repairObservedHostGuc)}),\n` +
+    `    'observed_psql_port',current_setting(${quote(repairObservedPortGuc)}),\n` +
+    `    'observed_psql_user',current_setting(${quote(repairObservedUserGuc)}),\n` +
+    `    'observed_psql_database',current_setting(${quote(repairObservedDatabaseGuc)}),\n` +
+    `    'observed_server_address',pg_catalog.inet_server_addr()::text,\n` +
+    `    'observed_server_port',pg_catalog.inet_server_port(),\n` +
+    `    'observed_current_database',v_observed_current_database,\n` +
+    `    'observed_session_user',v_observed_session_user,\n` +
+    `    'observed_current_user',v_observed_current_user,\n` +
+    `    'observed_ssl',(select ssl from pg_catalog.pg_stat_ssl where pid=pg_catalog.pg_backend_pid()),\n` +
+    `    'observed_ssl_version',(select version from pg_catalog.pg_stat_ssl where pid=pg_catalog.pg_backend_pid()),\n` +
+    `    'observed_ssl_cipher',(select cipher from pg_catalog.pg_stat_ssl where pid=pg_catalog.pg_backend_pid()),\n` +
+    `    'expected_clinic_code',${quote(target.tenant.expectedClinicCode)},\n` +
+    `    'expected_clinic_id',${quote(target.tenant.expectedClinicId)},\n` +
+    `    'acl_phase',${quote(resolvedAclPhase)},\n` +
+    `    'repair_gate_token',${quote(repairGateToken)},\n` +
+    `    'repair_run_nonce',v_run_nonce,\n` +
+    `    'repair_transaction_xid',v_repair_xid,\n` +
+    `    'trigger_server_major',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor},\n` +
+    `    'trigger_server_encoding',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding)},\n` +
+    `    'trigger_function_semantic_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount},\n` +
+    `    'trigger_function_semantic_payload_bytes',${expectedTriggerSemanticPayloadBytes},\n` +
+    `    'trigger_function_semantic_sha256',${quote(expectedTriggerSemanticSha256)},\n` +
+    `    'trigger_binding_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount},\n` +
+    `    'trigger_binding_payload_bytes',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes},\n` +
+    `    'trigger_binding_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256)}\n` +
+    `  ) || pg_catalog.jsonb_build_object(\n` +
+    `    'ledger_reconciled',true,\n` +
+    `    'acl_remediation_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
+    `    'browser_rpc_acl_remediation_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
+    `    'trigger_function_acl_remediation_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
+    `    'repository_derived_treatment_session_acl_manifest_sha256',${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sha256)},\n` +
+    `    'repository_derived_treatment_session_acl_provenance',${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.provenance)},\n` +
+    `    'repository_derived_treatment_session_public_execute_debt_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
+    `    'production_eligible',false,\n` +
+    (isChananyaPreReconciliation
+      ? `    'authorization',false,\n` +
+        `    'live_callable_acl_inventory_required',true,\n` +
+        `    'live_callable_acl_inventory_complete',false,\n` +
+        `    'live_callable_acl_known_subset_only',true,\n` +
+        `    'ledger_reconciliation_blocked_pending_live_callable_acl_inventory',true,\n` +
+        `    'reviewed_pre_reconciliation_evidence_bundle_sha256',${quote(CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256)},\n` +
+        `    'known_live_callable_acl_subset_count',${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples.length},\n` +
+        `    'known_live_callable_acl_subset_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256)},\n` +
+        `    'reviewed_trigger_inventory_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256)},\n` +
+        `    'reviewed_trigger_acl_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256)},\n` +
+        `    'reviewed_trigger_binding_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256)},\n` +
+        `    'reviewed_trigger_binding_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount},\n` +
+        `    'reviewed_trigger_binding_payload_bytes',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes},\n`
+      : '') +
+    `    'migration_manifest_sha256',${quote(migrationManifestSha256(entries))},\n` +
+    `    'migration_count',count(*),\n` +
+    `    'first_version',min(version),\n` +
+    `    'last_version',max(version),\n` +
+    `    'source_revision',${quote(revision || 'not-supplied')}\n` +
+    `  )\n` +
+    `  from supabase_migrations.schema_migrations\n` +
+    `)\n` +
+    `where gate_token=${quote(repairGateToken)} and run_nonce=v_run_nonce\n` +
+    `  and repair_xid=v_repair_xid and evidence is null;\n` +
+    `if not found then raise exception 'STAGING_LEDGER_REPAIR_EVIDENCE_MARKER_MISSING'; end if;\n` +
+    `insert into supabase_migrations.${repairReceiptTable}(run_nonce,gate_token,repair_xid,evidence)\n` +
+    `select run_nonce,gate_token,repair_xid,evidence\n` +
+    `from pg_temp.${repairEvidenceMarker}\n` +
+    `where gate_token=${quote(repairGateToken)} and run_nonce=v_run_nonce\n` +
+    `  and repair_xid=v_repair_xid\n` +
+    `  and evidence->>'repair_gate_token'=gate_token\n` +
+    `  and evidence->>'repair_run_nonce'=run_nonce::text\n` +
+    `  and evidence->>'repair_transaction_xid'=repair_xid;\n` +
+    `if not found then raise exception 'CNYOS_LEDGER_REPAIR_RECEIPT_INSERT_FAILED'; end if;\n` +
+    `set constraints all immediate;\n` +
+    `if (${exactLedgerInvariantPredicate}) is not true then\n` +
+    `  raise exception 'CNYOS_LEDGER_REPAIR_POST_RECEIPT_LEDGER_INVALID';\n` +
+    `end if;\n` +
+    `if not exists (\n` +
+    `  select 1 from supabase_migrations.${repairReceiptTable} receipt\n` +
+    `  where receipt.run_nonce=v_run_nonce and receipt.gate_token=${quote(repairGateToken)}\n` +
+    `    and receipt.repair_xid=v_repair_xid and receipt.committed_at is not null\n` +
+    `    and (pg_catalog.jsonb_typeof(receipt.evidence)='object'\n` +
+    `      and receipt.evidence->>'repair_gate_token'=receipt.gate_token\n` +
+    `      and receipt.evidence->>'repair_run_nonce'=receipt.run_nonce::text\n` +
+    `      and receipt.evidence->>'repair_transaction_xid'=receipt.repair_xid) is true\n` +
+    `) then raise exception 'CNYOS_LEDGER_REPAIR_RECEIPT_INSERT_INVALID'; end if;\n` +
+    `perform set_config(${quote(repairCommittedNonceGuc)},v_run_nonce::text,false);\n` +
+    `perform set_config(${quote(repairCommittedXidGuc)},v_repair_xid,false);\n` +
     `end\n` +
-    `$ledger_verify$;\n` +
-    `\n` +
-    `comment on table supabase_migrations.schema_migrations is\n` +
-    `  'Canonical Supabase CLI migration history. Recovered only after staging schema fingerprint and empty-data guards passed.';\n` +
-    `revoke all on schema supabase_migrations from public, anon, authenticated, service_role;\n` +
-    `revoke all on table supabase_migrations.schema_migrations from public, anon, authenticated, service_role;\n` +
+    `$ledger_repair$;\n` +
     `commit;\n` +
-    `\n` +
-    `select jsonb_build_object(\n` +
-    `  'status','CHANANYA_STAGING_MIGRATION_LEDGER_READY',\n` +
-    `  'migration_count',count(*),\n` +
-    `  'first_version',min(version),\n` +
-    `  'last_version',max(version),\n` +
-    `  'source_revision',${quote(revision || 'not-supplied')}\n` +
-    `) as migration_ledger_evidence\n` +
-    `from supabase_migrations.schema_migrations;\n`);
+    `begin isolation level repeatable read read only;\n` +
+    canonicalCatalogOutputGucSql +
+    `set local search_path = pg_catalog, pg_temp, public;\n` +
+    `set local statement_timeout = '60s';\n` +
+    `set local lock_timeout = '5s';\n` +
+    `lock table only supabase_migrations.schema_migrations in share mode;\n` +
+    `lock table only supabase_migrations.${repairReceiptTable} in share mode;\n` +
+    `\\unset cnyos_repair_evidence\n` +
+    `select case when count(*)=1 then min(receipt.evidence::text) end as cnyos_repair_evidence\n` +
+    `from supabase_migrations.${repairReceiptTable} receipt\n` +
+    `where receipt.gate_token=${quote(repairGateToken)}\n` +
+    `  and receipt.run_nonce=:'cnyos_repair_run_nonce'::uuid\n` +
+    `  and receipt.repair_xid=coalesce(current_setting(${quote(repairCommittedXidGuc)},true),'')\n` +
+    `  and receipt.committed_at is not null\n` +
+    `  and (coalesce(current_setting(${quote(repairCommittedNonceGuc)},true),'')=\n` +
+    `        :'cnyos_repair_run_nonce'\n` +
+    `    and pg_catalog.current_database()=${quote(expectedDatabaseName)}\n` +
+    `    and session_user=${quote(expectedDatabaseUser)}\n` +
+    `    and current_user=${quote(expectedDatabaseUser)}\n` +
+    `    and current_setting('transaction_read_only')='on'\n` +
+    `    and current_setting('transaction_isolation')='repeatable read'\n` +
+    `    and pg_catalog.jsonb_typeof(receipt.evidence)='object'\n` +
+    `    and receipt.evidence->>'repair_gate_token'=receipt.gate_token\n` +
+    `    and receipt.evidence->>'repair_run_nonce'=receipt.run_nonce::text\n` +
+    `    and receipt.evidence->>'repair_transaction_xid'=receipt.repair_xid\n` +
+    `    and receipt.evidence->>'status'=${quote(repairStatus)}\n` +
+    `    and receipt.evidence->>'expected_current_database'=${quote(expectedDatabaseName)}\n` +
+    `    and receipt.evidence->>'expected_session_user'=${quote(expectedDatabaseUser)}\n` +
+    `    and receipt.evidence->>'expected_current_user'=${quote(expectedDatabaseUser)}\n` +
+    `    and receipt.evidence->>'observed_current_database'=${quote(expectedDatabaseName)}\n` +
+    `    and receipt.evidence->>'observed_session_user'=${quote(expectedDatabaseUser)}\n` +
+    `    and receipt.evidence->>'observed_current_user'=${quote(expectedDatabaseUser)}\n` +
+    `    and receipt.evidence->>'expected_system_identifier'=${quote(CHANANYA_REVIEWED_SYSTEM_IDENTIFIER)}\n` +
+    `    and receipt.evidence->>'observed_system_identifier'=${quote(CHANANYA_REVIEWED_SYSTEM_IDENTIFIER)}\n` +
+    `    and receipt.evidence->>'migration_manifest_sha256'=${quote(migrationManifestSha256(entries))}\n` +
+    `    and receipt.evidence->>'migration_count'=${quote(entries.length)}\n` +
+    `    and receipt.evidence->>'first_version'=${quote(entries[0].version)}\n` +
+    `    and receipt.evidence->>'last_version'=${quote(entries.at(-1).version)}\n` +
+    `    and receipt.evidence->>'source_revision'=${quote(revision)}\n` +
+    `    and receipt.evidence->>'repository_derived_treatment_session_acl_manifest_sha256'=\n` +
+    `        ${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sha256)}\n` +
+    `    and receipt.evidence->>'repository_derived_treatment_session_acl_provenance'=\n` +
+    `        ${quote(REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.provenance)}\n` +
+    `    and receipt.evidence->>'repository_derived_treatment_session_public_execute_debt_pending'=\n` +
+    `        ${quote(isChananyaPreReconciliation)}\n` +
+    (isChananyaPreReconciliation
+      ? `    and receipt.evidence->>'authorization'='false'\n` +
+        `    and receipt.evidence->>'live_callable_acl_inventory_required'='true'\n` +
+        `    and receipt.evidence->>'live_callable_acl_inventory_complete'='false'\n` +
+        `    and receipt.evidence->>'live_callable_acl_known_subset_only'='true'\n` +
+        `    and receipt.evidence->>'ledger_reconciliation_blocked_pending_live_callable_acl_inventory'='true'\n`
+      : '') +
+    `    and receipt.evidence->>'ledger_reconciled'='true'\n` +
+    `    and receipt.evidence->>'production_eligible'='false') is true\n` +
+    `  and (${exactLedgerInvariantPredicate}) is true\n` +
+    `\\gset\n` +
+    `\\if :{?cnyos_repair_evidence}\n` +
+    `rollback;\n` +
+    `\\unset cnyos_repair_lock_released\n` +
+    `select pg_catalog.pg_advisory_unlock(202608302100::bigint) as cnyos_repair_lock_released\n` +
+    `\\gset\n` +
+    `\\if :cnyos_repair_lock_released\n` +
+    `\\unset cnyos_repair_lock_fully_released\n` +
+    `select not exists (\n` +
+    `  select 1\n` +
+    `  from pg_catalog.pg_locks\n` +
+    `  where locktype='advisory' and pid=pg_catalog.pg_backend_pid() and granted\n` +
+    `    and classid::bigint=(202608302100::bigint >> 32)\n` +
+    `    and objid::bigint=(202608302100::bigint & 4294967295::bigint)\n` +
+    `    and objsubid=1\n` +
+    `) as cnyos_repair_lock_fully_released\n` +
+    `\\gset\n` +
+    `\\if :cnyos_repair_lock_fully_released\n` +
+    `select :'cnyos_repair_evidence'::jsonb as migration_ledger_evidence;\n` +
+    `\\else\n` +
+    `\\warn 'CNYOS ledger repair advisory key remains held after unlock'\n` +
+    `do $cnyos_psql_unlock_abort$\n` +
+    `begin\n` +
+    `  raise exception 'CNYOS_LEDGER_REPAIR_ADVISORY_UNLOCK_FAILED';\n` +
+    `end\n` +
+    `$cnyos_psql_unlock_abort$;\n` +
+    `\\endif\n` +
+    `\\else\n` +
+    `\\warn 'CNYOS ledger repair session advisory lock was not released'\n` +
+    `do $cnyos_psql_unlock_abort$\n` +
+    `begin\n` +
+    `  raise exception 'CNYOS_LEDGER_REPAIR_ADVISORY_UNLOCK_FAILED';\n` +
+    `end\n` +
+    `$cnyos_psql_unlock_abort$;\n` +
+    `\\endif\n` +
+    `\\else\n` +
+    `rollback;\n` +
+    `\\unset cnyos_repair_lock_released\n` +
+    `select pg_catalog.pg_advisory_unlock(202608302100::bigint) as cnyos_repair_lock_released\n` +
+    `\\gset\n` +
+    `\\unset cnyos_repair_lock_fully_released\n` +
+    `select (\n` +
+    `  :'cnyos_repair_lock_released'::boolean and not exists (\n` +
+    `    select 1\n` +
+    `    from pg_catalog.pg_locks\n` +
+    `    where locktype='advisory' and pid=pg_catalog.pg_backend_pid() and granted\n` +
+    `      and classid::bigint=(202608302100::bigint >> 32)\n` +
+    `      and objid::bigint=(202608302100::bigint & 4294967295::bigint)\n` +
+    `      and objsubid=1\n` +
+    `  )\n` +
+    `) as cnyos_repair_lock_fully_released\n` +
+    `\\gset\n` +
+    `\\if :cnyos_repair_lock_fully_released\n` +
+    `\\warn 'CNYOS ledger repair committed state failed durable proof'\n` +
+    `do $cnyos_psql_commit_proof_abort$\n` +
+    `begin\n` +
+    `  raise exception 'CNYOS_LEDGER_REPAIR_COMMIT_PROOF_FAILED';\n` +
+    `end\n` +
+    `$cnyos_psql_commit_proof_abort$;\n` +
+    `\\else\n` +
+    `\\warn 'CNYOS ledger repair advisory key was not fully released after proof failure'\n` +
+    `do $cnyos_psql_unlock_abort$\n` +
+    `begin\n` +
+    `  raise exception 'CNYOS_LEDGER_REPAIR_ADVISORY_UNLOCK_FAILED';\n` +
+    `end\n` +
+    `$cnyos_psql_unlock_abort$;\n` +
+    `\\endif\n` +
+    `\\endif\n` +
+    `\\unset cnyos_repair_probe_xid\n` +
+    `\\unset cnyos_repair_existing_transaction\n` +
+    `\\unset cnyos_repair_session_nonce\n` +
+    `\\unset cnyos_repair_committed_nonce\n` +
+    `\\unset cnyos_repair_committed_xid\n` +
+    `\\unset cnyos_repair_connection_ok\n` +
+    `\\unset cnyos_repair_server_identity_ok\n` +
+    `\\unset cnyos_repair_lock_unheld\n` +
+    `\\unset cnyos_repair_lock_acquired\n` +
+    `\\unset cnyos_repair_lock_released\n` +
+    `\\unset cnyos_repair_lock_fully_released\n` +
+    `\\unset cnyos_repair_evidence\n` +
+    `\\unset cnyos_repair_run_nonce\n`);
 }
 
 function main() {
@@ -2625,7 +4217,9 @@ function main() {
   process.stdout.write(buildMigrationLedgerRepairSql({
     config,
     entries: loadMigrationEntries(root),
-    sourceRevision: process.env.CLINICAL_OS_SOURCE_COMMIT || ''
+    sourceRevision: process.env.CLINICAL_OS_SOURCE_COMMIT || '',
+    aclPhase: process.argv[3] || process.env.CNYOS_MIGRATION_LEDGER_ACL_PHASE ||
+      MIGRATION_LEDGER_ACL_PHASE_STRICT
   }));
 }
 
