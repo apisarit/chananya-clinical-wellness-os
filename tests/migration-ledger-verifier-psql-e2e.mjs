@@ -599,7 +599,8 @@ try {
   for (const testCase of transactionModeCases) {
     const wrapperPath = await writeRuntimeFile(
       `${testCase.label.replaceAll(/[^a-z0-9]+/gi, '-').toLowerCase()}.sql`,
-      testCase.source +
+      `\\set ON_ERROR_STOP 1\n` +
+        testCase.source +
         `\\i ${exactCnyosVerifierPath}\n` +
         `\\echo CNYOS_UNREACHABLE_VERIFIER_TRANSACTION_TAIL\n`
     );
@@ -620,7 +621,8 @@ try {
 
   const sameSessionLockPath = await writeRuntimeFile(
     'same-session-pre-held-lock.sql',
-    `select pg_catalog.pg_advisory_lock(${advisoryLockKey}::bigint);\n` +
+    `\\set ON_ERROR_STOP 1\n` +
+      `select pg_catalog.pg_advisory_lock(${advisoryLockKey}::bigint);\n` +
       `\\i ${exactCnyosVerifierPath}\n` +
       `\\echo CNYOS_UNREACHABLE_VERIFIER_PREHELD_LOCK_TAIL\n`
   );

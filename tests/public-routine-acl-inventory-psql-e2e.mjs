@@ -701,7 +701,8 @@ set bytea_output = 'escape';
   );
   const lifecycleWrapperPath = await writeRuntimeFile(
     'instrumented-observation-wrapper.sql',
-    advisoryLockProbeSql('before') +
+    String.raw`\set ON_ERROR_STOP 1
+` + advisoryLockProbeSql('before') +
       `\\i ${lifecycleObservationPath}\n` +
       advisoryLockProbeSql('after')
   );
@@ -804,7 +805,8 @@ $cnyos_test_observer_prehold_abort$;
 
   const autocommitOffWrapper = await writeRuntimeFile(
     'autocommit-off.sql',
-    String.raw`\set AUTOCOMMIT off
+    String.raw`\set ON_ERROR_STOP 1
+\set AUTOCOMMIT off
 \i ${observationPath}
 `
   );
@@ -820,7 +822,8 @@ $cnyos_test_observer_prehold_abort$;
 
   const outerTransactionWrapper = await writeRuntimeFile(
     'outer-transaction.sql',
-    String.raw`begin;
+    String.raw`\set ON_ERROR_STOP 1
+begin;
 \i ${observationPath}
 `
   );

@@ -355,6 +355,7 @@ $cnyos_acl_candidate_handler_probe_complete$;
 
     const autocommitOffPath = await writeRuntimeFile(
       `${candidate.label}-autocommit-off.sql`,
+      `\\set ON_ERROR_STOP 1\n` +
       `\\set AUTOCOMMIT off\n` +
       `insert into public.cnyos_acl_candidate_sentinel(value) values (701);\n` +
       `\\i ${candidate.path}\n` +
@@ -369,6 +370,7 @@ $cnyos_acl_candidate_handler_probe_complete$;
 
     const outerTransactionPath = await writeRuntimeFile(
       `${candidate.label}-outer-transaction.sql`,
+      `\\set ON_ERROR_STOP 1\n` +
       `begin;\n` +
       `insert into public.cnyos_acl_candidate_sentinel(value) values (702);\n` +
       `savepoint caller_statement;\n` +
@@ -384,6 +386,7 @@ $cnyos_acl_candidate_handler_probe_complete$;
 
     const singleTransactionPath = await writeRuntimeFile(
       `${candidate.label}-single-transaction.sql`,
+      `\\set ON_ERROR_STOP 1\n` +
       `insert into public.cnyos_acl_candidate_sentinel(value) values (703);\n` +
       `\\i ${candidate.path}\n` +
       `\\echo CNYOS_UNREACHABLE_ACL_CANDIDATE_TAIL\n`

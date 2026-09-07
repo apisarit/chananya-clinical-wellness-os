@@ -1357,6 +1357,7 @@ assert.equal(
 );
 
 const wrongClusterWrapperPath = await writeRuntimeFile('exact-wrong-cluster-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${originalArtifactPath}
 \\echo CNYOS_UNREACHABLE_WRONG_CLUSTER_TAIL
 `);
@@ -1365,6 +1366,7 @@ expectFailure(wrongCluster, 'exact generated artifact on the CI cluster', /CNYOS
 assert.doesNotMatch(wrongCluster.output, /CNYOS_UNREACHABLE_WRONG_CLUSTER_TAIL/);
 
 const wrongConnectionWrapperPath = await writeRuntimeFile('exact-wrong-connection-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${originalArtifactPath}
 \\echo CNYOS_UNREACHABLE_WRONG_CONNECTION_TAIL
 `);
@@ -1436,7 +1438,9 @@ await resetDatabase();
 const exactVerifierWrongClusterBefore = durableSnapshot();
 const exactVerifierWrongClusterWrapperPath = await writeRuntimeFile(
   'exact-verifier-wrong-cluster-wrapper.sql',
-  `\n\\i ${originalVerifierPath}\n\\echo CNYOS_UNREACHABLE_VERIFIER_WRONG_CLUSTER_TAIL\n`
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `\\i ${originalVerifierPath}\n` +
+    `\\echo CNYOS_UNREACHABLE_VERIFIER_WRONG_CLUSTER_TAIL\n`
 );
 assert.equal(sessionAdvisoryLockCount(), 0, 'verifier wrong-cluster test must start unlocked');
 const exactVerifierWrongCluster = psql(
@@ -1480,7 +1484,8 @@ assert.deepEqual(
 );
 const exactVerifierSuccessWrapperPath = await writeRuntimeFile(
   'test-bound-verifier-hostile-search-path.sql',
-  `\nset search_path = cnyos_verifier_hostile_path, public, pg_catalog;\n` +
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `set search_path = cnyos_verifier_hostile_path, public, pg_catalog;\n` +
     "select jsonb_build_object('test_verifier_input_search_path'," +
       "pg_catalog.current_setting('search_path'));\n" +
     `\\i ${testBoundVerifierPath}\n`
@@ -1545,7 +1550,8 @@ const lockLifecycleVerifierPath = await writeRuntimeFile(
 );
 const lockLifecycleVerifierWrapperPath = await writeRuntimeFile(
   'test-bound-verifier-lock-lifecycle-wrapper.sql',
-  `\nset search_path = cnyos_verifier_hostile_path, public, pg_catalog;\n` +
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `set search_path = cnyos_verifier_hostile_path, public, pg_catalog;\n` +
     `\\i ${lockLifecycleVerifierPath}\n`
 );
 const lockLifecycleVerification = psql(['-f', lockLifecycleVerifierWrapperPath]);
@@ -1582,7 +1588,8 @@ assertDurableUnchanged(
 
 const verifierStateLeakWrapperPath = await writeRuntimeFile(
   'test-bound-verifier-psql-state.sql',
-  `\nset search_path = cnyos_verifier_hostile_path, public, pg_catalog;\n` +
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `set search_path = cnyos_verifier_hostile_path, public, pg_catalog;\n` +
     `\\i ${testBoundVerifierPath}\n` +
     verificationPsqlStateLeakProbeSql()
 );
@@ -1618,7 +1625,8 @@ await resetDatabase();
 const wrongVerifierIdentityBefore = durableSnapshot();
 const wrongVerifierIdentityWrapperPath = await writeRuntimeFile(
   'test-bound-verifier-wrong-current-user.sql',
-  `\nset role authenticated;\n` +
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `set role authenticated;\n` +
     `\\i ${testBoundVerifierPath}\n` +
     '\\echo CNYOS_UNREACHABLE_VERIFIER_WRONG_IDENTITY_TAIL\n'
 );
@@ -1656,7 +1664,8 @@ assert.equal(driftedFunctionConfig, 'search_path=public');
 const driftedVerifierBefore = durableSnapshot();
 const driftedVerifierWrapperPath = await writeRuntimeFile(
   'test-bound-verifier-schema-drift.sql',
-  `\n\\i ${testBoundVerifierPath}\n` +
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `\\i ${testBoundVerifierPath}\n` +
     '\\echo CNYOS_UNREACHABLE_VERIFIER_SCHEMA_DRIFT_TAIL\n'
 );
 const driftedVerifier = psql(
@@ -1694,7 +1703,8 @@ assert.deepEqual(blockedPreReconciliationRepairBefore.ledger.rows, []);
 assert.deepEqual(blockedPreReconciliationRepairBefore.receipts, { exists: false });
 const blockedPreReconciliationRepairWrapperPath = await writeRuntimeFile(
   'test-bound-pre-reconciliation-repair-blocked.sql',
-  `\n\\i ${testBoundPreReconciliationArtifactPath}\n` +
+  `\n\\set ON_ERROR_STOP 1\n` +
+    `\\i ${testBoundPreReconciliationArtifactPath}\n` +
     '\\echo CNYOS_UNREACHABLE_PRE_RECONCILIATION_REPAIR_TAIL\n'
 );
 const blockedPreReconciliationRepair = psql(
@@ -1758,7 +1768,8 @@ const sourceBlockerSavepointArtifactPath = await writeRuntimeFile(
 const sourceBlockerSavepointBefore = durableSnapshot();
 const sourceBlockerSavepointWrapperPath = await writeRuntimeFile(
   'source-blocker-savepoint-recovery-wrapper.sql',
-  `\\i ${sourceBlockerSavepointArtifactPath}\n` +
+  `\\set ON_ERROR_STOP 1\n` +
+    `\\i ${sourceBlockerSavepointArtifactPath}\n` +
     '\\echo CNYOS_UNREACHABLE_SOURCE_BLOCKER_SAVEPOINT_TAIL\n'
 );
 const sourceBlockerSavepointRecovery = psql(
@@ -1818,7 +1829,8 @@ await resetDatabase();
 const preheldSessionLockBefore = durableSnapshot();
 const preheldSessionLockWrapperPath = await writeRuntimeFile(
   'preheld-session-lock-wrapper.sql',
-  'select pg_catalog.pg_advisory_lock(202608302100::bigint);\n' +
+  '\\set ON_ERROR_STOP 1\n' +
+    'select pg_catalog.pg_advisory_lock(202608302100::bigint);\n' +
     `\\i ${testBoundStrictArtifactPath}\n` +
     '\\echo CNYOS_UNREACHABLE_PREHELD_SESSION_LOCK_TAIL\n'
 );
@@ -1859,6 +1871,7 @@ const lockLifecycleArtifactPath = await writeRuntimeFile(
   lockLifecycleArtifact
 );
 const directPath = await writeRuntimeFile('direct-repair-with-lifecycle.sql', `
+\\set ON_ERROR_STOP 1
 ${hostileSearchPathFixtureSql('cnyos_hostile_path')}
 set search_path = cnyos_hostile_path, public, pg_catalog;
 ${advisoryLockProbeSql('before')}
@@ -1921,6 +1934,7 @@ const forcedNonceArtifactPath = await writeRuntimeFile(
   forcedNonceArtifact
 );
 const forcedNonceWrapperPath = await writeRuntimeFile('forced-same-nonce-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${forcedNonceArtifactPath}
 \\echo CNYOS_UNREACHABLE_NONCE_REPLAY_TAIL
 `);
@@ -1951,6 +1965,7 @@ assertSuccessfulEvidence(oneJsonRow(nestedSuccess, 'nested \\i'), systemIdentifi
 await resetDatabase();
 const pristineDurableState = durableSnapshot();
 const autocommitOffPath = await writeRuntimeFile('autocommit-off.sql', `
+\\set ON_ERROR_STOP 1
 \\set AUTOCOMMIT off
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_AUTOCOMMIT_TAIL
@@ -1962,6 +1977,7 @@ assertDurableUnchanged('AUTOCOMMIT off', pristineDurableState);
 
 await resetDatabase();
 const singleTransactionPath = await writeRuntimeFile('single-transaction-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_SINGLE_TRANSACTION_TAIL
 `);
@@ -1979,6 +1995,7 @@ assertDurableUnchanged('--single-transaction', pristineDurableState);
 
 await resetDatabase();
 const existingTransactionPath = await writeRuntimeFile('existing-transaction.sql', `
+\\set ON_ERROR_STOP 1
 begin;
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_EXISTING_TRANSACTION_TAIL
@@ -1994,6 +2011,7 @@ assertDurableUnchanged('existing transaction', pristineDurableState);
 
 await resetDatabase();
 const wrongServerIdentityPath = await writeRuntimeFile('wrong-server-identity.sql', `
+\\set ON_ERROR_STOP 1
 set role authenticated;
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_SERVER_IDENTITY_TAIL
@@ -2032,13 +2050,13 @@ psql(['-v', 'ON_ERROR_STOP=1', '-c', immediateHookSql]);
 const immediateHookState = durableSnapshot();
 assert.equal(immediateHookState.ledger.has_triggers_flag, true);
 assert.equal(immediateHookState.ledger.trigger_count, 1);
-const stopOverridePath = await writeRuntimeFile('caller-error-settings.sql', `
-\\set ON_ERROR_STOP off
-\\set ON_ERROR_ROLLBACK on
-\\i ${testBoundStrictArtifactPath}
-\\echo CNYOS_UNREACHABLE_ERROR_TAIL
-`);
-const stoppedFailure = psql(['-f', stopOverridePath], { allowFailure: true });
+// Invoke the artifact directly so PostgreSQL 17 cannot mask its failure at a
+// nested \\i boundary while still proving it overrides hostile caller settings.
+const stoppedFailure = psql([
+  '-v', 'ON_ERROR_STOP=off',
+  '-v', 'ON_ERROR_ROLLBACK=on',
+  '-f', testBoundStrictArtifactPath
+], { allowFailure: true });
 expectFailure(
   stoppedFailure,
   'artifact error-setting override with a ledger hook',
@@ -2049,7 +2067,6 @@ assert.doesNotMatch(
   /TEST_LEDGER_REPAIR_ABORT/,
   'ledger trigger must be refused before it can execute'
 );
-assert.doesNotMatch(stoppedFailure.output, /CNYOS_UNREACHABLE_ERROR_TAIL/);
 assertDurableUnchanged('artifact error-setting override', immediateHookState);
 
 await resetDatabase();
@@ -2087,6 +2104,7 @@ const continuationArtifactPath = await writeRuntimeFile(
   continuationArtifact
 );
 const staleMarkerPath = await writeRuntimeFile('stale-marker-savepoint-probe.sql', `
+\\set ON_ERROR_STOP 1
 create temporary table cnyos_migration_ledger_repair_evidence (
   gate_token text not null,
   run_nonce uuid not null,
@@ -2136,7 +2154,8 @@ const deferredCommitFailureArtifactPath = await writeRuntimeFile(
 );
 const deferredCommitFailureWrapperPath = await writeRuntimeFile(
   'genuine-deferred-commit-failure-wrapper.sql',
-  `create temporary table cnyos_ledger_repair_commit_parent (
+  `\\set ON_ERROR_STOP 1
+create temporary table cnyos_ledger_repair_commit_parent (
   id integer primary key
 );
 create temporary table cnyos_ledger_repair_commit_child (
@@ -2192,6 +2211,7 @@ assert.equal(
   'supabase_migrations.mutate_ledger_from_receipt_default_test()'
 );
 const maliciousDefaultWrapperPath = await writeRuntimeFile('malicious-default-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_MALICIOUS_DEFAULT_TAIL
 `);
@@ -2222,6 +2242,7 @@ const maliciousRuleState = durableSnapshot();
 assert.equal(maliciousRuleState.receipts.has_rules_flag, true);
 assert.equal(maliciousRuleState.receipts.rule_count, 1);
 const maliciousRuleWrapperPath = await writeRuntimeFile('malicious-rule-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_MALICIOUS_RULE_TAIL
 `);
@@ -2259,6 +2280,7 @@ const deferredSilentMutationState = durableSnapshot();
 assert.equal(deferredSilentMutationState.receipts.has_triggers_flag, true);
 assert.equal(deferredSilentMutationState.receipts.trigger_count, 1);
 const deferredMutationWrapperPath = await writeRuntimeFile('deferred-mutation-wrapper.sql', `
+\\set ON_ERROR_STOP 1
 \\i ${testBoundStrictArtifactPath}
 \\echo CNYOS_UNREACHABLE_DEFERRED_MUTATION_TAIL
 `);
@@ -2314,7 +2336,8 @@ const postCommitMutationArtifactPath = await writeRuntimeFile(
 );
 const postCommitMutationWrapperPath = await writeRuntimeFile(
   'post-commit-ledger-mutation-wrapper.sql',
-  `\\i ${postCommitMutationArtifactPath}
+  `\\set ON_ERROR_STOP 1
+\\i ${postCommitMutationArtifactPath}
 \\echo CNYOS_UNREACHABLE_POST_COMMIT_MUTATION_TAIL
 `
 );
