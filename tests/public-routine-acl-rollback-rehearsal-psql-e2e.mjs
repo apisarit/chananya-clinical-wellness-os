@@ -246,11 +246,16 @@ select pg_catalog.jsonb_build_object(
     version >= 170000 && version < 180000,
     `ACL rollback rehearsal native E2E requires PostgreSQL 17, got ${version}`
   );
-  assert.deepEqual(serverProbe, {
+  const { server_address: serverAddress, ...serverIdentity } = serverProbe;
+  assert.match(
+    serverAddress,
+    /^(?:127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/,
+    'disposable server must report loopback or an RFC1918 container address'
+  );
+  assert.deepEqual(serverIdentity, {
     ssl: false,
     database: 'template1',
     session_user: 'postgres',
-    server_address: '127.0.0.1',
     application_name: 'cnyos-acl-rollback-rehearsal-native-e2e',
     server_version_num: String(version)
   });

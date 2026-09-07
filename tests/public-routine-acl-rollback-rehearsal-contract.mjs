@@ -20,9 +20,15 @@ const runnerPath = path.join(
   'scripts',
   'run-public-routine-acl-rollback-rehearsal.mjs'
 );
-const [candidateSource, runnerSource] = await Promise.all([
+const nativeE2ePath = path.join(
+  root,
+  'tests',
+  'public-routine-acl-rollback-rehearsal-psql-e2e.mjs'
+);
+const [candidateSource, runnerSource, nativeE2eSource] = await Promise.all([
   fs.readFile(candidatePath, 'utf8'),
-  fs.readFile(runnerPath, 'utf8')
+  fs.readFile(runnerPath, 'utf8'),
+  fs.readFile(nativeE2ePath, 'utf8')
 ]);
 const sourceRevision = 'a'.repeat(40);
 
@@ -317,6 +323,31 @@ for (const digest of [
 assert.match(runnerSource, /PostgreSQL 17 psql/);
 assert.match(runnerSource, /requires a completely clean exact-source checkout/);
 assert.match(runnerSource, /fresh observer/);
+assert.match(
+  nativeE2eSource,
+  /process\.env\.CNYOS_PG17_DISPOSABLE_ACK !== disposableAcknowledgement/,
+  'native rollback E2E must retain the exact disposable-cluster acknowledgement'
+);
+assert.match(
+  nativeE2eSource,
+  /databaseHost !== '127\.0\.0\.1'/,
+  'native rollback E2E input must remain hard-locked to loopback'
+);
+assert.match(
+  nativeE2eSource,
+  /databaseUser !== 'postgres'/,
+  'native rollback E2E must retain its disposable administrator guard'
+);
+assert.match(
+  nativeE2eSource,
+  /disposable server must report loopback or an RFC1918 container address/,
+  'runtime identity may admit only loopback or private CI-container addresses'
+);
+assert.doesNotMatch(
+  nativeE2eSource,
+  /server_address:\s*'127\.0\.0\.1'/,
+  'runtime probe must not confuse a Docker service address with the guarded client target'
+);
 
 console.log(
   'public-routine ACL rollback rehearsal contract passed ' +
