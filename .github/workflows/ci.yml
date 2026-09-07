@@ -100,10 +100,18 @@ jobs:
           )
 
       - name: Retain guarded migration ledger artifacts
+        # Review-only source outputs; no live observation, receipt, or transcript.
+        # Keep explicit paths so later files in this directory are not published.
+        # See docs/PR36_SECURITY_REVIEW.md; these artifacts authorize no SQL run.
         uses: actions/upload-artifact@v6
         with:
           name: migration-ledger-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
-          path: artifacts/migration-ledger/
+          path: |
+            artifacts/migration-ledger/cnyos-staging-strict-post-remediation-verification-only.sql
+            artifacts/migration-ledger/cnyos-staging-pre-reconciliation-verification-only.sql
+            artifacts/migration-ledger/cnyos-staging-pre-reconciliation-guarded-repair.sql
+            artifacts/migration-ledger/public-routine-acl-inventory-read-only.sql
+            artifacts/migration-ledger/SHA256SUMS
           if-no-files-found: error
           retention-days: 90
 
@@ -123,6 +131,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: release-contracts-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
-          path: artifacts/release-evidence/
+          path: artifacts/release-evidence/exact-commit.json
           if-no-files-found: error
           retention-days: 90
