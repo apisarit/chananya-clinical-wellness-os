@@ -194,7 +194,7 @@ function stateSnapshot() {
     '--command', String.raw`
 select pg_catalog.jsonb_build_object(
   'sentinel_rows', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(pg_catalog.to_jsonb(sentinel) order by sentinel.value),
       '[]'::pg_catalog.jsonb
     )
@@ -206,7 +206,7 @@ select pg_catalog.jsonb_build_object(
     where namespace.nspname = 'public'
   ),
   'public_routines', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.to_jsonb(procedure) order by procedure.oid
       ),
@@ -218,7 +218,7 @@ select pg_catalog.jsonb_build_object(
     where namespace.nspname = 'public'
   ),
   'public_routine_dependencies', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.to_jsonb(dependency)
         order by dependency.classid,
@@ -240,7 +240,7 @@ select pg_catalog.jsonb_build_object(
     where namespace.nspname = 'public'
   ),
   'default_acls', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.to_jsonb(default_acl) order by default_acl.oid
       ),
@@ -249,7 +249,7 @@ select pg_catalog.jsonb_build_object(
     from pg_catalog.pg_default_acl default_acl
   ),
   'fixture_roles', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.to_jsonb(role_row) - 'rolpassword'
         order by role_row.oid
@@ -266,7 +266,7 @@ select pg_catalog.jsonb_build_object(
     )
   ),
   'fixture_memberships', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.to_jsonb(membership)
         order by membership.roleid, membership.member, membership.grantor

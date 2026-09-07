@@ -142,14 +142,14 @@ function snapshot() {
     '--command', String.raw`
 select pg_catalog.jsonb_build_object(
   'sentinel', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(pg_catalog.to_jsonb(sentinel) order by sentinel.value),
       '[]'::pg_catalog.jsonb
     )
     from public.cnyos_acl_candidate_sentinel sentinel
   ),
   'public_routines', (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_array(
           procedure.oid,

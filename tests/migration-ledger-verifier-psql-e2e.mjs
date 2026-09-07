@@ -273,21 +273,21 @@ function databaseSnapshot(host) {
     '--command', String.raw`
 select pg_catalog.jsonb_build_object(
   'clinics',(
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(pg_catalog.to_jsonb(clinic) order by clinic.id),
       '[]'::pg_catalog.jsonb
     )
     from public.clinics clinic
   ),
   'profiles',(
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(pg_catalog.to_jsonb(profile) order by profile.id),
       '[]'::pg_catalog.jsonb
     )
     from public.profiles profile
   ),
   'memberships',(
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.to_jsonb(membership)
         order by membership.clinic_id,membership.profile_id
@@ -297,14 +297,14 @@ select pg_catalog.jsonb_build_object(
     from public.clinic_memberships membership
   ),
   'ledger',(
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(pg_catalog.to_jsonb(ledger) order by ledger.version),
       '[]'::pg_catalog.jsonb
     )
     from supabase_migrations.schema_migrations ledger
   ),
   'public_routine_security',(
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_array(
           procedure.oid::text,
