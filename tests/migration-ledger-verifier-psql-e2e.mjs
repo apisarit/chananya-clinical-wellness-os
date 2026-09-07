@@ -5,10 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST,
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST,
   CHANANYA_REVIEWED_SYSTEM_IDENTIFIER,
   MIGRATION_LEDGER_ACL_PHASE_STRICT,
+  REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   loadMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
@@ -192,20 +191,32 @@ function assertCommonNonAuthorizingEvidence(evidence, expectedStatus, label) {
     `${label} authorized ledger reconciliation`
   );
   assert.equal(
-    evidence.live_callable_acl_inventory_required,
-    true,
-    `${label} omitted the live callable-ACL prerequisite`
-  );
-  assert.equal(
     evidence.live_callable_acl_inventory_complete,
     false,
-    `${label} claimed the live callable-ACL inventory was complete`
+    `${label} claimed classified live callable-ACL evidence for a strict fixture`
   );
   assert.equal(
-    evidence.ledger_reconciliation_blocked_pending_live_callable_acl_inventory,
-    true,
-    `${label} omitted the live callable-ACL blocker`
+    evidence.classification_coverage_complete,
+    false,
+    `${label} claimed classified live coverage for a strict fixture`
   );
+  assert.equal(
+    evidence.independent_security_review_complete,
+    false,
+    `${label} claimed independent security review`
+  );
+  assert.equal(
+    evidence.managed_supabase_admin_exception_accepted,
+    false,
+    `${label} accepted the managed-platform exception`
+  );
+  assert.equal(
+    evidence.ledger_reconciliation_blocked_pending_independent_review_and_authorization,
+    true,
+    `${label} omitted the independent-review/authorization blocker`
+  );
+  assert.equal(evidence.fresh_post_commit_observer_required, false);
+  assert.equal(evidence.fresh_post_commit_observer_completed, false);
   assert.equal(evidence.ledger_reconciled, false, `${label} claimed ledger reconciliation`);
   assert.equal(evidence.production_eligible, false, `${label} claimed production eligibility`);
   assert.equal(evidence.rollback_required, true, `${label} omitted mandatory rollback`);
@@ -223,20 +234,20 @@ function assertCommonNonAuthorizingEvidence(evidence, expectedStatus, label) {
 
 function transitionGrantSql() {
   return [
-    ...CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples,
-    ...CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+    ...REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.triggerAclTuples,
+    ...REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.browserRpcAclTuples
   ].map(([grantee, signature]) =>
     `grant execute on function ${signature} to ${grantee};`
   ).join('\n');
 }
 
 function strictPostRemediationFixtureSql() {
-  const triggerClosure = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory
+  const triggerClosure = REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.triggerInventory
     .map(([signature]) =>
       `revoke all on function ${signature} from public,anon,authenticated,service_role;`
     )
     .join('\n');
-  const browserClosure = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+  const browserClosure = REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.browserRpcAclTuples
     .map(([grantee, signature]) =>
       `revoke execute on function ${signature} from ${grantee};`
     )

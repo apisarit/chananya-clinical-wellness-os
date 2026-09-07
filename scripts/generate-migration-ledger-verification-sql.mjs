@@ -21,7 +21,7 @@ export const targetUnverifiedStrictVerificationStatus =
   'CNYOS_STAGING_STRICT_POST_REMEDIATION_SCHEMA_GUARD_MATCHED_' +
   'TARGET_UNVERIFIED_NOT_AUTHORIZED';
 export const preReconciliationVerificationStatus =
-  'CNYOS_CHANANYA_PRE_RECONCILIATION_KNOWN_ACL_SUBSET_MATCHED_NOT_AUTHORIZED';
+  'CNYOS_CHANANYA_PUBLIC_ROUTINE_ACL_CLASSIFIED_COMPLETE_NOT_AUTHORIZED';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ledgerGuardTerminator = 'end\n$ledger_guard$;\n';
@@ -93,13 +93,6 @@ export function buildMigrationLedgerVerificationSql({
 
   const isChananyaPreReconciliation =
     aclPhase === MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION;
-  const triggerFunctionSemanticPayloadBytes = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
-      .functionSemanticPreReconciliationPayloadBytes
-    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictPayloadBytes;
-  const triggerFunctionSemanticSha256 = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticPreReconciliationSha256
-    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256;
   const expectedProjectRef = targetDatabaseUrl.hostname.replace(/\.supabase\.co$/, '');
   const expectedDatabaseName = 'postgres';
   const expectedDatabaseUser = 'postgres';
@@ -132,52 +125,118 @@ export function buildMigrationLedgerVerificationSql({
       REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.provenance,
     repository_derived_treatment_session_public_execute_debt_pending:
       isChananyaPreReconciliation,
-    trigger_server_major: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor,
-    trigger_server_encoding:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding,
-    trigger_function_semantic_count:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount,
-    trigger_function_semantic_payload_bytes: triggerFunctionSemanticPayloadBytes,
-    trigger_function_semantic_sha256: triggerFunctionSemanticSha256,
-    trigger_binding_count: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount,
-    trigger_binding_payload_bytes:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes,
-    trigger_binding_sha256: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256,
     target_identity_verified: hasReviewedSystemIdentifier,
     target_identity_verification: hasReviewedSystemIdentifier
       ? 'system-identifier-enforced'
       : 'target-unverified-system-identifier-unpinned',
     authorization: false,
     ledger_reconciliation_authorized: false,
-    live_callable_acl_inventory_required: true,
-    live_callable_acl_inventory_complete: false,
-    ledger_reconciliation_blocked_pending_live_callable_acl_inventory: true,
+    live_callable_acl_inventory_complete: isChananyaPreReconciliation,
+    classification_coverage_complete: isChananyaPreReconciliation,
+    independent_security_review_complete: false,
+    managed_supabase_admin_exception_accepted: false,
+    security_definer_path_plan_approved: false,
+    hosted_concurrency_protocol_approved: false,
+    hosted_trigger_relation_lock_plan_rehearsed: false,
+    fresh_post_commit_observer_required: isChananyaPreReconciliation,
+    fresh_post_commit_observer_completed: false,
+    ledger_reconciliation_blocked_pending_independent_review_and_authorization: true,
     ledger_reconciled: false,
     production_eligible: false,
     rollback_required: true
   };
   if (isChananyaPreReconciliation) {
-    evidence.live_callable_acl_known_subset_only = true;
     evidence.reviewed_pre_reconciliation_evidence_bundle_sha256 =
       CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256;
-    evidence.known_live_callable_acl_subset_count =
-      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples.length;
-    evidence.known_live_callable_acl_subset_sha256 =
-      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256;
-    evidence.reviewed_trigger_inventory_sha256 =
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256;
-    evidence.reviewed_trigger_acl_sha256 =
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256;
-    evidence.reviewed_trigger_function_semantic_sha256 =
-      triggerFunctionSemanticSha256;
-    evidence.reviewed_trigger_binding_sha256 =
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256;
-    evidence.reviewed_trigger_binding_count =
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount;
-    evidence.reviewed_trigger_binding_payload_bytes =
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes;
-    evidence.known_live_callable_acl_subset_source_revision =
+    evidence.evidence_source_revision =
       CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision;
+    evidence.observer_raw_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerRawSha256;
+    evidence.observer_source_sql_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerSourceSqlSha256;
+    evidence.observation_composite_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationCompositeSha256;
+    evidence.disposition_artifact_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionArtifactSha256;
+    evidence.disposition_payload_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionPayloadSha256;
+    evidence.complete_acl_candidate_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.completeAclCandidateSha256;
+    evidence.classified_public_routine_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.routineCount;
+    evidence.classified_authenticated_only_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .routineDispositions.authenticated_only.length;
+    evidence.classified_authenticated_and_service_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .routineDispositions.authenticated_and_service.length;
+    evidence.classified_service_only_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .routineDispositions.service_only.length;
+    evidence.classified_owner_only_ordinary_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .routineDispositions.owner_only_ordinary.length;
+    evidence.classified_owner_only_trigger_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .routineDispositions.owner_only_trigger.length;
+    evidence.classified_owner_only_event_trigger_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .routineDispositions.owner_only_event_trigger.length;
+    evidence.desired_effective_authenticated_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .desiredEffectiveExecute.authenticated;
+    evidence.desired_effective_service_role_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .desiredEffectiveExecute.service_role;
+    evidence.current_raw_acl_matrix_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.currentRawAclMatrix.sha256;
+    evidence.current_effective_access_matrix_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .currentEffectiveAccessMatrix.sha256;
+    evidence.desired_effective_access_matrix_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .desiredEffectiveAccessMatrix.sha256;
+    evidence.security_definer_path_plan_count =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.count;
+    evidence.security_definer_path_plan_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.sha256;
+    evidence.reviewed_trigger_binding_count =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingCount;
+    evidence.reviewed_trigger_binding_dataset_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256;
+    evidence.reviewed_trigger_binding_identity_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingIdentitySha256;
+    evidence.reviewed_trigger_binding_stable_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingStableSha256;
+    evidence.trigger_relation_lock_plan_count =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount;
+    evidence.trigger_relation_lock_plan_payload_bytes =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+        .triggerRelationLockPlanPayloadBytes;
+    evidence.trigger_relation_lock_plan_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256;
+    evidence.reviewed_event_trigger_binding_count =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingCount;
+    evidence.reviewed_event_trigger_binding_dataset_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+        .eventTriggerBindingDatasetSha256;
+    evidence.reviewed_event_trigger_binding_identity_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+        .eventTriggerBindingIdentitySha256;
+    evidence.reviewed_event_trigger_binding_stable_sha256 =
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+        .eventTriggerBindingStableSha256;
+    evidence.post_toggle_default_acl_evidence_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .postToggleDefaultAclBaseline.externalEvidenceSha256;
+    evidence.ledger_target_baseline_evidence_sha256 =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .ledgerTargetBaseline.externalEvidenceSha256;
+    evidence.observed_ledger_migration_count_at_baseline =
+      CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+        .ledgerTargetBaseline.chananyaObservedMigrationCount;
+    evidence.hosted_postgres_superuser = false;
+    evidence.protected_catalog_share_lock_supported = false;
   }
 
   // Capture evidence inside the verified read-only snapshot, but do not emit a

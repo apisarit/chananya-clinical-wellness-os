@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -295,11 +296,10 @@ for (const configFile of [
   assert.doesNotMatch(sql, /"authorization":true/);
   assert.ok(sql.includes('"ledger_reconciliation_authorized":false'));
   assert.doesNotMatch(sql, /"ledger_reconciliation_authorized":true/);
-  assert.ok(sql.includes('"live_callable_acl_inventory_required":true'));
   assert.ok(sql.includes('"live_callable_acl_inventory_complete":false'));
   assert.doesNotMatch(sql, /"live_callable_acl_inventory_complete":true/);
   assert.ok(sql.includes(
-    '"ledger_reconciliation_blocked_pending_live_callable_acl_inventory":true'
+    '"ledger_reconciliation_blocked_pending_independent_review_and_authorization":true'
   ));
   assert.ok(sql.includes('"ledger_reconciled":false'));
   assert.ok(sql.includes('"production_eligible":false'));
@@ -309,18 +309,8 @@ for (const configFile of [
     sql,
     /Transitional observation manifest|transitional_|known_live_callable_acl_subset/
   );
-  assert.match(
-    sql,
-    new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256)
-  );
-  assert.doesNotMatch(
-    sql,
-    new RegExp(
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
-        .functionSemanticPreReconciliationSha256
-    )
-  );
-  assert.match(sql, new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256));
+  assert.doesNotMatch(sql, new RegExp(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerRawSha256));
+  assert.doesNotMatch(sql, /CNYOS_CLASSIFIED_ACL_CURRENT_RAW_MATRIX_INVALID/);
   assert.doesNotMatch(sql, new RegExp(preReconciliationVerificationStatus));
   assert.doesNotMatch(sql, /CNYOS_STAGING_SCHEMA_FINGERPRINT_VERIFIED/);
   assert.doesNotMatch(sql, /from public\.\w+_healthcheck\(\)/);
@@ -512,7 +502,6 @@ assert.doesNotMatch(unreviewedChananyaProjectVerificationSql, new RegExp(strictV
 assert.match(unreviewedChananyaProjectVerificationSql, /"target_identity_verified":false/);
 assert.match(unreviewedChananyaProjectVerificationSql, /"authorization":false/);
 assert.match(unreviewedChananyaProjectVerificationSql, /"ledger_reconciliation_authorized":false/);
-assert.match(unreviewedChananyaProjectVerificationSql, /"live_callable_acl_inventory_required":true/);
 assert.match(unreviewedChananyaProjectVerificationSql, /"live_callable_acl_inventory_complete":false/);
 assert.match(unreviewedChananyaProjectVerificationSql, /"production_eligible":false/);
 
@@ -525,91 +514,171 @@ const jitarsaConfig = JSON.parse(fs.readFileSync(
   'utf8'
 ));
 const transitionManifest = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST;
-const independentlyReviewedTransitionTuples = [
-  ['anon', 'public.book_clinic_appointment(uuid,uuid,text,text,text)'],
-  ['anon', 'public.cancel_clinic_appointment(uuid,text)'],
-  ['anon', 'public.clinical_financial_handoffs_healthcheck()'],
-  ['anon', 'public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)'],
-  ['anon', 'public.current_user_role()'],
-  ['anon', 'public.decide_approval_task(uuid,text,text)'],
-  ['anon', 'public.department_persistence_healthcheck()'],
-  ['anon', 'public.is_admin_or_super()'],
-  ['anon', 'public.is_appointment_operator()'],
-  ['anon', 'public.is_appointment_practitioner()'],
-  ['anon', 'public.is_clinic_admin()'],
-  ['anon', 'public.is_practitioner()'],
-  ['anon', 'public.is_reception_or_admin()'],
-  ['anon', 'public.prescription_dispensing_healthcheck()'],
-  ['anon', 'public.production_execution_healthcheck()'],
-  ['anon', 'public.quality_release_healthcheck()'],
-  ['anon', 'public.set_clinic_appointment_status(uuid,text,text)'],
-  ['service_role', 'public.book_clinic_appointment(uuid,uuid,text,text,text)'],
-  ['service_role', 'public.cancel_clinic_appointment(uuid,text)'],
-  ['service_role', 'public.create_approval_task(text,text,text,text,text,text,uuid,timestamptz,jsonb)'],
-  ['service_role', 'public.decide_approval_task(uuid,text,text)'],
-  ['service_role', 'public.set_clinic_appointment_status(uuid,text,text)']
-];
 assert.equal(transitionManifest.projectRef, 'hsmnjwxurlmsizndjlun');
 assert.equal(transitionManifest.databaseOrigin, 'https://hsmnjwxurlmsizndjlun.supabase.co');
-assert.equal(transitionManifest.observedAt, '2026-09-06T15:42:14.891459Z');
-assert.equal(transitionManifest.observationSourceRevision, '79750ef1f5bb3baa82f57687276b6efb1a2d345c');
-assert.equal(transitionManifest.tupleSha256, '3d6fe1f67c0c2bc418c412b30b0c439f9f5c3c6ba2757bc212cb5f5f9c029695');
-assert.equal(transitionManifest.browserRpcAclTuples.length, 22);
-assert.equal(transitionManifest.browserRpcAclTuples.filter(([grantee]) => grantee === 'anon').length, 17);
-assert.equal(transitionManifest.browserRpcAclTuples.filter(([grantee]) => grantee === 'service_role').length, 5);
-assert.equal(new Set(transitionManifest.browserRpcAclTuples.map(tuple => tuple.join('\t'))).size, 22);
-assert.deepEqual(transitionManifest.browserRpcAclTuples, independentlyReviewedTransitionTuples);
-assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory.length, 23);
-assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples.length, 62);
 assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256,
-  '4ff91cbb4fca03b8f7f2d0eaa6dc47b198ea7ce592a1d624d5b72bc273558a0d'
+  transitionManifest.observationSourceRevision,
+  '831543c2d1ed36b2d8242cc82af23c83e019e7a7'
 );
-assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount, 23);
+assert.equal(transitionManifest.routineCount, 147);
 assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
-    .functionSemanticPreReconciliationPayloadBytes,
-  21183
+  new Set(Object.values(transitionManifest.routineDispositions).flat()).size,
+  147
 );
-assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticPreReconciliationSha256,
-  '4c92389f247e80c27c63721eff19f321ed538c8e70d616df5aa36e193cb2eb0b'
+assert.deepEqual(
+  Object.fromEntries(Object.entries(transitionManifest.routineDispositions)
+    .map(([category, signatures]) => [category, signatures.length])),
+  {
+    authenticated_only: 23,
+    authenticated_and_service: 47,
+    service_only: 28,
+    owner_only_ordinary: 25,
+    owner_only_trigger: 23,
+    owner_only_event_trigger: 1
+  }
 );
+assert.deepEqual(transitionManifest.desiredEffectiveExecute, {
+  public: 0,
+  anon: 0,
+  authenticated: 70,
+  service_role: 75,
+  owner_only: 49,
+  total_routines: 147
+});
 assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictPayloadBytes,
-  21213
-);
-assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256,
-  '07535c64e7607d8cc9bc34b197a40e3923f4f56df84262d041d56541b1890737'
-);
-assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount, 168);
-assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes, 46998);
-assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256,
-  '9430970d3b25cbe3d5d4ab704740e62ce5a6864d9a804a732ed6f8919523fe54'
+  transitionManifest.observerRawSha256,
+  '235a2c612c78367e4c2beff0243b4bc624fd6107fbdc39b1f9c0af8ae4ace27e'
 );
 assert.equal(
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256,
-  'bd0391e6a7f6a06797fde1d9f9e90e2a475cf2679b298f86b7b8492980a39b11'
+  transitionManifest.observerSourceSqlSha256,
+  '46a226f7ab7f0d3ee4f6062c1bc223dcdbee351d7640f86592e3614cb261a777'
 );
 assert.equal(
-  CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256,
-  '2f4ec29006a5a2b3a0e3b2d7aa9018861bee5153b60887c625d6a46d2516a733'
+  transitionManifest.observationCompositeSha256,
+  '9a555548d810ec5bed2dc86591651ca144941687c3fd34cf8d0828708ebb9efe'
+);
+assert.equal(
+  transitionManifest.dispositionArtifactSha256,
+  '0f5979a9f64a9600fa3083703fcd0937487772dffdfa93370aabb6ca28e41400'
+);
+assert.equal(
+  transitionManifest.dispositionPayloadSha256,
+  'b64789650acf4dd435d7cd41e114fac6c71b35d995cf78b2ce954ad8b571d343'
+);
+assert.equal(
+  transitionManifest.completeAclCandidateSha256,
+  '2f374ca556a1f98f46ec179b2e8143d56c7f900d7d1812e2dc7f5e23439e4acf'
+);
+assert.equal(transitionManifest.securityDefinerPathPlan.count, 141);
+assert.equal(
+  transitionManifest.securityDefinerPathPlan.sha256,
+  'dd948f4f7f6baa535d26446aaba64aba3b7e79cfe2c4e2c63a2c83ee0fd0d2bb'
+);
+assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingCount, 173);
+assert.equal(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingCount, 7);
+assert.equal(
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount,
+  91
+);
+assert.equal(
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanPayloadBytes,
+  2400
+);
+assert.equal(
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256,
+  '65cc5e93f3ef618e4fe77e535f908f630d4e4a5ac5a5857c7f92172b19eb3611'
+);
+assert.equal(
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256,
+  '2f5ffa09ed5a895733d4ba6418ae0a69ab190d3a6718bde73e17dc73118fd15d'
+);
+assert.equal(
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingDatasetSha256,
+  'b0ba455cb69e75488c4c50229a387e4859c201581921c96737a313961ba6c799'
 );
 assert.equal(
   CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.evidenceScope,
-  'known-live-callable-acl-subset-not-complete-inventory'
+  'classified-complete-live-public-routine-inventory-not-authorized'
 );
-assert.equal(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.liveCallableAclInventoryComplete, false);
+assert.equal(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.liveCallableAclInventoryComplete, true);
+assert.equal(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.authorization, false);
 assert.equal(
   CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.evidenceScope,
-  'reviewed-evidence-bundle-not-complete-live-callable-acl-inventory'
+  'classified-complete-live-public-routine-inventory-not-authorized'
 );
 assert.equal(CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.authorization, false);
 assert.equal(
   CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.liveCallableAclInventoryComplete,
-  false
+  true
+);
+assert.notEqual(
+  revision,
+  transitionManifest.observationSourceRevision,
+  'the generated code revision and the observer source revision are distinct bindings'
+);
+const canonicalPathPlanJson = JSON.stringify(
+  transitionManifest.securityDefinerPathPlan.rows
+);
+assert.equal(
+  createHash('sha256').update(canonicalPathPlanJson).digest('hex'),
+  transitionManifest.securityDefinerPathPlan.sha256
+);
+const sameCountStalePathPlan = transitionManifest.securityDefinerPathPlan.rows.map(
+  (row, index) => index === 0
+    ? { ...row, definition_sha256: '0'.repeat(64) }
+    : row
+);
+assert.equal(sameCountStalePathPlan.length, 141);
+assert.notEqual(
+  createHash('sha256').update(JSON.stringify(sameCountStalePathPlan)).digest('hex'),
+  transitionManifest.securityDefinerPathPlan.sha256,
+  'same-count path/definition drift must not retain the reviewed plan digest'
+);
+const classifiedDisposition = JSON.parse(fs.readFileSync(path.join(
+  root,
+  'security',
+  'chananya-staging-public-routine-acl-disposition-831543c.json'
+), 'utf8'));
+const serializeBindingIdentities = rows => rows.sort().join('\n') + '\n';
+const triggerBindingIdentityRows = classifiedDisposition.trigger_bindings.map(row =>
+  [row.relation_schema, row.relation_name, row.trigger_name, row.function_signature]
+    .join('\t')
+);
+assert.equal(
+  createHash('sha256').update(serializeBindingIdentities(triggerBindingIdentityRows))
+    .digest('hex'),
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingIdentitySha256
+);
+const sameCountStaleBindingRows = [...triggerBindingIdentityRows];
+sameCountStaleBindingRows[0] += '_stale';
+assert.equal(sameCountStaleBindingRows.length, 173);
+assert.notEqual(
+  createHash('sha256').update(serializeBindingIdentities(sameCountStaleBindingRows))
+    .digest('hex'),
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingIdentitySha256,
+  'same-count binding identity drift must not retain the reviewed digest'
+);
+const triggerRelationLockPlan = [...new Set(
+  classifiedDisposition.trigger_bindings.map(
+    row => `${row.relation_schema}.${row.relation_name}`
+  )
+)].sort();
+const serializeTriggerRelations = rows => rows.join('\n') + '\n';
+assert.equal(triggerRelationLockPlan.length, 91);
+assert.equal(
+  createHash('sha256').update(serializeTriggerRelations(triggerRelationLockPlan))
+    .digest('hex'),
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256
+);
+const sameCountStaleTriggerRelations = [...triggerRelationLockPlan];
+sameCountStaleTriggerRelations[0] += '_stale';
+assert.equal(sameCountStaleTriggerRelations.length, 91);
+assert.notEqual(
+  createHash('sha256')
+    .update(serializeTriggerRelations(sameCountStaleTriggerRelations))
+    .digest('hex'),
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256,
+  'same-count trigger-relation lock-plan drift must not retain the reviewed digest'
 );
 assert.equal(
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sha256,
@@ -638,14 +707,9 @@ assert.deepEqual(
     .strictPostRemediationAcl.directOwnerGrantedNonGrantableExecuteGrantees,
   ['authenticated']
 );
-assert.equal(
-  transitionManifest.browserRpcAclTuples.some(([, procedureSignature]) =>
-    procedureSignature ===
-      REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.procedureSignature
-  ),
-  false,
-  'the repository-derived debt must not be relabeled as one of the 22 live-observed tuples'
-);
+assert.ok(Object.values(transitionManifest.routineDispositions).flat().includes(
+  REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.procedureSignature
+));
 
 assert.equal(
   buildMigrationLedgerVerificationSql({
@@ -728,9 +792,8 @@ assert.match(
   preReconciliationVerificationSql,
   /"repository_derived_treatment_session_public_execute_debt_pending":true/
 );
-assert.match(preReconciliationVerificationSql, /"live_callable_acl_inventory_required":true/);
-assert.match(preReconciliationVerificationSql, /"live_callable_acl_inventory_complete":false/);
-assert.doesNotMatch(preReconciliationVerificationSql, /"live_callable_acl_inventory_complete":true/);
+assert.match(preReconciliationVerificationSql, /"live_callable_acl_inventory_complete":true/);
+assert.match(preReconciliationVerificationSql, /"classification_coverage_complete":true/);
 assert.match(preReconciliationVerificationSql, /"authorization":false/);
 assert.doesNotMatch(preReconciliationVerificationSql, /"authorization":true/);
 assert.match(preReconciliationVerificationSql, /"ledger_reconciliation_authorized":false/);
@@ -740,10 +803,9 @@ assert.match(
   preReconciliationVerificationSql,
   /"target_identity_verification":"system-identifier-enforced"/
 );
-assert.match(preReconciliationVerificationSql, /"live_callable_acl_known_subset_only":true/);
 assert.match(
   preReconciliationVerificationSql,
-  /"ledger_reconciliation_blocked_pending_live_callable_acl_inventory":true/
+  /"ledger_reconciliation_blocked_pending_independent_review_and_authorization":true/
 );
 assert.match(preReconciliationVerificationSql, /"ledger_reconciled":false/);
 assert.match(preReconciliationVerificationSql, /"production_eligible":false/);
@@ -754,53 +816,168 @@ assert.ok(preReconciliationVerificationSql.includes(
 assert.ok(preReconciliationVerificationSql.includes(
   "from (values ('anon','true'),('authenticated','true'),('service_role','true')) expected("
 ));
-assert.match(preReconciliationVerificationSql, new RegExp(transitionManifest.tupleSha256));
 assert.match(
   preReconciliationVerificationSql,
   new RegExp(CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256)
 );
 assert.match(
   preReconciliationVerificationSql,
-  new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256)
+  new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256)
 );
 assert.match(
   preReconciliationVerificationSql,
-  new RegExp(
-    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
-      .functionSemanticPreReconciliationSha256
-  )
+  new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingDatasetSha256)
 );
-assert.doesNotMatch(
+assert.match(
   preReconciliationVerificationSql,
-  new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256)
+  new RegExp(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.sha256)
 );
 assert.ok(preReconciliationVerificationSql.includes(
-  `"reviewed_trigger_binding_sha256":"${
-    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256
+  `"reviewed_trigger_binding_dataset_sha256":"${
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256
   }"`
 ));
 assert.ok(preReconciliationVerificationSql.includes(
   `"reviewed_trigger_binding_count":${
-    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingCount
   }`
 ));
 assert.ok(preReconciliationVerificationSql.includes(
-  `"reviewed_trigger_binding_payload_bytes":${
-    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes
+  `"reviewed_event_trigger_binding_count":${
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingCount
   }`
 ));
 assert.ok(preReconciliationVerificationSql.includes(
-  `"known_live_callable_acl_subset_count":${
-    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples.length
+  `"classified_public_routine_count":${
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.routineCount
   }`
 ));
 assert.ok(preReconciliationVerificationSql.includes(
-  `"known_live_callable_acl_subset_sha256":"${
-    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256
+  `"current_raw_acl_matrix_sha256":"${
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.currentRawAclMatrix.sha256
   }"`
 ));
 assert.doesNotMatch(preReconciliationVerificationSql, /transitional_observation_manifest_sha256/);
-assert.match(preReconciliationVerificationSql, /STAGING_TRIGGER_BINDING_SNAPSHOT_INVALID/);
+assert.doesNotMatch(preReconciliationVerificationSql, /known_live_callable_acl_subset/);
+assert.match(preReconciliationVerificationSql, /CNYOS_CLASSIFIED_ACL_TRIGGER_BINDING_IDENTITY_INVALID/);
+assert.match(preReconciliationVerificationSql, /CNYOS_CLASSIFIED_ACL_EVENT_BINDING_IDENTITY_INVALID/);
+assert.match(preReconciliationVerificationSql, /CNYOS_CLASSIFIED_ACL_SECURITY_DEFINER_PATH_OR_DEFINITION_INVALID/);
+assert.match(
+  preReconciliationVerificationSql,
+  new RegExp(
+    `v_acl_row_count<>${transitionManifest.currentRawAclMatrix.rowCount}` +
+    `[\\s\\S]*octet_length\\(v_acl_payload\\)<>${
+      transitionManifest.currentRawAclMatrix.payloadBytes
+    }[\\s\\S]*${transitionManifest.currentRawAclMatrix.sha256}`
+  ),
+  'same-count raw ACL drift must still fail the byte/digest pin'
+);
+assert.match(
+  preReconciliationVerificationSql,
+  /namespace\.nspname \|\| '\.' \|\| procedure\.proname \|\| pg_catalog\.regexp_replace\([\s\S]*procedure\.oid::pg_catalog\.regprocedure::text,'\^\[\^\(\]\+',''/,
+  'ACL matrix rows must combine an explicit schema with type-only regprocedure output'
+);
+const classifiedAclMatrixGuard = preReconciliationVerificationSql.slice(
+  preReconciliationVerificationSql.indexOf('  with acl_rows as ('),
+  preReconciliationVerificationSql.indexOf(
+    '  select count(*)::bigint,\n    coalesce(string_agg(binding_row',
+    preReconciliationVerificationSql.indexOf('  with acl_rows as (')
+  )
+);
+assert.ok(classifiedAclMatrixGuard.length > 0);
+assert.doesNotMatch(
+  classifiedAclMatrixGuard,
+  /pg_get_function_identity_arguments\(procedure\.oid\)/,
+  'identity-argument output includes argument names and cannot bind type-only reviewed signatures'
+);
+const namedArgumentSignatureDb = new PGlite();
+try {
+  await namedArgumentSignatureDb.exec(`
+    create function public.cnyos_named_argument_signature_probe(
+      p_user_id uuid,
+      p_reason text
+    ) returns boolean language sql as $signature_probe$ select true $signature_probe$
+  `);
+  const namedArgumentSignature = (await namedArgumentSignatureDb.query(`
+    select
+      pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+        as identity_arguments,
+      namespace.nspname || '.' || procedure.proname ||
+        pg_catalog.regexp_replace(
+          procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+        ) as canonical_signature
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace on namespace.oid=procedure.pronamespace
+    where procedure.oid=
+      'public.cnyos_named_argument_signature_probe(uuid,text)'::pg_catalog.regprocedure
+  `)).rows[0];
+  assert.match(namedArgumentSignature.identity_arguments, /p_user_id uuid/);
+  assert.equal(
+    namedArgumentSignature.canonical_signature,
+    'public.cnyos_named_argument_signature_probe(uuid,text)'
+  );
+} finally {
+  await namedArgumentSignatureDb.close();
+}
+assert.match(
+  preReconciliationVerificationSql,
+  new RegExp(
+    `v_acl_row_count<>${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingCount}` +
+    `[\\s\\S]*${
+      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingIdentitySha256
+    }`
+  ),
+  'same-count trigger binding drift must still fail the identity digest pin'
+);
+assert.match(
+  preReconciliationVerificationSql,
+  /jsonb_array_length\(v_acl_path_plan\)<>141[\s\S]*count\(distinct plan\.signature\)[\s\S]*pg_get_functiondef\(procedure\.oid\)[\s\S]*CNYOS_CLASSIFIED_ACL_SECURITY_DEFINER_PATH_OR_DEFINITION_INVALID/,
+  'the path guard must reject stale rows even when the plan still has 141 entries'
+);
+assert.match(
+  preReconciliationVerificationSql,
+  /defaults\.defaclnamespace=0[\s\S]*namespace\.nspname='public'\)<>2[\s\S]*\('postgres','postgres'\)[\s\S]*\('supabase_admin','service_role'\)[\s\S]*CNYOS_CLASSIFIED_ACL_POST_TOGGLE_DEFAULT_BASELINE_INVALID/,
+  'the post-toggle default baseline must bind exact rows and tuples, not only counts'
+);
+assert.match(
+  preReconciliationVerificationSql,
+  /\('pg_database_owner',false,false\)[\s\S]*\('postgres',true,false\)[\s\S]*\('supabase_admin',true,true\)[\s\S]*CNYOS_CLASSIFIED_ACL_ROLE_SCHEMA_MANAGED_EXCEPTION_INVALID/,
+  'the hosted creator roles must retain their exact LOGIN and SUPERUSER attributes'
+);
+assert.match(
+  preReconciliationVerificationSql,
+  /candidate_role\.rolcanlogin[\s\S]*pg_has_role\(candidate_role\.oid,creator_role\.oid,'SET'\)[\s\S]*CNYOS_CLASSIFIED_ACL_UNTRUSTED_CREATOR_SET_REACHABILITY_INVALID/,
+  'untrusted LOGIN/runtime roles must not gain SET reachability to a public creator'
+);
+assert.match(
+  preReconciliationVerificationSql,
+  new RegExp(transitionManifest.postToggleDefaultAclBaseline.externalEvidenceSha256)
+);
+assert.match(
+  preReconciliationVerificationSql,
+  new RegExp(transitionManifest.ledgerTargetBaseline.externalEvidenceSha256)
+);
+assert.doesNotMatch(preReconciliationVerificationSql, /lock table pg_catalog\./i);
+assert.match(
+  preReconciliationVerificationSql,
+  /"hosted_concurrency_protocol_approved":false/
+);
+assert.match(
+  preReconciliationVerificationSql,
+  /"hosted_trigger_relation_lock_plan_rehearsed":false/
+);
+assert.match(preReconciliationVerificationSql, /"fresh_post_commit_observer_required":true/);
+assert.match(preReconciliationVerificationSql, /"fresh_post_commit_observer_completed":false/);
+assert.ok(preReconciliationVerificationSql.includes(
+  `"trigger_relation_lock_plan_count":${
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount
+  }`
+));
+assert.ok(preReconciliationVerificationSql.includes(
+  `"trigger_relation_lock_plan_sha256":"${
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256
+  }"`
+));
 assert.match(preReconciliationVerificationSql, /encode\(sha256\(convert_to/);
 assert.doesNotMatch(preReconciliationVerificationSql, new RegExp(strictVerificationStatus));
 assert.doesNotMatch(preReconciliationVerificationSql, /\bREADY\b/);
@@ -998,15 +1175,15 @@ assert.match(
 );
 assert.match(
   preReconciliationRepairSql,
-  /CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING/
+  /CNYOS_CHANANYA_CLASSIFIED_COMPLETE_LEDGER_REPAIR_NOT_AUTHORIZED/
 );
 assert.match(
   preReconciliationRepairSql,
-  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
 );
 assert.equal(
   (preReconciliationRepairSql.match(
-    /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/g
+    /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/g
   ) ?? []).length,
   2,
   'pre-reconciliation guard and repair blocks must each refuse writes'
@@ -1017,13 +1194,13 @@ const preReconciliationRepairWriteBlock = preReconciliationRepairSql.slice(
 );
 assert.match(
   preReconciliationRepairWriteBlock,
-  /^do \$ledger_repair\$\ndeclare\n(?:  v_[^\n]+;\n)+begin\n  raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED:/
+  /^do \$ledger_repair\$\ndeclare\n(?:  v_[^\n]+;\n)+begin\n  raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED:/
 );
 assert.doesNotMatch(
   preReconciliationRepairWriteBlock.slice(
     0,
     preReconciliationRepairWriteBlock.indexOf(
-      'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED'
+      'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED'
     )
   ),
   /:=|\b(?:select|perform|execute|insert|update|delete|create|alter|drop)\b/i
@@ -1065,25 +1242,15 @@ assert.doesNotMatch(
   preReconciliationRepairSql,
   /'database_origin','https:\/\/hsmnjwxurlmsizndjlun\.supabase\.co'/
 );
-assert.match(preReconciliationRepairSql, /'ledger_reconciled',true/);
+assert.match(preReconciliationRepairSql, /'ledger_reconciled',false/);
 assert.match(preReconciliationRepairSql, /'production_eligible',false/);
-assert.match(preReconciliationRepairSql, new RegExp(transitionManifest.tupleSha256));
 assert.match(
   preReconciliationRepairSql,
-  new RegExp(
-    `'trigger_function_semantic_sha256','${
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
-        .functionSemanticPreReconciliationSha256
-    }'`
-  )
+  new RegExp(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.currentRawAclMatrix.sha256)
 );
 assert.match(
   preReconciliationRepairSql,
-  new RegExp(
-    `'trigger_binding_sha256','${
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256
-    }'`
-  )
+  new RegExp(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256)
 );
 assert.equal(
   (preReconciliationRepairSql.match(
@@ -1093,14 +1260,14 @@ assert.equal(
   'the guarded marker and mutation blocks must each retain one nonce binding'
 );
 const firstRepairAuthorizationBlockerIndex = preReconciliationRepairSql.indexOf(
-  'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED'
+  'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED'
 );
 const guardNonceUseIndex = preReconciliationRepairSql.indexOf(
   "current_setting('cnyos.migration_ledger_repair_run_nonce')::uuid",
   firstRepairAuthorizationBlockerIndex
 );
 const secondRepairAuthorizationBlockerIndex = preReconciliationRepairSql.indexOf(
-  'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED',
+  'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED',
   firstRepairAuthorizationBlockerIndex + 1
 );
 const mutationNonceAssignmentIndex = preReconciliationRepairSql.indexOf(
@@ -1228,7 +1395,7 @@ const repairWriteSearchPathIndex = preReconciliationRepairSql.indexOf(
 );
 const repairGuardIndex = preReconciliationRepairSql.indexOf('do $ledger_guard$');
 const repairLiveAclInventoryBlockerIndex = preReconciliationRepairSql.indexOf(
-  'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED'
+  'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED'
 );
 const repairTransactionModeCheckIndex = preReconciliationRepairSql.indexOf(
   "current_setting('transaction_isolation') <> 'repeatable read'",
@@ -1370,9 +1537,11 @@ assert.match(
   /CNYOS_LEDGER_REPAIR_ADVISORY_UNLOCK_FAILED[\s\S]*\\else\nrollback;\n\\unset cnyos_repair_lock_released\nselect pg_catalog\.pg_advisory_unlock\(202608302100::bigint\) as cnyos_repair_lock_released[\s\S]*cnyos_repair_lock_fully_released[\s\S]*CNYOS_LEDGER_REPAIR_COMMIT_PROOF_FAILED/
 );
 
-for (const [grantee, procedureSignature] of transitionManifest.browserRpcAclTuples) {
-  assert.ok(preReconciliationVerificationSql.includes(`('${procedureSignature}','${grantee}')`));
-  assert.ok(preReconciliationRepairSql.includes(`('${procedureSignature}','${grantee}')`));
+for (const procedureSignature of Object.values(
+  transitionManifest.routineDispositions
+).flat()) {
+  assert.ok(preReconciliationVerificationSql.includes(procedureSignature));
+  assert.ok(preReconciliationRepairSql.includes(procedureSignature));
 }
 
 for (const builder of [buildMigrationLedgerVerificationSql, buildMigrationLedgerRepairSql]) {

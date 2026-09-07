@@ -1,15 +1,23 @@
 # PR #36 independent review and artifact handling
 
-Status: pending independent approval and complete live-manifest reconciliation.
+Status: pending exact-head independent approval, hosted-platform exception
+acceptance, and an authorized live verifier.
 This checklist is not an approval, a receipt, or authorization to run live SQL.
-The successful discovery observation was made from
-`21c12683e8be06d7b42f3491274d6bb5104d6825` on 2026-09-08. Its independent
-classification found a P0 anonymous clinical-write exposure and proved that
-the two current candidates cannot reach their asserted global ACL matrix. The
-observer is now being extended to include every non-internal trigger binding
-and every event-trigger binding; that source change needs new exact-head CI and
-reviewer assessment before another live read-only run. Follow the
+The current successful 25-dataset discovery observation was made from
+`831543c2d1ed36b2d8242cc82af23c83e019e7a7` on 2026-09-08 after
+[exact-head CI run 34158677933](https://github.com/apisarit/chananya-clinical-wellness-os/actions/runs/34158677933)
+passed. It binds every enabled non-internal trigger and event-trigger binding,
+current-database security, database-role settings, all non-temporary schema
+security, and the original 20 routine/ACL datasets. Independent classification
+found a P0 anonymous clinical-write exposure, a P0 trigger-handler privilege
+reuse primitive, unsafe privileged search paths, and proved that the two
+current candidates cannot reach their asserted global ACL matrix. The live
+observation is complete discovery evidence, but no remediation or deployment
+is authorized by it. Follow the
 [staging runbook](AUTHENTICATED_STAGING_RUNBOOK.md) for the full execution protocol.
+Use the dedicated
+[Chananya staging ACL maintenance protocol](security/CHANANYA_STAGING_ACL_MAINTENANCE_PROTOCOL.md)
+for quiescence, rollback rehearsal, managed-platform exception, and ambiguous-result handling.
 
 The classified discovery summary is
 [Chananya staging public-routine ACL observation — 2026-09-08](security/CHANANYA_STAGING_PUBLIC_ROUTINE_ACL_OBSERVATION_2026-09-08.md).
@@ -19,20 +27,38 @@ It is evidence of blockers, not security sign-off.
 
 | Source | Mutations behind the current unconditional refusal |
 | --- | --- |
-| `supabase/manual/202609060700_revoke_trigger_function_data_api_execute_candidate.sql` | Revoke all function privileges from `PUBLIC`, `anon`, `authenticated`, and `service_role` on public-schema functions bound to non-internal triggers. Set `public.set_updated_at()` search_path to `pg_catalog, public`. Review the actual function-schema predicate; it does not select arbitrary non-public functions merely because their trigger table is public. |
-| `supabase/manual/202609060710_close_browser_rpc_acl_drift_candidate.sql` | Revoke `PUBLIC` and `anon` privileges on the 20 entries of `v_browser_signatures`; also revoke `service_role` on the eight entries of `v_browser_write_signatures`. Preserve the asserted authenticated/service-role matrix. No default ACL changes. |
+| `supabase/manual/202609060700_revoke_trigger_function_data_api_execute_candidate.sql` | Superseded, incomplete proposal. It revokes runtime execution from public trigger handlers but does not close all ordinary-RPC, default-ACL, or privileged search-path exposure. Do not run it. |
+| `supabase/manual/202609060710_close_browser_rpc_acl_drift_candidate.sql` | Superseded, incomplete proposal. It covers only the earlier browser-RPC subset and leaves 77 excess live ACL tuples plus unsafe defaults and paths. Do not run it. |
+| `security/chananya-staging-public-routine-acl-disposition-831543c.json` and `scripts/generate-public-routine-acl-manifest.mjs` | No database mutation. Bind the restricted v2 record to 147 routine dispositions, 173 trigger bindings, seven event-trigger bindings, exact dataset hashes, and a compact non-authorizing manifest. Classification completeness must never be interpreted as evidence authenticity, target verification, reviewer approval, or execution authority. |
+| `supabase/manual/202609080900_close_complete_public_routine_acl_candidate.sql` | Inert complete proposal: normalize all 147 application-routine ACLs to the classified 70 authenticated/75 service-role matrix, make 49 routines owner-only, harden all 141 `SECURITY DEFINER` paths with terminal `pg_temp`, preserve every reviewed binding, and close tenant-controlled function defaults. It must retain a separately reviewed hosted-`supabase_admin` trust-boundary decision and exact rollback/lock behavior before any enabling change. |
+| `scripts/generate-public-routine-acl-rollback-rehearsal.mjs` and `scripts/run-public-routine-acl-rollback-rehearsal.mjs` | Generate and run an exact-candidate, rollback-only derivative for Chananya staging. Both normal and injected-failure modes remain non-authorizing; their scoped ACL-catalog equality does not prove whole-database or external-side-effect atomicity. |
 | `scripts/generate-migration-ledger-repair-sql.mjs` | Generate an inert repair program whose blocked write path initializes/reconciles migration-ledger rows and records a durable repair receipt. This changes migration history, not application schema replay. It must not be treated as an ordinary application migration. |
+
+The current complete candidate SHA-256 is
+`2f374ca556a1f98f46ec179b2e8143d56c7f900d7d1812e2dc7f5e23439e4acf`.
+It uses type-only canonical signatures for named arguments and one exact,
+C-sorted 91-relation `SHARE ... NOWAIT` statement before any repeatable-read
+snapshot. Those controls remain proposals until the exact-head review and
+hosted rollback-only evidence gates pass.
 
 The generator accepts positional tenant-config and ACL-phase arguments, not
 `--manifest`. It currently **successfully generates blocked SQL**; the refusal
 occurs when that SQL executes. A fabricated missing-manifest CLI test does not
 test this guard. Tests remove blockers only in disposable fixture copies.
 
+The live Chananya `postgres` role is not a superuser and a direct read-only
+privilege check reports no `MAINTAIN`, `UPDATE`, `DELETE`, or `TRUNCATE` on
+`pg_proc`, `pg_trigger`, `pg_event_trigger`, `pg_attribute`, or
+`pg_constraint`. A local superuser harness can therefore hide an impossible
+`LOCK TABLE pg_catalog.*` plan. Any candidate or ledger tool that depends on
+those locks remains non-executable until it is redesigned and rehearsed under a
+hosted-like non-super role.
+
 ## Reviewer checklist
 
 - [ ] Record reviewed source SHA, reviewer identity, date, scope and verdict.
   Author-account AI commentary is not an independent approving review.
-- [ ] Review all three sources above: exact signatures/owners, inherited and
+- [ ] Review all sources above: exact signatures/owners, inherited and
   effective grants, target identity, ledger invariants, unconditional blockers,
   transaction failure paths, receipt validation and post-commit proof.
 - [ ] Check exact-head source contracts and native PostgreSQL 17 observer,
@@ -46,10 +72,12 @@ test this guard. Tests remove blockers only in disposable fixture copies.
   security mode, local `search_path`, owner role context, handler-schema and
   all-schema trust state, direct language catalog/ACL, and temporary/dynamic
   path flags.
-- [ ] Bind the reviewed complete manifest in a later commit; repeat independent
-  review and exact-head CI. Current subset-verifier success is not authorization.
+- [ ] Review the bound complete manifest from the exact commit; repeat
+  independent review and exact-head CI after any changed byte. Current
+  complete-classification verifier success is not authorization.
 - [ ] Establish the runbook's tenant-specific prerequisites before any future
-  enabled ledger recovery. Reconcile Chananya and Jitarsa independently. Do not
+  enabled ledger recovery. Reconcile Chananya and Jitarsa independently. The
+  current complete-classification verifier remains non-authorizing. Do not
   invent receipt JSON: only the validated committed receipt/proof protocol counts.
 - [ ] Obtain security and operations acceptance with protected evidence links.
   Promote ACL changes only in a later migration-native change; never copy a psql
@@ -112,9 +140,10 @@ CLINICAL_OS_SOURCE_COMMIT="$(git rev-parse HEAD)" \
   > "$CNYOS_EVIDENCE_DIR/verification-only.sql"
 ```
 
-The current result is a known-subset, non-authorizing diagnostic. Live execution
-of a complete-manifest verifier must wait for the later reviewed implementation
-specified in the runbook. Do not set authorization GUCs to bypass a refusal.
+The current result is a complete-classification, non-authorizing diagnostic. It
+may be run read-only only under the exact-source and target controls in the
+runbook; it does not approve ledger repair or deployment. Do not set
+authorization GUCs or edit generated SQL to bypass a refusal.
 
 ## Artifact audit
 

@@ -2,6 +2,11 @@
 
 Status: harness present; execution evidence pending. This runbook does not authorize a Production target and does not mark the commercial release gate as passed.
 
+The public-routine remediation also requires the
+[Chananya staging ACL maintenance protocol](security/CHANANYA_STAGING_ACL_MAINTENANCE_PROTOCOL.md).
+That protocol is non-authorizing and keeps PR #36 draft, production untouched,
+and the hosted `supabase_admin` exception explicitly owned.
+
 The protected workflow verifies the exact release candidate against a dedicated Netlify site and a dedicated Supabase project. It provisions synthetic identities, checks database authorization for every role, loads every workspace in a real mobile Chromium session, and runs ten synthetic Practitioner → Pharmacy → Billing journeys through full payment and Encounter closure.
 
 ## Isolation requirements
@@ -41,11 +46,13 @@ present; their need must be established without treating this draft as staging
 mutation authorization. Keep PR #36 draft and unapproved; merging is unnecessary
 and would publish `main` to Netlify.
 
-The recorded aggregate baseline is incomplete: it implies 53 ordinary
+The initial aggregate baseline was incomplete: it implied 53 ordinary
 anonymous-executable `SECURITY DEFINER` routines beyond the 17 named browser
-drifts, plus one live-only public routine. After independent design review of
-the ACL, read-only and rollback controls and exact-head CI, run the standalone
-observer first from the exact PR commit:
+drifts, plus one live-only public routine. Closed-world discovery and
+classification are now complete for the 25-dataset observation at source
+revision `831543c2d1ed36b2d8242cc82af23c83e019e7a7`. After independent design
+review of the ACL, read-only and rollback controls and exact-head CI, rerun the
+standalone observer from the exact current PR commit to detect drift:
 
 ```sh
 psql -X --quiet --no-align --tuples-only \
@@ -61,9 +68,10 @@ psql -X --quiet --no-align --tuples-only \
 The observer is read-only discovery, not a gate. It emits one post-rollback
 `CNYOS_PUBLIC_ROUTINE_INVENTORY_OBSERVED` record with `authorization=false` and
 `production_eligible=false`. Retain its complete JSON and checksum securely;
-independently classify every routine, raw/effective ACL, extension membership,
-schema privilege, connected runtime-role edge and default function ACL. Check
-the reviewed exact live manifest into a new PR #36 commit and repeat independent
+compare every routine, raw/effective ACL, extension membership, schema
+privilege, connected runtime-role edge, default function ACL, and binding with
+the checked-in reviewed disposition. Any drift requires fresh independent
+classification, a new exact live manifest commit, and repeated independent
 review and exact-head CI before running the closed-world verifier.
 
 The observer must also contain the closed-world
@@ -85,8 +93,20 @@ session-specific temporary schema, or a path without an explicit unquoted
 terminal `pg_temp` remains an explicit unsafe review condition rather than an
 inferred safe path. Quoted paths require manual parsing; the conservative flag
 must not infer safety from commas or `pg_temp` text inside a quoted schema name.
-The 20-dataset
-observation captured at
+The current complete discovery record was captured from
+`831543c2d1ed36b2d8242cc82af23c83e019e7a7` after exact-head CI, reports
+PostgreSQL 17.6 and system identifier `7666007964130682852`, and binds 25
+datasets under artifact schema `cnyos-public-routine-acl-observation/v2`. Its
+restricted raw-record SHA-256 is
+`235a2c612c78367e4c2beff0243b4bc624fd6107fbdc39b1f9c0af8ae4ace27e`, its
+observer-source SHA-256 is
+`46a226f7ab7f0d3ee4f6062c1bc223dcdbee351d7640f86592e3614cb261a777`, and its
+25-dataset composite SHA-256 is
+`9a555548d810ec5bed2dc86591651ca144941687c3fd34cf8d0828708ebb9efe`.
+Those hashes identify discovery evidence; they do not authorize a repair or
+deployment.
+
+The earlier 20-dataset observation captured at
 `21c12683e8be06d7b42f3491274d6bb5104d6825` predates these datasets and is valid
 discovery evidence only; do not bind or accept it as the complete manifest.
 The direct language record does not recursively attest a procedural-language
@@ -111,12 +131,12 @@ observer refuses before acquisition if its session already holds the key and
 emits evidence only after both a successful unlock and proof that the session
 has zero remaining holds.
 
-CI generates the current known-subset verifier for review, but that artifact is
-diagnostic only and cannot satisfy a closed-world preflight. After the observer
-manifest has been checked in and the generator has been updated to require that
-complete manifest with a distinct complete-manifest status, repeat independent
-review and exact-head CI. Only then regenerate and execute the verification-only
-artifact from that later exact reviewed PR commit:
+CI now generates a verifier bound to the complete classified 147-routine,
+141-path, 173-trigger and seven-event-trigger observation. It is read-only and
+non-authorizing: complete classification is not independent approval, managed
+platform risk acceptance, ledger authorization, or deployment authorization.
+After independent review and exact-head CI, regenerate and execute the
+verification-only artifact directly from that exact reviewed PR commit:
 
 ```sh
 CLINICAL_OS_SOURCE_COMMIT=<exact Git SHA> \
@@ -130,20 +150,24 @@ psql -X \
   '<direct Chananya staging connection>'
 ```
 
-The artifact generated by the current revision instead has status
-`CNYOS_CHANANYA_PRE_RECONCILIATION_KNOWN_ACL_SUBSET_MATCHED_NOT_AUTHORIZED`.
-It sets `authorization=false`, `live_callable_acl_inventory_complete=false`,
-`ledger_reconciliation_authorized=false`, and
-`ledger_reconciliation_blocked_pending_live_callable_acl_inventory=true`;
-therefore even a zero-exit result is diagnostic evidence, not repair
-authorization and cannot enable repair. The current Chananya strict diagnostic
-similarly uses
+The current pre-reconciliation verifier has status
+`CNYOS_CHANANYA_PUBLIC_ROUTINE_ACL_CLASSIFIED_COMPLETE_NOT_AUTHORIZED`.
+It sets `live_callable_acl_inventory_complete=true` and
+`classification_coverage_complete=true`, while keeping `authorization=false`,
+`independent_security_review_complete=false`,
+`managed_supabase_admin_exception_accepted=false`,
+`ledger_reconciliation_authorized=false`,
+`fresh_post_commit_observer_completed=false`, and
+`ledger_reconciliation_blocked_pending_independent_review_and_authorization=true`.
+Therefore even a zero-exit result is classification evidence, not repair
+authorization, and cannot enable repair. The current Chananya strict diagnostic
+uses
 `CNYOS_STAGING_STRICT_POST_REMEDIATION_SCHEMA_GUARD_MATCHED_NOT_AUTHORIZED`.
-Every current verifier mode carries those non-authorization/incomplete-inventory
-flags, `ledger_reconciled=false`, and `production_eligible=false`. A later,
-differently statused complete
-preflight can be accepted only when the exact artifact checksum/source commit and
-independently confirmed Chananya target match, the transcript contains one
+Every current verifier mode carries non-authorization flags,
+`ledger_reconciled=false`, and `production_eligible=false`; the strict mode does
+not claim a live pre-reconciliation classification. A verifier result is valid
+diagnostic evidence only when the exact artifact checksum/source commit and
+independently confirmed Chananya target match, and the transcript contains one
 `migration_ledger_verification_evidence` JSON row with
 `verification_transaction_rolled_back=true` and
 `advisory_lock_released=true`, no errors, and a zero exit. The verifier emits no
@@ -185,22 +209,23 @@ artifact before Jitarsa's independent system identity and baseline are reviewed.
 The current repair generator remains useful for reviewing the write envelope,
 and CI deliberately generates its blocked pre-reconciliation SQL for that
 purpose, but **every phase it can generate, including strict, is intentionally
-non-executable**. Each generated repair
-raises `CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED` in both the
+non-executable**. Each generated repair raises
+`CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED` in both the
 guard and the sole mutation block before any temp-table DDL, application
-healthcheck, ledger/receipt mutation or success evidence. Do not run it. Only a
-later independently reviewed commit with the complete all-routine semantic/ACL,
-extension and function-creator default-ACL manifest may remove those blockers
-and enable execution. Regenerate that later exact-head artifact
-before use:
+healthcheck, ledger/receipt mutation or success evidence. Do not run it. The
+complete classified routine, path, binding, default-ACL, observation and ledger
+baseline hashes are already bound; an enabling change still requires protected
+independent approval, the managed-platform exception decision, hosted
+quiescence/rollback evidence, and a fresh observer. Regenerate only from that
+later exact reviewed and authorized commit:
 
-Removing the two exceptions by itself is not an enabling change. The later
-commit must bind the reviewed all-routine/default-ACL digests into its gate token
-and evidence, change the current non-authorization/incomplete-inventory fields,
-and prevent catalog/role/default-ACL drift across verification and ledger commit
-with reviewed locks or an equivalent commit-time revalidation. The post-commit
-proof must recheck those authorization prerequisites, not only the ledger and
-receipt. That full change requires a new independent review and exact-head CI.
+Removing the two exceptions by itself is not an enabling change. A later commit
+must preserve the reviewed all-routine/default-ACL digests in its gate token and
+evidence, bind the protected authorization decision, and prevent
+catalog/role/default-ACL drift across verification and ledger commit with
+reviewed locks or equivalent commit-time revalidation. The post-commit proof
+must recheck those authorization prerequisites, not only the ledger and receipt.
+That full change requires a new independent review and exact-head CI.
 
 ```sh
 CLINICAL_OS_SOURCE_COMMIT=<exact Git SHA> \
@@ -213,10 +238,10 @@ Strict post-remediation is the generator default, but it carries the same two
 unconditional blockers. The explicit
 `chananya-pre-reconciliation` mode above is bound only to the exact reviewed
 Chananya staging origin, deployment and clinic, a full 40-character artifact
-source revision, the pinned 45-entry migration manifest, and the currently known
-browser-RPC subset and trigger-function snapshot. It is not enabled for repair
-until the complete live routine/ACL/default-ACL manifest is independently
-reviewed. It must not be reused for another
+source revision, the pinned 45-entry migration manifest, and the complete
+classified routine/ACL/path/trigger/default-ACL evidence bundle. It is not
+enabled for repair until that bundle and the remaining hosted controls are
+independently reviewed. It must not be reused for another
 tenant or inferred for Jitarsa. Behind the unconditional blocker, every
 write-capable mode and every read-only verifier reject anything except the exact reviewed
 45-entry manifest (count and ordered version/name/SHA-256 digest). A
@@ -324,12 +349,16 @@ Exact-head CI must run `node tests/migration-ledger-psql-e2e.mjs` with real
 `psql` and an ephemeral PostgreSQL 17 server. The supplied pre-reconciliation
 artifact is regenerated byte-for-byte and directly exercised for wrong-cluster
 and wrong-client-connection refusal. CI statically asserts both independent
-live-inventory blockers; a copy differing only at the five reviewed
+review-and-authorization blockers; a copy differing only at the five reviewed
 system-identifier occurrences reaches the guard blocker at runtime and proves a
 nonzero exit, absence of ledger/receipt mutation and advisory-lock release. A
 second native copy changes only client error controls and a terminal test-only
 abort so savepoint continuation reaches both retained blockers and still cannot
-write. The PGlite contract independently exercises both blockers. Every
+write. The generic fixture cannot truthfully reproduce the classified hosted
+147/141/173/7 pre-reconciliation baseline, so successful native verifier
+lifecycle tests use the strict-post-remediation verifier; the pre-reconciliation
+success path remains reserved for the exact hosted baseline. The PGlite contract
+independently exercises both blockers. Every
 executable success/atomic-failure fixture uses a separately generated strict
 artifact explicitly bound to the ephemeral cluster with exactly the two source
 blockers removed; no generated or retained artifact has that bypass. The native
@@ -340,16 +369,15 @@ direct `-f`, include/wrapper, disabled autocommit,
 continuation, deferred commit failure, stale UUID/XID and
 durable same-nonce replay, locked receipt metadata, and absence of success JSON on
 every failure. It does **not** claim byte-identical
-production execution against live staging. This local Codex host has no
-`psql`, PostgreSQL server, Docker or Podman, so the real-client harness is CI-only;
-the local PGlite contract remains the strongest available transactional check.
+production execution against live staging. The protected local schema-only clone
+rehearses the complete ACL candidate's rollback paths, but it is not a substitute
+for the exact hosted ledger verifier or for CI's repair-envelope harness.
 
-The transitional status is reserved for a future explicitly enabled repair:
-`CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING`
-may be accepted only with `ledger_reconciled=true`, both remediation-pending flags true,
-`production_eligible=false`, matching trigger semantic/binding digests, no SQL
-errors and zero client exit. The current blocked artifact cannot emit it. It is
-not `READY`.
+The former transitional reconciliation status is retired. The current internal
+pre-reconciliation label is
+`CNYOS_CHANANYA_CLASSIFIED_COMPLETE_LEDGER_REPAIR_NOT_AUTHORIZED`; it must not be
+accepted as success, and both source blockers make it unreachable. No current
+artifact authorizes or completes pre-reconciliation ledger mutation.
 
 The two manual ACL candidates are review artifacts implemented as
 fresh-session-only psql programs, not migration-runner inputs. They force

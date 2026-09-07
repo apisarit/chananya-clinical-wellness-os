@@ -49,11 +49,12 @@ for (const [file, sha256] of expectedOwnerControlMigrationHashes) {
 }
 
 const repairAuthorizationBlockerStatement =
-  "  raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED: complete live callable ACL and function-creator default ACL inventory review is required before any ledger repair';\n";
+  "  raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED: classified live ACL evidence is complete, but independent security review and explicit ledger repair authorization are required before any ledger repair';\n";
 
-// Generated repair artifacts are deliberately inert until the live callable
-// and default-ACL inventories are complete. Behavioral tests may execute only
-// an exact, disposable copy with both independently enforced blockers removed.
+// Generated repair artifacts are deliberately inert until independent review,
+// explicit authorization and hosted-like native rehearsal are complete.
+// Behavioral tests may execute only an exact disposable copy with both
+// independently enforced blockers removed.
 function unblockRepairForDisposableTest(artifact, label) {
   assert.equal(
     artifact.split(repairAuthorizationBlockerStatement).length - 1,
@@ -476,14 +477,14 @@ assert.match(recoverySql, /'acl_remediation_pending',false/);
 assert.doesNotMatch(recoverySql, /\bREADY\b/);
 assert.match(
   preReconciliationRecoverySql,
-  /CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING/
+  /CNYOS_CHANANYA_CLASSIFIED_COMPLETE_LEDGER_REPAIR_NOT_AUTHORIZED/
 );
 assert.match(preReconciliationRecoverySql, /'acl_remediation_pending',true/);
-assert.match(preReconciliationRecoverySql, /'ledger_reconciled',true/);
+assert.match(preReconciliationRecoverySql, /'ledger_reconciled',false/);
 assert.match(preReconciliationRecoverySql, /'production_eligible',false/);
 assert.match(
   preReconciliationRecoverySql,
-  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
 );
 for (const [label, blockedArtifact] of [
   ['strict', blockedStrictRecoverySql],
@@ -500,13 +501,13 @@ for (const [label, blockedArtifact] of [
   );
   assert.match(
     blockedWriteBlock,
-    /^do \$ledger_repair\$\ndeclare\n(?:  v_[^\n]+;\n)+begin\n  raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED:/
+    /^do \$ledger_repair\$\ndeclare\n(?:  v_[^\n]+;\n)+begin\n  raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED:/
   );
   assert.doesNotMatch(
     blockedWriteBlock.slice(
       0,
       blockedWriteBlock.indexOf(
-        'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED'
+        'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED'
       )
     ),
     /:=|\b(?:select|perform|execute|insert|update|delete|create|alter|drop)\b/i,
@@ -515,23 +516,39 @@ for (const [label, blockedArtifact] of [
 }
 assert.doesNotMatch(
   recoverySql,
-  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
 );
-assert.match(preReconciliationRecoverySql, /'live_callable_acl_inventory_required',true/);
-assert.match(preReconciliationRecoverySql, /'live_callable_acl_inventory_complete',false/);
-assert.doesNotMatch(preReconciliationRecoverySql, /'live_callable_acl_inventory_complete',true/);
+assert.match(preReconciliationRecoverySql, /'live_callable_acl_inventory_complete',true/);
+assert.match(preReconciliationRecoverySql, /'classification_coverage_complete',true/);
 assert.match(preReconciliationRecoverySql, /'authorization',false/);
 assert.doesNotMatch(preReconciliationRecoverySql, /'authorization',true/);
-assert.match(preReconciliationRecoverySql, /'live_callable_acl_known_subset_only',true/);
-assert.match(preReconciliationRecoverySql, /'known_live_callable_acl_subset_count',22/);
+assert.match(preReconciliationRecoverySql, /'hosted_concurrency_protocol_approved',false/);
 assert.match(
   preReconciliationRecoverySql,
-  /'known_live_callable_acl_subset_sha256','3d6fe1f67c0c2bc418c412b30b0c439f9f5c3c6ba2757bc212cb5f5f9c029695'/
+  /'hosted_trigger_relation_lock_plan_rehearsed',false/
+);
+assert.match(preReconciliationRecoverySql, /'fresh_post_commit_observer_required',true/);
+assert.match(preReconciliationRecoverySql, /'fresh_post_commit_observer_completed',false/);
+assert.match(
+  preReconciliationRecoverySql,
+  /'classified_public_routine_count',147/
+);
+assert.match(
+  preReconciliationRecoverySql,
+  new RegExp(
+    `'trigger_relation_lock_plan_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount}`
+  )
+);
+assert.match(
+  preReconciliationRecoverySql,
+  new RegExp(
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256
+  )
 );
 assert.doesNotMatch(preReconciliationRecoverySql, /transitional_observation_manifest_sha256/);
 assert.match(
   preReconciliationRecoverySql,
-  /'ledger_reconciliation_blocked_pending_live_callable_acl_inventory',true/
+  /'ledger_reconciliation_blocked_pending_independent_review_and_authorization',true/
 );
 assert.match(
   preReconciliationRecoverySql,
@@ -543,13 +560,14 @@ assert.match(
 );
 assert.match(
   preReconciliationRecoverySql,
-  new RegExp(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256)
+  new RegExp(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.currentRawAclMatrix.sha256)
 );
 assert.doesNotMatch(preReconciliationRecoverySql, /\bREADY\b/);
 assert.match(recoverySql, /STAGING_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT/);
 assert.match(recoverySql, /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/);
-assert.match(preReconciliationRecoverySql, /STAGING_TRANSITIONAL_TRIGGER_ACL_MISSING/);
-assert.match(preReconciliationRecoverySql, /STAGING_TRIGGER_FUNCTION_ACL_INVALID/);
+assert.match(preReconciliationRecoverySql, /CNYOS_CLASSIFIED_ACL_CURRENT_RAW_MATRIX_INVALID/);
+assert.match(preReconciliationRecoverySql, /CNYOS_CLASSIFIED_ACL_CURRENT_EFFECTIVE_MATRIX_INVALID/);
+assert.match(preReconciliationRecoverySql, /CNYOS_CLASSIFIED_ACL_DESIRED_MATRIX_INVALID/);
 assert.match(
   recoverySql,
   /execute 'drop table if exists pg_temp\.cnyos_migration_ledger_repair_evidence';/
@@ -739,7 +757,7 @@ for (const [repairPhase, repairArtifact] of [
     guard
   );
   const blocker = repairArtifact.indexOf(
-    'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED',
+    'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED',
     guard
   );
   const nonceCheck = repairArtifact.indexOf(
@@ -748,7 +766,7 @@ for (const [repairPhase, repairArtifact] of [
   );
   const writeBlock = repairArtifact.indexOf('do $ledger_repair$', guard);
   const mutationBlocker = repairArtifact.indexOf(
-    'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED',
+    'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED',
     writeBlock
   );
   const firstRepairDdl = repairArtifact.indexOf(
@@ -1158,8 +1176,9 @@ await db.exec(`
 `);
 
 const applyStrictTriggerAclFixture = async () => {
-  const revokes = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory
-    .map(([procedureSignature]) =>
+  const revokes = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+    .triggerHandlerSignatures
+    .map(procedureSignature =>
       `revoke all on function ${procedureSignature} from public,anon,authenticated,service_role;`)
     .join('\n');
   await db.exec(`${revokes}\nalter function public.set_updated_at() set search_path=pg_catalog,public;`);
@@ -2413,183 +2432,40 @@ for (const drift of [
 }
 console.log('Full-schema verification passed: exact 45-migration fixture, unchanged state, and RLS/ACL drift denied without a success notice');
 
-const transitionGrantSql = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
-  .map(([grantee, procedureSignature]) =>
-    `grant execute on function ${procedureSignature} to ${grantee};`)
-  .join('\n');
-const transitionRevokeSql = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
-  .map(([grantee, procedureSignature]) =>
-    `revoke execute on function ${procedureSignature} from ${grantee};`)
-  .join('\n');
-const triggerTransitionGrantSql = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples
-  .map(([grantee, procedureSignature]) =>
-    `grant execute on function ${procedureSignature} to ${grantee};`)
-  .join('\n');
-await db.exec(`
-  alter function public.set_updated_at() reset search_path;
-  ${triggerTransitionGrantSql}
-  ${transitionGrantSql}
-  grant execute on function ${clinicalTreatmentSessionProcedure} to public
-`);
-
-// The transitional state is intentionally rejected by the default strict
-// verifier, but accepted by the explicitly selected Chananya-only preflight.
-verificationNotices.length = 0;
-await assert.rejects(
-  db.exec(verificationSql, verificationOptions),
-  /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/
+// The classified-complete verifier is bound to hosted Chananya catalog and
+// role facts. A local superuser fixture must not be accepted as a native live
+// rehearsal, and the generated verifier must not attempt unsupported system-
+// catalog SHARE locks to manufacture serialization.
+assert.match(
+  productionPreReconciliationVerificationSql,
+  /CNYOS_CLASSIFIED_ACL_HOSTED_NON_SUPER_PROFILE_REQUIRED/
 );
-await db.exec('rollback;');
-assert.equal(verificationNotices.length, 0);
-
-const preReconciliationNotices = [];
-const preReconciliationOptions = {
-  onNotice: notice => preReconciliationNotices.push(notice.message)
-};
-const beforePreReconciliationVerification = await verificationSnapshot();
-await db.exec(preReconciliationVerificationSql, preReconciliationOptions);
-assert.deepEqual(
-  await verificationSnapshot(),
-  beforePreReconciliationVerification,
-  'the known 22-tuple subset plus repository-derived debt preflight must remain read-only'
+assert.doesNotMatch(
+  productionPreReconciliationVerificationSql,
+  /lock table pg_catalog\./i
 );
 assert.equal(
-  preReconciliationNotices.length,
-  0,
-  'pre-reconciliation verification must not emit success inside its transaction'
+  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount,
+  91
+);
+assert.match(
+  productionPreReconciliationVerificationSql,
+  /"hosted_concurrency_protocol_approved":false/
+);
+assert.match(
+  productionPreReconciliationVerificationSql,
+  /"fresh_post_commit_observer_required":true/
+);
+assert.match(
+  productionPreReconciliationVerificationSql,
+  /CNYOS_CLASSIFIED_ACL_CURRENT_RAW_MATRIX_INVALID/
+);
+assert.match(
+  productionPreReconciliationVerificationSql,
+  /CNYOS_CLASSIFIED_ACL_SECURITY_DEFINER_PATH_OR_DEFINITION_INVALID/
 );
 
-async function assertPreReconciliationGuard({ setup, expected, repair, assertSetup }) {
-  preReconciliationNotices.length = 0;
-  await db.exec(setup);
-  if (assertSetup) await assertSetup();
-  await assert.rejects(
-    db.exec(preReconciliationVerificationSql, preReconciliationOptions),
-    expected
-  );
-  await db.exec('rollback;');
-  assert.equal(preReconciliationNotices.length, 0);
-  await db.exec(repair);
-}
-
-await assertPreReconciliationGuard({
-  setup: 'revoke execute on function public.assign_audit_clinic() from public',
-  expected: /STAGING_TRANSITIONAL_TRIGGER_ACL_MISSING/,
-  repair: 'grant execute on function public.assign_audit_clinic() to public'
-});
-await assertPreReconciliationGuard({
-  setup: 'grant execute on function public.reject_append_only_mutation() to anon',
-  expected: /STAGING_TRIGGER_FUNCTION_ACL_INVALID/,
-  repair: 'revoke execute on function public.reject_append_only_mutation() from anon'
-});
-await assertPreReconciliationGuard({
-  setup: 'alter function public.set_updated_at() set search_path=public',
-  expected: /STAGING_TRIGGER_FUNCTION_INVENTORY_OR_STATE_INVALID/,
-  repair: 'alter function public.set_updated_at() reset search_path'
-});
-
-// 21 of 22 transitional tuples is not an accepted approximation.
-await assertPreReconciliationGuard({
-  setup: 'revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon',
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
-  repair: 'grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon'
-});
-
-// Canonical authenticated grants remain mandatory during the transition.
-await assertPreReconciliationGuard({
-  setup: 'revoke execute on function public.sign_clinical_record_complete(uuid,text,text,text) from authenticated',
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
-  repair: 'grant execute on function public.sign_clinical_record_complete(uuid,text,text,text) to authenticated'
-});
-
-// A 23rd non-owner ACL tuple, whether PUBLIC or another role, is rejected.
-await assertPreReconciliationGuard({
-  setup: 'grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to public',
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_INVALID/,
-  repair: 'revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from public'
-});
-await assertPreReconciliationGuard({
-  setup: `
-    create role pre_reconciliation_rogue_executor;
-    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-      to pre_reconciliation_rogue_executor
-  `,
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_INVALID/,
-  repair: `
-    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-      from pre_reconciliation_rogue_executor;
-    drop role pre_reconciliation_rogue_executor
-  `
-});
-
-await assertPreReconciliationGuard({
-  setup: `grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-    to anon with grant option`,
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
-  repair: `revoke grant option for execute on function
-    public.book_clinic_appointment(uuid,uuid,text,text,text) from anon`
-});
-
-await assertPreReconciliationGuard({
-  setup: `
-    create role pre_reconciliation_delegated_grantor;
-    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-      to pre_reconciliation_delegated_grantor with grant option;
-    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon;
-    set role pre_reconciliation_delegated_grantor;
-    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon;
-    reset role
-  `,
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_(?:MISSING|INVALID)/,
-  repair: `
-    set role pre_reconciliation_delegated_grantor;
-    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon;
-    reset role;
-    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-      from pre_reconciliation_delegated_grantor cascade;
-    drop role pre_reconciliation_delegated_grantor;
-    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon
-  `
-});
-
-await assertPreReconciliationGuard({
-  setup: `
-    create role pre_reconciliation_inherited_executor;
-    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-      to pre_reconciliation_inherited_executor;
-    grant pre_reconciliation_inherited_executor to anon;
-    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) from anon
-  `,
-  expected: /STAGING_SUBSCRIPTION_BROWSER_RPC_ACL_MISSING/,
-  assertSetup: async () => {
-    assert.equal((await db.query(`
-      select has_function_privilege(
-        'anon',
-        'public.book_clinic_appointment(uuid,uuid,text,text,text)',
-        'EXECUTE'
-      ) inherited_execute
-    `)).rows[0].inherited_execute, true);
-    assert.equal((await db.query(`
-      select exists (
-        select 1
-        from pg_proc p
-        cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
-        join pg_roles grantee on grantee.oid=acl.grantee
-        where p.oid=to_regprocedure(
-          'public.book_clinic_appointment(uuid,uuid,text,text,text)'
-        ) and grantee.rolname='anon' and acl.grantor=p.proowner
-      ) direct_owner_grant
-    `)).rows[0].direct_owner_grant, false);
-  },
-  repair: `
-    revoke pre_reconciliation_inherited_executor from anon;
-    revoke execute on function public.book_clinic_appointment(uuid,uuid,text,text,text)
-      from pre_reconciliation_inherited_executor;
-    drop role pre_reconciliation_inherited_executor;
-    grant execute on function public.book_clinic_appointment(uuid,uuid,text,text,text) to anon
-  `
-});
-
+await db.exec(`grant execute on function ${clinicalTreatmentSessionProcedure} to public`);
 assert.deepEqual(await clinicalTreatmentSessionDirectAcl(), [
   { grantee: 'PUBLIC', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true },
   { grantee: 'authenticated', privilege_type: 'EXECUTE', is_grantable: false, owner_granted: true }
@@ -2600,9 +2476,9 @@ assert.deepEqual(await clinicalTreatmentSessionRuntimeAcl(), [
   { runtime_role: 'service_role', can_execute: true }
 ]);
 
-// The exact repository-derived debt is accepted by the read-only transitional
-// verifier, but the write-capable artifact remains blocked until an exact live
-// callable-ACL inventory has been independently classified.
+// Classification is complete, but the write-capable artifact remains blocked
+// until independent review, explicit authorization and hosted-like native
+// rehearsal have all completed.
 const blockedPreReconciliationRepair = materializePsqlRepairArtifactForPGlite(
   preReconciliationRecoverySql,
   nextRepairTestNonce()
@@ -2613,17 +2489,16 @@ await db.exec(blockedPreReconciliationRepair.beforeTransactionSql);
 await db.exec(blockedPreReconciliationRepair.transactionPrefix);
 await assert.rejects(
   db.exec(blockedPreReconciliationRepair.guardStatement),
-  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
 );
 await db.exec('rollback;');
 assert.deepEqual(
   await verificationSnapshot(),
   beforeBlockedPreReconciliationRepair,
-  'the live callable-ACL inventory blocker must fire before any durable repair mutation'
+  'the independent-review blocker must fire before any durable repair mutation'
 );
 
 await applyStrictTriggerAclFixture();
-await db.exec(transitionRevokeSql);
 verificationNotices.length = 0;
 await assert.rejects(
   db.exec(verificationSql, verificationOptions),
@@ -2841,7 +2716,7 @@ async function assertRepairWriteRejectedBeforeMutation({ expected, message }) {
     db.exec(materialized.guardStatement, {
       onNotice: notice => notices.push(notice.message)
     }),
-    /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+    /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
   );
   await db.exec('rollback to savepoint recover_pre_reconciliation_guard;');
   await db.exec('release savepoint recover_pre_reconciliation_guard;');
@@ -2851,7 +2726,7 @@ async function assertRepairWriteRejectedBeforeMutation({ expected, message }) {
     db.exec(materialized.writeStatement, {
       onNotice: notice => notices.push(notice.message)
     }),
-    /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+    /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
   );
   await db.exec('rollback to savepoint recover_pre_reconciliation_repair;');
   await db.exec('release savepoint recover_pre_reconciliation_repair;');
@@ -3438,7 +3313,6 @@ assert.equal(
 );
 
 await applyStrictTriggerAclFixture();
-await db.exec(transitionRevokeSql);
 verificationNotices.length = 0;
 await db.exec(verificationSql, verificationOptions);
 assert.equal(
@@ -3492,7 +3366,6 @@ assert.ok(
 const triggerBindingsBeforeBrowserClosure = (await db.query(
   'select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid'
 )).rows;
-await db.exec(transitionRevokeSql);
 assert.deepEqual(
   (await db.query('select oid,tgfoid,tgenabled from pg_trigger where not tgisinternal order by oid')).rows,
   triggerBindingsBeforeBrowserClosure

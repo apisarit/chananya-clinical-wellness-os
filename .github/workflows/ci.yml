@@ -69,6 +69,19 @@ jobs:
       - name: Exercise inert ACL candidates with PostgreSQL 17 psql
         run: node tests/acl-candidate-psql-e2e.mjs
 
+      - name: Exercise complete inert ACL remediation with PostgreSQL 17 psql
+        env:
+          CNYOS_PG17_DISPOSABLE_ACK: I_ACKNOWLEDGE_DISPOSABLE_LOOPBACK_POSTGRESQL_17
+          CNYOS_PGHOST: 127.0.0.1
+          CNYOS_PGPORT: 5432
+          CNYOS_PGUSER: postgres
+        run: node tests/public-routine-acl-complete-remediation-psql-e2e.mjs
+
+      - name: Exercise ACL rollback rehearsal controls with PostgreSQL 17 psql
+        env:
+          CNYOS_PG17_DISPOSABLE_ACK: I_ACKNOWLEDGE_DISPOSABLE_LOOPBACK_POSTGRESQL_17
+        run: node tests/public-routine-acl-rollback-rehearsal-psql-e2e.mjs
+
       - name: Exercise migration ledger verifier with PostgreSQL 17 psql
         run: node tests/migration-ledger-verifier-psql-e2e.mjs
 

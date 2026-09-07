@@ -5,17 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST,
-  CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST,
   MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION,
   MIGRATION_LEDGER_ACL_PHASE_STRICT,
+  REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   buildMigrationLedgerRepairSql,
   loadMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 import {
   buildMigrationLedgerVerificationSql,
-  preReconciliationVerificationStatus
+  strictVerificationStatus
 } from '../scripts/generate-migration-ledger-verification-sql.mjs';
 import { buildTenantBootstrapSql } from '../scripts/generate-tenant-bootstrap-sql.mjs';
 
@@ -34,7 +33,7 @@ const databaseName = 'postgres';
 const baselineDatabase = 'cnyos_psql_e2e_baseline';
 const clientImage = 'postgres:17';
 const preReconciliationRepairSuccessStatus =
-  'CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING';
+  'CNYOS_CHANANYA_CLASSIFIED_COMPLETE_LEDGER_REPAIR_NOT_AUTHORIZED';
 const successStatus = 'CNYOS_STAGING_MIGRATION_LEDGER_RECONCILED';
 const repairSuccessStatuses = [successStatus, preReconciliationRepairSuccessStatus];
 const adminId = '33333333-3333-4333-a333-333333333333';
@@ -107,7 +106,7 @@ function replaceExact(source, needle, replacement, expectedCount, label) {
 }
 
 const repairAuthorizationBlockerStatement =
-  "  raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED: complete live callable ACL and function-creator default ACL inventory review is required before any ledger repair';\n";
+  "  raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED: classified live ACL evidence is complete, but independent security review and explicit ledger repair authorization are required before any ledger repair';\n";
 
 function unblockRepairForDisposableTest(artifact, label) {
   return replaceExact(
@@ -115,7 +114,7 @@ function unblockRepairForDisposableTest(artifact, label) {
     repairAuthorizationBlockerStatement,
     '',
     2,
-    `${label} exact live-inventory blockers`
+    `${label} exact independent-review/authorization blockers`
   );
 }
 
@@ -153,7 +152,7 @@ function assertNoRepairSuccess(result, label) {
 function assertNoVerificationSuccess(result, label) {
   assert.doesNotMatch(
     result.output,
-    new RegExp(preReconciliationVerificationStatus),
+    new RegExp(strictVerificationStatus),
     `${label} emitted verification success status`
   );
   assert.doesNotMatch(
@@ -163,7 +162,7 @@ function assertNoVerificationSuccess(result, label) {
   );
   assert.equal(
     jsonRows(result).some(row =>
-      row.status === preReconciliationVerificationStatus ||
+      row.status === strictVerificationStatus ||
       row.verification_transaction_rolled_back === true ||
       row.advisory_lock_released === true),
     false,
@@ -192,17 +191,17 @@ function oneJsonRow(result, label) {
 function oneVerificationJsonRow(result, label) {
   const parsedRows = jsonRows(result);
   const rows = parsedRows.filter(row =>
-    row.status === preReconciliationVerificationStatus
+    row.status === strictVerificationStatus
   );
   assert.equal(rows.length, 1, `${label} must emit exactly one verification success object`);
   assert.equal(
-    (result.output.match(new RegExp(preReconciliationVerificationStatus, 'g')) ?? []).length,
+    (result.output.match(new RegExp(strictVerificationStatus, 'g')) ?? []).length,
     1,
     `${label} must emit the verification status exactly once`
   );
   assert.doesNotMatch(
     result.output,
-    new RegExp(`NOTICE:[^\n]*${preReconciliationVerificationStatus}`),
+    new RegExp(`NOTICE:[^\n]*${strictVerificationStatus}`),
     `${label} must not emit verification success as a NOTICE`
   );
   assert.deepEqual(
@@ -219,19 +218,19 @@ function sqlString(value) {
 
 function transitionGrantSql() {
   const tuples = [
-    ...CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples,
-    ...CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+    ...REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.triggerAclTuples,
+    ...REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.browserRpcAclTuples
   ];
   return tuples.map(([grantee, signature]) =>
     `grant execute on function ${signature} to ${grantee};`).join('\n');
 }
 
 function strictPostRemediationFixtureSql() {
-  const triggerClosure = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory
+  const triggerClosure = REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.triggerInventory
     .map(([signature]) =>
       `revoke all on function ${signature} from public,anon,authenticated,service_role;`)
     .join('\n');
-  const browserClosure = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+  const browserClosure = REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST.browserRpcAclTuples
     .map(([grantee, signature]) =>
       `revoke execute on function ${signature} from ${grantee};`)
     .join('\n');
@@ -859,7 +858,7 @@ function assertSuccessfulVerificationEvidence(
   sourceRevision,
   label
 ) {
-  assert.equal(evidence.status, preReconciliationVerificationStatus);
+  assert.equal(evidence.status, strictVerificationStatus);
   assert.equal(evidence.source_revision, sourceRevision);
   assert.equal(evidence.expected_deployment_id, config.deploymentId);
   assert.equal(evidence.expected_clinic_code, config.tenant.expectedClinicCode);
@@ -876,16 +875,29 @@ function assertSuccessfulVerificationEvidence(
   assert.equal(evidence.observed_session_user, databaseUser);
   assert.equal(evidence.observed_current_user, databaseUser);
   assert.equal(evidence.migration_count, entries.length);
-  assert.equal(evidence.acl_phase, MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION);
+  assert.equal(evidence.acl_phase, MIGRATION_LEDGER_ACL_PHASE_STRICT);
   assert.equal(evidence.verification_transaction_rolled_back, true);
   assert.equal(evidence.advisory_lock_released, true);
   assert.equal(evidence.ledger_reconciled, false);
   assert.equal(evidence.production_eligible, false);
   assert.equal(evidence.rollback_required, true);
+  assert.equal(evidence.live_callable_acl_inventory_complete, false);
+  assert.equal(evidence.classification_coverage_complete, false);
+  assert.equal(evidence.independent_security_review_complete, false);
+  assert.equal(evidence.managed_supabase_admin_exception_accepted, false);
+  assert.equal(evidence.security_definer_path_plan_approved, false);
+  assert.equal(evidence.hosted_concurrency_protocol_approved, false);
+  assert.equal(evidence.hosted_trigger_relation_lock_plan_rehearsed, false);
+  assert.equal(evidence.fresh_post_commit_observer_required, false);
+  assert.equal(evidence.fresh_post_commit_observer_completed, false);
+  assert.equal(
+    evidence.ledger_reconciliation_blocked_pending_independent_review_and_authorization,
+    true
+  );
   assert.equal(
     evidence.acl_remediation_pending,
-    true,
-    `${label} must identify the transitional ACL phase`
+    false,
+    `${label} must identify the strict post-remediation ACL phase`
   );
 }
 
@@ -925,6 +937,7 @@ insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primar
 values (${sqlString(config.tenant.expectedClinicId)}::uuid,${sqlString(adminId)}::uuid,'owner',true);
 alter function public.set_updated_at() reset search_path;
 ${transitionGrantSql()}
+${strictPostRemediationFixtureSql()}
 create schema supabase_migrations authorization postgres;
 create table supabase_migrations.schema_migrations (
   version text not null primary key,
@@ -969,19 +982,19 @@ const originalVerifier = buildMigrationLedgerVerificationSql({
   config,
   entries,
   sourceRevision,
-  aclPhase: MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION
+  aclPhase: MIGRATION_LEDGER_ACL_PHASE_STRICT
 });
 const originalVerifierPath = await writeRuntimeFile(
-  'exact-generated-pre-reconciliation-verifier.sql',
+  'exact-generated-strict-post-remediation-verifier.sql',
   originalVerifier
 );
 assert.match(originalVerifier, /^\\set ON_ERROR_STOP 1$/m);
 assert.match(
   originalVerifier,
-  /^-- Generated read-only staging schema verification \(chananya-pre-reconciliation\)\.$/m
+  /^-- Generated read-only staging schema verification \(strict-post-remediation\)\.$/m
 );
 assert.equal(
-  (originalVerifier.match(new RegExp(preReconciliationVerificationStatus, 'g')) ?? []).length,
+  (originalVerifier.match(new RegExp(strictVerificationStatus, 'g')) ?? []).length,
   1,
   'generated verifier must contain its final status exactly once'
 );
@@ -1085,24 +1098,24 @@ assert.match(
 assert.doesNotMatch(originalArtifact, new RegExp(successStatus));
 assert.match(
   originalArtifact,
-  /raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED:/
+  /raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED:/
 );
 assert.equal(
-  (originalArtifact.match(/CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/g) ?? [])
+  (originalArtifact.match(/CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/g) ?? [])
     .length,
   2,
-  'pre-reconciliation repair must retain both guard and write-body live-inventory blockers'
+  'pre-reconciliation repair must retain both guard and write-body authorization blockers'
 );
 const preReconciliationGuardIndex = originalArtifact.indexOf('do $ledger_guard$');
 const liveCallableInventoryBlockIndex = originalArtifact.indexOf(
-  "raise exception 'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED:"
+  "raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED:"
 );
 const unreachablePreReconciliationWriteIndex = originalArtifact.indexOf('do $ledger_repair$');
 assert.ok(
   preReconciliationGuardIndex >= 0 &&
   preReconciliationGuardIndex < liveCallableInventoryBlockIndex &&
   liveCallableInventoryBlockIndex < unreachablePreReconciliationWriteIndex,
-  'pre-reconciliation live callable-ACL blocker must precede the repair write body'
+  'pre-reconciliation authorization blocker must precede the repair write body'
 );
 assert.doesNotMatch(
   originalArtifact.slice(0, liveCallableInventoryBlockIndex),
@@ -1162,7 +1175,7 @@ assert.doesNotMatch(repairArtifact, new RegExp(preReconciliationRepairSuccessSta
 assert.equal(
   repairArtifact.split(repairAuthorizationBlockerStatement).length - 1,
   2,
-  'strict source repair must retain identical guard and mutation live-inventory blockers'
+  'strict source repair must retain identical guard and mutation authorization blockers'
 );
 const strictGuardIndex = repairArtifact.indexOf('do $ledger_guard$');
 const strictGuardBlockerIndex = repairArtifact.indexOf(
@@ -1424,7 +1437,7 @@ const testBoundStrictArtifactPath = await writeRuntimeFile(
 );
 assert.doesNotMatch(
   testBoundStrictArtifact,
-  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/,
+  /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/,
   'only the explicitly disposable strict behavioral copy may remove the two source blockers'
 );
 const testBoundVerifier = replaceExact(
@@ -1435,7 +1448,7 @@ const testBoundVerifier = replaceExact(
   'ephemeral verifier system identifier'
 );
 const testBoundVerifierPath = await writeRuntimeFile(
-  'test-bound-generated-pre-reconciliation-verifier.sql',
+  'test-bound-generated-strict-post-remediation-verifier.sql',
   testBoundVerifier
 );
 
@@ -1486,12 +1499,12 @@ const exactVerifierSuccessBefore = durableSnapshot();
 assert.deepEqual(
   exactVerifierSuccessBefore.ledger.rows,
   [],
-  'pre-reconciliation verifier must run before durable ledger repair'
+  'strict verifier must run before durable ledger repair'
 );
 assert.deepEqual(
   exactVerifierSuccessBefore.receipts,
   { exists: false },
-  'pre-reconciliation verifier must not require or create a repair receipt'
+  'strict verifier must not require or create a repair receipt'
 );
 const exactVerifierSuccessWrapperPath = await writeRuntimeFile(
   'test-bound-verifier-hostile-search-path.sql',
@@ -1511,16 +1524,16 @@ assert.deepEqual(
 );
 const exactVerificationEvidence = oneVerificationJsonRow(
   exactVerifierSuccess,
-  'test-bound exact generated pre-reconciliation verifier'
+  'test-bound exact generated strict verifier'
 );
 assertSuccessfulVerificationEvidence(
   exactVerificationEvidence,
   systemIdentifier,
   sourceRevision,
-  'test-bound exact generated pre-reconciliation verifier'
+  'test-bound exact generated strict verifier'
 );
 assertDurableUnchanged(
-  'successful exact generated pre-reconciliation verifier',
+  'successful exact generated strict verifier',
   exactVerifierSuccessBefore
 );
 
@@ -1579,13 +1592,13 @@ assert.deepEqual(
 );
 const lifecycleVerificationEvidence = oneVerificationJsonRow(
   lockLifecycleVerification,
-  'instrumented pre-reconciliation verifier'
+  'instrumented strict verifier'
 );
 assertSuccessfulVerificationEvidence(
   lifecycleVerificationEvidence,
   systemIdentifier,
   sourceRevision,
-  'instrumented pre-reconciliation verifier'
+  'instrumented strict verifier'
 );
 assert.equal(
   sessionAdvisoryLockCount(),
@@ -1593,7 +1606,7 @@ assert.equal(
   'successful verifier must not leave a session advisory lock behind'
 );
 assertDurableUnchanged(
-  'instrumented pre-reconciliation verifier',
+  'instrumented strict verifier',
   exactVerifierSuccessBefore
 );
 
@@ -1607,14 +1620,14 @@ const verifierStateLeakWrapperPath = await writeRuntimeFile(
 const verifierStateLeak = psql(['-f', verifierStateLeakWrapperPath]);
 assert.equal(
   jsonRows(verifierStateLeak).filter(
-    row => row.status === preReconciliationVerificationStatus
+    row => row.status === strictVerificationStatus
   ).length,
   1,
   'psql state probe run must still emit exactly one verifier evidence object'
 );
 assert.doesNotMatch(
   verifierStateLeak.output,
-  new RegExp(`NOTICE:[^\\n]*${preReconciliationVerificationStatus}`),
+  new RegExp(`NOTICE:[^\\n]*${strictVerificationStatus}`),
   'psql state probe run must not emit verifier success as a NOTICE'
 );
 assert.deepEqual(
@@ -1628,7 +1641,7 @@ assert.deepEqual(
   'verifier must close its psql conditionals and clear its client state'
 );
 assertDurableUnchanged(
-  'pre-reconciliation verifier psql state probe',
+  'strict verifier psql state probe',
   exactVerifierSuccessBefore
 );
 
@@ -1647,7 +1660,7 @@ const wrongVerifierIdentity = psql(
 );
 expectVerificationFailure(
   wrongVerifierIdentity,
-  'pre-reconciliation verifier under the wrong current_user',
+  'strict verifier under the wrong current_user',
   /CNYOS_STAGING_VERIFICATION_SERVER_IDENTITY_REFUSED/
 );
 assert.doesNotMatch(
@@ -1685,7 +1698,7 @@ const driftedVerifier = psql(
 );
 expectVerificationFailure(
   driftedVerifier,
-  'pre-reconciliation verifier with trigger-function schema drift',
+  'strict verifier with trigger-function schema drift',
   /STAGING_TRIGGER_FUNCTION_(?:INVENTORY_OR_STATE|SEMANTICS)_INVALID/
 );
 assert.doesNotMatch(
@@ -1724,8 +1737,8 @@ const blockedPreReconciliationRepair = psql(
 );
 expectFailure(
   blockedPreReconciliationRepair,
-  'pre-reconciliation repair without a complete live callable ACL inventory',
-  /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/
+  'pre-reconciliation repair without independent review and authorization',
+  /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/
 );
 assert.doesNotMatch(
   blockedPreReconciliationRepair.output,
@@ -1737,7 +1750,7 @@ assert.equal(
   'blocked pre-reconciliation repair must not leak its session advisory lock'
 );
 assertDurableUnchanged(
-  'pre-reconciliation live callable-ACL inventory refusal',
+  'pre-reconciliation independent-review/authorization refusal',
   blockedPreReconciliationRepairBefore
 );
 
@@ -1794,7 +1807,7 @@ expectFailure(
 );
 assert.equal(
   (sourceBlockerSavepointRecovery.output.match(
-    /CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED/g
+    /CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED/g
   ) ?? []).length,
   2,
   'psql savepoint recovery must encounter both independent source blockers'

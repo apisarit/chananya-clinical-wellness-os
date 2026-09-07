@@ -19,7 +19,7 @@ export const MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION =
   'chananya-pre-reconciliation';
 
 const migrationLedgerRepairAuthorizationBlocker =
-  'CNYOS_LEDGER_REPAIR_LIVE_CALLABLE_ACL_INVENTORY_REQUIRED: complete live callable ACL and function-creator default ACL inventory review is required before any ledger repair';
+  'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED: classified live ACL evidence is complete, but independent security review and explicit ledger repair authorization are required before any ledger repair';
 
 const compareCanonicalTuple = (left, right) => {
   const leftKey = left.join('\t');
@@ -27,7 +27,10 @@ const compareCanonicalTuple = (left, right) => {
   return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 };
 
-const chananyaPreReconciliationBrowserRpcAclTuples = [
+// Retained only to keep the generic strict-post-remediation schema guard
+// executable against the historical migration fixture. It is not exported or
+// presented as Chananya live evidence.
+const legacyStrictBrowserRpcAclExceptions = [
   ['anon', 'public.book_clinic_appointment(uuid,uuid,text,text,text)'],
   ['anon', 'public.cancel_clinic_appointment(uuid,text)'],
   ['anon', 'public.clinical_financial_handoffs_healthcheck()'],
@@ -56,33 +59,6 @@ const serializeBrowserRpcAclTuples = tuples => tuples
   .map(([grantee, procedureSignature]) =>
     `${grantee}\t${procedureSignature}\tEXECUTE\tfalse\towner`)
   .join('\n') + '\n';
-
-export const CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST = Object.freeze({
-  evidenceScope: 'known-live-callable-acl-subset-not-complete-inventory',
-  liveCallableAclInventoryComplete: false,
-  projectRef: 'hsmnjwxurlmsizndjlun',
-  databaseOrigin: 'https://hsmnjwxurlmsizndjlun.supabase.co',
-  deploymentId: 'chananya-clinical-staging',
-  clinicCode: 'CHANANYA-STG',
-  clinicId: '00000000-0000-4000-8000-00000000a001',
-  observedAt: '2026-09-06T15:42:14.891459Z',
-  observationSourceRevision: '79750ef1f5bb3baa82f57687276b6efb1a2d345c',
-  privilege: 'EXECUTE',
-  isGrantable: false,
-  grantor: 'function-owner',
-  tupleSerialization: '<grantee>\\t<regprocedure>\\tEXECUTE\\tfalse\\towner\\n',
-  tupleSha256: '3d6fe1f67c0c2bc418c412b30b0c439f9f5c3c6ba2757bc212cb5f5f9c029695',
-  browserRpcAclTuples: Object.freeze(
-    chananyaPreReconciliationBrowserRpcAclTuples.map(tuple => Object.freeze([...tuple]))
-  )
-});
-
-const computedChananyaPreReconciliationAclHash = createHash('sha256')
-  .update(serializeBrowserRpcAclTuples(chananyaPreReconciliationBrowserRpcAclTuples))
-  .digest('hex');
-if (computedChananyaPreReconciliationAclHash !== CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256) {
-  throw new Error('Chananya pre-reconciliation known ACL subset SHA-256 mismatch');
-}
 
 const chananyaPreReconciliationTriggerInventory = [
   ['public.apply_stock_movement()', 'postgres', 'search_path=public', true, 1],
@@ -137,7 +113,7 @@ const serializeTriggerInventory = inventory => inventory
     `${procedureSignature}\t${owner}\t${searchPath}\t${securityDefiner}\t${bindingCount}`)
   .join('\n') + '\n';
 
-export const CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST = Object.freeze({
+const legacyStrictTriggerGuardManifest = Object.freeze({
   observedAt: '2026-09-06T15:42:59.875869Z',
   inventorySha256: '4ff91cbb4fca03b8f7f2d0eaa6dc47b198ea7ce592a1d624d5b72bc273558a0d',
   aclTupleSha256: 'bd0391e6a7f6a06797fde1d9f9e90e2a475cf2679b298f86b7b8492980a39b11',
@@ -172,104 +148,395 @@ export const CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST = Object.freeze({
 
 if (createHash('sha256').update(serializeTriggerInventory(
   chananyaPreReconciliationTriggerInventory
-)).digest('hex') !== CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256) {
+)).digest('hex') !== legacyStrictTriggerGuardManifest.inventorySha256) {
   throw new Error('Chananya pre-reconciliation trigger inventory SHA-256 mismatch');
 }
 if (createHash('sha256').update(serializeBrowserRpcAclTuples(
   chananyaPreReconciliationTriggerAclTuples
-)).digest('hex') !== CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256) {
+)).digest('hex') !== legacyStrictTriggerGuardManifest.aclTupleSha256) {
   throw new Error('Chananya pre-reconciliation trigger ACL SHA-256 mismatch');
 }
+
+// Public only so disposable PostgreSQL E2E fixtures can materialize the
+// historical repository-derived strict state. This is deliberately separate
+// from the classified live Chananya manifest and is never live evidence or an
+// authorization record.
+export const REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST = Object.freeze({
+  provenance: 'repository-derived-disposable-test-fixture-not-live-evidence',
+  browserRpcAclTuples: Object.freeze(
+    legacyStrictBrowserRpcAclExceptions.map(row => Object.freeze([...row]))
+  ),
+  triggerInventory: legacyStrictTriggerGuardManifest.triggerInventory,
+  triggerAclTuples: legacyStrictTriggerGuardManifest.aclTuples
+});
 
 const reviewedMigrationManifestSha256 =
   'b21bf64a89aaa01cf757a14c74dcbd02caa5c7dfb6e43bc2215bbd70291a1e0a';
 const reviewedMigrationManifestCount = 45;
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';
 
-const chananyaPreReconciliationKnownEvidencePayload = {
-  schemaVersion: 3,
-  projectRef: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.projectRef,
-  databaseOrigin: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.databaseOrigin,
-  deploymentId: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.deploymentId,
-  clinicCode: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.clinicCode,
-  clinicId: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.clinicId,
-  browserAclObservedAt: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observedAt,
-  triggerObservedAt: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.observedAt,
-  observationSourceRevision:
-    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision,
-  browserRpcAcl: {
-    privilege: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.privilege,
-    isGrantable: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.isGrantable,
-    grantor: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.grantor,
-    tuples: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
-  },
-  triggerInventory: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory,
-  triggerAcl: {
-    privilege: 'EXECUTE',
-    isGrantable: false,
-    grantor: 'function-owner',
-    tuples: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples
-  },
-  triggerCatalogContract: {
-    serverMajor: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor,
-    serverEncoding: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding,
-    relationScope: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.relationScope,
-    allowedFunctionSchema:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.allowedFunctionSchema,
-    expectedOwnerRole: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.expectedOwnerRole
-  },
-  triggerFunctionSemantics: {
-    observedAt: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticObservedAt,
-    count: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount,
-    preReconciliationPayloadBytes:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
-        .functionSemanticPreReconciliationPayloadBytes,
-    preReconciliationSha256:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticPreReconciliationSha256,
-    strictPostRemediationPayloadBytes:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictPayloadBytes,
-    strictPostRemediationSha256:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256,
-    serialization:
-      CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticSerialization
-  },
-  migrationManifestSha256: reviewedMigrationManifestSha256,
-  triggerBindings: {
-    observedAt: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingObservedAt,
-    count: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount,
-    payloadBytes: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes,
-    sha256: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256,
-    serialization: CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSerialization
-  }
-};
-const computedChananyaPreReconciliationKnownEvidenceSha256 = createHash('sha256')
-  .update(JSON.stringify(chananyaPreReconciliationKnownEvidencePayload))
+const classifiedDispositionPath = path.join(
+  root,
+  'security',
+  'chananya-staging-public-routine-acl-disposition-831543c.json'
+);
+const classifiedDispositionBytes = fs.readFileSync(classifiedDispositionPath);
+const classifiedDispositionRawSha256 = createHash('sha256')
+  .update(classifiedDispositionBytes)
   .digest('hex');
-const reviewedChananyaPreReconciliationKnownEvidenceSha256 =
-  '2f4ec29006a5a2b3a0e3b2d7aa9018861bee5153b60887c625d6a46d2516a733';
-if (computedChananyaPreReconciliationKnownEvidenceSha256 !==
-    reviewedChananyaPreReconciliationKnownEvidenceSha256) {
+if (classifiedDispositionRawSha256 !==
+    '0f5979a9f64a9600fa3083703fcd0937487772dffdfa93370aabb6ca28e41400') {
+  throw new Error('Chananya classified disposition artifact SHA-256 mismatch');
+}
+const classifiedDisposition = JSON.parse(classifiedDispositionBytes.toString('utf8'));
+const requiredDispositionCategories = [
+  'authenticated_only',
+  'authenticated_and_service',
+  'service_only',
+  'owner_only_ordinary',
+  'owner_only_trigger',
+  'owner_only_event_trigger'
+];
+const requiredDispositionCounts = [23, 47, 28, 25, 23, 1];
+if (classifiedDisposition.artifact_schema !==
+      'cnyos-public-routine-acl-disposition/v1' ||
+    classifiedDisposition.schema_version !== 1 ||
+    classifiedDisposition.status !== 'CLASSIFIED_COMPLETE_NOT_AUTHORIZED' ||
+    classifiedDisposition.classification_complete !== true ||
+    Object.values(classifiedDisposition.authorization_flags ?? {})
+      .some(value => value !== false) ||
+    Object.keys(classifiedDisposition.routine_dispositions ?? {}).sort().join('\n') !==
+      [...requiredDispositionCategories].sort().join('\n') ||
+    requiredDispositionCategories.some((category, index) =>
+      !Array.isArray(classifiedDisposition.routine_dispositions[category]) ||
+      classifiedDisposition.routine_dispositions[category].length !==
+        requiredDispositionCounts[index])) {
+  throw new Error('Chananya classified disposition artifact contract mismatch');
+}
+const classifiedRoutineSignatures = requiredDispositionCategories.flatMap(
+  category => classifiedDisposition.routine_dispositions[category]
+);
+if (classifiedRoutineSignatures.length !== 147 ||
+    new Set(classifiedRoutineSignatures).size !== 147 ||
+    classifiedRoutineSignatures.some(signature =>
+      typeof signature !== 'string' || !signature.startsWith('public.'))) {
+  throw new Error('Chananya classified routine disposition is not an exact 147-routine set');
+}
+const dispositionSource = classifiedDisposition.source;
+if (dispositionSource.source_revision !==
+      '831543c2d1ed36b2d8242cc82af23c83e019e7a7' ||
+    dispositionSource.observer_raw_sha256 !==
+      '235a2c612c78367e4c2beff0243b4bc624fd6107fbdc39b1f9c0af8ae4ace27e' ||
+    dispositionSource.observer_source_sql_sha256 !==
+      '46a226f7ab7f0d3ee4f6062c1bc223dcdbee351d7640f86592e3614cb261a777' ||
+    dispositionSource.observation_composite_sha256 !==
+      '9a555548d810ec5bed2dc86591651ca144941687c3fd34cf8d0828708ebb9efe' ||
+    dispositionSource.system_identifier !== CHANANYA_REVIEWED_SYSTEM_IDENTIFIER ||
+    dispositionSource.project_label !== 'chananya-staging' ||
+    dispositionSource.project_ref !== 'hsmnjwxurlmsizndjlun' ||
+    classifiedDisposition.canonical_disposition_digest?.entry_count !== 327 ||
+    classifiedDisposition.canonical_disposition_digest?.payload_sha256 !==
+      'b64789650acf4dd435d7cd41e114fac6c71b35d995cf78b2ce954ad8b571d343') {
+  throw new Error('Chananya classified disposition source binding mismatch');
+}
+
+const completeAclCandidatePath = path.join(
+  root,
+  'supabase',
+  'manual',
+  '202609080900_close_complete_public_routine_acl_candidate.sql'
+);
+const completeAclCandidateSource = fs.readFileSync(completeAclCandidatePath, 'utf8');
+const completeAclCandidateSha256 = createHash('sha256')
+  .update(completeAclCandidateSource)
+  .digest('hex');
+if (completeAclCandidateSha256 !==
+    '2f374ca556a1f98f46ec179b2e8143d56c7f900d7d1812e2dc7f5e23439e4acf') {
+  throw new Error('Chananya complete ACL candidate source SHA-256 mismatch');
+}
+const reviewedPathPlanMatch = completeAclCandidateSource.match(
+  /v_reviewed_path_plan constant jsonb := \$cnyos_reviewed_path_plan\$\s*([\s\S]*?)\s*\$cnyos_reviewed_path_plan\$::jsonb;/
+);
+if (!reviewedPathPlanMatch) {
+  throw new Error('Chananya complete ACL candidate path plan is missing');
+}
+const reviewedSecurityDefinerPathPlan = JSON.parse(reviewedPathPlanMatch[1]);
+const reviewedPathPlanSha256 = createHash('sha256')
+  .update(JSON.stringify(reviewedSecurityDefinerPathPlan))
+  .digest('hex');
+if (reviewedSecurityDefinerPathPlan.length !== 141 ||
+    new Set(reviewedSecurityDefinerPathPlan.map(row => row.signature)).size !== 141 ||
+    reviewedPathPlanSha256 !==
+      'dd948f4f7f6baa535d26446aaba64aba3b7e79cfe2c4e2c63a2c83ee0fd0d2bb' ||
+    reviewedSecurityDefinerPathPlan.some(row =>
+      !classifiedRoutineSignatures.includes(row.signature) ||
+      !/^[0-9a-f]{64}$/.test(row.definition_sha256) ||
+      !['plpgsql', 'sql'].includes(row.language) ||
+      ![
+        'search_path=public',
+        'search_path=pg_catalog, public',
+        'search_path=pg_catalog'
+      ].includes(row.pre_config) ||
+      row.target_config !== (row.pre_config === 'search_path=pg_catalog'
+        ? 'search_path=pg_catalog, pg_temp'
+        : 'search_path=pg_catalog, public, pg_temp'))) {
+  throw new Error('Chananya SECURITY DEFINER path plan contract mismatch');
+}
+const triggerRelationPlanMatch = completeAclCandidateSource.match(
+  /v_trigger_relations constant text\[\] := array\[\s*([\s\S]*?)\s*\]::text\[\];/
+);
+if (!triggerRelationPlanMatch) {
+  throw new Error('Chananya complete ACL candidate trigger-relation lock plan is missing');
+}
+const reviewedTriggerRelationLockPlan = triggerRelationPlanMatch[1]
+  .split('\n')
+  .map(line => line.trim())
+  .filter(Boolean)
+  .map((line, index, lines) => {
+    const match = line.match(/^'([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)'(,?)$/);
+    if (!match || (index < lines.length - 1 ? match[2] !== ',' : match[2] !== '')) {
+      throw new Error('Chananya complete ACL candidate trigger-relation lock plan is malformed');
+    }
+    return match[1];
+  });
+const serializeTriggerRelationLockPlan = relations => relations.join('\n') + '\n';
+const reviewedTriggerRelationLockPlanPayload = serializeTriggerRelationLockPlan(
+  reviewedTriggerRelationLockPlan
+);
+const reviewedTriggerRelationLockPlanSha256 = createHash('sha256')
+  .update(reviewedTriggerRelationLockPlanPayload)
+  .digest('hex');
+if (reviewedTriggerRelationLockPlan.length !== 91 ||
+    new Set(reviewedTriggerRelationLockPlan).size !== 91 ||
+    Buffer.byteLength(reviewedTriggerRelationLockPlanPayload) !== 2400 ||
+    reviewedTriggerRelationLockPlanSha256 !==
+      '65cc5e93f3ef618e4fe77e535f908f630d4e4a5ac5a5857c7f92172b19eb3611' ||
+    !completeAclCandidateSource.includes(
+      "raise exception 'CNYOS_COMPLETE_ACL_HOSTED_CONCURRENCY_AND_FRESH_OBSERVER_NOT_APPROVED';"
+    )) {
+  throw new Error('Chananya complete ACL candidate hosted-concurrency contract mismatch');
+}
+const stableBindingGuardStart = completeAclCandidateSource.indexOf(
+  '  -- Recompute stable, OID-independent semantic digests'
+);
+const stableBindingGuardEnd = completeAclCandidateSource.indexOf(
+  '  select array_agg(signature order by signature collate "C") into v_actual',
+  stableBindingGuardStart
+);
+if (stableBindingGuardStart < 0 || stableBindingGuardEnd <= stableBindingGuardStart) {
+  throw new Error('Chananya complete ACL stable-binding guard is missing');
+}
+const classifiedStableBindingGuardSql = completeAclCandidateSource.slice(
+  stableBindingGuardStart,
+  stableBindingGuardEnd
+);
+if (createHash('sha256').update(classifiedStableBindingGuardSql).digest('hex') !==
+    '51940b5f142653d6a9f2d482244df62b816adf627005154444d56bd86a5ee53e') {
+  throw new Error('Chananya complete ACL stable-binding guard SHA-256 mismatch');
+}
+
+const triggerBindingIdentityRows = classifiedDisposition.trigger_bindings.map(row => [
+  row.relation_schema,
+  row.relation_name,
+  row.trigger_name,
+  row.function_signature
+]);
+const eventBindingIdentityRows = classifiedDisposition.event_trigger_bindings.map(row => [
+  row.event_trigger_name,
+  row.event,
+  row.function_signature
+]);
+if (triggerBindingIdentityRows.length !== 173 || eventBindingIdentityRows.length !== 7 ||
+    dispositionSource.binding_datasets.trigger_bindings_all_non_internal.row_count !== 173 ||
+    dispositionSource.binding_datasets.trigger_bindings_all_non_internal.payload_sha256 !==
+      '2f5ffa09ed5a895733d4ba6418ae0a69ab190d3a6718bde73e17dc73118fd15d' ||
+    dispositionSource.binding_datasets.event_trigger_bindings_all.row_count !== 7 ||
+    dispositionSource.binding_datasets.event_trigger_bindings_all.payload_sha256 !==
+      'b0ba455cb69e75488c4c50229a387e4859c201581921c96737a313961ba6c799') {
+  throw new Error('Chananya classified binding disposition contract mismatch');
+}
+const dispositionTriggerRelations = [...new Set(
+  classifiedDisposition.trigger_bindings.map(
+    row => `${row.relation_schema}.${row.relation_name}`
+  )
+)].sort();
+if (JSON.stringify(reviewedTriggerRelationLockPlan) !==
+    JSON.stringify(dispositionTriggerRelations)) {
   throw new Error(
-    `Chananya pre-reconciliation known evidence bundle SHA-256 mismatch: ${computedChananyaPreReconciliationKnownEvidenceSha256}`
+    'Chananya complete ACL candidate trigger-relation lock plan does not match disposition'
   );
 }
 
-// This reviewed bundle authenticates the evidence that was captured. It is
-// not a complete live public-function raw/effective ACL inventory and cannot
-// authorize reconciliation or repair.
-export const CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE = Object.freeze({
-  evidenceScope: 'reviewed-evidence-bundle-not-complete-live-callable-acl-inventory',
+const freezeStringArray = values => Object.freeze([...values]);
+const routineDispositions = Object.freeze(Object.fromEntries(
+  requiredDispositionCategories.map(category => [
+    category,
+    freezeStringArray(classifiedDisposition.routine_dispositions[category])
+  ])
+));
+export const CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST = Object.freeze({
+  evidenceScope: 'classified-complete-live-public-routine-inventory-not-authorized',
+  liveCallableAclInventoryComplete: true,
+  classificationCoverageComplete: true,
   authorization: false,
-  liveCallableAclInventoryComplete: false,
-  ...chananyaPreReconciliationKnownEvidencePayload,
-  sha256: reviewedChananyaPreReconciliationKnownEvidenceSha256
+  independentSecurityReviewComplete: false,
+  ledgerReconciliationAuthorized: false,
+  hostedConcurrencyProtocolApproved: false,
+  hostedTriggerRelationLockPlanRehearsed: false,
+  freshPostCommitObserverRequired: true,
+  freshPostCommitObserverCompleted: false,
+  projectRef: 'hsmnjwxurlmsizndjlun',
+  databaseOrigin: 'https://hsmnjwxurlmsizndjlun.supabase.co',
+  deploymentId: 'chananya-clinical-staging',
+  clinicCode: 'CHANANYA-STG',
+  clinicId: '00000000-0000-4000-8000-00000000a001',
+  observationSourceRevision: dispositionSource.source_revision,
+  observerRawSha256: dispositionSource.observer_raw_sha256,
+  observerSourceSqlSha256: dispositionSource.observer_source_sql_sha256,
+  observationCompositeSha256: dispositionSource.observation_composite_sha256,
+  dispositionArtifactSha256: classifiedDispositionRawSha256,
+  dispositionPayloadSha256:
+    classifiedDisposition.canonical_disposition_digest.payload_sha256,
+  completeAclCandidateSha256,
+  ledgerTargetBaseline: Object.freeze({
+    artifactSchema: 'cnyos-ledger-target-baseline/v1',
+    externalEvidenceSha256:
+      'e2bacfb9fd36612a3a0ba86dc8260d6421952d867c412b6bd9db1afd91ff1418',
+    chananyaObservedMigrationCount: 32,
+    authorization: false,
+    jitarsaAuthorization: false
+  }),
+  routineCount: 147,
+  routineDispositions,
+  desiredEffectiveExecute: Object.freeze({
+    ...classifiedDisposition.derived_expected_access
+  }),
+  currentRawAclMatrix: Object.freeze({
+    rowCount: 456,
+    payloadBytes: 57491,
+    sha256: '693b6b931332fb6c5e5fdb92b93115ee15a219734a0334fbce3823f746fda5b0'
+  }),
+  currentEffectiveAccessMatrix: Object.freeze({
+    rowCount: 588,
+    payloadBytes: 55755,
+    sha256: '73ff6f9c56fb3dc302ea647b1d2c36b8c7451445d73c1463fb25dc7bd9b9ed80'
+  }),
+  desiredEffectiveAccessMatrix: Object.freeze({
+    rowCount: 588,
+    payloadBytes: 43292,
+    sha256: '64fbbc346858d040cc5b9a187af5da544cd460392a27ea8e2dc418cb7ede9bec'
+  }),
+  securityDefinerPathPlan: Object.freeze({
+    count: 141,
+    sha256: reviewedPathPlanSha256,
+    pathDistribution: Object.freeze({
+      'search_path=public': 73,
+      'search_path=pg_catalog, public': 65,
+      'search_path=pg_catalog': 3
+    }),
+    rows: Object.freeze(reviewedSecurityDefinerPathPlan.map(row => Object.freeze({ ...row })))
+  }),
+  postToggleDefaultAclBaseline: Object.freeze({
+    artifactSchema: 'cnyos-post-toggle-default-acl-observation/v1',
+    externalEvidenceSha256:
+      '1be7efa81a459ad950b1dba8602eb6e0d76c4f6f4185ba616c91fa52e3fe144a',
+    capturedAt: '2026-09-07T21:12:57.689224Z',
+    creatorRoles: Object.freeze(['pg_database_owner', 'postgres', 'supabase_admin']),
+    globalFunctionRows: 0,
+    publicSchemaFunctionRows: 2,
+    expandedTupleCount: 5,
+    managedSupabaseAdminExceptionAccepted: false,
+    hostedPostgresSuperuser: false,
+    protectedCatalogShareLockSupported: false
+  })
 });
 
-// This debt is derived from the ordered repository migration, not from the
-// independently captured 22-tuple Chananya staging observation above. The
-// CREATE FUNCTION default leaves PUBLIC EXECUTE in place and the migration
-// adds a direct authenticated grant. Keep the provenance separate so a
-// repository inference can never be misreported as a live staging fact.
+export const CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST = Object.freeze({
+  serverMajor: 17,
+  serverEncoding: 'UTF8',
+  allowedFunctionSchema: 'public',
+  expectedOwnerRole: 'postgres',
+  triggerHandlerCount: routineDispositions.owner_only_trigger.length,
+  eventTriggerHandlerCount: routineDispositions.owner_only_event_trigger.length,
+  triggerBindingCount: 173,
+  triggerBindingDatasetSha256:
+    dispositionSource.binding_datasets.trigger_bindings_all_non_internal.payload_sha256,
+  triggerBindingIdentityPayloadBytes: 20227,
+  triggerBindingIdentitySha256:
+    'e4a98936ece8103d851ea4d7708c73686c74713afd6ea8baad2885db4f831435',
+  triggerBindingStablePayloadBytes: 198158,
+  triggerBindingStableSha256:
+    'aa777a86a6ade0616080eb5b41680f2d4dadc0e4a686acc71459d80bd380fea6',
+  triggerRelationLockPlanCount: reviewedTriggerRelationLockPlan.length,
+  triggerRelationLockPlanPayloadBytes:
+    Buffer.byteLength(reviewedTriggerRelationLockPlanPayload),
+  triggerRelationLockPlanSha256: reviewedTriggerRelationLockPlanSha256,
+  eventTriggerBindingCount: 7,
+  eventTriggerBindingDatasetSha256:
+    dispositionSource.binding_datasets.event_trigger_bindings_all.payload_sha256,
+  eventTriggerBindingIdentityPayloadBytes: 458,
+  eventTriggerBindingIdentitySha256:
+    'c246db450dba7fe6d7f8901d935c5a04e3558fac9be11a2670c5044d5546d04f',
+  eventTriggerBindingStablePayloadBytes: 5122,
+  eventTriggerBindingStableSha256:
+    'cbabdf241e6d6634759fd20c94ef98c4f939458397532671c1e38265b51ddddf',
+  triggerHandlerSignatures: routineDispositions.owner_only_trigger,
+  eventTriggerHandlerSignatures: routineDispositions.owner_only_event_trigger
+});
+
+const chananyaPreReconciliationKnownEvidencePayload = {
+  schemaVersion: 4,
+  evidenceScope: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.evidenceScope,
+  projectRef: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.projectRef,
+  systemIdentifier: CHANANYA_REVIEWED_SYSTEM_IDENTIFIER,
+  observationSourceRevision:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision,
+  observerRawSha256: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerRawSha256,
+  observerSourceSqlSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerSourceSqlSha256,
+  observationCompositeSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationCompositeSha256,
+  dispositionArtifactSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionArtifactSha256,
+  dispositionPayloadSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionPayloadSha256,
+  completeAclCandidateSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.completeAclCandidateSha256,
+  ledgerTargetBaselineEvidenceSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.ledgerTargetBaseline
+      .externalEvidenceSha256,
+  routineCount: CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.routineCount,
+  pathPlanSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.sha256,
+  postToggleDefaultAclEvidenceSha256:
+    CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.postToggleDefaultAclBaseline
+      .externalEvidenceSha256,
+  triggerBindingDatasetSha256:
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256,
+  eventTriggerBindingDatasetSha256:
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingDatasetSha256,
+  triggerRelationLockPlanSha256:
+    CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256,
+  migrationManifestSha256: reviewedMigrationManifestSha256
+};
+export const CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE = Object.freeze({
+  ...chananyaPreReconciliationKnownEvidencePayload,
+  authorization: false,
+  independentSecurityReviewComplete: false,
+  hostedConcurrencyProtocolApproved: false,
+  hostedTriggerRelationLockPlanRehearsed: false,
+  freshPostCommitObserverRequired: true,
+  freshPostCommitObserverCompleted: false,
+  liveCallableAclInventoryComplete: true,
+  sha256: createHash('sha256')
+    .update(JSON.stringify(chananyaPreReconciliationKnownEvidencePayload))
+    .digest('hex')
+});
+
+// This debt is derived from the ordered repository migration. The CREATE
+// FUNCTION default leaves PUBLIC EXECUTE in place and the migration adds a
+// direct authenticated grant. Keep the provenance separate so a repository
+// inference can never be misreported as a live staging fact.
 const createClinicalTreatmentSessionSignature =
   'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)';
 const repositoryDerivedClinicalTreatmentSessionAclPayload = {
@@ -1392,7 +1659,7 @@ function buildTriggerSemanticAndBindingGuardSql({
     relationNamespaceAlias: 'relation_namespace',
     functionNamespaceAlias: 'function_namespace'
   });
-  const manifest = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST;
+  const manifest = legacyStrictTriggerGuardManifest;
 
   return `  if current_setting('server_version_num')::integer / 10000 <>
       ${manifest.serverMajor} then
@@ -1576,6 +1843,546 @@ function buildTriggerSemanticAndBindingGuardSql({
 `;
 }
 
+function buildClassifiedCompleteAclGuardSql() {
+  const manifest = CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST;
+  const triggerManifest = CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST;
+  const desiredAuthenticated = [
+    ...manifest.routineDispositions.authenticated_only,
+    ...manifest.routineDispositions.authenticated_and_service
+  ];
+  const desiredService = [
+    ...manifest.routineDispositions.authenticated_and_service,
+    ...manifest.routineDispositions.service_only
+  ];
+
+  return `  if current_setting('server_version_num')::integer / 10000 <>
+      ${triggerManifest.serverMajor} then
+    raise exception 'CNYOS_CLASSIFIED_ACL_SERVER_MAJOR_INVALID: %',
+      current_setting('server_version_num');
+  end if;
+  if current_setting('server_encoding') <> ${quote(triggerManifest.serverEncoding)} then
+    raise exception 'CNYOS_CLASSIFIED_ACL_SERVER_ENCODING_INVALID: %',
+      current_setting('server_encoding');
+  end if;
+
+  select array_agg(signature order by signature collate "C") into v_acl_actual
+  from (
+    select namespace.nspname || '.' || procedure.proname ||
+      pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      ) signature
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace on namespace.oid=procedure.pronamespace
+    where namespace.nspname='public'
+  ) actual;
+  select array_agg(signature order by signature collate "C") into v_acl_expected
+  from unnest(v_acl_all_routines) item(signature);
+  if cardinality(v_acl_all_routines)<>147
+     or (select count(distinct signature) from unnest(v_acl_all_routines) item(signature))<>147
+     or v_acl_actual is distinct from v_acl_expected then
+    raise exception 'CNYOS_CLASSIFIED_ACL_PUBLIC_ROUTINE_SET_INVALID';
+  end if;
+
+  select string_agg(item.signature, ', ' order by item.signature collate "C")
+  into v_missing
+  from unnest(v_acl_all_routines) item(signature)
+  left join pg_catalog.pg_proc procedure
+    on procedure.oid=pg_catalog.to_regprocedure(item.signature)
+  left join pg_catalog.pg_roles owner_role on owner_role.oid=procedure.proowner
+  where owner_role.rolname is distinct from 'postgres'
+     or procedure.prokind is distinct from 'f'
+     or exists (
+       select 1 from pg_catalog.pg_depend dependency
+       where dependency.classid='pg_catalog.pg_proc'::pg_catalog.regclass
+         and dependency.objid=procedure.oid
+         and dependency.refclassid='pg_catalog.pg_extension'::pg_catalog.regclass
+         and dependency.deptype='e'
+     );
+  if v_missing is not null then
+    raise exception 'CNYOS_CLASSIFIED_ACL_OWNER_KIND_OR_EXTENSION_INVALID: %',v_missing;
+  end if;
+
+  if exists (
+    select 1 from unnest(v_acl_trigger_handlers) item(signature)
+    join pg_catalog.pg_proc procedure
+      on procedure.oid=pg_catalog.to_regprocedure(item.signature)
+    where procedure.prorettype<>'pg_catalog.trigger'::pg_catalog.regtype
+  ) or exists (
+    select 1 from unnest(v_acl_event_handlers) item(signature)
+    join pg_catalog.pg_proc procedure
+      on procedure.oid=pg_catalog.to_regprocedure(item.signature)
+    where procedure.prorettype<>'pg_catalog.event_trigger'::pg_catalog.regtype
+  ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_HANDLER_CLASSIFICATION_INVALID';
+  end if;
+
+  with acl_rows as (
+    select concat_ws(E'\\t',
+      namespace.nspname || '.' || procedure.proname || pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      ),
+      owner_role.rolname,
+      case when procedure.proacl is null then 'true' else 'false' end,
+      coalesce(grantee_role.rolname,'PUBLIC'),
+      coalesce(grantor_role.rolname,'PUBLIC'),
+      acl.privilege_type,
+      case when acl.is_grantable then 'true' else 'false' end,
+      case when procedure.proacl is null
+        then 'implicit_hard_wired_function_default'
+        else 'explicit_pg_proc_proacl' end
+    ) acl_row
+    from unnest(v_acl_all_routines) item(signature)
+    join pg_catalog.pg_proc procedure
+      on procedure.oid=pg_catalog.to_regprocedure(item.signature)
+    join pg_catalog.pg_namespace namespace on namespace.oid=procedure.pronamespace
+    join pg_catalog.pg_roles owner_role on owner_role.oid=procedure.proowner
+    cross join lateral pg_catalog.aclexplode(coalesce(
+      procedure.proacl,pg_catalog.acldefault('f',procedure.proowner)
+    )) acl
+    left join pg_catalog.pg_roles grantee_role
+      on acl.grantee<>0 and grantee_role.oid=acl.grantee
+    left join pg_catalog.pg_roles grantor_role
+      on acl.grantor<>0 and grantor_role.oid=acl.grantor
+  ), metric as (
+    select count(*)::bigint row_count,
+      coalesce(string_agg(acl_row,E'\\n' order by acl_row collate "C"),'') || E'\\n'
+        payload
+    from acl_rows
+  )
+  select row_count,payload into v_acl_row_count,v_acl_payload from metric;
+  if v_acl_row_count<>${manifest.currentRawAclMatrix.rowCount}
+     or octet_length(v_acl_payload)<>${manifest.currentRawAclMatrix.payloadBytes}
+     or encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex')<>
+        ${quote(manifest.currentRawAclMatrix.sha256)} then
+    raise exception 'CNYOS_CLASSIFIED_ACL_CURRENT_RAW_MATRIX_INVALID: count=%, bytes=%, sha256=%',
+      v_acl_row_count,octet_length(v_acl_payload),
+      encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex');
+  end if;
+
+  with required_roles(role_name,is_public) as (values
+    ('PUBLIC'::text,true),('anon'::text,false),
+    ('authenticated'::text,false),('service_role'::text,false)
+  ), runtime_roles as (
+    select required.role_name,required.is_public,
+      case when required.is_public then 0::oid else role_row.oid end role_oid,
+      required.is_public or role_row.oid is not null role_exists
+    from required_roles required
+    left join pg_catalog.pg_roles role_row
+      on not required.is_public and role_row.rolname=required.role_name
+  ), public_privileges as (
+    select
+      coalesce(bool_or(acl.privilege_type='USAGE')
+        filter (where acl.grantee=0),false) schema_usage
+    from pg_catalog.pg_namespace namespace
+    left join lateral pg_catalog.aclexplode(coalesce(
+      namespace.nspacl,pg_catalog.acldefault('n',namespace.nspowner)
+    )) acl on true
+    where namespace.nspname='public'
+  ), access_rows as (
+    select concat_ws(E'\\t',
+      namespace.nspname || '.' || procedure.proname || pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      ),
+      runtime.role_name,
+      case when runtime.role_exists then 'true' else 'false' end,
+      case when access_value.schema_usage then 'true' else 'false' end,
+      case when access_value.function_execute then 'true' else 'false' end,
+      case when access_value.function_grantable then 'true' else 'false' end,
+      case when access_value.schema_usage and access_value.function_execute
+        then 'true' else 'false' end
+    ) access_row
+    from unnest(v_acl_all_routines) item(signature)
+    join pg_catalog.pg_proc procedure
+      on procedure.oid=pg_catalog.to_regprocedure(item.signature)
+    join pg_catalog.pg_namespace namespace on namespace.oid=procedure.pronamespace
+    cross join runtime_roles runtime
+    cross join public_privileges
+    cross join lateral (
+      select
+        case when runtime.is_public then public_privileges.schema_usage
+          when runtime.role_exists then pg_catalog.has_schema_privilege(
+            runtime.role_oid,procedure.pronamespace,'USAGE'
+          ) else false end schema_usage,
+        case when runtime.is_public then exists (
+          select 1 from pg_catalog.aclexplode(coalesce(
+            procedure.proacl,pg_catalog.acldefault('f',procedure.proowner)
+          )) public_acl
+          where public_acl.grantee=0 and public_acl.privilege_type='EXECUTE'
+        ) when runtime.role_exists then pg_catalog.has_function_privilege(
+          runtime.role_oid,procedure.oid,'EXECUTE'
+        ) else false end function_execute,
+        case when runtime.is_public then exists (
+          select 1 from pg_catalog.aclexplode(coalesce(
+            procedure.proacl,pg_catalog.acldefault('f',procedure.proowner)
+          )) public_acl
+          where public_acl.grantee=0 and public_acl.privilege_type='EXECUTE'
+            and public_acl.is_grantable
+        ) when runtime.role_exists then pg_catalog.has_function_privilege(
+          runtime.role_oid,procedure.oid,'EXECUTE WITH GRANT OPTION'
+        ) else false end function_grantable
+    ) access_value
+  ), metric as (
+    select count(*)::bigint row_count,
+      coalesce(string_agg(access_row,E'\\n' order by access_row collate "C"),'') || E'\\n'
+        payload
+    from access_rows
+  )
+  select row_count,payload into v_acl_row_count,v_acl_payload from metric;
+  if v_acl_row_count<>${manifest.currentEffectiveAccessMatrix.rowCount}
+     or octet_length(v_acl_payload)<>${manifest.currentEffectiveAccessMatrix.payloadBytes}
+     or encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex')<>
+        ${quote(manifest.currentEffectiveAccessMatrix.sha256)} then
+    raise exception 'CNYOS_CLASSIFIED_ACL_CURRENT_EFFECTIVE_MATRIX_INVALID: count=%, bytes=%, sha256=%',
+      v_acl_row_count,octet_length(v_acl_payload),
+      encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex');
+  end if;
+
+  with desired_rows as (
+    select concat_ws(E'\\t',item.signature,runtime.role_name,
+      case
+        when runtime.role_name='authenticated'
+          and item.signature=any(${sqlArray(desiredAuthenticated)}) then 'true'
+        when runtime.role_name='service_role'
+          and item.signature=any(${sqlArray(desiredService)}) then 'true'
+        else 'false'
+      end
+    ) desired_row
+    from unnest(v_acl_all_routines) item(signature)
+    cross join (values ('PUBLIC'),('anon'),('authenticated'),('service_role'))
+      runtime(role_name)
+  ), metric as (
+    select count(*)::bigint row_count,
+      coalesce(string_agg(desired_row,E'\\n' order by desired_row collate "C"),'') || E'\\n'
+        payload
+    from desired_rows
+  )
+  select row_count,payload into v_acl_row_count,v_acl_payload from metric;
+  if v_acl_row_count<>${manifest.desiredEffectiveAccessMatrix.rowCount}
+     or octet_length(v_acl_payload)<>${manifest.desiredEffectiveAccessMatrix.payloadBytes}
+     or encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex')<>
+        ${quote(manifest.desiredEffectiveAccessMatrix.sha256)} then
+    raise exception 'CNYOS_CLASSIFIED_ACL_DESIRED_MATRIX_INVALID';
+  end if;
+
+  select count(*)::bigint,
+    coalesce(string_agg(binding_row,E'\\n' order by binding_row collate "C"),'') || E'\\n'
+  into v_acl_row_count,v_acl_payload
+  from (
+    select concat_ws(E'\\t',relation_namespace.nspname,relation.relname,
+      trigger_row.tgname,function_namespace.nspname || '.' || procedure.proname ||
+      pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      )
+    ) binding_row
+    from pg_catalog.pg_trigger trigger_row
+    join pg_catalog.pg_class relation on relation.oid=trigger_row.tgrelid
+    join pg_catalog.pg_namespace relation_namespace
+      on relation_namespace.oid=relation.relnamespace
+    join pg_catalog.pg_proc procedure on procedure.oid=trigger_row.tgfoid
+    join pg_catalog.pg_namespace function_namespace
+      on function_namespace.oid=procedure.pronamespace
+    where not trigger_row.tgisinternal
+  ) bindings;
+  if v_acl_row_count<>${triggerManifest.triggerBindingCount}
+     or octet_length(v_acl_payload)<>
+        ${triggerManifest.triggerBindingIdentityPayloadBytes}
+     or encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex')<>
+        ${quote(triggerManifest.triggerBindingIdentitySha256)}
+     or exists (
+       select 1
+       from pg_catalog.pg_trigger trigger_row
+       join pg_catalog.pg_class relation on relation.oid=trigger_row.tgrelid
+       join pg_catalog.pg_namespace namespace on namespace.oid=relation.relnamespace
+       where not trigger_row.tgisinternal
+         and (trigger_row.tgenabled<>'O' or relation.relpersistence='t'
+           or namespace.nspname like 'pg_temp\\_%' escape '\\')
+     ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_TRIGGER_BINDING_IDENTITY_INVALID: count=%, bytes=%, sha256=%',
+      v_acl_row_count,octet_length(v_acl_payload),
+      encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex');
+  end if;
+
+  select count(*)::bigint,
+    coalesce(string_agg(binding_row,E'\\n' order by binding_row collate "C"),'') || E'\\n'
+  into v_acl_row_count,v_acl_payload
+  from (
+    select concat_ws(E'\\t',event_row.evtname,event_row.evtevent,
+      function_namespace.nspname || '.' || procedure.proname ||
+      pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      )
+    ) binding_row
+    from pg_catalog.pg_event_trigger event_row
+    join pg_catalog.pg_proc procedure on procedure.oid=event_row.evtfoid
+    join pg_catalog.pg_namespace function_namespace
+      on function_namespace.oid=procedure.pronamespace
+  ) bindings;
+  if v_acl_row_count<>${triggerManifest.eventTriggerBindingCount}
+     or octet_length(v_acl_payload)<>
+        ${triggerManifest.eventTriggerBindingIdentityPayloadBytes}
+     or encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex')<>
+        ${quote(triggerManifest.eventTriggerBindingIdentitySha256)}
+     or exists (
+       select 1 from pg_catalog.pg_event_trigger event_row
+       where event_row.evtenabled<>'O'
+     ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_EVENT_BINDING_IDENTITY_INVALID: count=%, bytes=%, sha256=%',
+      v_acl_row_count,octet_length(v_acl_payload),
+      encode(sha256(convert_to(v_acl_payload,'UTF8')),'hex');
+  end if;
+
+${classifiedStableBindingGuardSql}
+  select array_agg(signature order by signature collate "C") into v_acl_actual
+  from (
+    select distinct function_namespace.nspname || '.' || procedure.proname ||
+      pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      ) signature
+    from pg_catalog.pg_trigger trigger_row
+    join pg_catalog.pg_proc procedure on procedure.oid=trigger_row.tgfoid
+    join pg_catalog.pg_namespace function_namespace
+      on function_namespace.oid=procedure.pronamespace
+    where not trigger_row.tgisinternal and function_namespace.nspname='public'
+  ) handlers;
+  select array_agg(signature order by signature collate "C") into v_acl_expected
+  from unnest(v_acl_trigger_handlers) item(signature);
+  if v_acl_actual is distinct from v_acl_expected then
+    raise exception 'CNYOS_CLASSIFIED_ACL_PUBLIC_TRIGGER_HANDLER_SET_INVALID';
+  end if;
+  select array_agg(signature order by signature collate "C") into v_acl_actual
+  from (
+    select distinct function_namespace.nspname || '.' || procedure.proname ||
+      pg_catalog.regexp_replace(
+        procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+      ) signature
+    from pg_catalog.pg_event_trigger event_row
+    join pg_catalog.pg_proc procedure on procedure.oid=event_row.evtfoid
+    join pg_catalog.pg_namespace function_namespace
+      on function_namespace.oid=procedure.pronamespace
+    where function_namespace.nspname='public'
+  ) handlers;
+  if v_acl_actual is distinct from v_acl_event_handlers then
+    raise exception 'CNYOS_CLASSIFIED_ACL_PUBLIC_EVENT_HANDLER_SET_INVALID';
+  end if;
+
+  select array_agg(namespace.nspname || '.' || procedure.proname ||
+    pg_catalog.regexp_replace(
+      procedure.oid::pg_catalog.regprocedure::text,'^[^(]+',''
+    )
+    order by namespace.nspname collate "C",procedure.proname collate "C",
+      procedure.oid::pg_catalog.regprocedure::text collate "C")
+  into v_acl_actual
+  from pg_catalog.pg_proc procedure
+  join pg_catalog.pg_namespace namespace on namespace.oid=procedure.pronamespace
+  where namespace.nspname='public' and procedure.prosecdef;
+  select array_agg(plan.signature order by plan.signature collate "C")
+  into v_acl_expected
+  from pg_catalog.jsonb_to_recordset(v_acl_path_plan) plan(signature text);
+  if pg_catalog.jsonb_array_length(v_acl_path_plan)<>141
+     or (select count(distinct plan.signature)
+         from pg_catalog.jsonb_to_recordset(v_acl_path_plan) plan(signature text))<>141
+     or v_acl_actual is distinct from v_acl_expected
+     or exists (
+       select 1
+       from pg_catalog.jsonb_to_recordset(v_acl_path_plan) reviewed(
+         signature text,definition_sha256 text,language text,
+         pre_config text,target_config text
+       )
+       left join pg_catalog.pg_proc procedure
+         on procedure.oid=pg_catalog.to_regprocedure(reviewed.signature)
+       left join pg_catalog.pg_roles owner_role on owner_role.oid=procedure.proowner
+       left join pg_catalog.pg_language language on language.oid=procedure.prolang
+       where procedure.oid is null or not procedure.prosecdef
+          or owner_role.rolname is distinct from 'postgres'
+          or language.lanname is distinct from reviewed.language
+          or coalesce(pg_catalog.array_to_string(procedure.proconfig,','),'')
+               is distinct from reviewed.pre_config
+          or pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+               pg_catalog.pg_get_functiondef(procedure.oid),'UTF8'
+             )),'hex') is distinct from reviewed.definition_sha256
+          or reviewed.target_config is distinct from
+             case when reviewed.pre_config='search_path=pg_catalog'
+               then 'search_path=pg_catalog, pg_temp'
+               else 'search_path=pg_catalog, public, pg_temp' end
+     ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_SECURITY_DEFINER_PATH_OR_DEFINITION_INVALID';
+  end if;
+
+  if (select datdba from pg_catalog.pg_database where datname=current_database())<>
+       (select oid from pg_catalog.pg_roles where rolname='postgres')
+     or (select nspowner from pg_catalog.pg_namespace where nspname='public')<>
+       (select oid from pg_catalog.pg_roles where rolname='pg_database_owner')
+     or not exists (
+       select 1 from pg_catalog.pg_roles role_row
+       where role_row.rolname='supabase_admin'
+         and role_row.rolcanlogin and role_row.rolsuper
+     )
+     or exists (
+       select 1 from (values ('anon'),('authenticated'),('service_role'),('authenticator'))
+         runtime(role_name)
+       where pg_catalog.has_schema_privilege(runtime.role_name,'public','CREATE')
+          or pg_catalog.pg_has_role(runtime.role_name,'supabase_admin','SET')
+     )
+     or exists (
+       select 1 from (values
+         ('pg_database_owner',false,false),
+         ('postgres',true,false),
+         ('supabase_admin',true,true)
+       ) expected(role_name,can_login,is_super)
+       left join pg_catalog.pg_roles role_row on role_row.rolname=expected.role_name
+       where role_row.oid is null
+          or role_row.rolcanlogin is distinct from expected.can_login
+          or role_row.rolsuper is distinct from expected.is_super
+     )
+     or exists (
+       select 1 from (values ('pg_database_owner'),('postgres'))
+         mutable_creator(role_name)
+       left join pg_catalog.pg_roles role_row
+         on role_row.rolname=mutable_creator.role_name
+       where role_row.oid is null
+          or not pg_catalog.has_schema_privilege(role_row.oid,'public','CREATE')
+          or (mutable_creator.role_name<>session_user
+            and not pg_catalog.pg_has_role(session_user,role_row.oid,'SET'))
+     )
+     or exists (
+       select 1 from pg_catalog.pg_class relation
+       join pg_catalog.pg_namespace namespace on namespace.oid=relation.relnamespace
+       join pg_catalog.pg_roles owner_role on owner_role.oid=relation.relowner
+       where namespace.nspname='public' and owner_role.rolname='supabase_admin'
+     )
+     or exists (
+       select 1 from pg_catalog.pg_type type_row
+       join pg_catalog.pg_namespace namespace on namespace.oid=type_row.typnamespace
+       join pg_catalog.pg_roles owner_role on owner_role.oid=type_row.typowner
+       where namespace.nspname='public' and owner_role.rolname='supabase_admin'
+     ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_ROLE_SCHEMA_MANAGED_EXCEPTION_INVALID';
+  end if;
+  select array_agg(role_row.rolname order by role_row.rolname collate "C")
+  into v_acl_actual
+  from pg_catalog.pg_roles role_row
+  where pg_catalog.has_schema_privilege(role_row.oid,'public','CREATE');
+  if v_acl_actual is distinct from array['pg_database_owner','postgres','supabase_admin']::text[]
+     or exists (
+       select 1 from pg_catalog.pg_namespace namespace
+       cross join lateral pg_catalog.aclexplode(coalesce(
+         namespace.nspacl,pg_catalog.acldefault('n',namespace.nspowner)
+       )) acl
+       where namespace.nspname='public' and acl.grantee=0
+         and acl.privilege_type='CREATE'
+     )
+     or exists (
+       select 1 from (values ('PUBLIC'),('anon'),('authenticated'),('service_role'))
+         runtime(role_name)
+       where case when runtime.role_name='PUBLIC' then not exists (
+         select 1 from pg_catalog.pg_namespace namespace
+         cross join lateral pg_catalog.aclexplode(coalesce(
+           namespace.nspacl,pg_catalog.acldefault('n',namespace.nspowner)
+         )) acl
+         where namespace.nspname='public' and acl.grantee=0
+           and acl.privilege_type='USAGE'
+       ) else not pg_catalog.has_schema_privilege(runtime.role_name,'public','USAGE') end
+     )
+     or exists (
+       select 1 from (values ('PUBLIC'),('anon'),('authenticated'),('service_role'))
+         runtime(role_name)
+       where case when runtime.role_name='PUBLIC' then not exists (
+         select 1 from pg_catalog.pg_database database
+         cross join lateral pg_catalog.aclexplode(coalesce(
+           database.datacl,pg_catalog.acldefault('d',database.datdba)
+         )) acl
+         where database.datname=current_database() and acl.grantee=0
+           and acl.privilege_type='TEMPORARY'
+       ) else not pg_catalog.has_database_privilege(
+         runtime.role_name,current_database(),'TEMPORARY'
+       ) end
+     ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_ROLE_SCHEMA_TEMP_BASELINE_INVALID';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_roles candidate_role
+    cross join unnest(array['pg_database_owner','postgres','supabase_admin']::text[])
+      creator_name(role_name)
+    join pg_catalog.pg_roles creator_role
+      on creator_role.rolname=creator_name.role_name
+    where (candidate_role.rolcanlogin
+        or candidate_role.rolname in
+          ('anon','authenticated','service_role','authenticator'))
+      and candidate_role.rolname not in ('postgres','supabase_admin')
+      and pg_catalog.pg_has_role(candidate_role.oid,creator_role.oid,'SET')
+  ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_UNTRUSTED_CREATOR_SET_REACHABILITY_INVALID';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_default_acl defaults
+    join pg_catalog.pg_roles creator on creator.oid=defaults.defaclrole
+    where creator.rolname=any(array['pg_database_owner','postgres','supabase_admin']::text[])
+      and defaults.defaclobjtype='f' and defaults.defaclnamespace=0
+  ) or (select count(*)
+    from pg_catalog.pg_default_acl defaults
+    join pg_catalog.pg_roles creator on creator.oid=defaults.defaclrole
+    join pg_catalog.pg_namespace namespace on namespace.oid=defaults.defaclnamespace
+    where creator.rolname=any(array['pg_database_owner','postgres','supabase_admin']::text[])
+      and defaults.defaclobjtype='f' and namespace.nspname='public')<>2
+  or exists (
+    select 1
+    from pg_catalog.pg_default_acl defaults
+    join pg_catalog.pg_roles creator on creator.oid=defaults.defaclrole
+    join pg_catalog.pg_namespace namespace on namespace.oid=defaults.defaclnamespace
+    cross join lateral pg_catalog.aclexplode(defaults.defaclacl) acl
+    left join pg_catalog.pg_roles grantee on grantee.oid=acl.grantee
+    left join pg_catalog.pg_roles grantor on grantor.oid=acl.grantor
+    where creator.rolname=any(array['pg_database_owner','postgres','supabase_admin']::text[])
+      and defaults.defaclobjtype='f' and namespace.nspname='public'
+      and (acl.privilege_type<>'EXECUTE' or acl.is_grantable
+        or grantor.rolname<>creator.rolname or not exists (
+          select 1 from (values
+            ('postgres','postgres'),
+            ('supabase_admin','postgres'),('supabase_admin','anon'),
+            ('supabase_admin','authenticated'),('supabase_admin','service_role')
+          ) expected(creator_name,grantee_name)
+          where expected.creator_name=creator.rolname
+            and expected.grantee_name=grantee.rolname
+        ))
+  ) or exists (
+    select 1 from (values
+      ('postgres','postgres'),
+      ('supabase_admin','postgres'),('supabase_admin','anon'),
+      ('supabase_admin','authenticated'),('supabase_admin','service_role')
+    ) expected(creator_name,grantee_name)
+    where not exists (
+      select 1
+      from pg_catalog.pg_default_acl defaults
+      join pg_catalog.pg_roles creator on creator.oid=defaults.defaclrole
+      join pg_catalog.pg_namespace namespace on namespace.oid=defaults.defaclnamespace
+      cross join lateral pg_catalog.aclexplode(defaults.defaclacl) acl
+      join pg_catalog.pg_roles grantee on grantee.oid=acl.grantee
+      join pg_catalog.pg_roles grantor on grantor.oid=acl.grantor
+      where creator.rolname=expected.creator_name
+        and grantee.rolname=expected.grantee_name
+        and grantor.rolname=expected.creator_name
+        and defaults.defaclobjtype='f' and namespace.nspname='public'
+        and acl.privilege_type='EXECUTE' and not acl.is_grantable
+    )
+  ) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_POST_TOGGLE_DEFAULT_BASELINE_INVALID';
+  end if;
+
+  -- Hosted Chananya postgres is intentionally non-super and cannot LOCK the
+  -- protected catalogs in SHARE mode. This verifier therefore relies on its
+  -- repeatable-read snapshot; mutation stays blocked pending a separately
+  -- reviewed hosted-like serialization design and native rehearsal.
+  if (select rolsuper from pg_catalog.pg_roles where rolname=current_user) then
+    raise exception 'CNYOS_CLASSIFIED_ACL_HOSTED_NON_SUPER_PROFILE_REQUIRED';
+  end if;
+
+`;
+}
+
 export function loadMigrationEntries(cwd = root) {
   const directory = path.join(cwd, 'supabase', 'migrations');
   const entries = fs.readdirSync(directory)
@@ -1724,7 +2531,7 @@ function buildMigrationLedgerSql({
     );
   }
   const transitionalBrowserRpcGrants = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples
+    ? legacyStrictBrowserRpcAclExceptions
       .map(([grantee, procedureSignature]) => [procedureSignature, grantee])
     : [];
   const allowedSubscriptionBrowserProcedureGrants = [
@@ -1736,49 +2543,26 @@ function buildMigrationLedgerSql({
     ...transitionalBrowserRpcGrants
   ];
   const expectedTriggerInventory = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory
-    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerInventory.map(row =>
+    ? legacyStrictTriggerGuardManifest.triggerInventory
+    : legacyStrictTriggerGuardManifest.triggerInventory.map(row =>
       row[0] === 'public.set_updated_at()'
         ? [row[0], row[1], 'search_path=pg_catalog, public', row[3], row[4]]
         : [...row]);
   const expectedTriggerSemanticPayloadBytes = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST
+    ? legacyStrictTriggerGuardManifest
       .functionSemanticPreReconciliationPayloadBytes
-    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictPayloadBytes;
+    : legacyStrictTriggerGuardManifest.functionSemanticStrictPayloadBytes;
   const expectedTriggerSemanticSha256 = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticPreReconciliationSha256
-    : CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticStrictSha256;
+    ? legacyStrictTriggerGuardManifest.functionSemanticPreReconciliationSha256
+    : legacyStrictTriggerGuardManifest.functionSemanticStrictSha256;
   const allowedTriggerProcedureGrants = isChananyaPreReconciliation
-    ? CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTuples
+    ? legacyStrictTriggerGuardManifest.aclTuples
       .map(([grantee, procedureSignature]) => [procedureSignature, grantee])
     : [];
-  const triggerAclMissingGuardSql = isChananyaPreReconciliation
-    ? `  select string_agg(procedure_signature || ' -> ' || expected_grantee, ', ' order by procedure_signature,expected_grantee) into v_missing\n` +
-      `  from (values ${sqlRows(allowedTriggerProcedureGrants)}) expected(procedure_signature,expected_grantee)\n` +
-      `  join pg_proc p on p.oid=to_regprocedure(procedure_signature)\n` +
-      `  where not exists (\n` +
-      `    select 1\n` +
-      `    from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl\n` +
-      `    left join pg_roles grantee on grantee.oid=acl.grantee\n` +
-      `    where coalesce(grantee.rolname,'PUBLIC')=expected_grantee\n` +
-      `      and acl.privilege_type='EXECUTE' and not acl.is_grantable\n` +
-      `      and acl.grantor=p.proowner\n` +
-      `  );\n` +
-      `  if v_missing is not null then raise exception 'STAGING_TRANSITIONAL_TRIGGER_ACL_MISSING: %', v_missing; end if;\n\n`
-    : '';
-  const triggerAclInvalidPredicate = isChananyaPreReconciliation
-    ? `acl.privilege_type <> 'EXECUTE' or acl.is_grantable or acl.grantor <> p.proowner\n` +
-      `      or not exists (\n` +
-      `        select 1\n` +
-      `        from (values ${sqlRows(allowedTriggerProcedureGrants)}) expected(\n` +
-      `          procedure_signature,expected_grantee\n` +
-      `        )\n` +
-      `        where to_regprocedure(procedure_signature)=p.oid\n` +
-      `          and expected_grantee=coalesce(grantee.rolname,'PUBLIC')\n` +
-      `      )`
-    : 'true';
+  const triggerAclMissingGuardSql = '';
+  const triggerAclInvalidPredicate = 'true';
   const repairStatus = isChananyaPreReconciliation
-    ? 'CNYOS_CHANANYA_STAGING_LEDGER_RECONCILED_BROWSER_RPC_AND_TRIGGER_REMEDIATIONS_PENDING'
+    ? 'CNYOS_CHANANYA_CLASSIFIED_COMPLETE_LEDGER_REPAIR_NOT_AUTHORIZED'
     : 'CNYOS_STAGING_MIGRATION_LEDGER_RECONCILED';
   const repairEvidenceMarker = 'cnyos_migration_ledger_repair_evidence';
   const repairReceiptTable = 'cnyos_migration_ledger_repair_receipts';
@@ -2042,9 +2826,9 @@ $cnyos_psql_lock_busy_abort$;
     `-- Source revision: ${revision || 'not-supplied'}; migration count: ${entries.length}.\n` +
     `-- ACL phase: ${resolvedAclPhase}.\n` +
     (isChananyaPreReconciliation
-      ? `-- Known pre-reconciliation evidence only (not a complete live public-function ACL inventory; not authorization): bundle-sha256=${CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256}; known-live-callable-acl-subset-count=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples.length}; known-live-callable-acl-subset-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256}; trigger-inventory-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256}; trigger-acl-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256}; trigger-function-semantic-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount}; trigger-function-semantic-bytes=${expectedTriggerSemanticPayloadBytes}; trigger-function-semantic-sha256=${expectedTriggerSemanticSha256}; trigger-binding-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount}; trigger-binding-bytes=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes}; trigger-binding-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256}; server-major=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor}; server-encoding=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding}; browser-observed-at=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observedAt}; trigger-observed-at=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.observedAt}; trigger-semantic-observed-at=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticObservedAt}; trigger-binding-observed-at=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingObservedAt}; known-subset-source=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision}.\n`
+      ? `-- Classified-complete Chananya live evidence (not independently approved; not ledger-mutation authorization): bundle-sha256=${CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256}; routine-count=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.routineCount}; observer-raw-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerRawSha256}; observer-sql-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerSourceSqlSha256}; observation-composite-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationCompositeSha256}; disposition-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionArtifactSha256}; disposition-payload-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionPayloadSha256}; candidate-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.completeAclCandidateSha256}; security-definer-path-count=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.count}; security-definer-path-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.sha256}; trigger-binding-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingCount}; trigger-binding-dataset-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256}; trigger-relation-lock-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount}; trigger-relation-lock-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256}; event-trigger-binding-count=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingCount}; event-trigger-binding-dataset-sha256=${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingDatasetSha256}; post-toggle-default-acl-evidence-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.postToggleDefaultAclBaseline.externalEvidenceSha256}; ledger-target-baseline-evidence-sha256=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.ledgerTargetBaseline.externalEvidenceSha256}; evidence-source-revision=${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationSourceRevision}.\n`
       : '') +
-    `-- Repository-derived (not live-observed) clinical treatment session ACL manifest: sha256=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sha256}; source-migration=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sourceMigration}; source-sha256=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sourceMigrationSha256}; live callable ACL inventory is a separate prerequisite.\n` +
+    `-- Repository-derived (not live-observed) clinical treatment session ACL manifest: sha256=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sha256}; source-migration=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sourceMigration}; source-sha256=${REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.sourceMigrationSha256}.\n` +
     `-- Run only after every ordered migration's intended schema effect is present in the isolated, empty staging database and provenance has been reviewed.\n` +
     (verificationOnly
       ? `begin isolation level repeatable read read only;\n` +
@@ -2068,6 +2852,28 @@ $cnyos_psql_lock_busy_abort$;
     `  v_observed_current_database text := pg_catalog.current_database();\n` +
     `  v_observed_session_user text := session_user;\n` +
     `  v_observed_current_user text := current_user;\n` +
+    (isChananyaPreReconciliation
+      ? `  v_acl_all_routines constant text[] := ${sqlArray(classifiedRoutineSignatures)};\n` +
+        `  v_acl_trigger_handlers constant text[] := ${sqlArray(
+          CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+            .routineDispositions.owner_only_trigger
+        )};\n` +
+        `  v_acl_event_handlers constant text[] := ${sqlArray(
+          CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST
+            .routineDispositions.owner_only_event_trigger
+        )};\n` +
+        `  v_acl_path_plan constant jsonb := ${quote(
+          JSON.stringify(reviewedSecurityDefinerPathPlan)
+        )}::jsonb;\n` +
+        `  v_acl_actual text[];\n` +
+        `  v_acl_expected text[];\n` +
+        `  v_acl_row_count bigint;\n` +
+        `  v_acl_payload text;\n` +
+        `  v_trigger_stable_bytes bigint;\n` +
+        `  v_trigger_stable_sha256 text;\n` +
+        `  v_event_trigger_stable_bytes bigint;\n` +
+        `  v_event_trigger_stable_sha256 text;\n`
+      : '') +
     `begin\n` +
     `  if v_observed_current_database is distinct from ${quote(expectedDatabaseName)}\n` +
     `     or v_observed_session_user is distinct from ${quote(expectedDatabaseUser)}\n` +
@@ -2116,7 +2922,9 @@ $cnyos_psql_lock_busy_abort$;
         `  v_repair_xid := pg_catalog.pg_current_xact_id()::text;\n` +
         `  perform pg_catalog.pg_advisory_xact_lock(202608302100::bigint);\n` +
         `  execute 'drop table if exists pg_temp.${repairEvidenceMarker}';\n`) +
-    `  select string_agg(procedure_signature, ', ' order by procedure_signature) into v_missing\n` +
+    (isChananyaPreReconciliation
+      ? buildClassifiedCompleteAclGuardSql()
+      : `  select string_agg(procedure_signature, ', ' order by procedure_signature) into v_missing\n` +
     `  from (values ${sqlRows(expectedTriggerInventory)}) expected(\n` +
     `    procedure_signature,expected_owner,expected_search_path,expected_security_definer,expected_binding_count\n` +
     `  )\n` +
@@ -2177,7 +2985,7 @@ $cnyos_psql_lock_busy_abort$;
       `  where n.nspname='public' and p.prokind='f'\n` +
       `    and exists (select 1 from pg_trigger t where t.tgfoid=p.oid and not t.tgisinternal)\n` +
       `    and has_function_privilege(runtime_role,p.oid,'EXECUTE');\n` +
-      `  if v_missing is not null then raise exception 'STAGING_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT: %', v_missing; end if;\n\n`) +
+      `  if v_missing is not null then raise exception 'STAGING_TRIGGER_FUNCTION_RUNTIME_EXECUTE_PRESENT: %', v_missing; end if;\n\n`)) +
     `  select string_agg(object_name, ', ' order by object_name) into v_missing\n` +
     `  from unnest(${sqlArray(requiredRelations)}) expected(object_name)\n` +
     `  where to_regclass(object_name) is null;\n` +
@@ -4001,14 +4809,25 @@ $cnyos_psql_lock_busy_abort$;
     `    'repair_transaction_xid',v_repair_xid,\n` +
     `    'trigger_server_major',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverMajor},\n` +
     `    'trigger_server_encoding',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.serverEncoding)},\n` +
-    `    'trigger_function_semantic_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.functionSemanticCount},\n` +
-    `    'trigger_function_semantic_payload_bytes',${expectedTriggerSemanticPayloadBytes},\n` +
-    `    'trigger_function_semantic_sha256',${quote(expectedTriggerSemanticSha256)},\n` +
-    `    'trigger_binding_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount},\n` +
-    `    'trigger_binding_payload_bytes',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes},\n` +
-    `    'trigger_binding_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256)}\n` +
+    (isChananyaPreReconciliation
+      ? `    'classified_public_routine_count',${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.routineCount},\n` +
+        `    'security_definer_path_plan_count',${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.count},\n` +
+        `    'security_definer_path_plan_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.securityDefinerPathPlan.sha256)},\n` +
+        `    'trigger_binding_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingCount},\n` +
+        `    'trigger_binding_dataset_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerBindingDatasetSha256)},\n` +
+        `    'trigger_relation_lock_plan_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanCount},\n` +
+        `    'trigger_relation_lock_plan_payload_bytes',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanPayloadBytes},\n` +
+        `    'trigger_relation_lock_plan_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.triggerRelationLockPlanSha256)},\n` +
+        `    'event_trigger_binding_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingCount},\n` +
+        `    'event_trigger_binding_dataset_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.eventTriggerBindingDatasetSha256)}\n`
+      : `    'trigger_function_semantic_count',${legacyStrictTriggerGuardManifest.functionSemanticCount},\n` +
+        `    'trigger_function_semantic_payload_bytes',${expectedTriggerSemanticPayloadBytes},\n` +
+        `    'trigger_function_semantic_sha256',${quote(expectedTriggerSemanticSha256)},\n` +
+        `    'trigger_binding_count',${legacyStrictTriggerGuardManifest.bindingCount},\n` +
+        `    'trigger_binding_payload_bytes',${legacyStrictTriggerGuardManifest.bindingPayloadBytes},\n` +
+        `    'trigger_binding_sha256',${quote(legacyStrictTriggerGuardManifest.bindingSha256)}\n`) +
     `  ) || pg_catalog.jsonb_build_object(\n` +
-    `    'ledger_reconciled',true,\n` +
+    `    'ledger_reconciled',${isChananyaPreReconciliation ? 'false' : 'true'},\n` +
     `    'acl_remediation_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
     `    'browser_rpc_acl_remediation_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
     `    'trigger_function_acl_remediation_pending',${isChananyaPreReconciliation ? 'true' : 'false'},\n` +
@@ -4018,18 +4837,26 @@ $cnyos_psql_lock_busy_abort$;
     `    'production_eligible',false,\n` +
     (isChananyaPreReconciliation
       ? `    'authorization',false,\n` +
-        `    'live_callable_acl_inventory_required',true,\n` +
-        `    'live_callable_acl_inventory_complete',false,\n` +
-        `    'live_callable_acl_known_subset_only',true,\n` +
-        `    'ledger_reconciliation_blocked_pending_live_callable_acl_inventory',true,\n` +
+        `    'classification_coverage_complete',true,\n` +
+        `    'live_callable_acl_inventory_complete',true,\n` +
+        `    'independent_security_review_complete',false,\n` +
+        `    'ledger_reconciliation_authorized',false,\n` +
+        `    'managed_supabase_admin_exception_accepted',false,\n` +
+        `    'security_definer_path_plan_approved',false,\n` +
+        `    'hosted_concurrency_protocol_approved',false,\n` +
+        `    'hosted_trigger_relation_lock_plan_rehearsed',false,\n` +
+        `    'fresh_post_commit_observer_required',true,\n` +
+        `    'fresh_post_commit_observer_completed',false,\n` +
+        `    'ledger_reconciliation_blocked_pending_independent_review_and_authorization',true,\n` +
         `    'reviewed_pre_reconciliation_evidence_bundle_sha256',${quote(CHANANYA_PRE_RECONCILIATION_KNOWN_EVIDENCE_BUNDLE.sha256)},\n` +
-        `    'known_live_callable_acl_subset_count',${CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.browserRpcAclTuples.length},\n` +
-        `    'known_live_callable_acl_subset_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.tupleSha256)},\n` +
-        `    'reviewed_trigger_inventory_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.inventorySha256)},\n` +
-        `    'reviewed_trigger_acl_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.aclTupleSha256)},\n` +
-        `    'reviewed_trigger_binding_sha256',${quote(CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingSha256)},\n` +
-        `    'reviewed_trigger_binding_count',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingCount},\n` +
-        `    'reviewed_trigger_binding_payload_bytes',${CHANANYA_PRE_RECONCILIATION_TRIGGER_MANIFEST.bindingPayloadBytes},\n`
+        `    'observer_raw_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerRawSha256)},\n` +
+        `    'observer_source_sql_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observerSourceSqlSha256)},\n` +
+        `    'observation_composite_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.observationCompositeSha256)},\n` +
+        `    'disposition_artifact_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionArtifactSha256)},\n` +
+        `    'disposition_payload_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.dispositionPayloadSha256)},\n` +
+        `    'complete_acl_candidate_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.completeAclCandidateSha256)},\n` +
+        `    'post_toggle_default_acl_evidence_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.postToggleDefaultAclBaseline.externalEvidenceSha256)},\n` +
+        `    'ledger_target_baseline_evidence_sha256',${quote(CHANANYA_PRE_RECONCILIATION_ACL_MANIFEST.ledgerTargetBaseline.externalEvidenceSha256)},\n`
       : '') +
     `    'migration_manifest_sha256',${quote(migrationManifestSha256(entries))},\n` +
     `    'migration_count',count(*),\n` +
@@ -4116,12 +4943,17 @@ $cnyos_psql_lock_busy_abort$;
     `        ${quote(isChananyaPreReconciliation)}\n` +
     (isChananyaPreReconciliation
       ? `    and receipt.evidence->>'authorization'='false'\n` +
-        `    and receipt.evidence->>'live_callable_acl_inventory_required'='true'\n` +
-        `    and receipt.evidence->>'live_callable_acl_inventory_complete'='false'\n` +
-        `    and receipt.evidence->>'live_callable_acl_known_subset_only'='true'\n` +
-        `    and receipt.evidence->>'ledger_reconciliation_blocked_pending_live_callable_acl_inventory'='true'\n`
+        `    and receipt.evidence->>'classification_coverage_complete'='true'\n` +
+        `    and receipt.evidence->>'live_callable_acl_inventory_complete'='true'\n` +
+        `    and receipt.evidence->>'independent_security_review_complete'='false'\n` +
+        `    and receipt.evidence->>'ledger_reconciliation_authorized'='false'\n` +
+        `    and receipt.evidence->>'hosted_concurrency_protocol_approved'='false'\n` +
+        `    and receipt.evidence->>'hosted_trigger_relation_lock_plan_rehearsed'='false'\n` +
+        `    and receipt.evidence->>'fresh_post_commit_observer_required'='true'\n` +
+        `    and receipt.evidence->>'fresh_post_commit_observer_completed'='false'\n` +
+        `    and receipt.evidence->>'ledger_reconciliation_blocked_pending_independent_review_and_authorization'='true'\n`
       : '') +
-    `    and receipt.evidence->>'ledger_reconciled'='true'\n` +
+    `    and receipt.evidence->>'ledger_reconciled'=${quote(!isChananyaPreReconciliation)}\n` +
     `    and receipt.evidence->>'production_eligible'='false') is true\n` +
     `  and (${exactLedgerInvariantPredicate}) is true\n` +
     `\\gset\n` +
