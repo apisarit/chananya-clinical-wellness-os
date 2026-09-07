@@ -48,7 +48,8 @@ function response(body, extraHeaders = {}, status = 200) {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Content-Security-Policy': "default-src 'self'; frame-ancestors 'self'; object-src 'none'",
       ...extraHeaders
     }
   });

@@ -305,17 +305,31 @@ const externalDenialEvidence = await verifyScheduledRouteDenial(
   }
 );
 assert.equal(externalDenialEvidence.length, 4);
+assert.deepEqual(externalDenialEvidence.map(item => item.status), [404, 404, 404, 404]);
 assert.deepEqual(externalDenialCalls.map(call => call.options.method), ['GET', 'POST', 'GET', 'POST']);
 assert.ok(externalDenialCalls.every(call => call.options.redirect === 'error'));
-const forbiddenExternalDenialEvidence = await verifyScheduledRouteDenial(
-  'https://synthetic-drive-staging.netlify.app',
-  async () => new Response('', {
-    status: 403,
-    headers: { 'Content-Type': 'text/plain' }
-  })
+await assert.rejects(
+  verifyScheduledRouteDenial(
+    'https://synthetic-drive-staging.netlify.app',
+    async () => new Response('', {
+      status: 403,
+      headers: { 'Content-Type': 'text/plain' }
+    })
+  ),
+  /SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT/
 );
-assert.equal(forbiddenExternalDenialEvidence.length, 4);
-assert.ok(forbiddenExternalDenialEvidence.every(item => item.status === 403));
+let mixedExternalDenialCallCount = 0;
+await assert.rejects(
+  verifyScheduledRouteDenial(
+    'https://synthetic-drive-staging.netlify.app',
+    async () => {
+      mixedExternalDenialCallCount += 1;
+      return new Response('', { status: mixedExternalDenialCallCount === 4 ? 403 : 404 });
+    }
+  ),
+  /SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT/
+);
+assert.equal(mixedExternalDenialCallCount, 4, 'one non-404 result must reject the full four-request proof');
 await assert.rejects(
   verifyScheduledRouteDenial(
     'https://synthetic-drive-staging.netlify.app',

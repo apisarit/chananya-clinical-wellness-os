@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { assertSameOriginFramePolicy } from './netlify-frame-policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha40 = /^[0-9a-f]{40}$/i;
@@ -65,10 +66,9 @@ async function request(origin, pathname, { expectedStatus, json = false } = {}) 
 function requireSecurityHeaders(response, pathname, { html = false } = {}) {
   const headers = response.headers;
   assert.equal(headers.get('x-content-type-options'), 'nosniff', `${pathname} missing nosniff`);
-  assert.equal(headers.get('x-frame-options'), 'DENY', `${pathname} missing frame denial`);
+  assertSameOriginFramePolicy(headers, pathname);
   assert.equal(headers.get('referrer-policy'), 'no-referrer', `${pathname} missing no-referrer`);
   assert.match(headers.get('strict-transport-security') || '', /max-age=\d+/, `${pathname} missing HSTS`);
-  assert.match(headers.get('content-security-policy') || '', /frame-ancestors 'none'/, `${pathname} missing CSP frame-ancestors`);
   if (html) assert.match(headers.get('cache-control') || '', /no-store/i, `${pathname} HTML must be no-store`);
 }
 

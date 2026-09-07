@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertSameOriginFramePolicy } from './netlify-frame-policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
@@ -81,11 +82,7 @@ function assertSecurityHeaders(response, pathName) {
     'nosniff',
     `${pathName} must set X-Content-Type-Options=nosniff`
   );
-  assert.equal(
-    response.headers.get('x-frame-options'),
-    'DENY',
-    `${pathName} must set X-Frame-Options=DENY`
-  );
+  assertSameOriginFramePolicy(response.headers, pathName);
 }
 
 async function fetchText(fetchImpl, origin, pathName) {
