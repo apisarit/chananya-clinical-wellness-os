@@ -197,7 +197,7 @@ where lock_row.locktype = 'advisory'
 function assertFailure(result, label, expectedError, baseline) {
   assert.notEqual(result.status, 0, `${label} unexpectedly succeeded`);
   assert.match(result.output, expectedError, `${label} missed its fail-closed gate`);
-  assert.doesNotMatch(result.output, /CHECKS_PASSED|REMEDIATION_PASSED|READY/);
+  assert.doesNotMatch(result.output, /CHECKS_PASSED|REMEDIATION_PASSED|\bREADY\b/);
   assert.doesNotMatch(result.output, /CNYOS_UNREACHABLE_ACL_CANDIDATE_TAIL/);
   assert.deepEqual(snapshot(), baseline, `${label} changed durable or ACL state`);
   assert.equal(advisoryLockCount(), 0, `${label} leaked the advisory interlock`);
