@@ -235,7 +235,7 @@ assert.match(
 
 assert.match(
   sql,
-  /lock table pg_catalog\.pg_proc,[\s\S]*pg_catalog\.pg_aggregate\s+in access share mode;/
+  /lock table pg_catalog\.pg_proc,[\s\S]*pg_catalog\.pg_db_role_setting,[\s\S]*pg_catalog\.pg_database,[\s\S]*pg_catalog\.pg_trigger,[\s\S]*pg_catalog\.pg_event_trigger,[\s\S]*pg_catalog\.pg_constraint\s+in access share mode;/
 );
 assert.doesNotMatch(
   sql,
@@ -264,7 +264,10 @@ for (const pinnedSetting of [
   'set local extra_float_digits = 3;',
   "set local bytea_output = 'hex';",
   'set local quote_all_identifiers = off;',
-  'set local standard_conforming_strings = on;'
+  'set local standard_conforming_strings = on;',
+  "set local lc_monetary = 'C';",
+  "set local lc_numeric = 'C';",
+  "set local lc_time = 'C';"
 ]) {
   assert.ok(
     outputGucSql.includes(pinnedSetting),
@@ -287,7 +290,10 @@ for (const recordedSetting of [
   "pg_catalog.current_setting('extra_float_digits')",
   "'bytea_output', pg_catalog.current_setting('bytea_output')",
   "pg_catalog.current_setting('quote_all_identifiers')",
-  "pg_catalog.current_setting('standard_conforming_strings')"
+  "pg_catalog.current_setting('standard_conforming_strings')",
+  "'lc_monetary', pg_catalog.current_setting('lc_monetary')",
+  "'lc_numeric', pg_catalog.current_setting('lc_numeric')",
+  "'lc_time', pg_catalog.current_setting('lc_time')"
 ]) {
   assert.ok(captureSql.includes(recordedSetting), `missing recorded GUC ${recordedSetting}`);
 }
@@ -343,10 +349,18 @@ for (const required of [
   "'runtime_role_graph.anchors'",
   "'runtime_role_graph.nodes'",
   "'runtime_role_graph.edges'",
+  "'current_database.security'",
+  "'schemas.all_non_temporary.security'",
+  "'database_role_settings.current_database_and_global'",
   "'runtime_role_graph.connected_routine_effective_diagnostics'",
   "'runtime_role_graph.connected_schema_effective_diagnostics'",
   "'function_default_acl.global_and_public_schema'",
   "'function_default_acl.future_public_execute'",
+  "'trigger_bindings.all_non_internal'",
+  "'event_trigger_bindings.all'",
+  "'owner_role_security'",
+  "'authorization_context'",
+  "'function_schema_security'",
   "'acl_identity.unresolved_nonzero_oids'",
   "'absent_row_semantics'",
   "'future_public_function_execute_in_public_schema'",
@@ -386,6 +400,7 @@ await db.exec(`
   create role service_role nologin noinherit bypassrls;
   create role authenticator nologin noinherit;
   create role app_owner nologin noinherit;
+  create role handler_parent nologin noinherit bypassrls;
   alter role authenticated valid until '2035-07-08 09:10:11+07';
 
   grant anon to authenticator with inherit false, set true;
@@ -416,6 +431,75 @@ await db.exec(`
   revoke all on function public.cost_rows_probe() from public;
   grant execute on function public.cost_rows_probe() to authenticated;
 
+  create table public.trigger_probe(id integer primary key);
+  create table public.trigger_probe_child(
+    id integer primary key,
+    trigger_probe_id integer references public.trigger_probe(id)
+  );
+  create function public.trigger_probe_handler()
+  returns trigger language plpgsql set search_path = pg_catalog as $$
+  begin
+    return new;
+  end
+  $$;
+  revoke all on function public.trigger_probe_handler() from public;
+  create trigger trigger_probe_before_update
+  before update of id on public.trigger_probe
+  for each row when (old.id is distinct from new.id)
+  execute function public.trigger_probe_handler('alpha', 'beta');
+
+  create schema private_probe;
+  revoke all on schema private_probe
+  from public, anon, authenticated, service_role;
+  grant usage on schema private_probe to anon;
+  create schema path_probe;
+  revoke all on schema path_probe
+  from public, anon, authenticated, service_role;
+  grant usage on schema path_probe to anon;
+  create table private_probe.trigger_probe(id integer);
+  create function private_probe.trigger_probe_handler()
+  returns trigger language plpgsql
+  set search_path = pg_catalog, path_probe, pg_temp as $$
+  begin
+    return new;
+  end
+  $$;
+  alter function private_probe.trigger_probe_handler() owner to app_owner;
+  revoke all on function private_probe.trigger_probe_handler()
+  from public, anon, authenticated, service_role;
+  create trigger private_trigger_probe_before_insert
+  before insert on private_probe.trigger_probe
+  for each row execute function private_probe.trigger_probe_handler();
+  create temporary table temporary_trigger_probe(id integer);
+  create trigger temporary_trigger_probe_before_insert
+  before insert on temporary_trigger_probe
+  for each row execute function private_probe.trigger_probe_handler();
+
+  create function public.event_trigger_probe_handler()
+  returns event_trigger language plpgsql set search_path = pg_catalog as $$
+  begin
+    null;
+  end
+  $$;
+  revoke all on function public.event_trigger_probe_handler() from public;
+  create event trigger event_trigger_probe
+  on ddl_command_end when tag in ('CREATE TABLE')
+  execute function public.event_trigger_probe_handler();
+
+  create function private_probe.event_trigger_probe_handler()
+  returns event_trigger language plpgsql as $$
+  begin
+    null;
+  end
+  $$;
+  alter function private_probe.event_trigger_probe_handler()
+    owner to app_owner;
+  revoke all on function private_probe.event_trigger_probe_handler()
+  from public, anon, authenticated, service_role;
+  create event trigger private_event_trigger_probe
+  on sql_drop
+  execute function private_probe.event_trigger_probe_handler();
+
   alter default privileges for role postgres
     revoke execute on functions from public;
 `);
@@ -433,7 +517,14 @@ async function observe() {
       pg_catalog.pg_extension,
       pg_catalog.pg_language,
       pg_catalog.pg_default_acl,
-      pg_catalog.pg_aggregate
+      pg_catalog.pg_aggregate,
+      pg_catalog.pg_type,
+      pg_catalog.pg_db_role_setting,
+      pg_catalog.pg_trigger,
+      pg_catalog.pg_event_trigger,
+      pg_catalog.pg_class,
+      pg_catalog.pg_attribute,
+      pg_catalog.pg_constraint
     in access share mode;
   `);
   try {
@@ -502,6 +593,7 @@ try {
 
   assert.deepEqual(after.rows, before.rows, 'observation changed routine or ACL state');
   assert.equal(first.status, 'CNYOS_PUBLIC_ROUTINE_INVENTORY_OBSERVED');
+  assert.equal(first.artifact_schema, 'cnyos-public-routine-acl-observation/v2');
   assert.equal(first.authorization, false);
   assert.equal(first.production_eligible, false);
   assert.equal(first.source_metadata.operator_supplied_metadata_only, true);
@@ -517,7 +609,10 @@ try {
     extra_float_digits: '3',
     bytea_output: 'hex',
     quote_all_identifiers: 'off',
-    standard_conforming_strings: 'on'
+    standard_conforming_strings: 'on',
+    lc_monetary: 'C',
+    lc_numeric: 'C',
+    lc_time: 'C'
   });
   assert.deepEqual(second.observation_transaction.output_gucs, {
     client_encoding: 'UTF8',
@@ -527,7 +622,10 @@ try {
     extra_float_digits: '3',
     bytea_output: 'hex',
     quote_all_identifiers: 'off',
-    standard_conforming_strings: 'on'
+    standard_conforming_strings: 'on',
+    lc_monetary: 'C',
+    lc_numeric: 'C',
+    lc_time: 'C'
   });
   assert.equal(first.composite_digest.payload_sha256, second.composite_digest.payload_sha256);
   assert.equal(first.composite_digest.payload_bytes, second.composite_digest.payload_bytes);
@@ -544,8 +642,8 @@ try {
     first,
     'public_routines.extension_members.semantic'
   );
-  assert.equal(allSemantics.row_count, 4);
-  assert.equal(appSemantics.row_count, 4);
+  assert.equal(allSemantics.row_count, 6);
+  assert.equal(appSemantics.row_count, 6);
   assert.equal(extensionSemantics.row_count, 0);
   assert.equal(
     appSemantics.review_rows.every(row =>
@@ -605,7 +703,7 @@ try {
   );
 
   const effective = dataset(first, 'public_routines.all.effective_access');
-  assert.equal(effective.row_count, 16);
+  assert.equal(effective.row_count, 24);
   for (const signature of [
     'public.app_probe()',
     'public.public_probe(integer)',
@@ -726,9 +824,551 @@ try {
   );
   assert.equal(dataset(first, 'acl_identity.unresolved_nonzero_oids').row_count, 0);
 
-  assert.equal(Object.keys(first.review_datasets).length, 20);
-  assert.equal(first.composite_digest.row_count, 20);
-  assert.equal(first.composite_digest.review_rows.length, 20);
+  const triggerBindings = dataset(
+    first,
+    'trigger_bindings.all_non_internal'
+  );
+  const independentNonInternalTriggerCount = Number((await db.query(
+    'select count(*)::int as count from pg_catalog.pg_trigger where not tgisinternal'
+  )).rows[0].count);
+  const independentInternalTriggerCount = Number((await db.query(
+    'select count(*)::int as count from pg_catalog.pg_trigger where tgisinternal'
+  )).rows[0].count);
+  assert.ok(independentInternalTriggerCount > 0, 'foreign-key fixture needs internal triggers');
+  assert.equal(triggerBindings.row_count, independentNonInternalTriggerCount);
+  assert.equal(triggerBindings.row_count, 3);
+  const publicTriggerBinding = triggerBindings.review_rows.find(row =>
+    row.function_signature === 'public.trigger_probe_handler()'
+  );
+  const privateTriggerBinding = triggerBindings.review_rows.find(row =>
+    row.function_signature === 'private_probe.trigger_probe_handler()'
+  );
+  assert.ok(publicTriggerBinding);
+  assert.ok(privateTriggerBinding, 'non-public binding must be included in the closed world');
+  const temporaryTriggerBinding = triggerBindings.review_rows.find(row =>
+    row.trigger_name === 'temporary_trigger_probe_before_insert'
+  );
+  assert.ok(temporaryTriggerBinding, 'temporary-relation binding must be classified');
+  assert.equal(temporaryTriggerBinding.temporary_relation, true);
+  assert.equal(temporaryTriggerBinding.relation_persistence, 't');
+  assert.equal(publicTriggerBinding.relation_schema, 'public');
+  assert.equal(publicTriggerBinding.relation_name, 'trigger_probe');
+  assert.equal(publicTriggerBinding.trigger_name, 'trigger_probe_before_update');
+  assert.equal(publicTriggerBinding.relation_persistence, 'p');
+  assert.deepEqual(publicTriggerBinding.update_columns, [{ attnum: 1, name: 'id' }]);
+  assert.equal(publicTriggerBinding.argument_count, 2);
+  assert.equal(publicTriggerBinding.arguments_hex, '616c706861006265746100');
+  assert.match(publicTriggerBinding.definition, /UPDATE OF id/i);
+  assert.match(publicTriggerBinding.definition, /IS DISTINCT FROM/i);
+  assert.equal(typeof publicTriggerBinding.when_expression_tree, 'string');
+  assert.equal(publicTriggerBinding.row_schema, 'cnyos-trigger-binding/v1');
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.pg_proc_catalog.prosecdef,
+    false
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.owner_name,
+    'app_owner'
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.owner_role_security
+      .rolbypassrls,
+    false
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.language_security
+      .pg_language_catalog.lanpltrusted,
+    true
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.language_security
+      .raw_acl.expanded_acl_rows.some(row =>
+        row.grantee_label === 'PUBLIC' && row.privilege_type === 'USAGE'
+      ),
+    true
+  );
+  assert.deepEqual(
+    privateTriggerBinding.handler_semantics_and_raw_acl.pg_proc_catalog.proconfig,
+    ['search_path=pg_catalog, path_probe, pg_temp']
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl
+      .function_local_search_path_has_explicit_terminal_pg_temp,
+    true
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl
+      .function_local_search_path_contains_quoted_identifier,
+    false
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl
+      .function_local_search_path_potentially_temp_dynamic,
+    false
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.raw_acl.expanded_acl_rows
+      .some(row => row.grantee_label === 'anon'),
+    false
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.effective_runtime_access
+      .find(row => row.role_name === 'anon').function_execute,
+    false
+  );
+  const privateHandlerSchemaSecurity = privateTriggerBinding
+    .handler_semantics_and_raw_acl.function_schema_security;
+  assert.equal(privateHandlerSchemaSecurity.schema_name, 'private_probe');
+  assert.equal(
+    privateHandlerSchemaSecurity.raw_acl.expanded_acl_rows.some(row =>
+      row.grantee_label === 'anon' && row.privilege_type === 'USAGE'
+    ),
+    true
+  );
+  assert.equal(
+    privateHandlerSchemaSecurity.effective_access_all_roles.find(row =>
+      row.role_name === 'anon'
+    ).create,
+    false
+  );
+  const persistentSchemaSecurity = dataset(
+    first,
+    'schemas.all_non_temporary.security'
+  );
+  assert.equal(
+    persistentSchemaSecurity.review_rows.every(row =>
+      row.temporary_schema === false
+    ),
+    true
+  );
+  assert.ok(
+    persistentSchemaSecurity.review_rows.some(row =>
+      row.schema_name === 'path_probe'
+    )
+  );
+  const embeddedSchemaDigest = privateTriggerBinding
+    .handler_semantics_and_raw_acl.all_non_temporary_schema_security_digest;
+  assert.equal(embeddedSchemaDigest.row_count, persistentSchemaSecurity.row_count);
+  assert.equal(
+    embeddedSchemaDigest.payload_bytes,
+    persistentSchemaSecurity.payload_bytes
+  );
+  assert.equal(
+    embeddedSchemaDigest.payload_sha256,
+    persistentSchemaSecurity.payload_sha256
+  );
+  assert.equal(
+    privateTriggerBinding.handler_semantics_and_raw_acl.authorization_context
+      .role_nodes.some(row => row.role_name === 'handler_parent'),
+    true
+  );
+  const currentDatabaseSecurity = dataset(first, 'current_database.security');
+  assert.equal(currentDatabaseSecurity.row_count, 1);
+  assert.equal(currentDatabaseSecurity.review_rows[0].database_name, 'template1');
+  assert.equal(currentDatabaseSecurity.review_rows[0].owner_name, 'postgres');
+  assert.equal(
+    currentDatabaseSecurity.review_rows[0].effective_access_all_roles.find(row =>
+      row.role_name === 'PUBLIC'
+    ).temporary,
+    true
+  );
+  assert.deepEqual(
+    privateTriggerBinding.handler_semantics_and_raw_acl.authorization_context
+      .current_database_security,
+    currentDatabaseSecurity.review_rows[0]
+  );
+  assert.equal(
+    triggerBindings.review_rows.every(row => row.is_internal === false),
+    true
+  );
+
+  const eventTriggerBindings = dataset(
+    first,
+    'event_trigger_bindings.all'
+  );
+  const independentEventTriggerCount = Number((await db.query(
+    'select count(*)::int as count from pg_catalog.pg_event_trigger'
+  )).rows[0].count);
+  assert.equal(eventTriggerBindings.row_count, independentEventTriggerCount);
+  assert.equal(eventTriggerBindings.row_count, 2);
+  const publicEventTriggerBinding = eventTriggerBindings.review_rows.find(row =>
+    row.function_signature === 'public.event_trigger_probe_handler()'
+  );
+  const privateEventTriggerBinding = eventTriggerBindings.review_rows.find(row =>
+    row.function_signature === 'private_probe.event_trigger_probe_handler()'
+  );
+  assert.ok(publicEventTriggerBinding);
+  assert.ok(privateEventTriggerBinding, 'non-public event trigger must be included');
+  assert.equal(publicEventTriggerBinding.event_trigger_name, 'event_trigger_probe');
+  assert.equal(publicEventTriggerBinding.event, 'ddl_command_end');
+  assert.deepEqual(publicEventTriggerBinding.tags, ['CREATE TABLE']);
+  assert.equal(privateEventTriggerBinding.tags, null);
+  assert.equal(
+    publicEventTriggerBinding.row_schema,
+    'cnyos-event-trigger-binding/v1'
+  );
+  assert.equal(
+    privateEventTriggerBinding.handler_semantics_and_raw_acl.pg_proc_catalog
+      .prosecdef,
+    false
+  );
+  assert.equal(
+    privateEventTriggerBinding.handler_semantics_and_raw_acl.owner_name,
+    'app_owner'
+  );
+  assert.deepEqual(
+    privateEventTriggerBinding.handler_semantics_and_raw_acl.pg_proc_catalog
+      .proconfig,
+    null
+  );
+  assert.equal(
+    privateEventTriggerBinding.handler_semantics_and_raw_acl
+      .function_local_search_path_absent,
+    true
+  );
+  assert.equal(
+    privateEventTriggerBinding.handler_semantics_and_raw_acl
+      .function_local_search_path_potentially_temp_dynamic,
+    true
+  );
+  assert.equal(
+    privateEventTriggerBinding.handler_semantics_and_raw_acl.raw_acl
+      .expanded_acl_rows.some(row => row.grantee_label === 'anon'),
+    false
+  );
+
+  await db.exec('set quote_all_identifiers = off;');
+  const privateTriggerHandlerRow = observation => observation.review_datasets[
+    'trigger_bindings.all_non_internal'
+  ].review_rows.find(row =>
+    row.trigger_name === 'private_trigger_probe_before_insert'
+  ).handler_semantics_and_raw_acl;
+  const assertPrivateTriggerRestored = (observation, label) => {
+    assert.equal(
+      observation.review_datasets['trigger_bindings.all_non_internal']
+        .payload_sha256,
+      first.review_datasets['trigger_bindings.all_non_internal'].payload_sha256,
+      `${label} must restore the exact trigger-binding digest`
+    );
+    assert.equal(
+      observation.composite_digest.payload_sha256,
+      first.composite_digest.payload_sha256,
+      `${label} must restore the exact composite digest`
+    );
+  };
+  const assertPrivateTriggerDrift = (observation, label) => {
+    assert.notEqual(
+      observation.review_datasets['trigger_bindings.all_non_internal']
+        .payload_sha256,
+      first.review_datasets['trigger_bindings.all_non_internal'].payload_sha256,
+      `${label} must change the trigger-binding digest`
+    );
+  };
+
+  await db.exec(`
+    create or replace function private_probe.trigger_probe_handler()
+    returns trigger language plpgsql security invoker
+    set search_path = pg_catalog, path_probe, pg_temp as $$
+    begin
+      perform 1;
+      return new;
+    end
+    $$;
+  `);
+  const bodyDrift = await observe();
+  assertPrivateTriggerDrift(bodyDrift, 'private handler body drift');
+  assert.match(privateTriggerHandlerRow(bodyDrift).pg_proc_catalog.prosrc, /perform 1/i);
+  await db.exec(`
+  create or replace function private_probe.trigger_probe_handler()
+  returns trigger language plpgsql security invoker
+  set search_path = pg_catalog, path_probe, pg_temp as $$
+  begin
+    return new;
+  end
+  $$;
+  `);
+  assertPrivateTriggerRestored(await observe(), 'private handler body restoration');
+
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler() security definer;
+  `);
+  const securityDrift = await observe();
+  assertPrivateTriggerDrift(securityDrift, 'private handler security-mode drift');
+  assert.equal(privateTriggerHandlerRow(securityDrift).pg_proc_catalog.prosecdef, true);
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler() security invoker;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'private handler security-mode restoration'
+  );
+
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler()
+      set search_path = public;
+  `);
+  const searchPathDrift = await observe();
+  assertPrivateTriggerDrift(searchPathDrift, 'private handler search_path drift');
+  assert.deepEqual(
+    privateTriggerHandlerRow(searchPathDrift).pg_proc_catalog.proconfig,
+    ['search_path=public']
+  );
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler()
+      set search_path = pg_catalog, path_probe, pg_temp;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'private handler search_path restoration'
+  );
+
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler()
+      set search_path = "evil,pg_temp";
+  `);
+  const quotedCommaSearchPathDrift = await observe();
+  const quotedCommaHandler = privateTriggerHandlerRow(quotedCommaSearchPathDrift);
+  assertPrivateTriggerDrift(
+    quotedCommaSearchPathDrift,
+    'private handler quoted-comma search_path drift'
+  );
+  assert.deepEqual(
+    quotedCommaHandler.pg_proc_catalog.proconfig,
+    ['search_path="evil,pg_temp"']
+  );
+  assert.equal(
+    quotedCommaHandler.function_local_search_path_contains_quoted_identifier,
+    true
+  );
+  assert.equal(
+    quotedCommaHandler.function_local_search_path_has_explicit_terminal_pg_temp,
+    false
+  );
+  assert.equal(
+    quotedCommaHandler.function_local_search_path_potentially_temp_dynamic,
+    true
+  );
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler()
+      set search_path = pg_catalog, path_probe, pg_temp;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'private handler quoted-comma search_path restoration'
+  );
+
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler() owner to postgres;
+  `);
+  const ownerDrift = await observe();
+  assertPrivateTriggerDrift(ownerDrift, 'private handler owner drift');
+  assert.equal(privateTriggerHandlerRow(ownerDrift).owner_name, 'postgres');
+  await db.exec(`
+    alter function private_probe.trigger_probe_handler() owner to app_owner;
+  `);
+  assertPrivateTriggerRestored(await observe(), 'private handler owner restoration');
+
+  await db.exec(`
+    grant execute on function private_probe.trigger_probe_handler() to anon;
+  `);
+  const aclDrift = await observe();
+  assertPrivateTriggerDrift(aclDrift, 'private handler ACL drift');
+  assert.equal(
+    privateTriggerHandlerRow(aclDrift).raw_acl.expanded_acl_rows.some(row =>
+      row.grantee_label === 'anon' && row.privilege_type === 'EXECUTE'
+    ),
+    true
+  );
+  assert.equal(
+    privateTriggerHandlerRow(aclDrift).effective_runtime_access.find(row =>
+      row.role_name === 'anon'
+    ).function_execute,
+    true
+  );
+  await db.exec(`
+    revoke execute on function private_probe.trigger_probe_handler() from anon;
+  `);
+  assertPrivateTriggerRestored(await observe(), 'private handler ACL restoration');
+
+  await db.exec(`
+    grant create on schema path_probe to anon;
+  `);
+  const schemaAclDrift = await observe();
+  assertPrivateTriggerDrift(schemaAclDrift, 'private handler-schema ACL drift');
+  assert.equal(
+    dataset(schemaAclDrift, 'schemas.all_non_temporary.security').review_rows
+      .find(row => row.schema_name === 'path_probe')
+      .effective_access_all_roles.find(row => row.role_name === 'anon').create,
+    true
+  );
+  await db.exec(`
+    revoke create on schema path_probe from anon;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'private handler-schema ACL restoration'
+  );
+
+  await db.exec(`
+    alter role app_owner bypassrls;
+  `);
+  const ownerAttributeDrift = await observe();
+  assertPrivateTriggerDrift(ownerAttributeDrift, 'handler-owner attribute drift');
+  assert.equal(
+    privateTriggerHandlerRow(ownerAttributeDrift).owner_role_security
+      .rolbypassrls,
+    true
+  );
+  await db.exec(`
+    alter role app_owner nobypassrls;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'handler-owner attribute restoration'
+  );
+
+  await db.exec(`
+    grant handler_parent to app_owner with inherit true, set true;
+  `);
+  const ownerMembershipDrift = await observe();
+  assertPrivateTriggerDrift(ownerMembershipDrift, 'handler-owner membership drift');
+  assert.equal(
+    privateTriggerHandlerRow(ownerMembershipDrift).authorization_context
+      .membership_edges.some(row =>
+        row.granted_role_name === 'handler_parent' &&
+        row.member_role_name === 'app_owner'
+      ),
+    true
+  );
+  await db.exec(`
+    revoke handler_parent from app_owner;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'handler-owner membership restoration'
+  );
+
+  await db.exec(`
+    alter role authenticator set search_path = private_probe, pg_catalog;
+  `);
+  const roleSettingDrift = await observe();
+  assertPrivateTriggerDrift(roleSettingDrift, 'database role-setting drift');
+  assert.equal(
+    dataset(
+      roleSettingDrift,
+      'database_role_settings.current_database_and_global'
+    ).review_rows.some(row =>
+      row.role_name === 'authenticator' &&
+      row.database_name === 'ALL_DATABASES'
+    ),
+    true
+  );
+  await db.exec(`
+    alter role authenticator reset search_path;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'database role-setting restoration'
+  );
+
+  await db.exec(`
+    alter language plpgsql owner to app_owner;
+  `);
+  const languageOwnerDrift = await observe();
+  assertPrivateTriggerDrift(languageOwnerDrift, 'handler-language owner drift');
+  assert.equal(
+    privateTriggerHandlerRow(languageOwnerDrift).language_security.owner_name,
+    'app_owner'
+  );
+  await db.exec(`
+    alter language plpgsql owner to postgres;
+  `);
+  assertPrivateTriggerRestored(
+    await observe(),
+    'handler-language owner restoration'
+  );
+
+  await db.exec(`
+    create or replace function private_probe.event_trigger_probe_handler()
+    returns event_trigger language plpgsql as $$
+    begin
+      perform 1;
+      null;
+    end
+    $$;
+  `);
+  const eventHandlerDrift = await observe();
+  assert.notEqual(
+    eventHandlerDrift.review_datasets['event_trigger_bindings.all']
+      .payload_sha256,
+    first.review_datasets['event_trigger_bindings.all'].payload_sha256,
+    'private event-handler body drift must change the event-trigger digest'
+  );
+  const driftedPrivateEventHandler = eventHandlerDrift.review_datasets[
+    'event_trigger_bindings.all'
+  ].review_rows.find(row =>
+    row.event_trigger_name === 'private_event_trigger_probe'
+  ).handler_semantics_and_raw_acl;
+  assert.match(driftedPrivateEventHandler.pg_proc_catalog.prosrc, /perform 1/i);
+  await db.exec(`
+  create or replace function private_probe.event_trigger_probe_handler()
+  returns event_trigger language plpgsql as $$
+  begin
+    null;
+  end
+  $$;
+  `);
+  const restoredPrivateEventHandler = await observe();
+  assert.equal(
+    restoredPrivateEventHandler.review_datasets['event_trigger_bindings.all']
+      .payload_sha256,
+    first.review_datasets['event_trigger_bindings.all'].payload_sha256,
+    'private event-handler restoration must restore its exact digest'
+  );
+  assert.equal(
+    restoredPrivateEventHandler.composite_digest.payload_sha256,
+    first.composite_digest.payload_sha256,
+    'private event-handler restoration must restore the exact composite digest'
+  );
+
+  await db.exec(`
+    alter table public.trigger_probe disable trigger trigger_probe_before_update;
+    alter event trigger event_trigger_probe disable;
+  `);
+  const disabledBindings = await observe();
+  assert.notEqual(
+    disabledBindings.review_datasets['trigger_bindings.all_non_internal']
+      .payload_sha256,
+    first.review_datasets['trigger_bindings.all_non_internal'].payload_sha256,
+    'disabling a trigger must change its closed-world binding digest'
+  );
+  assert.notEqual(
+    disabledBindings.review_datasets['event_trigger_bindings.all'].payload_sha256,
+    first.review_datasets['event_trigger_bindings.all'].payload_sha256,
+    'disabling an event trigger must change its closed-world binding digest'
+  );
+  await db.exec(`
+    alter table public.trigger_probe enable trigger trigger_probe_before_update;
+    alter event trigger event_trigger_probe enable;
+  `);
+  const restoredBindings = await observe();
+  assert.equal(
+    restoredBindings.review_datasets['trigger_bindings.all_non_internal']
+      .payload_sha256,
+    first.review_datasets['trigger_bindings.all_non_internal'].payload_sha256
+  );
+  assert.equal(
+    restoredBindings.review_datasets['event_trigger_bindings.all'].payload_sha256,
+    first.review_datasets['event_trigger_bindings.all'].payload_sha256
+  );
+  assert.equal(
+    restoredBindings.composite_digest.payload_sha256,
+    first.composite_digest.payload_sha256
+  );
+
+  assert.equal(Object.keys(first.review_datasets).length, 25);
+  assert.equal(first.composite_digest.row_count, 25);
+  assert.equal(first.composite_digest.review_rows.length, 25);
   for (const [name, value] of Object.entries(first.review_datasets)) {
     assert.equal(
       first.composite_digest.review_rows.some(row =>

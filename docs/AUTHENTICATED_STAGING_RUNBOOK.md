@@ -66,12 +66,41 @@ schema privilege, connected runtime-role edge and default function ACL. Check
 the reviewed exact live manifest into a new PR #36 commit and repeat independent
 review and exact-head CI before running the closed-world verifier.
 
+The observer must also contain the closed-world
+`trigger_bindings.all_non_internal` and `event_trigger_bindings.all` datasets.
+Those additions are identified by artifact schema
+`cnyos-public-routine-acl-observation/v2`. The same revision adds
+`database_role_settings.current_database_and_global` and
+`schemas.all_non_temporary.security`, plus `current_database.security`, making
+25 datasets in total.
+This includes bindings whose relation and handler are outside `public`; a
+public-only binding query is not complete. Classify temporary-relation rows and
+all non-public handlers explicitly. Every binding commits to its handler body,
+catalog state, owner, raw/effective ACL, handler-schema security, the digest of
+all non-temporary schema security rows, all role attributes and memberships,
+current/global database-role settings, the current database owner and ACL, and
+the handler's direct `pg_language` catalog row and language ACL.
+An absent function-local `search_path`, `$user`, a quoted identifier, a
+session-specific temporary schema, or a path without an explicit unquoted
+terminal `pg_temp` remains an explicit unsafe review condition rather than an
+inferred safe path. Quoted paths require manual parsing; the conservative flag
+must not infer safety from commas or `pg_temp` text inside a quoted schema name.
+The 20-dataset
+observation captured at
+`21c12683e8be06d7b42f3491274d6bb5104d6825` predates these datasets and is valid
+discovery evidence only; do not bind or accept it as the complete manifest.
+The direct language record does not recursively attest a procedural-language
+handler binary or every database object referenced by a function body. Treat an
+unexpected language or unresolved dependency as a blocker requiring separate
+review rather than claiming transitive semantic closure.
+
 Its fresh-session detector deliberately calls `pg_current_xact_id()` in two
 adjacent autocommit statements. PostgreSQL therefore allocates two permanent
 transaction IDs before the read-only observation snapshot; that accounting
 effect is expected and does not change application rows, catalogs or ACLs. The
-artifact forces UTF-8 psql output and pins every supported catalog-deparsing and
-JSON-text output GUC before hashing. Exact-head CI runs the unmodified observer
+artifact forces UTF-8 psql output and pins the catalog-deparsing and JSON-text
+settings on which its canonical payload depends, including `lc_monetary=C`,
+`lc_numeric=C`, and `lc_time=C`. Exact-head CI runs the unmodified observer
 with a PostgreSQL 17 `psql` client against an ephemeral PostgreSQL 17 server,
 including hostile caller GUCs/client encoding, a non-ASCII routine, missing or
 malformed metadata refusal, outer-transaction refusal, same- and cross-session

@@ -2,9 +2,18 @@
 
 Status: pending independent approval and complete live-manifest reconciliation.
 This checklist is not an approval, a receipt, or authorization to run live SQL.
-Source inspected: `2e6529852a9d30e4d85186a7f5ac9ccfda8ee1da` on 2026-09-07.
-Any source change needs new exact-head CI and reviewer assessment. Follow the
+The successful discovery observation was made from
+`21c12683e8be06d7b42f3491274d6bb5104d6825` on 2026-09-08. Its independent
+classification found a P0 anonymous clinical-write exposure and proved that
+the two current candidates cannot reach their asserted global ACL matrix. The
+observer is now being extended to include every non-internal trigger binding
+and every event-trigger binding; that source change needs new exact-head CI and
+reviewer assessment before another live read-only run. Follow the
 [staging runbook](AUTHENTICATED_STAGING_RUNBOOK.md) for the full execution protocol.
+
+The classified discovery summary is
+[Chananya staging public-routine ACL observation — 2026-09-08](security/CHANANYA_STAGING_PUBLIC_ROUTINE_ACL_OBSERVATION_2026-09-08.md).
+It is evidence of blockers, not security sign-off.
 
 ## Changes to review
 
@@ -31,7 +40,12 @@ test this guard. Tests remove blockers only in disposable fixture copies.
   advisory-lock assertions; do not infer them from a matching exception alone.
 - [ ] After design review and exact-head CI, collect the read-only observation
   using the runbook's direct-session protocol. Independently classify every live
-  routine, extension, raw/effective ACL, role edge, schema and default ACL.
+  routine, extension, raw/effective ACL, role edge, schema, default ACL,
+  database-role setting, current-database ACL/owner, non-internal trigger
+  binding and event-trigger binding. For every bound handler, review its body,
+  security mode, local `search_path`, owner role context, handler-schema and
+  all-schema trust state, direct language catalog/ACL, and temporary/dynamic
+  path flags.
 - [ ] Bind the reviewed complete manifest in a later commit; repeat independent
   review and exact-head CI. Current subset-verifier success is not authorization.
 - [ ] Establish the runbook's tenant-specific prerequisites before any future
