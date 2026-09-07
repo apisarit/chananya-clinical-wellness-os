@@ -225,8 +225,13 @@ endpoint, the Supabase SQL Editor, a driver-supplied outer transaction, or an
 already-open psql transaction. The artifact refuses disabled autocommit and an
 existing transaction before any ledger work; if mis-included in a caller
 transaction, it deliberately rolls that transaction back and raises a hard SQL
-error while its own `ON_ERROR_STOP=1` is in force, so direct `-f` execution and
-an including script terminate nonzero without reaching a caller tail sentinel.
+error while its own `ON_ERROR_STOP=1` is in force, so the required direct `-f`
+execution terminates nonzero. Nested `\i` execution is unsupported: PostgreSQL
+17 `psql` snapshots the outer caller's error policy at the include boundary, so a caller
+that reaches `\i` with `ON_ERROR_STOP=off` can mask the child error, continue a
+tail command and retain a session advisory lock until disconnect. If an operator
+wrapper is unavoidable, it must set `ON_ERROR_STOP=1` before `\i`; any child
+error, missing exact evidence or unexpected output still invalidates the run.
 No refusal or proof path relies on `\q`/`\quit` or a numeric quit argument. It rejects any
 other psql `HOST`/`PORT`/`USER`/`DBNAME` tuple and, inside the transaction,
 requires `pg_control_system().system_identifier` to equal the independently

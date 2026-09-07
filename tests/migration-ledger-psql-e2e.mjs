@@ -2080,6 +2080,50 @@ assert.doesNotMatch(
 );
 assertDurableUnchanged('artifact error-setting override', immediateHookState);
 
+const unsupportedNestedCallerPath = await writeRuntimeFile(
+  'unsupported-nested-on-error-stop-off.sql',
+  `\\set ON_ERROR_STOP off\n` +
+    `\\i ${testBoundStrictArtifactPath}\n` +
+    `rollback;\n` +
+    advisoryLockProbeSql('unsupported-nested-before-disconnect') +
+    `\\echo CNYOS_UNSUPPORTED_NESTED_INCLUDE_TAIL_REACHED\n`
+);
+const unsupportedNestedCaller = psql(
+  ['-f', unsupportedNestedCallerPath],
+  { allowFailure: true }
+);
+assert.equal(
+  unsupportedNestedCaller.status,
+  0,
+  'PostgreSQL 17 outer ON_ERROR_STOP=off behavior changed; re-review nested support'
+);
+assert.match(
+  unsupportedNestedCaller.output,
+  /CNYOS_LEDGER_REPAIR_RELATION_HOOK_INVALID/,
+  'unsupported nested caller must still encounter the child repair refusal'
+);
+assert.match(
+  unsupportedNestedCaller.output,
+  /CNYOS_UNSUPPORTED_NESTED_INCLUDE_TAIL_REACHED/,
+  'unsupported nested caller must demonstrate outer error-status masking'
+);
+assert.deepEqual(
+  jsonRows(unsupportedNestedCaller)
+    .filter(row =>
+      row.test_advisory_lock_phase === 'unsupported-nested-before-disconnect'
+    )
+    .map(row => row.own_granted_advisory_locks),
+  [1],
+  'unsupported nested caller must retain its session lock until disconnect'
+);
+assertNoRepairSuccess(unsupportedNestedCaller, 'unsupported nested caller');
+assertDurableUnchanged('unsupported nested caller', immediateHookState);
+assert.equal(
+  sessionAdvisoryLockCount(),
+  0,
+  'unsupported nested caller lock must be released when its psql process disconnects'
+);
+
 await resetDatabase();
 psql(['-v', 'ON_ERROR_STOP=1', '-c', receiptTableFixtureSql()]);
 const savepointContinuationBefore = durableSnapshot();

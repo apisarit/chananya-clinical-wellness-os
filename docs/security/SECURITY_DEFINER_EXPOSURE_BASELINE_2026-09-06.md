@@ -334,9 +334,14 @@ process with `AUTOCOMMIT=on` and `ON_ERROR_STOP=1`. Do not use
 `--single-transaction`, `ON_ERROR_ROLLBACK`, a transaction pooler, SQL Editor,
 driver wrapper or pre-existing transaction. Before `BEGIN`, the artifact refuses
 an outer transaction; a misuse path first rolls it back and then raises a hard SQL
-error while its own `ON_ERROR_STOP=1` is active, so direct and nested callers exit
-nonzero and cannot reach a tail sentinel. No refusal or post-commit proof depends
-on `\q`/`\quit` or a numeric quit argument. Behind the unconditional live/default
+error while its own `ON_ERROR_STOP=1` is active, so the required direct `-f`
+invocation exits nonzero. Nested `\i` execution is unsupported because PostgreSQL
+17 `psql` snapshots the outer caller's `ON_ERROR_STOP` value at the include boundary. An
+outer caller entering `\i` with that value off can mask the child error, continue
+its tail and retain a session advisory lock until disconnect; any unavoidable
+wrapper must set it to `1` before `\i`, and any child error or missing exact
+evidence invalidates the run. No refusal or post-commit proof depends on
+`\q`/`\quit` or a numeric quit argument. Behind the unconditional live/default
 ACL blocker, every write-capable ACL phase first requires the exact reviewed 45-entry
 ordered version/name/SHA-256 manifest; canonical syntax and cardinality alone are
 insufficient.
