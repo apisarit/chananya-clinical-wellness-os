@@ -40,6 +40,15 @@ const repairSuccessStatuses = [successStatus, preReconciliationRepairSuccessStat
 const adminId = '33333333-3333-4333-a333-333333333333';
 const staleNonce = '99999999-9999-4999-a999-999999999999';
 const staleXid = '999999999';
+const canonicalCatalogOutputGucSql = [
+  "set local timezone = 'UTC';",
+  "set local datestyle = 'ISO, YMD';",
+  "set local intervalstyle = 'postgres';",
+  'set local extra_float_digits = 3;',
+  "set local bytea_output = 'hex';",
+  'set local quote_all_identifiers = off;',
+  'set local standard_conforming_strings = on;'
+].join('\n') + '\n';
 const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'cnyos-psql-e2e-'));
 
 function runDockerClient(command, args, { allowFailure = false } = {}) {
@@ -1255,6 +1264,7 @@ assert.match(
 );
 assert.ok(repairArtifact.includes(
   'begin isolation level repeatable read read write;\n' +
+  canonicalCatalogOutputGucSql +
   'set local search_path = pg_catalog, pg_temp, public;\n' +
   'do $ledger_guard$\n'
 ), 'write-transaction path pin must immediately precede the repair guard');
@@ -1339,6 +1349,7 @@ assert.match(
 assert.ok(repairArtifact.includes(
   'commit;\n' +
   'begin isolation level repeatable read read only;\n' +
+  canonicalCatalogOutputGucSql +
   'set local search_path = pg_catalog, pg_temp, public;\n' +
   "set local statement_timeout = '60s';\n" +
   "set local lock_timeout = '5s';\n" +
