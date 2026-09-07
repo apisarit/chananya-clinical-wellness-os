@@ -343,6 +343,11 @@ assert.match(
   /disposable server must report loopback or an RFC1918 container address/,
   'runtime identity may admit only loopback or private CI-container addresses'
 );
+assert.match(
+  nativeE2eSource,
+  /directHostAddress: serverAddress/,
+  'snapshot profile must pin the already-validated server-reported address'
+);
 assert.doesNotMatch(
   nativeE2eSource,
   /server_address:\s*'127\.0\.0\.1'/,

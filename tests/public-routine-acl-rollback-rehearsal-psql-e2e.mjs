@@ -318,7 +318,7 @@ for each row execute function public.cnyos_acl_rehearsal_trigger();
     clinicId: '00000000-0000-4000-8000-00000000a001',
     clinicCode: 'CHANANYA-STG',
     applicationName: 'cnyos-acl-rollback-rehearsal-native-e2e',
-    directHostAddress: '127.0.0.1',
+    directHostAddress: serverAddress,
     requireSsl: false,
     publicRoutineCount: Number(baseline.public_routine_count),
     securityDefinerCount: Number(baseline.security_definer_count),
