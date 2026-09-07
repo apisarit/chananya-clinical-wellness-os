@@ -2081,6 +2081,23 @@ assert.doesNotMatch(
 assertDurableUnchanged('artifact error-setting override', immediateHookState);
 
 await resetDatabase();
+psql(['-v', 'ON_ERROR_STOP=1', '-c', receiptTableFixtureSql()]);
+const savepointContinuationBefore = durableSnapshot();
+assert.deepEqual(
+  savepointContinuationBefore.ledger.rows,
+  [],
+  'savepoint continuation fixture must start with an empty durable ledger'
+);
+assert.equal(
+  savepointContinuationBefore.receipts.exists,
+  true,
+  'savepoint continuation fixture must start with a canonical durable receipt table'
+);
+assert.deepEqual(
+  savepointContinuationBefore.receipts.rows,
+  [],
+  'savepoint continuation fixture must start with an empty durable receipt table'
+);
 const injectedFailureNeedle =
   "perform set_config('cnyos.migration_ledger_repair_committed_nonce'," +
   'v_run_nonce::text,false);';
@@ -2141,7 +2158,7 @@ expectFailure(
 );
 assert.match(savepointContinuation.output, /TEST_LEDGER_REPAIR_ABORT/);
 assert.doesNotMatch(savepointContinuation.output, /CNYOS_UNREACHABLE_SAVEPOINT_TAIL/);
-assertDurableUnchanged('adversarial savepoint continuation', pristineDurableState);
+assertDurableUnchanged('adversarial savepoint continuation', savepointContinuationBefore);
 
 // Force a real PostgreSQL deferred-constraint failure at COMMIT after the
 // entire repair body has run. This covers a failure that cannot be caught by
