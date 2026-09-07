@@ -734,9 +734,18 @@ set bytea_output = 'escape';
 
   const preheldWrapperPath = await writeRuntimeFile(
     'preheld-observer-lock.sql',
-    String.raw`select true as cnyos_test_observer_preheld
-from (select pg_catalog.pg_advisory_lock(202608302100::bigint)) held
+    String.raw`\set ON_ERROR_STOP 1
+select pg_catalog.pg_try_advisory_lock(202608302100::bigint)
+  as cnyos_test_observer_preheld
 \gset
+\if :cnyos_test_observer_preheld
+\else
+do $cnyos_test_observer_prehold_abort$
+begin
+  raise exception 'CNYOS_TEST_OBSERVER_PREHOLD_ACQUISITION_FAILED';
+end
+$cnyos_test_observer_prehold_abort$;
+\endif
 \i ${observationPath}
 \echo CNYOS_UNREACHABLE_OBSERVER_PREHELD_TAIL
 `

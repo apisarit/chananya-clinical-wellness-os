@@ -255,9 +255,18 @@ try {
 
     const preheldPath = await writeRuntimeFile(
       `${candidate.label}-preheld-lock.sql`,
-      String.raw`select true as cnyos_test_acl_candidate_preheld
-from (select pg_catalog.pg_advisory_lock(202608302100::bigint)) held
+      String.raw`\set ON_ERROR_STOP 1
+select pg_catalog.pg_try_advisory_lock(202608302100::bigint)
+  as cnyos_test_acl_candidate_preheld
 \gset
+\if :cnyos_test_acl_candidate_preheld
+\else
+do $cnyos_test_acl_candidate_prehold_abort$
+begin
+  raise exception 'CNYOS_TEST_ACL_CANDIDATE_PREHOLD_ACQUISITION_FAILED';
+end
+$cnyos_test_acl_candidate_prehold_abort$;
+\endif
 \i ${candidate.path}
 \echo CNYOS_UNREACHABLE_ACL_CANDIDATE_TAIL
 `
