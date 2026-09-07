@@ -6,6 +6,7 @@ import { resolvePlatformFeatures } from '../platform-config.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hex = /^#[0-9a-f]{6}$/i;
 const clinicCode = /^[A-Z][A-Z0-9_-]{1,23}$/;
+const deploymentIdentifier = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
 const sourceRevision = /^[0-9a-f]{7,40}$/i;
 const legacyClinicId = '00000000-0000-0000-0000-000000000001';
@@ -102,6 +103,10 @@ export function validateTenantConfig(input) {
     normalizedColors[key] = value.toLowerCase();
   }
 
+  const deploymentId = requiredString(input.deploymentId, 'deploymentId', 80);
+  if (!deploymentIdentifier.test(deploymentId)) {
+    throw new Error('deploymentId must start with a letter or digit and contain only letters, digits, ., _ or -');
+  }
   const expectedClinicCode = requiredString(input.tenant?.expectedClinicCode, 'tenant.expectedClinicCode', 24).toUpperCase();
   if (!clinicCode.test(expectedClinicCode)) throw new Error('tenant.expectedClinicCode must be 2-24 uppercase letters, digits, _ or -');
   const expectedClinicId = requiredString(input.tenant?.expectedClinicId, 'tenant.expectedClinicId', 36).toLowerCase();
@@ -131,7 +136,7 @@ export function validateTenantConfig(input) {
   return {
     schemaVersion: 1,
     ...(input.features === undefined ? {} : { features: resolvePlatformFeatures(input.features) }),
-    deploymentId: requiredString(input.deploymentId, 'deploymentId', 80),
+    deploymentId,
     brand: {
       appName,
       shortName,

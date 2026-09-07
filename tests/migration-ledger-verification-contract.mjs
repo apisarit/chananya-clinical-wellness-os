@@ -1376,6 +1376,19 @@ for (const [grantee, procedureSignature] of transitionManifest.browserRpcAclTupl
 }
 
 for (const builder of [buildMigrationLedgerVerificationSql, buildMigrationLedgerRepairSql]) {
+  for (const deploymentId of [
+    'jitarsa-clinical-staging\nselect 1 as cnyos_injected;',
+    'jitarsa-clinical-staging\r\n\\echo forged'
+  ]) {
+    assert.throws(
+      () => builder({
+        config: { ...jitarsaConfig, deploymentId },
+        entries,
+        sourceRevision: revision
+      }),
+      /deploymentId must start with a letter or digit and contain only letters, digits, \., _ or -/
+    );
+  }
   assert.throws(
     () => builder({
       config: jitarsaConfig,

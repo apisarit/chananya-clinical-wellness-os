@@ -120,7 +120,8 @@ already-published identity checks and blockers, not database credentials.
 Generated SQL is therefore not automatically a credential exposure or a reason
 to rotate keys. An actual secret or patient-data finding requires incident handling.
 
-CI now explicitly allowlists the five source-generated migration files and
+CI now explicitly allowlists four source-only SQL files (three generated and one
+checked-in observer copy), plus `SHA256SUMS` and
 `exact-commit.json` instead of uploading their whole directories. This limits
 accidental inclusion of future transcripts/observations; it is not a content
 redactor. Review generator changes before adding new upload paths. Keep required

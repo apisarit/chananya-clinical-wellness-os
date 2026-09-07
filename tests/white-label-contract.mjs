@@ -30,6 +30,18 @@ assert.match(customer.database.url, /^https:\/\//);
 assert.match(renderTenantConfig(customer), /window\.CLINICAL_OS_CONFIG = Object\.freeze/);
 assert.doesNotMatch(renderBrandConfig(customer), /"database"|publishableKey|supabase\.co/i);
 
+for (const deploymentId of [
+  'customer-clinic-staging\nselect 1;',
+  'customer-clinic-staging\r\n\\echo forged',
+  'customer clinic staging',
+  '-customer-clinic-staging'
+]) {
+  assert.throws(
+    () => validateTenantConfig({ ...example, deploymentId }),
+    /deploymentId must start with a letter or digit and contain only letters, digits, \., _ or -/
+  );
+}
+
 assert.throws(
   () => validateTenantConfig({ ...example, database: { ...example.database, publishableKey: 'sb_secret_forbidden' } }),
   /must never contain a service-role or secret key/
