@@ -6,7 +6,7 @@ export const SCHEDULED_FUNCTION_NAMES = Object.freeze([
   'database-backup-recovery'
 ]);
 
-const NETLIFY_SCHEDULED_ROUTE_DENIAL_STATUS = 404;
+const NETLIFY_SCHEDULED_ROUTE_DENIAL_STATUSES = new Set([403, 404]);
 const MAX_DENIAL_BODY_BYTES = 16 * 1024;
 
 export function assertPublishedNetlifyOrigin(value) {
@@ -57,7 +57,7 @@ function assertExternalDenial(response, body) {
       || Object.hasOwn(payload, 'code'))) {
     throw new Error('SCHEDULED_FUNCTION_RUNTIME_REACHED');
   }
-  if (response.status !== NETLIFY_SCHEDULED_ROUTE_DENIAL_STATUS) {
+  if (!NETLIFY_SCHEDULED_ROUTE_DENIAL_STATUSES.has(response.status)) {
     throw new Error('SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT');
   }
 }

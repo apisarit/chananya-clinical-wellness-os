@@ -30,8 +30,12 @@ import {
   verifyScheduledRouteDenial
 } from '../scripts/verify-netlify-scheduled-route-denial.mjs';
 import {
+  EXPECTED_FUNCTION_NAMES,
   assertScheduledDeployMetadata
 } from '../scripts/verify-netlify-scheduled-deploy-metadata.mjs';
+import {
+  verifyNetlifyScheduledReleaseGate
+} from '../scripts/verify-netlify-scheduled-release-gate.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
@@ -308,33 +312,40 @@ assert.equal(externalDenialEvidence.length, 4);
 assert.deepEqual(externalDenialEvidence.map(item => item.status), [404, 404, 404, 404]);
 assert.deepEqual(externalDenialCalls.map(call => call.options.method), ['GET', 'POST', 'GET', 'POST']);
 assert.ok(externalDenialCalls.every(call => call.options.redirect === 'error'));
-await assert.rejects(
-  verifyScheduledRouteDenial(
-    'https://synthetic-drive-staging.netlify.app',
-    async () => new Response('', {
-      status: 403,
-      headers: { 'Content-Type': 'text/plain' }
-    })
-  ),
-  /SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT/
+const forbiddenExternalDenialEvidence = await verifyScheduledRouteDenial(
+  'https://synthetic-drive-staging.netlify.app',
+  async () => new Response('', {
+    status: 403,
+    headers: { 'Content-Type': 'text/plain' }
+  })
 );
+assert.equal(forbiddenExternalDenialEvidence.length, 4);
+assert.ok(forbiddenExternalDenialEvidence.every(item => item.status === 403));
 let mixedExternalDenialCallCount = 0;
-await assert.rejects(
-  verifyScheduledRouteDenial(
-    'https://synthetic-drive-staging.netlify.app',
-    async () => {
-      mixedExternalDenialCallCount += 1;
-      return new Response('', { status: mixedExternalDenialCallCount === 4 ? 403 : 404 });
-    }
-  ),
-  /SCHEDULED_FUNCTION_PUBLIC_ROUTE_PRESENT/
+const mixedExternalDenialEvidence = await verifyScheduledRouteDenial(
+  'https://synthetic-drive-staging.netlify.app',
+  async () => {
+    mixedExternalDenialCallCount += 1;
+    return new Response('', { status: mixedExternalDenialCallCount % 2 ? 404 : 403 });
+  }
 );
-assert.equal(mixedExternalDenialCallCount, 4, 'one non-404 result must reject the full four-request proof');
+assert.equal(mixedExternalDenialCallCount, 4);
+assert.deepEqual(mixedExternalDenialEvidence.map(item => item.status), [404, 403, 404, 403]);
 await assert.rejects(
   verifyScheduledRouteDenial(
     'https://synthetic-drive-staging.netlify.app',
     async () => new Response(JSON.stringify({ ok: true, enabled: false }), {
       status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  ),
+  /SCHEDULED_FUNCTION_RUNTIME_REACHED/
+);
+await assert.rejects(
+  verifyScheduledRouteDenial(
+    'https://synthetic-drive-staging.netlify.app',
+    async () => new Response(JSON.stringify({ ok: false, code: 'BACKUP_SCHEDULED_INVOCATION_REQUIRED' }), {
+      status: 404,
       headers: { 'Content-Type': 'application/json' }
     })
   ),
@@ -375,25 +386,114 @@ await assert.rejects(
   /SCHEDULED_ROUTE_DENIAL_BODY_TOO_LARGE/
 );
 const deployMetadata = {
+  id: 'a'.repeat(24),
+  site_id: values.BACKUP_EXPECTED_NETLIFY_SITE_ID,
+  commit_ref: 'b'.repeat(40),
+  state: 'ready',
+  context: 'production',
   function_schedules: [
     { cron: '0 20 * * *', name: 'database-backup' },
     { cron: '*/15 0-2,20-23 * * *', name: 'database-backup-recovery' }
   ],
-  available_functions: [
-    { n: 'database-backup' },
-    { n: 'database-backup-recovery' },
-    { n: 'owner-subscription', ro: [{ p: '/api/owner-subscription' }] }
-  ]
+  available_functions: EXPECTED_FUNCTION_NAMES.map(name => ({
+    n: name,
+    ...(name === 'owner-subscription' ? { ro: [{ p: '/api/owner-subscription' }] } : {})
+  })),
+  functions_config: {
+    'database-backup': { routes: [], excluded_routes: [] },
+    'database-backup-recovery': { routes: [], excluded_routes: [] }
+  }
 };
-assert.equal(assertScheduledDeployMetadata(deployMetadata).length, 2);
+const deployMetadataExpectation = {
+  expectedSiteId: values.BACKUP_EXPECTED_NETLIFY_SITE_ID,
+  expectedDeployId: deployMetadata.id,
+  expectedCommit: deployMetadata.commit_ref,
+  expectedContext: 'production'
+};
+assert.equal(assertScheduledDeployMetadata(deployMetadata, deployMetadataExpectation).length, 2);
+assert.equal(
+  assertScheduledDeployMetadata(
+    { ...deployMetadata, commit_ref: deployMetadata.commit_ref.toUpperCase() },
+    deployMetadataExpectation
+  ).length,
+  2,
+  'Netlify hexadecimal commit provenance may be normalized without changing its identity'
+);
+assert.throws(() => assertScheduledDeployMetadata(deployMetadata), /EXPECTED_NETLIFY_SITE_ID_REQUIRED/);
+assert.throws(
+  () => assertScheduledDeployMetadata(deployMetadata, {
+    ...deployMetadataExpectation,
+    expectedDeployId: 'b'.repeat(24)
+  }),
+  /NETLIFY_DEPLOY_ID_MISMATCH/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({ ...deployMetadata, site_id: 'different-site' }, deployMetadataExpectation),
+  /NETLIFY_DEPLOY_SITE_ID_MISMATCH/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({ ...deployMetadata, state: 'building' }, deployMetadataExpectation),
+  /NETLIFY_DEPLOY_NOT_READY/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({ ...deployMetadata, commit_ref: 'c'.repeat(40) }, deployMetadataExpectation),
+  /NETLIFY_DEPLOY_SOURCE_COMMIT_MISMATCH/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({ ...deployMetadata, commit_ref: '' }, deployMetadataExpectation),
+  /NETLIFY_DEPLOY_SOURCE_COMMIT_MISMATCH/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({ ...deployMetadata, commit_ref: 'b'.repeat(12) }, deployMetadataExpectation),
+  /NETLIFY_DEPLOY_SOURCE_COMMIT_MISMATCH/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata(deployMetadata, {
+    ...deployMetadataExpectation,
+    expectedCommit: 'b'.repeat(12)
+  }),
+  /EXPECTED_NETLIFY_SOURCE_COMMIT_INVALID/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({ ...deployMetadata, context: 'deploy-preview' }, deployMetadataExpectation),
+  /NETLIFY_DEPLOY_CONTEXT_MISMATCH/
+);
 assert.throws(
   () => assertScheduledDeployMetadata({
     ...deployMetadata,
     function_schedules: deployMetadata.function_schedules.map(item => item.name === 'database-backup-recovery'
       ? { ...item, cron: '*/30 * * * *' }
       : item)
-  }),
+  }, deployMetadataExpectation),
   /NETLIFY_SCHEDULE_METADATA_INVALID/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({
+    ...deployMetadata,
+    function_schedules: [...deployMetadata.function_schedules, deployMetadata.function_schedules[0]]
+  }, deployMetadataExpectation),
+  /NETLIFY_SCHEDULE_METADATA_INVALID/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({
+    ...deployMetadata,
+    function_schedules: [
+      ...deployMetadata.function_schedules,
+      { name: 'unexpected-export', cron: '* * * * *' }
+    ],
+    available_functions: [
+      ...deployMetadata.available_functions,
+      { n: 'unexpected-export' }
+    ]
+  }, deployMetadataExpectation),
+  /NETLIFY_SCHEDULE_METADATA_INVALID/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({
+    ...deployMetadata,
+    available_functions: deployMetadata.available_functions.slice(1)
+  }, deployMetadataExpectation),
+  /NETLIFY_FUNCTION_FILESET_INVALID/
 );
 assert.throws(
   () => assertScheduledDeployMetadata({
@@ -401,9 +501,264 @@ assert.throws(
     available_functions: deployMetadata.available_functions.map(item => item.n === 'database-backup'
       ? { ...item, ro: [] }
       : item)
-  }),
+  }, deployMetadataExpectation),
   /NETLIFY_SCHEDULED_FUNCTION_CUSTOM_ROUTE_PRESENT/
 );
+assert.throws(
+  () => assertScheduledDeployMetadata({
+    ...deployMetadata,
+    functions_config: {
+      ...deployMetadata.functions_config,
+      'database-backup': { routes: [{ pattern: '/public-backup' }], excluded_routes: [] }
+    }
+  }, deployMetadataExpectation),
+  /NETLIFY_SCHEDULED_FUNCTION_CUSTOM_ROUTE_PRESENT/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({
+    ...deployMetadata,
+    functions_config: {
+      ...deployMetadata.functions_config,
+      'database-backup-recovery': { routes: [], excluded_routes: [{ pattern: '/exception' }] }
+    }
+  }, deployMetadataExpectation),
+  /NETLIFY_SCHEDULED_FUNCTION_CUSTOM_ROUTE_PRESENT/
+);
+
+const scheduledGateSiteId = values.BACKUP_EXPECTED_NETLIFY_SITE_ID;
+const scheduledGateSiteName = 'synthetic-drive-staging';
+const scheduledGateOrigin = `https://${scheduledGateSiteName}.netlify.app`;
+const scheduledGateDeployId = deployMetadata.id;
+const scheduledGateDeployOrigin = `https://${scheduledGateDeployId}--${scheduledGateSiteName}.netlify.app`;
+const scheduledGateCommit = 'b'.repeat(40);
+const scheduledGateTree = 'c'.repeat(40);
+const scheduledGateToken = 'netlify-token-sentinel-never-evidence';
+const scheduledGateManifest = {
+  schemaVersion: 1,
+  deploymentId: 'synthetic-drive-staging',
+  source: {
+    commit: scheduledGateCommit,
+    tree: scheduledGateTree,
+    verified: true
+  },
+  build: { context: 'production', timestamp: '2026-09-08T00:00:00.000Z' },
+  safety: { previewLocked: false, databaseLocked: false }
+};
+const scheduledGateDeployMetadata = {
+  ...deployMetadata,
+  deploy_ssl_url: scheduledGateDeployOrigin,
+  secret_marker: 'raw-deploy-metadata-must-not-be-evidence'
+};
+
+function gateResponseJson(value, status = 200) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+function scheduledGateFetch({
+  metadata = scheduledGateDeployMetadata,
+  exactManifest = scheduledGateManifest,
+  canonicalManifest = scheduledGateManifest,
+  exactManifestStatus = 200,
+  canonicalManifestStatus = 200,
+  routeResponses = [
+    { status: 403 }, { status: 404 }, { status: 403 }, { status: 404 },
+    { status: 404 }, { status: 403 }, { status: 404 }, { status: 403 }
+  ],
+  publishedDeployAfter = scheduledGateDeployId
+} = {}) {
+  const calls = [];
+  const counts = { site: 0, deploy: 0, manifest: 0, route: 0 };
+  const manifestBody = value => typeof value === 'string' ? value : JSON.stringify(value);
+  const fetchImpl = async (input, options = {}) => {
+    const url = new URL(String(input));
+    calls.push({ url: url.toString(), options });
+    if (url.origin === 'https://api.netlify.com'
+      && url.pathname === `/api/v1/sites/${scheduledGateSiteId}`) {
+      counts.site += 1;
+      return gateResponseJson({
+        id: scheduledGateSiteId,
+        name: scheduledGateSiteName,
+        ssl_url: scheduledGateOrigin,
+        published_deploy: {
+          id: counts.site === 1 ? scheduledGateDeployId : publishedDeployAfter
+        }
+      });
+    }
+    if (url.origin === 'https://api.netlify.com'
+      && url.pathname === `/api/v1/deploys/${scheduledGateDeployId}`) {
+      counts.deploy += 1;
+      return gateResponseJson(metadata);
+    }
+    if (url.pathname === '/deploy-manifest.json') {
+      counts.manifest += 1;
+      const isExact = url.origin === scheduledGateDeployOrigin;
+      return new Response(manifestBody(isExact ? exactManifest : canonicalManifest), {
+        status: isExact ? exactManifestStatus : canonicalManifestStatus,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    if (/^\/\.netlify\/functions\/(?:database-backup|database-backup-recovery)$/.test(url.pathname)) {
+      const item = routeResponses[counts.route];
+      counts.route += 1;
+      if (!item) throw new Error('UNEXPECTED_SCHEDULED_GATE_ROUTE_CALL');
+      return new Response(item.body || '', {
+        status: item.status,
+        headers: item.headers || { 'Content-Type': 'text/plain' }
+      });
+    }
+    throw new Error(`UNEXPECTED_SCHEDULED_GATE_URL_${url}`);
+  };
+  return { calls, counts, fetchImpl };
+}
+
+function scheduledGateArguments(fixture) {
+  return {
+    siteUrl: scheduledGateOrigin,
+    siteId: scheduledGateSiteId,
+    expectedCommit: scheduledGateCommit,
+    expectedTree: scheduledGateTree,
+    expectedDeployId: scheduledGateDeployId,
+    netlifyToken: scheduledGateToken,
+    fetchImpl: fixture.fetchImpl,
+    now: () => new Date('2026-09-08T01:02:03.000Z')
+  };
+}
+
+const successfulScheduledGateFixture = scheduledGateFetch();
+const scheduledGateEvidence = await verifyNetlifyScheduledReleaseGate(
+  scheduledGateArguments(successfulScheduledGateFixture)
+);
+assert.equal(scheduledGateEvidence.siteId, scheduledGateSiteId);
+assert.equal(scheduledGateEvidence.netlifyDeployId, scheduledGateDeployId);
+assert.equal(scheduledGateEvidence.releaseCommit, scheduledGateCommit);
+assert.equal(scheduledGateEvidence.releaseTree, scheduledGateTree);
+assert.equal(scheduledGateEvidence.schedules.length, 2);
+assert.equal(scheduledGateEvidence.routeDenials.length, 8);
+assert.deepEqual(
+  scheduledGateEvidence.routeDenials.map(item => item.status),
+  [403, 404, 403, 404, 404, 403, 404, 403]
+);
+assert.deepEqual(successfulScheduledGateFixture.counts, { site: 2, deploy: 1, manifest: 2, route: 8 });
+const scheduledGateApiCalls = successfulScheduledGateFixture.calls.filter(
+  call => new URL(call.url).origin === 'https://api.netlify.com'
+);
+const scheduledGatePublicCalls = successfulScheduledGateFixture.calls.filter(
+  call => new URL(call.url).origin !== 'https://api.netlify.com'
+);
+assert.equal(scheduledGateApiCalls.length, 3);
+assert.ok(scheduledGateApiCalls.every(
+  call => new Headers(call.options.headers).get('authorization') === `Bearer ${scheduledGateToken}`
+));
+assert.ok(scheduledGatePublicCalls.every(
+  call => !new Headers(call.options.headers).has('authorization')
+));
+const serializedScheduledGateEvidence = JSON.stringify(scheduledGateEvidence);
+assert.doesNotMatch(serializedScheduledGateEvidence, /netlify-token-sentinel/);
+assert.doesNotMatch(serializedScheduledGateEvidence, /raw-deploy-metadata/);
+
+const wrongReceiptFixture = scheduledGateFetch();
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate({
+    ...scheduledGateArguments(wrongReceiptFixture),
+    expectedDeployId: 'f'.repeat(24)
+  }),
+  /NETLIFY_PUBLISHED_DEPLOY_RECEIPT_MISMATCH/
+);
+assert.equal(wrongReceiptFixture.counts.deploy, 0, 'a mismatched deploy receipt must fail before deploy metadata');
+
+const blockedManifestFixture = scheduledGateFetch({ exactManifestStatus: 403 });
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(blockedManifestFixture)),
+  /NETLIFY_DEPLOY_MANIFEST_STATUS_MISMATCH_403/
+);
+assert.equal(blockedManifestFixture.counts.route, 0, 'a blanket-blocked site must not reach route evidence');
+
+const pathBlockedButUnscheduledFixture = scheduledGateFetch({
+  metadata: {
+    ...scheduledGateDeployMetadata,
+    function_schedules: scheduledGateDeployMetadata.function_schedules.filter(
+      item => item.name !== 'database-backup-recovery'
+    )
+  },
+  routeResponses: Array.from({ length: 8 }, () => ({ status: 403 }))
+});
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(pathBlockedButUnscheduledFixture)),
+  /NETLIFY_SCHEDULE_METADATA_INVALID/
+);
+assert.equal(
+  pathBlockedButUnscheduledFixture.counts.route,
+  0,
+  'path-level 403 responses must not substitute for exact scheduled deploy metadata'
+);
+
+const runtimeMarkerFixture = scheduledGateFetch({
+  routeResponses: [
+    {
+      status: 403,
+      body: JSON.stringify({ ok: false, code: 'BACKUP_SCHEDULED_INVOCATION_REQUIRED' }),
+      headers: { 'Content-Type': 'application/json' }
+    },
+    ...Array.from({ length: 7 }, () => ({ status: 404 }))
+  ]
+});
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(runtimeMarkerFixture)),
+  /SCHEDULED_FUNCTION_RUNTIME_REACHED/
+);
+
+const wrongCommitFixture = scheduledGateFetch({
+  exactManifest: {
+    ...scheduledGateManifest,
+    source: { ...scheduledGateManifest.source, commit: 'd'.repeat(40) }
+  }
+});
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(wrongCommitFixture)),
+  /NETLIFY_DEPLOY_MANIFEST_COMMIT_MISMATCH/
+);
+
+const spoofedManifestFixture = scheduledGateFetch({
+  metadata: { ...scheduledGateDeployMetadata, commit_ref: 'd'.repeat(40) }
+});
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(spoofedManifestFixture)),
+  /NETLIFY_DEPLOY_SOURCE_COMMIT_MISMATCH/
+);
+assert.equal(
+  spoofedManifestFixture.counts.manifest,
+  0,
+  'public manifests must not substitute for authenticated deploy source provenance'
+);
+
+const wrongTreeFixture = scheduledGateFetch({
+  exactManifest: {
+    ...scheduledGateManifest,
+    source: { ...scheduledGateManifest.source, tree: 'e'.repeat(40) }
+  }
+});
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(wrongTreeFixture)),
+  /NETLIFY_DEPLOY_MANIFEST_TREE_MISMATCH/
+);
+
+const canonicalManifestMismatchFixture = scheduledGateFetch({
+  canonicalManifest: { ...scheduledGateManifest, canonicalOnly: true }
+});
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(canonicalManifestMismatchFixture)),
+  /NETLIFY_CANONICAL_DEPLOY_MANIFEST_MISMATCH/
+);
+
+const publishRaceFixture = scheduledGateFetch({ publishedDeployAfter: 'f'.repeat(24) });
+await assert.rejects(
+  verifyNetlifyScheduledReleaseGate(scheduledGateArguments(publishRaceFixture)),
+  /NETLIFY_PUBLISHED_DEPLOY_CHANGED_DURING_VERIFICATION/
+);
+assert.equal(publishRaceFixture.counts.route, 8);
 
 const captured = [];
 const rpc = async (_config, name) => {

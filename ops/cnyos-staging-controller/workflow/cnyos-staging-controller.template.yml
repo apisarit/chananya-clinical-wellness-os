@@ -1,0 +1,1020 @@
+# DORMANT TEMPLATE. Copy only to a separate protected controller repository.
+name: CNYOS staging protected controller
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Full 40-character CNYOS candidate commit
+        required: true
+        type: string
+      dispatch_nonce:
+        description: Fresh base64url nonce containing at least 32 random bytes
+        required: true
+        type: string
+      confirmation:
+        description: Type PREPARE_CNYOS_STAGING_CONTROLLER_RUN
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnyos-staging-protected-controller
+  cancel-in-progress: false
+
+env:
+  CNYOS_CONTROLLER_PROTECTED_REF: refs/heads/main
+  CNYOS_CONTROLLER_EXPECTED_REPOSITORY: apisarit/cnyos-staging-deployment-control
+  CNYOS_CONTROLLER_WORKFLOW_PATH: .github/workflows/cnyos-staging-release.yml
+  CNYOS_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+  CNYOS_DISPATCH_NONCE: ${{ inputs.dispatch_nonce }}
+
+jobs:
+  bootstrap:
+    name: Require completed independent controller bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Bootstrap stop — intentionally fail closed
+        env:
+          CNYOS_CONTROLLER_BOOTSTRAP_STATE: BLOCKED_UNTIL_SEPARATE_PROTECTED_CONTROLLER_IS_REVIEWED
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          test "$CONFIRMATION" = "PREPARE_CNYOS_STAGING_CONTROLLER_RUN"
+          test "$GITHUB_REF_PROTECTED" = "true"
+          test "$GITHUB_REF" = "$CNYOS_CONTROLLER_PROTECTED_REF"
+          test "$GITHUB_REPOSITORY" = "$CNYOS_CONTROLLER_EXPECTED_REPOSITORY"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_ACTOR"
+          echo "$CNYOS_CANDIDATE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          echo "$CNYOS_DISPATCH_NONCE" | grep -Eq '^[A-Za-z0-9_-]{43,128}$'
+          test "$CNYOS_CONTROLLER_BOOTSTRAP_STATE" = "REVIEWED_AND_ACTIVATED"
+      - name: Check out protected controller source
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require controller-owned UAT and dependency lock
+        run: |
+          test -f ops/cnyos-staging-controller/package-lock.json
+          test -f ops/cnyos-staging-controller/approver-registry.json
+          test -f ops/cnyos-staging-controller/state/cnyos-staging-known-good.json
+          test -f ops/cnyos-staging-controller/config/cnyos-public-staging.json
+          test -f ops/cnyos-staging-controller/config/cnyos-production-denylist.json
+          test -f ops/cnyos-staging-controller/scripts/controller-function-bundle.mjs
+          test -f ops/cnyos-staging-controller/scripts/controller-static-reproducibility.mjs
+          test -f ops/cnyos-staging-controller/scripts/controller-authenticated-uat.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-runtime-capability-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-live-netlify-authority-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-live-github-release-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-rollback-attestation-deposit.mjs
+          test -f ops/cnyos-staging-controller/scripts/deposit-rollback-attestation.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-netlify-control-file-behavior.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-netlify-exclusive-publisher.mjs
+          test -f ops/cnyos-staging-controller/scripts/release-netlify-exclusive-publisher.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-private-draft-lifecycle.mjs
+          test -f ops/cnyos-staging-controller/scripts/private-draft-access-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/create-netlify-draft-with-durable-intent.mjs
+          test -f ops/cnyos-staging-controller/scripts/cleanup-netlify-draft.mjs
+          test -f ops/cnyos-staging-controller/scripts/reconcile-netlify-release-state.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-backup-disable-runtime-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-rollback-authorization-chain.mjs
+          test -f ops/cnyos-staging-controller/scripts/rollback-readiness.mjs
+          test -f ops/cnyos-staging-controller/scripts/scheduled-function-route-denial.mjs
+          test -f ops/cnyos-staging-controller/tests/controller-authenticated-uat-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/uat-evidence-schema-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/controller-function-bundle-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/controller-static-reproducibility-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/netlify-control-file-behavior-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/netlify-exclusive-publisher-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/private-draft-lifecycle-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/private-draft-access-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/draft-mutation-recovery-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/release-state-reconciliation-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/backup-disable-runtime-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-authorization-chain-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-principal-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-readiness-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/scheduled-function-route-denial-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/runtime-capability-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/live-netlify-authority-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/live-github-release-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/authorization-foundation-security-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/external-broker-trust-boundaries-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-attestation-deposit-contract.mjs
+          test -f .github/workflows/cnyos-staging-release.yml
+          test -f .github/workflows/cnyos-staging-rollback-watchdog.yml
+          for protected_file in \
+            ops/cnyos-staging-controller/package.json \
+            ops/cnyos-staging-controller/package-lock.json \
+            ops/cnyos-staging-controller/controller-policy.json \
+            ops/cnyos-staging-controller/approver-registry.json \
+            ops/cnyos-staging-controller/state/cnyos-staging-known-good.json \
+            ops/cnyos-staging-controller/config/cnyos-public-staging.json \
+            ops/cnyos-staging-controller/config/cnyos-production-denylist.json \
+            .github/workflows/cnyos-staging-release.yml \
+            .github/workflows/cnyos-staging-rollback-watchdog.yml
+          do
+            test -f "$protected_file"
+            test ! -L "$protected_file"
+          done
+          ! rg -n '__[A-Z_]+__|BLOCKED_UNTIL' \
+            .github/workflows/cnyos-staging-release.yml \
+            .github/workflows/cnyos-staging-rollback-watchdog.yml \
+            ops/cnyos-staging-controller/controller-policy.json \
+            ops/cnyos-staging-controller/approver-registry.json \
+            ops/cnyos-staging-controller/state/cnyos-staging-known-good.json \
+            ops/cnyos-staging-controller/config/cnyos-public-staging.json \
+            ops/cnyos-staging-controller/config/cnyos-production-denylist.json
+      - name: Set up the protected controller test runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: ops/cnyos-staging-controller/package-lock.json
+      - name: Install the reviewed controller lock without lifecycle scripts
+        working-directory: ops/cnyos-staging-controller
+        run: npm ci --ignore-scripts
+      - name: Execute the bootstrap and closed-world activation suites
+        working-directory: ops/cnyos-staging-controller
+        run: |
+          npm test
+          npm run test:activation
+
+  build_candidate:
+    name: Untrusted candidate build without credentials
+    needs: bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      build_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Check out immutable protected public configuration
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out candidate as untrusted input
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          repository: apisarit/chananya-clinical-wellness-os
+          ref: ${{ inputs.candidate_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Set up locked untrusted build runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install candidate dependencies without lifecycle scripts
+        working-directory: candidate
+        run: npm ci --ignore-scripts
+      - name: Install the lockfile-pinned browser only
+        working-directory: candidate
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Run candidate contracts without credentials
+        working-directory: candidate
+        run: npm run check
+      - name: Build candidate without privileged credentials
+        working-directory: candidate
+        env:
+          CONTEXT: production
+          URL: https://cnyos.netlify.app
+          CLINICAL_OS_STAGING_DEPLOYMENT: "true"
+          CLINICAL_OS_ALLOW_STAGING_DATABASE: "true"
+          CLINICAL_OS_STAGING_DATABASE_ACK: STAGING_ONLY
+          CLINICAL_OS_TENANT_CONFIG_PATH: ../controller/ops/cnyos-staging-controller/config/cnyos-public-staging.json
+          CLINICAL_OS_PRODUCTION_CONFIG_PATH: ../controller/ops/cnyos-staging-controller/config/cnyos-production-denylist.json
+          CLINICAL_OS_SOURCE_COMMIT: ${{ inputs.candidate_sha }}
+          CLINICAL_OS_REQUIRE_SOURCE_COMMIT: "true"
+        run: |
+          export CLINICAL_OS_SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
+          export CLINICAL_OS_BUILD_TIMESTAMP="$(git show -s --format=%cI HEAD)"
+          npm run build:staging-artifact
+      - name: Reject generated runtime drift before artifact upload
+        working-directory: candidate
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+      - name: Upload untrusted static build for clean-room packaging
+        id: upload
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-candidate-build-${{ github.run_id }}
+          path: candidate/dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  produce:
+    name: Clean-room exact-source artifact producer
+    needs: [bootstrap, build_candidate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      manifest_sha256: ${{ steps.manifest.outputs.manifest_sha256 }}
+      artifact_sha256: ${{ steps.manifest.outputs.artifact_sha256 }}
+      candidate_tree: ${{ steps.manifest.outputs.candidate_tree }}
+      function_source_tree: ${{ steps.manifest.outputs.function_source_tree }}
+      github_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out candidate as immutable data
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          repository: apisarit/chananya-clinical-wellness-os
+          ref: ${{ inputs.candidate_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Download the untrusted static build as comparison-only input
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-candidate-build-${{ github.run_id }}
+          path: ${{ runner.temp }}/cnyos-untrusted-static
+      - name: Set up clean-room producer runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: controller/ops/cnyos-staging-controller/package-lock.json
+      - name: Install locked controller bundler without credentials
+        working-directory: controller/ops/cnyos-staging-controller
+        run: npm ci --ignore-scripts
+      - name: Independently reproduce and compare the static artifact
+        id: static_reproducibility
+        working-directory: controller
+        env:
+          CNYOS_CANDIDATE_DIRECTORY: ${{ github.workspace }}/candidate
+          CNYOS_UNTRUSTED_STATIC_DIRECTORY: ${{ runner.temp }}/cnyos-untrusted-static
+          CNYOS_REPRODUCED_STATIC_DIRECTORY: ${{ runner.temp }}/cnyos-reproduced-static
+          CNYOS_PUBLIC_STAGING_CONFIG_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/config/cnyos-public-staging.json
+          CNYOS_PRODUCTION_DENYLIST_CONFIG_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/config/cnyos-production-denylist.json
+          CNYOS_EXPECTED_CANDIDATE_BUILD_ARTIFACT_DIGEST: ${{ needs.build_candidate.outputs.build_artifact_digest }}
+          CNYOS_STATIC_REPRODUCIBILITY_EVIDENCE_PATH: ${{ runner.temp }}/cnyos-static-reproducibility.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/controller-static-reproducibility.mjs
+          STATIC_REPRO_SHA="$(sha256sum "$CNYOS_STATIC_REPRODUCIBILITY_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          echo "evidence_sha256=$STATIC_REPRO_SHA" >> "$GITHUB_OUTPUT"
+      - name: Materialize deterministic self-contained Function archives
+        working-directory: controller
+        env:
+          CNYOS_CANDIDATE_DIRECTORY: ${{ github.workspace }}/candidate
+          CNYOS_PREBUNDLED_FUNCTIONS_DIRECTORY: ${{ runner.temp }}/cnyos-function-bundles
+          CNYOS_FUNCTION_BUNDLE_MANIFEST_PATH: ${{ runner.temp }}/cnyos-function-bundle-manifest.json
+          CNYOS_EXPECTED_FUNCTION_DEPENDENCY_LOCK_SHA256: ${{ hashFiles('controller/ops/cnyos-staging-controller/package-lock.json') }}
+        run: node ops/cnyos-staging-controller/scripts/controller-function-bundle.mjs
+      - name: Create controller-owned exact-byte bundle
+        id: manifest
+        env:
+          CNYOS_CANDIDATE_DIRECTORY: ${{ github.workspace }}/candidate
+          CNYOS_REPRODUCED_STATIC_DIRECTORY: ${{ runner.temp }}/cnyos-reproduced-static
+          CNYOS_PREBUNDLED_FUNCTIONS_DIRECTORY: ${{ runner.temp }}/cnyos-function-bundles
+          CNYOS_FUNCTION_BUNDLE_MANIFEST_PATH: ${{ runner.temp }}/cnyos-function-bundle-manifest.json
+          CNYOS_EXPECTED_FUNCTION_DEPENDENCY_LOCK_SHA256: ${{ hashFiles('controller/ops/cnyos-staging-controller/package-lock.json') }}
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ runner.temp }}/cnyos-producer-bundle
+          CNYOS_EXPECTED_CANDIDATE_BUILD_ARTIFACT_DIGEST: ${{ needs.build_candidate.outputs.build_artifact_digest }}
+          CNYOS_STATIC_REPRODUCIBILITY_EVIDENCE_PATH: ${{ runner.temp }}/cnyos-static-reproducibility.json
+          CNYOS_EXPECTED_STATIC_REPRODUCIBILITY_EVIDENCE_SHA256: ${{ steps.static_reproducibility.outputs.evidence_sha256 }}
+        run: |
+          node controller/ops/cnyos-staging-controller/scripts/create-producer-bundle.mjs
+          MANIFEST="$RUNNER_TEMP/cnyos-producer-bundle/producer-manifest.json"
+          echo "manifest_sha256=$(sha256sum "$MANIFEST" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "artifact_sha256=$(node -e 'const m=require(process.argv[1]);process.stdout.write(m.artifactSha256)' "$MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "candidate_tree=$(node -e 'const m=require(process.argv[1]);process.stdout.write(m.candidateTree)' "$MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "function_source_tree=$(node -e 'const m=require(process.argv[1]);process.stdout.write(m.functionSourceTree)' "$MANIFEST")" >> "$GITHUB_OUTPUT"
+      - name: Retain immutable producer bundle
+        id: upload
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-producer-${{ github.run_id }}
+          path: ${{ runner.temp }}/cnyos-producer-bundle/
+          if-no-files-found: error
+          retention-days: 90
+
+  authorize_preflight:
+    name: Verify two-person authorization and durable preflight
+    needs: produce
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cnyos-staging-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      pre_release_reconciliation_sha256: ${{ steps.reconciliation.outputs.evidence_sha256 }}
+      authorization_sha256: ${{ steps.authorization.outputs.authorization_sha256 }}
+      authorization_bundle_sha256: ${{ steps.authorization.outputs.authorization_bundle_sha256 }}
+      rollback_attestation_receipt_sha256: ${{ steps.attestation.outputs.receipt_sha256 }}
+      rollback_attestation_evidence_sha256: ${{ steps.attestation.outputs.evidence_sha256 }}
+      live_netlify_authority_sha256: ${{ steps.live_authority.outputs.evidence_sha256 }}
+      function_environment_sha256: ${{ steps.preflight.outputs.function_environment_sha256 }}
+      backup_disable_sha256: ${{ steps.preflight.outputs.backup_disable_sha256 }}
+      runtime_capability_sha256: ${{ steps.preflight.outputs.runtime_capability_sha256 }}
+      preflight_sha256: ${{ steps.preflight.outputs.preflight_sha256 }}
+      previous_deploy_id: ${{ steps.preflight.outputs.previous_deploy_id }}
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Download exact producer artifact from this run
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-producer-${{ github.run_id }}
+          path: controller/release-input
+      - name: Set up protected publisher runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: controller/ops/cnyos-staging-controller/package-lock.json
+      - name: Install only controller-owned locked dependencies
+        working-directory: controller/ops/cnyos-staging-controller
+        run: npm ci --ignore-scripts
+      - name: Refuse a new release while any earlier mutation is unreconciled
+        id: reconciliation
+        working-directory: controller
+        env:
+          CNYOS_NETLIFY_PUBLISH_BROKER_URL: ${{ vars.CNYOS_NETLIFY_PUBLISH_BROKER_URL }}
+          CNYOS_DRAFT_LIFECYCLE_BROKER_URL: ${{ vars.CNYOS_DRAFT_LIFECYCLE_BROKER_URL }}
+          CNYOS_CONTROLLER_RECONCILIATION_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/pre-release-reconciliation.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/reconcile-netlify-release-state.mjs assert-clean
+          echo "evidence_sha256=$(sha256sum "$CNYOS_CONTROLLER_RECONCILIATION_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Verify local publisher package before token exposure
+        working-directory: controller
+        env:
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-input
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+        run: |
+          test "$(node -p "require('./ops/cnyos-staging-controller/node_modules/netlify-cli/package.json').version")" = "__AUDITED_NETLIFY_CLI_VERSION__"
+          node ops/cnyos-staging-controller/scripts/verify-producer-bundle.mjs
+      - name: Validate exact-run signatures from protected Environment
+        id: authorization
+        working-directory: controller
+        env:
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-input
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_EXPECTED_GITHUB_ARTIFACT_DIGEST: ${{ needs.produce.outputs.github_artifact_digest }}
+          CNYOS_CONTROLLER_AUTHORIZATION_JSON: ${{ secrets.CNYOS_CONTROLLER_AUTHORIZATION_JSON }}
+          CNYOS_CONTROLLER_SECURITY_SIGNATURE_BASE64: ${{ secrets.CNYOS_CONTROLLER_SECURITY_SIGNATURE_BASE64 }}
+          CNYOS_CONTROLLER_RISK_OWNER_SIGNATURE_BASE64: ${{ secrets.CNYOS_CONTROLLER_RISK_OWNER_SIGNATURE_BASE64 }}
+          CNYOS_CONTROLLER_APPROVER_KEY_REGISTRY_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/approver-registry.json
+          CNYOS_CONTROLLER_KNOWN_GOOD_EVIDENCE_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/state/cnyos-staging-known-good.json
+          CNYOS_CONTROLLER_AUTHORIZATION_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/authorization.json
+          CNYOS_CONTROLLER_AUTHORIZATION_BUNDLE_PATH: ${{ runner.temp }}/release-chain/authorization-verification-bundle.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/verify-authorization.mjs
+          echo "authorization_sha256=$(sha256sum "$CNYOS_CONTROLLER_AUTHORIZATION_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "authorization_bundle_sha256=$(sha256sum "$CNYOS_CONTROLLER_AUTHORIZATION_BUNDLE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Deposit exact recovery inputs with the immutable attestation broker
+        id: deposit
+        working-directory: controller
+        env:
+          CNYOS_CONTROLLER_AUTHORIZATION_JSON: ${{ secrets.CNYOS_CONTROLLER_AUTHORIZATION_JSON }}
+          CNYOS_CONTROLLER_SECURITY_SIGNATURE_BASE64: ${{ secrets.CNYOS_CONTROLLER_SECURITY_SIGNATURE_BASE64 }}
+          CNYOS_CONTROLLER_RISK_OWNER_SIGNATURE_BASE64: ${{ secrets.CNYOS_CONTROLLER_RISK_OWNER_SIGNATURE_BASE64 }}
+          CNYOS_CONTROLLER_APPROVER_KEY_REGISTRY_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/approver-registry.json
+          CNYOS_CONTROLLER_KNOWN_GOOD_EVIDENCE_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/state/cnyos-staging-known-good.json
+          CNYOS_CONTROLLER_AUTHORIZATION_BUNDLE_PATH: ${{ runner.temp }}/release-chain/authorization-verification-bundle.json
+          CNYOS_EXPECTED_AUTHORIZATION_BUNDLE_SHA256: ${{ steps.authorization.outputs.authorization_bundle_sha256 }}
+          CNYOS_ROLLBACK_ATTESTATION_BROKER_URL: ${{ vars.CNYOS_ROLLBACK_ATTESTATION_BROKER_URL }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_PATH: ${{ runner.temp }}/release-chain/rollback-attestation-deposit-receipt.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/deposit-rollback-attestation.mjs
+          echo "receipt_sha256=$(sha256sum "$CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Verify the broker-signed sanitized attestation receipt
+        id: attestation
+        working-directory: controller
+        env:
+          CNYOS_CONTROLLER_AUTHORIZATION_BUNDLE_PATH: ${{ runner.temp }}/release-chain/authorization-verification-bundle.json
+          CNYOS_EXPECTED_AUTHORIZATION_BUNDLE_SHA256: ${{ steps.authorization.outputs.authorization_bundle_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_PATH: ${{ runner.temp }}/release-chain/rollback-attestation-deposit-receipt.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_SHA256: ${{ steps.deposit.outputs.receipt_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/rollback-attestation-deposit-validation.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/verify-rollback-attestation-deposit.mjs
+          echo "receipt_sha256=${{ steps.deposit.outputs.receipt_sha256 }}" >> "$GITHUB_OUTPUT"
+          echo "evidence_sha256=$(sha256sum "$CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Obtain a signed live publisher-boundary attestation without deployment credentials
+        id: live_authority
+        working-directory: controller
+        env:
+          CNYOS_CONTROLLER_AUTHORIZATION_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/authorization.json
+          CNYOS_EXPECTED_AUTHORIZATION_EVIDENCE_SHA256: ${{ steps.authorization.outputs.authorization_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/rollback-attestation-deposit-validation.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_SHA256: ${{ steps.attestation.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_LIVE_NETLIFY_AUTHORITY_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/live-netlify-authority-boundary.json
+          CNYOS_NETLIFY_AUTHORITY_BROKER_URL: ${{ vars.CNYOS_NETLIFY_AUTHORITY_BROKER_URL }}
+        run: |
+          node ops/cnyos-staging-controller/scripts/verify-live-netlify-authority-boundary.mjs
+          echo "evidence_sha256=$(sha256sum "$CNYOS_CONTROLLER_LIVE_NETLIFY_AUTHORITY_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Prove staging-only principal and capture signed rollback target
+        id: preflight
+        working-directory: controller
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          NETLIFY_CLI_TELEMETRY_DISABLED: "1"
+          CNYOS_CONTROLLER_AUTHORIZATION_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/authorization.json
+          CNYOS_CONTROLLER_FUNCTION_ENV_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/function-environment.json
+          CNYOS_CONTROLLER_BACKUP_DISABLE_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/backup-disable-runtime-boundary.json
+          CNYOS_CONTROLLER_RUNTIME_CAPABILITY_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/runtime-capability.json
+          CNYOS_CONTROLLER_LIVE_NETLIFY_AUTHORITY_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/live-netlify-authority-boundary.json
+          CNYOS_EXPECTED_AUTHORIZATION_EVIDENCE_SHA256: ${{ steps.authorization.outputs.authorization_sha256 }}
+          CNYOS_EXPECTED_LIVE_NETLIFY_AUTHORITY_EVIDENCE_SHA256: ${{ steps.live_authority.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/rollback-attestation-deposit-validation.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_SHA256: ${{ steps.attestation.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ runner.temp }}/release-chain/preflight.json
+          CNYOS_NETLIFY_CLI_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/node_modules/.bin/netlify
+        run: |
+          node ops/cnyos-staging-controller/scripts/validate-function-environment.mjs
+          FUNCTION_ENV_SHA="$(sha256sum "$CNYOS_CONTROLLER_FUNCTION_ENV_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          CNYOS_EXPECTED_FUNCTION_ENV_EVIDENCE_SHA256="$FUNCTION_ENV_SHA" \
+            node ops/cnyos-staging-controller/scripts/verify-backup-disable-runtime-boundary.mjs
+          BACKUP_DISABLE_SHA="$(sha256sum "$CNYOS_CONTROLLER_BACKUP_DISABLE_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          CNYOS_EXPECTED_FUNCTION_ENV_EVIDENCE_SHA256="$FUNCTION_ENV_SHA" \
+            node ops/cnyos-staging-controller/scripts/verify-runtime-capability-boundary.mjs
+          RUNTIME_CAPABILITY_SHA="$(sha256sum "$CNYOS_CONTROLLER_RUNTIME_CAPABILITY_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          CNYOS_EXPECTED_FUNCTION_ENV_EVIDENCE_SHA256="$FUNCTION_ENV_SHA" \
+            CNYOS_EXPECTED_BACKUP_DISABLE_EVIDENCE_SHA256="$BACKUP_DISABLE_SHA" \
+            CNYOS_EXPECTED_RUNTIME_CAPABILITY_EVIDENCE_SHA256="$RUNTIME_CAPABILITY_SHA" \
+            node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs preflight
+          echo "function_environment_sha256=$FUNCTION_ENV_SHA" >> "$GITHUB_OUTPUT"
+          echo "backup_disable_sha256=$BACKUP_DISABLE_SHA" >> "$GITHUB_OUTPUT"
+          echo "runtime_capability_sha256=$RUNTIME_CAPABILITY_SHA" >> "$GITHUB_OUTPUT"
+          echo "preflight_sha256=$(sha256sum "$CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "previous_deploy_id=$(node -e 'const m=require(process.argv[1]);process.stdout.write(m.previousPublishedDeploy.id)' "$CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+      - name: Durably retain authorization and preflight before mutation
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-preflight-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/release-chain/pre-release-reconciliation.json
+            ${{ runner.temp }}/release-chain/authorization.json
+            ${{ runner.temp }}/release-chain/authorization-verification-bundle.json
+            ${{ runner.temp }}/release-chain/rollback-attestation-deposit-receipt.json
+            ${{ runner.temp }}/release-chain/rollback-attestation-deposit-validation.json
+            ${{ runner.temp }}/release-chain/live-netlify-authority-boundary.json
+            ${{ runner.temp }}/release-chain/function-environment.json
+            ${{ runner.temp }}/release-chain/backup-disable-runtime-boundary.json
+            ${{ runner.temp }}/release-chain/runtime-capability.json
+            ${{ runner.temp }}/release-chain/preflight.json
+          if-no-files-found: error
+          retention-days: 90
+
+  rollback_readiness:
+    name: Live-bind the separate rollback principal before mutation
+    needs: [bootstrap, authorize_preflight]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: cnyos-staging-rollback
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      evidence_sha256: ${{ steps.readiness.outputs.evidence_sha256 }}
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download the signed preflight chain
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-preflight-${{ github.run_id }}
+          path: rollback-readiness/evidence
+      - name: Verify the live rollback token and least-privilege membership
+        id: readiness
+        env:
+          CNYOS_STAGING_NETLIFY_ROLLBACK_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_ROLLBACK_TOKEN }}
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/rollback-readiness/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_PATH: ${{ github.workspace }}/rollback-readiness/evidence/rollback-attestation-deposit-receipt.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_SHA256: ${{ needs.authorize_preflight.outputs.rollback_attestation_receipt_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH: ${{ github.workspace }}/rollback-readiness/evidence/rollback-attestation-deposit-validation.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.rollback_attestation_evidence_sha256 }}
+          CNYOS_ROLLBACK_ATTESTATION_BROKER_URL: ${{ vars.CNYOS_ROLLBACK_ATTESTATION_BROKER_URL }}
+          CNYOS_NETLIFY_PRINCIPAL_MEMBERSHIP_BROKER_URL: ${{ vars.CNYOS_NETLIFY_PRINCIPAL_MEMBERSHIP_BROKER_URL }}
+          CNYOS_CONTROLLER_ROLLBACK_READINESS_EVIDENCE_PATH: ${{ runner.temp }}/rollback-readiness.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/rollback-readiness.mjs
+          READINESS_SHA="$(sha256sum "$CNYOS_CONTROLLER_ROLLBACK_READINESS_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          echo "evidence_sha256=$READINESS_SHA" >> "$GITHUB_OUTPUT"
+      - name: Retain the pre-mutation rollback readiness receipt
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-rollback-readiness-${{ github.run_id }}
+          path: ${{ runner.temp }}/rollback-readiness.json
+          if-no-files-found: error
+          retention-days: 90
+
+  draft_deploy:
+    name: Create an unpromoted staging draft
+    needs: [produce, authorize_preflight, rollback_readiness]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cnyos-staging-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      draft_deploy_id: ${{ steps.draft.outputs.draft_deploy_id }}
+      draft_receipt_sha256: ${{ steps.draft.outputs.draft_receipt_sha256 }}
+      draft_intent_sha256: ${{ steps.draft.outputs.draft_intent_sha256 }}
+      draft_gate_sha256: ${{ steps.gate.outputs.draft_gate_sha256 }}
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Download exact producer artifact
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-producer-${{ github.run_id }}
+          path: controller/release-chain/producer
+      - name: Download exact preflight artifact
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-preflight-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Download live rollback-readiness evidence
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-rollback-readiness-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Set up controller-owned draft publisher
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: controller/ops/cnyos-staging-controller/package-lock.json
+      - name: Install locked publisher before token exposure
+        working-directory: controller/ops/cnyos-staging-controller
+        run: npm ci --ignore-scripts
+      - name: Re-hash the isolated producer and preflight chain
+        working-directory: controller
+        env:
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+        run: |
+          node ops/cnyos-staging-controller/scripts/verify-producer-bundle.mjs
+          test "$(sha256sum release-chain/evidence/authorization.json | cut -d ' ' -f 1)" = "${{ needs.authorize_preflight.outputs.authorization_sha256 }}"
+          test "$(sha256sum release-chain/evidence/authorization-verification-bundle.json | cut -d ' ' -f 1)" = "${{ needs.authorize_preflight.outputs.authorization_bundle_sha256 }}"
+          test "$(sha256sum release-chain/evidence/rollback-attestation-deposit-receipt.json | cut -d ' ' -f 1)" = "${{ needs.authorize_preflight.outputs.rollback_attestation_receipt_sha256 }}"
+          test "$(sha256sum release-chain/evidence/rollback-attestation-deposit-validation.json | cut -d ' ' -f 1)" = "${{ needs.authorize_preflight.outputs.rollback_attestation_evidence_sha256 }}"
+          test "$(sha256sum release-chain/evidence/preflight.json | cut -d ' ' -f 1)" = "${{ needs.authorize_preflight.outputs.preflight_sha256 }}"
+      - name: Recheck authorization, principal, and unchanged current deploy
+        id: gate
+        working-directory: controller
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_READINESS_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/rollback-readiness.json
+          CNYOS_EXPECTED_ROLLBACK_READINESS_EVIDENCE_SHA256: ${{ needs.rollback_readiness.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_GATE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-gate.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs draft-gate
+          echo "draft_gate_sha256=$(sha256sum "$CNYOS_CONTROLLER_DRAFT_GATE_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Create a draft only after a durable external intent is acknowledged
+        id: draft
+        working-directory: controller
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          NETLIFY_CLI_TELEMETRY_DISABLED: "1"
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_GATE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-gate.json
+          CNYOS_EXPECTED_DRAFT_GATE_EVIDENCE_SHA256: ${{ steps.gate.outputs.draft_gate_sha256 }}
+          CNYOS_DRAFT_LIFECYCLE_BROKER_URL: ${{ vars.CNYOS_DRAFT_LIFECYCLE_BROKER_URL }}
+          CNYOS_CONTROLLER_DRAFT_INTENT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-intent.json
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_NETLIFY_CLI_PATH: ${{ github.workspace }}/controller/ops/cnyos-staging-controller/node_modules/.bin/netlify
+          CNYOS_NETLIFY_CLI_RECEIPT_PATH: ${{ runner.temp }}/netlify-cli-draft-receipt.json
+          CNYOS_CONTROLLER_DEPLOY_RECEIPT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-receipt.json
+          CNYOS_NETLIFY_CLI_VERSION: "__AUDITED_NETLIFY_CLI_VERSION__"
+        run: |
+          node ops/cnyos-staging-controller/scripts/create-netlify-draft-with-durable-intent.mjs
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs draft-receipt
+          echo "draft_deploy_id=$(node -e 'const m=require(process.argv[1]);process.stdout.write(m.draftDeployId)' "$CNYOS_CONTROLLER_DEPLOY_RECEIPT_EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+          echo "draft_receipt_sha256=$(sha256sum "$CNYOS_CONTROLLER_DEPLOY_RECEIPT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "draft_intent_sha256=$(sha256sum "$CNYOS_CONTROLLER_DRAFT_INTENT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Retain draft evidence
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-draft-${{ github.run_id }}
+          path: controller/release-chain/evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  verify_draft:
+    name: Verify immutable draft bytes and Function process provenance
+    needs: [produce, authorize_preflight, draft_deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cnyos-staging-publish
+    outputs:
+      draft_verification_sha256: ${{ steps.verify.outputs.draft_verification_sha256 }}
+      draft_access_boundary_sha256: ${{ steps.verify.outputs.draft_access_boundary_sha256 }}
+      control_behavior_sha256: ${{ steps.verify.outputs.control_behavior_sha256 }}
+      private_draft_sha256: ${{ steps.verify.outputs.private_draft_sha256 }}
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Download exact producer artifact
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-producer-${{ github.run_id }}
+          path: controller/release-chain/producer
+      - name: Download exact draft evidence
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-draft-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Set up verifier runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+      - name: Verify exact draft while current remains unchanged
+        id: verify
+        working-directory: controller
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          CNYOS_STAGING_DRAFT_ACCESS_BOUNDARY_TOKEN: ${{ secrets.CNYOS_STAGING_DRAFT_ACCESS_BOUNDARY_TOKEN }}
+          CNYOS_PRIVATE_DRAFT_ACCESS_BOUNDARY_URL: ${{ vars.CNYOS_PRIVATE_DRAFT_ACCESS_BOUNDARY_URL }}
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_RECEIPT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-receipt.json
+          CNYOS_EXPECTED_DRAFT_RECEIPT_EVIDENCE_SHA256: ${{ needs.draft_deploy.outputs.draft_receipt_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_ACCESS_BOUNDARY_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-access-boundary.json
+          CNYOS_CONTROLLER_DRAFT_VERIFICATION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-verification.json
+          CNYOS_CONTROLLER_CONTROL_BEHAVIOR_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/control-behavior.json
+          CNYOS_CONTROLLER_PRIVATE_DRAFT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/private-draft.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/private-draft-access-boundary.mjs
+          export CNYOS_EXPECTED_DRAFT_ACCESS_BOUNDARY_EVIDENCE_SHA256="$(sha256sum "$CNYOS_CONTROLLER_DRAFT_ACCESS_BOUNDARY_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs verify-draft
+          export CNYOS_EXPECTED_DRAFT_VERIFICATION_EVIDENCE_SHA256="$(sha256sum "$CNYOS_CONTROLLER_DRAFT_VERIFICATION_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          node ops/cnyos-staging-controller/scripts/verify-netlify-control-file-behavior.mjs
+          node ops/cnyos-staging-controller/scripts/verify-private-draft-lifecycle.mjs
+          echo "draft_verification_sha256=$(sha256sum "$CNYOS_CONTROLLER_DRAFT_VERIFICATION_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "draft_access_boundary_sha256=$CNYOS_EXPECTED_DRAFT_ACCESS_BOUNDARY_EVIDENCE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "control_behavior_sha256=$(sha256sum "$CNYOS_CONTROLLER_CONTROL_BEHAVIOR_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "private_draft_sha256=$(sha256sum "$CNYOS_CONTROLLER_PRIVATE_DRAFT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Retain draft verification
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-draft-verification-${{ github.run_id }}
+          path: |
+            controller/release-chain/evidence/draft-access-boundary.json
+            controller/release-chain/evidence/draft-verification.json
+            controller/release-chain/evidence/control-behavior.json
+            controller/release-chain/evidence/private-draft.json
+          if-no-files-found: error
+          retention-days: 90
+
+  promote_and_validate:
+    name: Promote exact draft, validate, and close evidence
+    needs: [produce, authorize_preflight, rollback_readiness, draft_deploy, verify_draft]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: cnyos-staging-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      deploy_id: ${{ steps.promote.outputs.deploy_id }}
+      attempt_sha256: ${{ steps.attempt.outputs.attempt_sha256 }}
+      exclusive_publisher_sha256: ${{ steps.attempt.outputs.exclusive_publisher_sha256 }}
+      promotion_sha256: ${{ steps.promote.outputs.promotion_sha256 }}
+      final_sha256: ${{ steps.finalize.outputs.final_sha256 }}
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Download exact producer artifact
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-producer-${{ github.run_id }}
+          path: controller/release-chain/producer
+      - name: Download exact preflight evidence
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-preflight-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Download exact draft evidence
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-draft-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Download exact draft verification
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-draft-verification-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Download exact rollback-readiness evidence
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-rollback-readiness-${{ github.run_id }}
+          path: controller/release-chain/evidence
+      - name: Set up critical-section runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+      - name: Persist exact promotion attempt
+        id: attempt
+        working-directory: controller
+        env:
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_READINESS_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/rollback-readiness.json
+          CNYOS_EXPECTED_ROLLBACK_READINESS_EVIDENCE_SHA256: ${{ needs.rollback_readiness.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_GATE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-gate.json
+          CNYOS_EXPECTED_DRAFT_GATE_EVIDENCE_SHA256: ${{ needs.draft_deploy.outputs.draft_gate_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_VERIFICATION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-verification.json
+          CNYOS_EXPECTED_DRAFT_VERIFICATION_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.draft_verification_sha256 }}
+          CNYOS_CONTROLLER_CONTROL_BEHAVIOR_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/control-behavior.json
+          CNYOS_EXPECTED_CONTROL_BEHAVIOR_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.control_behavior_sha256 }}
+          CNYOS_CONTROLLER_PRIVATE_DRAFT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/private-draft.json
+          CNYOS_EXPECTED_PRIVATE_DRAFT_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.private_draft_sha256 }}
+          CNYOS_CONTROLLER_EXCLUSIVE_PUBLISHER_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/exclusive-publisher.json
+          CNYOS_NETLIFY_PUBLISH_BROKER_URL: ${{ vars.CNYOS_NETLIFY_PUBLISH_BROKER_URL }}
+          CNYOS_CONTROLLER_PUBLISH_ATTEMPT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion-attempt.json
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+        run: |
+          node ops/cnyos-staging-controller/scripts/verify-netlify-exclusive-publisher.mjs
+          export CNYOS_EXPECTED_EXCLUSIVE_PUBLISHER_EVIDENCE_SHA256="$(sha256sum "$CNYOS_CONTROLLER_EXCLUSIVE_PUBLISHER_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs promotion-attempt
+          echo "attempt_sha256=$(sha256sum "$CNYOS_CONTROLLER_PUBLISH_ATTEMPT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "exclusive_publisher_sha256=$CNYOS_EXPECTED_EXCLUSIVE_PUBLISHER_EVIDENCE_SHA256" >> "$GITHUB_OUTPUT"
+      - name: Durably retain promotion marker before mutation
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-attempt-${{ github.run_id }}
+          path: |
+            controller/release-chain/evidence/promotion-attempt.json
+            controller/release-chain/evidence/exclusive-publisher.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Promote only the receipt-bound draft
+        id: promote
+        working-directory: controller
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_READINESS_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/rollback-readiness.json
+          CNYOS_EXPECTED_ROLLBACK_READINESS_EVIDENCE_SHA256: ${{ needs.rollback_readiness.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_GATE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-gate.json
+          CNYOS_EXPECTED_DRAFT_GATE_EVIDENCE_SHA256: ${{ needs.draft_deploy.outputs.draft_gate_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_VERIFICATION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-verification.json
+          CNYOS_EXPECTED_DRAFT_VERIFICATION_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.draft_verification_sha256 }}
+          CNYOS_CONTROLLER_CONTROL_BEHAVIOR_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/control-behavior.json
+          CNYOS_EXPECTED_CONTROL_BEHAVIOR_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.control_behavior_sha256 }}
+          CNYOS_CONTROLLER_PRIVATE_DRAFT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/private-draft.json
+          CNYOS_EXPECTED_PRIVATE_DRAFT_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.private_draft_sha256 }}
+          CNYOS_CONTROLLER_EXCLUSIVE_PUBLISHER_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/exclusive-publisher.json
+          CNYOS_EXPECTED_EXCLUSIVE_PUBLISHER_EVIDENCE_SHA256: ${{ steps.attempt.outputs.exclusive_publisher_sha256 }}
+          CNYOS_CONTROLLER_PUBLISH_ATTEMPT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion-attempt.json
+          CNYOS_EXPECTED_PUBLISH_ATTEMPT_EVIDENCE_SHA256: ${{ steps.attempt.outputs.attempt_sha256 }}
+          CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs promote
+          echo "promotion_sha256=$(sha256sum "$CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "deploy_id=$(node -e 'const m=require(process.argv[1]);process.stdout.write(m.promotedDeployId)' "$CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH")" >> "$GITHUB_OUTPUT"
+      - name: Verify promoted bytes and deny scheduled Function routes
+        id: verify_promoted
+        working-directory: controller
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          CNYOS_EXPECTED_SOURCE_COMMIT: ${{ inputs.candidate_sha }}
+          CNYOS_EXPECTED_SOURCE_TREE: ${{ needs.produce.outputs.candidate_tree }}
+          CNYOS_EXPECTED_NETLIFY_DEPLOY_ID: ${{ steps.promote.outputs.deploy_id }}
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion.json
+          CNYOS_EXPECTED_PROMOTION_EVIDENCE_SHA256: ${{ steps.promote.outputs.promotion_sha256 }}
+          CNYOS_CONTROLLER_POST_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/post-promotion.json
+          CNYOS_CONTROLLER_SCHEDULED_ROUTE_DENIAL_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/scheduled-route-denial.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs verify-promoted
+          POST_PROMOTION_SHA="$(sha256sum "$CNYOS_CONTROLLER_POST_PROMOTION_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          export CNYOS_EXPECTED_POST_PROMOTION_EVIDENCE_SHA256="$POST_PROMOTION_SHA"
+          node ops/cnyos-staging-controller/scripts/scheduled-function-route-denial.mjs
+          echo "post_promotion_sha256=$POST_PROMOTION_SHA" >> "$GITHUB_OUTPUT"
+          echo "scheduled_route_denial_sha256=$(sha256sum "$CNYOS_CONTROLLER_SCHEDULED_ROUTE_DENIAL_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Run synthetic authenticated UAT without publisher credentials
+        id: uat
+        working-directory: controller
+        env:
+          CNYOS_STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CNYOS_STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          CNYOS_STAGING_TEST_PASSWORD: ${{ secrets.CNYOS_STAGING_TEST_PASSWORD }}
+          CNYOS_EXPECTED_SOURCE_COMMIT: ${{ inputs.candidate_sha }}
+          CNYOS_EXPECTED_SOURCE_TREE: ${{ needs.produce.outputs.candidate_tree }}
+          CNYOS_EXPECTED_NETLIFY_DEPLOY_ID: ${{ steps.promote.outputs.deploy_id }}
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion.json
+          CNYOS_EXPECTED_PROMOTION_EVIDENCE_SHA256: ${{ steps.promote.outputs.promotion_sha256 }}
+          CNYOS_CONTROLLER_POST_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/post-promotion.json
+          CNYOS_EXPECTED_POST_PROMOTION_EVIDENCE_SHA256: ${{ steps.verify_promoted.outputs.post_promotion_sha256 }}
+          CNYOS_CONTROLLER_SCHEDULED_ROUTE_DENIAL_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/scheduled-route-denial.json
+          CNYOS_EXPECTED_SCHEDULED_ROUTE_DENIAL_EVIDENCE_SHA256: ${{ steps.verify_promoted.outputs.scheduled_route_denial_sha256 }}
+          CNYOS_CONTROLLER_UAT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/uat.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/controller-authenticated-uat.mjs
+          echo "uat_sha256=$(sha256sum "$CNYOS_CONTROLLER_UAT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Recheck exact current deploy after UAT
+        id: final_current
+        working-directory: controller
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_AUTH_TOKEN }}
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion.json
+          CNYOS_EXPECTED_PROMOTION_EVIDENCE_SHA256: ${{ steps.promote.outputs.promotion_sha256 }}
+          CNYOS_CONTROLLER_FINAL_CURRENT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/final-current.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/netlify-evidence.mjs verify-final-current
+          echo "final_current_sha256=$(sha256sum "$CNYOS_CONTROLLER_FINAL_CURRENT_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Atomically release the publisher lease after the final current check
+        id: release_publisher
+        working-directory: controller
+        env:
+          CNYOS_NETLIFY_PUBLISH_BROKER_URL: ${{ vars.CNYOS_NETLIFY_PUBLISH_BROKER_URL }}
+          CNYOS_EXPECTED_NETLIFY_DEPLOY_ID: ${{ steps.promote.outputs.deploy_id }}
+          CNYOS_CONTROLLER_EXCLUSIVE_PUBLISHER_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/exclusive-publisher.json
+          CNYOS_EXPECTED_EXCLUSIVE_PUBLISHER_EVIDENCE_SHA256: ${{ steps.attempt.outputs.exclusive_publisher_sha256 }}
+          CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion.json
+          CNYOS_EXPECTED_PROMOTION_EVIDENCE_SHA256: ${{ steps.promote.outputs.promotion_sha256 }}
+          CNYOS_CONTROLLER_FINAL_CURRENT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/final-current.json
+          CNYOS_EXPECTED_FINAL_CURRENT_EVIDENCE_SHA256: ${{ steps.final_current.outputs.final_current_sha256 }}
+          CNYOS_CONTROLLER_PUBLISHER_RELEASE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/publisher-release.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/release-netlify-exclusive-publisher.mjs
+          echo "publisher_release_sha256=$(sha256sum "$CNYOS_CONTROLLER_PUBLISHER_RELEASE_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Close the cross-linked evidence set without credentials
+        id: finalize
+        working-directory: controller
+        env:
+          CNYOS_PRODUCER_BUNDLE_DIRECTORY: ${{ github.workspace }}/controller/release-chain/producer
+          CNYOS_EXPECTED_PRODUCER_MANIFEST_SHA256: ${{ needs.produce.outputs.manifest_sha256 }}
+          CNYOS_CONTROLLER_AUTHORIZATION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/authorization.json
+          CNYOS_EXPECTED_AUTHORIZATION_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.authorization_sha256 }}
+          CNYOS_CONTROLLER_AUTHORIZATION_BUNDLE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/authorization-verification-bundle.json
+          CNYOS_EXPECTED_AUTHORIZATION_BUNDLE_SHA256: ${{ needs.authorize_preflight.outputs.authorization_bundle_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_PATH: ${{ github.workspace }}/controller/release-chain/evidence/rollback-attestation-deposit-receipt.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_SHA256: ${{ needs.authorize_preflight.outputs.rollback_attestation_receipt_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/rollback-attestation-deposit-validation.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.rollback_attestation_evidence_sha256 }}
+          CNYOS_CONTROLLER_LIVE_NETLIFY_AUTHORITY_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/live-netlify-authority-boundary.json
+          CNYOS_EXPECTED_LIVE_NETLIFY_AUTHORITY_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.live_netlify_authority_sha256 }}
+          CNYOS_CONTROLLER_FUNCTION_ENV_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/function-environment.json
+          CNYOS_EXPECTED_FUNCTION_ENV_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.function_environment_sha256 }}
+          CNYOS_CONTROLLER_BACKUP_DISABLE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/backup-disable-runtime-boundary.json
+          CNYOS_EXPECTED_BACKUP_DISABLE_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.backup_disable_sha256 }}
+          CNYOS_CONTROLLER_RUNTIME_CAPABILITY_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/runtime-capability.json
+          CNYOS_EXPECTED_RUNTIME_CAPABILITY_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.runtime_capability_sha256 }}
+          CNYOS_CONTROLLER_RECONCILIATION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/pre-release-reconciliation.json
+          CNYOS_EXPECTED_RECONCILIATION_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.pre_release_reconciliation_sha256 }}
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_READINESS_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/rollback-readiness.json
+          CNYOS_EXPECTED_ROLLBACK_READINESS_EVIDENCE_SHA256: ${{ needs.rollback_readiness.outputs.evidence_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_GATE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-gate.json
+          CNYOS_EXPECTED_DRAFT_GATE_EVIDENCE_SHA256: ${{ needs.draft_deploy.outputs.draft_gate_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_INTENT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-intent.json
+          CNYOS_EXPECTED_DRAFT_INTENT_EVIDENCE_SHA256: ${{ needs.draft_deploy.outputs.draft_intent_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_RECEIPT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-receipt.json
+          CNYOS_EXPECTED_DRAFT_RECEIPT_EVIDENCE_SHA256: ${{ needs.draft_deploy.outputs.draft_receipt_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_ACCESS_BOUNDARY_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-access-boundary.json
+          CNYOS_EXPECTED_DRAFT_ACCESS_BOUNDARY_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.draft_access_boundary_sha256 }}
+          CNYOS_CONTROLLER_DRAFT_VERIFICATION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/draft-verification.json
+          CNYOS_EXPECTED_DRAFT_VERIFICATION_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.draft_verification_sha256 }}
+          CNYOS_CONTROLLER_CONTROL_BEHAVIOR_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/control-behavior.json
+          CNYOS_EXPECTED_CONTROL_BEHAVIOR_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.control_behavior_sha256 }}
+          CNYOS_CONTROLLER_PRIVATE_DRAFT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/private-draft.json
+          CNYOS_EXPECTED_PRIVATE_DRAFT_EVIDENCE_SHA256: ${{ needs.verify_draft.outputs.private_draft_sha256 }}
+          CNYOS_CONTROLLER_EXCLUSIVE_PUBLISHER_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/exclusive-publisher.json
+          CNYOS_EXPECTED_EXCLUSIVE_PUBLISHER_EVIDENCE_SHA256: ${{ steps.attempt.outputs.exclusive_publisher_sha256 }}
+          CNYOS_CONTROLLER_PUBLISH_ATTEMPT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion-attempt.json
+          CNYOS_EXPECTED_PUBLISH_ATTEMPT_EVIDENCE_SHA256: ${{ steps.attempt.outputs.attempt_sha256 }}
+          CNYOS_CONTROLLER_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/promotion.json
+          CNYOS_EXPECTED_PROMOTION_EVIDENCE_SHA256: ${{ steps.promote.outputs.promotion_sha256 }}
+          CNYOS_CONTROLLER_POST_PROMOTION_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/post-promotion.json
+          CNYOS_EXPECTED_POST_PROMOTION_EVIDENCE_SHA256: ${{ steps.verify_promoted.outputs.post_promotion_sha256 }}
+          CNYOS_CONTROLLER_SCHEDULED_ROUTE_DENIAL_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/scheduled-route-denial.json
+          CNYOS_EXPECTED_SCHEDULED_ROUTE_DENIAL_EVIDENCE_SHA256: ${{ steps.verify_promoted.outputs.scheduled_route_denial_sha256 }}
+          CNYOS_CONTROLLER_UAT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/uat.json
+          CNYOS_EXPECTED_UAT_EVIDENCE_SHA256: ${{ steps.uat.outputs.uat_sha256 }}
+          CNYOS_CONTROLLER_FINAL_CURRENT_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/final-current.json
+          CNYOS_EXPECTED_FINAL_CURRENT_EVIDENCE_SHA256: ${{ steps.final_current.outputs.final_current_sha256 }}
+          CNYOS_CONTROLLER_PUBLISHER_RELEASE_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/publisher-release.json
+          CNYOS_EXPECTED_PUBLISHER_RELEASE_EVIDENCE_SHA256: ${{ steps.release_publisher.outputs.publisher_release_sha256 }}
+          CNYOS_CONTROLLER_FINAL_EVIDENCE_PATH: ${{ github.workspace }}/controller/release-chain/evidence/final.json
+        run: |
+          node ops/cnyos-staging-controller/scripts/finalize-evidence.mjs
+          echo "final_sha256=$(sha256sum "$CNYOS_CONTROLLER_FINAL_EVIDENCE_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Retain complete fail-closed evidence
+        if: always()
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-final-${{ github.run_id }}
+          path: controller/release-chain/evidence/
+          if-no-files-found: error
+          retention-days: 365
+
+  reconcile_failed_release:
+    name: Reconcile rollback, rejected draft, and publisher lease after failure
+    if: ${{ always() && needs.authorize_preflight.result == 'success' && (needs.draft_deploy.result != 'success' || needs.promote_and_validate.result != 'success') }}
+    needs: [authorize_preflight, draft_deploy, promote_and_validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cnyos-staging-rollback
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out protected controller
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download exact preflight chain
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-preflight-${{ github.run_id }}
+          path: rollback-chain/evidence
+      - name: Download exact ownership marker when promotion was attempted
+        if: ${{ needs.promote_and_validate.outputs.attempt_sha256 != '' }}
+        uses: actions/download-artifact@__PINNED_DOWNLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-attempt-${{ github.run_id }}
+          path: rollback-chain/evidence
+      - name: Reconcile every effect owned by this failed run
+        env:
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_ROLLBACK_TOKEN }}
+          CNYOS_TARGET_CONTROLLER_RUN_ID: ${{ github.run_id }}
+          CNYOS_CONTROLLER_PREFLIGHT_EVIDENCE_PATH: ${{ github.workspace }}/rollback-chain/evidence/preflight.json
+          CNYOS_EXPECTED_PREFLIGHT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.preflight_sha256 }}
+          CNYOS_CONTROLLER_PUBLISH_ATTEMPT_EVIDENCE_PATH: ${{ github.workspace }}/rollback-chain/evidence/promotion-attempt.json
+          CNYOS_EXPECTED_PUBLISH_ATTEMPT_EVIDENCE_SHA256: ${{ needs.promote_and_validate.outputs.attempt_sha256 }}
+          CNYOS_CONTROLLER_AUTHORIZATION_BUNDLE_PATH: ${{ github.workspace }}/rollback-chain/evidence/authorization-verification-bundle.json
+          CNYOS_EXPECTED_AUTHORIZATION_BUNDLE_SHA256: ${{ needs.authorize_preflight.outputs.authorization_bundle_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_PATH: ${{ github.workspace }}/rollback-chain/evidence/rollback-attestation-deposit-receipt.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_RECEIPT_SHA256: ${{ needs.authorize_preflight.outputs.rollback_attestation_receipt_sha256 }}
+          CNYOS_CONTROLLER_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_PATH: ${{ github.workspace }}/rollback-chain/evidence/rollback-attestation-deposit-validation.json
+          CNYOS_EXPECTED_ROLLBACK_ATTESTATION_DEPOSIT_EVIDENCE_SHA256: ${{ needs.authorize_preflight.outputs.rollback_attestation_evidence_sha256 }}
+          CNYOS_CONTROLLER_APPROVER_KEY_REGISTRY_PATH: ${{ github.workspace }}/ops/cnyos-staging-controller/approver-registry.json
+          CNYOS_ROLLBACK_ATTESTATION_BROKER_URL: ${{ vars.CNYOS_ROLLBACK_ATTESTATION_BROKER_URL }}
+          CNYOS_NETLIFY_PUBLISH_BROKER_URL: ${{ vars.CNYOS_NETLIFY_PUBLISH_BROKER_URL }}
+          CNYOS_DRAFT_LIFECYCLE_BROKER_URL: ${{ vars.CNYOS_DRAFT_LIFECYCLE_BROKER_URL }}
+          CNYOS_CONTROLLER_ROLLBACK_CHAIN_EVIDENCE_PATH: ${{ runner.temp }}/rollback-chain-validation.json
+          CNYOS_CONTROLLER_RECONCILIATION_EVIDENCE_DIRECTORY: ${{ runner.temp }}/reconciliation
+        run: |
+          if test -n "$CNYOS_EXPECTED_PUBLISH_ATTEMPT_EVIDENCE_SHA256"; then
+            node ops/cnyos-staging-controller/scripts/verify-rollback-authorization-chain.mjs
+            export CNYOS_EXPECTED_ROLLBACK_CHAIN_EVIDENCE_SHA256="$(sha256sum "$CNYOS_CONTROLLER_ROLLBACK_CHAIN_EVIDENCE_PATH" | cut -d ' ' -f 1)"
+          fi
+          node ops/cnyos-staging-controller/scripts/reconcile-netlify-release-state.mjs recover-failed-run
+      - name: Retain authenticated rollback-chain validation
+        if: ${{ always() && needs.promote_and_validate.outputs.attempt_sha256 != '' }}
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-rollback-chain-validation-${{ github.run_id }}
+          path: ${{ runner.temp }}/rollback-chain-validation.json
+          if-no-files-found: error
+          retention-days: 365
+      - name: Retain complete reconciliation receipts
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-reconciliation-${{ github.run_id }}
+          path: ${{ runner.temp }}/reconciliation/
+          if-no-files-found: error
+          retention-days: 365

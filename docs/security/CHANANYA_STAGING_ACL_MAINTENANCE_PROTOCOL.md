@@ -133,9 +133,29 @@ and the managed-platform acceptance:
 3. create a separate PR that promotes approved SQL into the ordered migration
    chain; do not copy the psql wrapper into a migration;
 4. apply that chain to Chananya staging and run authenticated regression;
-5. manually deploy only the exact reviewed build to the cnyos site and verify
-   deploy metadata, route denial, target identity, and staging journeys;
-6. keep the production gate closed until a separately authorized production
+5. bootstrap a separate protected deployment-control repository. Do not put its
+   privileged workflow on this repository's candidate branch or merge it to
+   `main`, because either route crosses an untrusted or Production boundary.
+   Its default branch and `cnyos-staging-publish` Environment require
+   independent review and no self-review/admin bypass; its distinct
+   `cnyos-staging-rollback` Environment must be noninteractive and use a
+   separately scoped principal. Follow the fail-closed bootstrap in
+   `ops/cnyos-staging-controller/README.md`. The publish and rollback principals
+   must each have project access only to cnyos site
+   `7da5e39e-580d-44f1-8623-605313e2fb2b` and no Production project access;
+   a normal Netlify personal access token and signed role booleans do not prove
+   that boundary. Activation additionally requires a fresh external authority
+   attestation covering provider role/capabilities, owner/admin absence, the
+   complete site inventory, and every Git/UI/hook/token/workflow publisher;
+6. bind two independent signatures to the exact controller run/commit, nonce,
+   candidate commit/tree, static and Function artifact hashes, exact target,
+   known-good rollback deploy and short expiry. Upload a draft, verify it, then
+   promote only that exact deploy ID. Verify deploy metadata, the closed
+   Function/schedule set, route denial, target identity, and staging journeys;
+7. automatically restore the signed baseline if any post-promotion gate fails,
+   but only while the failed deploy remains current. Retain an external
+   watchdog for cancellation, timeout or runner loss;
+8. keep the production gate closed until a separately authorized production
    release.
 
 No step in this document authorizes merging PR #36 or touching production.

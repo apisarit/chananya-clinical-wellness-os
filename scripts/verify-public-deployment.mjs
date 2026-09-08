@@ -37,6 +37,19 @@ export function validateProductionOrigin(raw, expectedHost) {
   return url.origin;
 }
 
+export function assertProductionManifestClassification(manifest) {
+  assert.equal(
+    manifest?.build?.deploymentClass,
+    'production',
+    'production deploy manifest must report deploymentClass=production'
+  );
+  assert.equal(
+    manifest?.safety?.stagingDatabaseExplicitlyAcknowledged,
+    false,
+    'production deploy manifest must record stagingDatabaseExplicitlyAcknowledged=false'
+  );
+}
+
 function required(name) {
   const value = String(process.env[name] || '').trim();
   if (!value) throw new Error(`${name}_REQUIRED`);
@@ -91,12 +104,16 @@ export async function verifyPublicDeployment({
   assert.equal(deploy.body?.source?.tree, checkoutTree, 'deployed source tree does not match exact checked-out release tree');
   assert.equal(deploy.body?.source?.verified, true, 'deploy manifest source must be verified');
   assert.equal(deploy.body?.build?.context, 'production', 'production deploy manifest must report production context');
+  assertProductionManifestClassification(deploy.body);
   assert.equal(deploy.body?.safety?.previewLocked, false, 'production release must not be preview-locked');
 
   const runtime = await request(origin, '/runtime-publish-manifest.json', { expectedStatus: 200, json: true });
-  assert.equal(runtime.body?.schemaVersion, 1, 'runtime publish manifest schema mismatch');
+  assert.equal(runtime.body?.schemaVersion, 2, 'runtime publish manifest schema mismatch');
+  assert.equal(runtime.body?.integrityAlgorithm, 'sha256', 'runtime publish manifest integrity algorithm mismatch');
   assert.ok(Number.isSafeInteger(runtime.body?.fileCount) && runtime.body.fileCount > 0, 'runtime publish manifest has no files');
   assert.ok(Array.isArray(runtime.body?.files), 'runtime publish manifest files missing');
+  assert.ok(Array.isArray(runtime.body?.integrity), 'runtime publish manifest integrity missing');
+  assert.equal(runtime.body.integrity.length, runtime.body.files.length, 'runtime publish manifest integrity count mismatch');
   for (const requiredFile of ['index.html', 'login.html', 'app.js', 'app.css', 'tenant-config.js', 'deploy-manifest.json']) {
     assert.ok(runtime.body.files.includes(requiredFile), `runtime publish manifest missing ${requiredFile}`);
   }

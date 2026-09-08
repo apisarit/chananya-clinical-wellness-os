@@ -58,13 +58,30 @@ The browser config contains `expectedClinicId` and `expectedClinicCode`. After l
 
 For a routine new customer, the only customer-specific inputs are the validated JSON configuration, approved logo asset, isolated Supabase project, Netlify site/environment, OAuth/LINE credentials and private Drive folder IDs. No clinical workflow JavaScript, SQL function or role policy should be customized per customer.
 
-`npm run build` validates the config and generates `tenant-config.js` for staff/auth pages plus `brand-config.js` for public/read-only pages. The public brand file contains no database endpoint or key. The staff tenant file contains only browser-safe public configuration.
+`npm run build` validates the config and generates `tenant-config.js` for staff/auth pages plus `brand-config.js` for public/read-only pages in an ignored build-only directory before assembling `dist`. It does not rewrite the tracked default tenant files. The public brand file contains no database endpoint or key. The staff tenant file contains only browser-safe public configuration. The runtime publish manifest records the exact size and SHA-256 of every uploaded runtime file.
 
-Netlify Deploy Preview and branch deploy contexts are database-locked by default: the build removes the Supabase URL/key from the generated browser config, so only read-only synthetic review surfaces work. Authenticated staging E2E requires a dedicated staging config, `CLINICAL_OS_ALLOW_PREVIEW_DATABASE=true`, the explicit guard `CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY`, and an explicit customer-specific Production config denylist; using the Production target is rejected by the build.
+Netlify Deploy Preview and branch deploy contexts are database-locked by default: the build removes the Supabase URL/key from the generated browser config, so only read-only synthetic review surfaces work. If authenticated testing is intentionally run on a Netlify Deploy Preview, it requires a dedicated staging config, `CLINICAL_OS_ALLOW_PREVIEW_DATABASE=true`, the explicit guard `CLINICAL_OS_PREVIEW_DATABASE_ACK=STAGING_ONLY`, and an explicit customer-specific Production config denylist; using the Production target is rejected by the build. Do not use these preview acknowledgement variables for the dedicated CNYOS staging site described next.
 
 A dedicated staging Netlify site must set `CLINICAL_OS_STAGING_DEPLOYMENT=true`, even though Netlify labels that site's primary deploy as a `production` context. It remains database-locked until `CLINICAL_OS_ALLOW_STAGING_DATABASE=true`, `CLINICAL_OS_STAGING_DATABASE_ACK=STAGING_ONLY`, an explicit staging config and a Production denylist are all present. The build rejects a matching Production database, site origin, clinic UUID, clinic code or QR issuer.
 
-Manual staging uploads must carry `CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true` plus the exact `CLINICAL_OS_SOURCE_COMMIT`. The generated public `deploy-manifest.json` records commit, tenant identity and whether the browser database is locked. Run `npm run staging:smoke:locked` against the deployed HTTPS origin and retain its JSON result with the release evidence.
+Manual staging candidate builds must carry
+`CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true`, the exact 40-character
+`CLINICAL_OS_SOURCE_COMMIT`, the exact 40-character `CLINICAL_OS_SOURCE_TREE`,
+and a deterministic `CLINICAL_OS_BUILD_TIMESTAMP`. The generated public
+`deploy-manifest.json` records commit, tree, tenant identity, deployment class
+and whether the browser database is locked. Run `npm run staging:smoke:locked`
+for a locked artifact. A candidate-ref workflow may create only unprivileged,
+database-locked evidence; it must not receive a GitHub Environment, Netlify
+token or database credential. Before any synthetic database mutation against
+unlocked CNYOS staging, a separate protected deployment-control repository must
+rehash the signed static and isolated Function artifacts, create and verify a
+draft deploy, promote only that exact deploy ID, and pass the controller-owned
+port of the candidate verifier contract with
+`EXPECTED_STAGING_NETLIFY_DEPLOY_ID`, the fixed site ID, a project-scoped
+staging-only Netlify token and the explicit verifier acknowledgement. Retain the
+non-authorizing receipt, gate and rollback-baseline evidence. An older deploy
+without that trusted receipt cannot be retroactively treated as exact Function
+code evidence.
 
 The protected 11-role and ten-journey procedure is documented in `AUTHENTICATED_STAGING_RUNBOOK.md`. Its command-line guard independently rejects the Production database/site, matching Production clinic code or QR issuer, and any config without an explicit staging marker. The release gate remains pending until that workflow is executed and reviewed against the exact release commit.
 

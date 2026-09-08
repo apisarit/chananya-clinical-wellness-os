@@ -1,13 +1,29 @@
 # Authenticated staging release gate
 
-Status: harness present; execution evidence pending. This runbook does not authorize a Production target and does not mark the commercial release gate as passed.
+Status: unprivileged candidate harness present; protected deployment controller
+and execution evidence pending. This runbook does not authorize a staging or
+Production deployment and does not mark the commercial release gate as passed.
 
 The public-routine remediation also requires the
 [Chananya staging ACL maintenance protocol](security/CHANANYA_STAGING_ACL_MAINTENANCE_PROTOCOL.md).
 That protocol is non-authorizing and keeps PR #36 draft, production untouched,
 and the hosted `supabase_admin` exception explicitly owned.
 
-The protected workflow verifies the exact release candidate against a dedicated Netlify site and a dedicated Supabase project. It provisions synthetic identities, checks database authorization for every role, loads every workspace in a real mobile Chromium session, and runs ten synthetic Practitioner → Pharmacy → Billing journeys through full payment and Encounter closure.
+The workflow in this repository is deliberately unprivileged. It runs offline
+contracts and emits database-locked static and Function inputs, but it has no
+GitHub Environment, Netlify token, service-role key, staging password, or
+tenant-config secret. A candidate branch must never define the job that receives
+deployment credentials: it could delete its own checks and use the credential
+directly.
+
+The credentialed publisher must live on the protected default branch of a
+separate deployment-control repository (or an already existing independently
+protected controller). The candidate commit is input data only. That controller
+must rehash the artifact, validate two out-of-band signatures, publish only to
+the fixed cnyos staging project, and run the authenticated checks described
+below. This separate controller is required because merging a bootstrap workflow
+into this repository's `main` branch would itself trigger a Production Netlify
+deployment.
 
 ## Isolation requirements
 
@@ -409,24 +425,102 @@ separately validates all three required PR #36 SQL-security areas.
 
 This recovery is staging-only. Never run it against Production, never use it to conceal a failed migration, and never backfill history after real patient or transactional data has been introduced.
 
-## Protected GitHub environment
+## Protected deployment-controller environment
 
-Create a GitHub environment named `staging` and require a reviewer. Configure:
+Do not attach a GitHub Environment or any staging secret to a workflow from a
+candidate ref in this repository. Create the separate repository
+`apisarit/cnyos-staging-deployment-control` with a protected default branch.
+Copy and independently review the dormant bootstrap in
+[`ops/cnyos-staging-controller/README.md`](../ops/cnyos-staging-controller/README.md),
+then create its `cnyos-staging-publish` Environment with required independent
+reviewers, prevent self-review, disallow administrator bypass, and restrict
+deployment branches to that one protected branch. Create a distinct
+noninteractive `cnyos-staging-rollback` Environment and principal. Pin every
+controller action and dependency by full commit or integrity hash.
+
+The publish Environment uses these canonical protected values only after the
+unprivileged producer completes:
 
 | Type | Name | Purpose |
 |---|---|---|
-| Secret | `CLINICAL_OS_STAGING_CONFIG_JSON` | Complete browser-safe staging tenant config |
-| Secret | `CLINICAL_OS_PRODUCTION_CONFIG_JSON` | Customer's browser-safe Production config, used only as a denylist |
-| Secret | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | Server-only provisioning and evidence reads |
-| Secret | `STAGING_TEST_PASSWORD` | Shared password for synthetic test identities; minimum 16 characters |
-| Variable | `STAGING_SITE_URL` | Exact HTTPS origin of the isolated staging site |
-| Variable | `STAGING_TEST_EMAIL_DOMAIN` | Domain used only for synthetic Auth users |
+| Secret | `CNYOS_CONTROLLER_AUTHORIZATION_JSON` | Short-lived exact-controller-run, exact-artifact, exact-target authorization packet |
+| Secret | `CNYOS_CONTROLLER_SECURITY_SIGNATURE_BASE64` | Independent security reviewer's Ed25519 signature over the exact packet |
+| Secret | `CNYOS_CONTROLLER_RISK_OWNER_SIGNATURE_BASE64` | Named managed-platform risk owner's independent Ed25519 signature over the exact packet |
+| Protected file | `approver-registry.json` | Reviewed public-key trust root on the protected controller branch; never load it from the candidate repository or an adjacent artifact |
+| Secret | `CNYOS_STAGING_NETLIFY_AUTH_TOKEN` | Token for a non-Owner principal with access only to site `7da5e39e-580d-44f1-8623-605313e2fb2b`; it must have no Production project access |
+| Secret | `CNYOS_STAGING_SUPABASE_SERVICE_ROLE_KEY` | Server-only controller-owned synthetic UAT and evidence reads |
+| Secret | `CNYOS_STAGING_TEST_PASSWORD` | Password for synthetic test identities; minimum 16 characters |
+| Secret | `CNYOS_STAGING_DRAFT_ACCESS_BOUNDARY_TOKEN` | Opaque bearer accepted only by the independently reviewed, separate draft-access boundary; it must never be sent to a candidate origin or reused as the Netlify token |
+| Protected file | `config/cnyos-public-staging.json` | Reviewed browser-public staging tenant config used by both unprivileged and independent hermetic builds |
+| Protected file | `config/cnyos-production-denylist.json` | Reviewed browser-public Production identity used only as a denylist |
+| Repository variable | `CNYOS_PRIVATE_DRAFT_ACCESS_BOUNDARY_URL` | Exact HTTPS origin pinned by the reviewed boundary policy; no path, query, credentials, port, or redirect |
 
-The service-role key and password must not be configured in Netlify browser variables or committed files. The staging Netlify deployment separately needs its browser-safe tenant config and the preview database guards described in `WHITE_LABEL_DEPLOYMENT.md`.
+The noninteractive `cnyos-staging-rollback` Environment contains only this
+recovery secret:
+
+| Type | Name | Purpose |
+|---|---|---|
+| Secret | `CNYOS_STAGING_NETLIFY_ROLLBACK_TOKEN` | Separate staging-only principal used only by rollback/reconciliation; its subject must differ from the publish principal |
+
+Never copy the rollback token into the publish Environment or configure the two
+tokens for the same Netlify account.
+
+Broker endpoints and the known-good rollback evidence remain protected
+controller configuration. The current bootstrap deliberately has no authorized
+Netlify CLI dependency: as recorded in its README, the current 27.5.0 lock had
+high-severity transitive advisories. Activation requires a clean pinned release
+or an independently reviewed replacement implementation.
+
+The Netlify principal restriction is a control-plane requirement, not an
+application assertion. Retain a protected membership record showing that the
+principal is a Publisher for only the cnyos staging project and is not a
+Developer or Team Owner. Publisher membership alone still does not prove that a
+normal Netlify token has deploy-only authority. Activation remains blocked until
+the reviewed external broker and fresh provider evidence prove exact-site,
+deploy-only authority. A hard-coded site ID cannot reduce the authority of an
+account-wide token.
+
+The service-role key and password must not be configured in Netlify browser
+variables or committed files, and candidate scripts must never receive them.
+The two browser-public configuration blobs may be exposed step-by-step to the
+unprivileged producer; they must not be job-wide, described as secrets, or made
+available to an unrelated command. Privileged final verification and
+authenticated staging steps remain controller-owned. The staging Netlify
+deployment separately needs its browser-safe tenant config and the
+dedicated-staging database guards described in `WHITE_LABEL_DEPLOYMENT.md`.
+
+The files `scripts/verify-staging-release-authorization.mjs` and
+`scripts/verify-unlocked-staging-deployment.mjs` are candidate-side executable
+specifications and offline contract fixtures only. A credentialed workflow must
+not import or execute either file from a candidate checkout. The protected
+controller must use its independently committed, reviewed and commit-pinned
+implementation before any Netlify token, service-role key or test credential is
+made available.
+
+This staging controller does not make the candidate-owned Production deploy,
+Production promotion, platform-preview, or isolated-restore workflows trusted.
+Those credentialed workflows require the same protected-controller separation
+before they can be treated as safe against a modified candidate ref. Nothing in
+this staging protocol authorizes running or changing those Production paths.
+
+At this checkpoint, the existing Production setup names the same Netlify site ID
+and `https://cnyos.netlify.app` origin as the staging controller, while active
+Production and preview workflows retain independent publish paths. That is a hard
+activation blocker, not staging evidence. Without modifying or running those
+Production workflows here, the signed deployment boundary and an independent
+server-side publisher broker must first prove the target is staging-only, holds
+no real patient data, the mapping conflict is resolved, the legacy publisher
+inventory is complete, and every candidate-repository Production/preview path
+and alternate token is denied this target. Otherwise no draft may be created.
 
 For a dedicated staging Netlify site, set `CLINICAL_OS_STAGING_DEPLOYMENT=true`. Its primary deploy is still treated as non-production by the application guard and remains database-locked until the staging database acknowledgement and Production config denylist are supplied.
 
-Every manual staging build must also set `CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true` and `CLINICAL_OS_SOURCE_COMMIT=<exact Git SHA>`. The build publishes a credential-free `deploy-manifest.json`; a missing or malformed required revision fails the build. After deployment, verify the public locked boundary before adding any database credential:
+The first hostname below is a generic customer-staging example, not the CNYOS
+target and not a value to substitute for the fixed controller policy:
+
+Every manual staging build must also set `CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true`, `CLINICAL_OS_SOURCE_COMMIT=<exact 40-character Git SHA>`, `CLINICAL_OS_SOURCE_TREE=<exact 40-character Git tree>`, and a deterministic `CLINICAL_OS_BUILD_TIMESTAMP` (use the selected commit's committer timestamp). The generated config is staged outside the tracked checkout, and `dist/runtime-publish-manifest.json` records every uploaded runtime file's exact size and SHA-256. A missing commit or tree fails the build.
+
+For a database-locked staging artifact, verify the public locked boundary before adding any browser database configuration:
 
 ```bash
 STAGING_SITE_URL=https://chananya-clinical-staging.netlify.app \
@@ -443,39 +537,132 @@ EXPECTED_STAGING_SOURCE_COMMIT=<exact Git SHA> \
 npm run staging:smoke:locked
 ```
 
-The locked smoke gate checks source provenance, tenant/database lock, security headers and all 11 public route shells. It is useful deployment evidence but does **not** satisfy the authenticated staging gate.
+The locked smoke gate checks source provenance, tenant/database lock, security
+headers and all 11 public route shells. It is useful candidate evidence but does
+**not** satisfy the authenticated staging gate. The repository workflow
+materializes Function inputs from Git blobs into an isolated directory and
+records every path, mode, size and SHA-256; ambient working-tree files and
+ignored overlays are not inputs.
 
-## What the workflow proves
+The protected controller accepts the exact commit SHA, independently checks out
+and hermetically rebuilds it using protected public configuration, and byte-compares
+that result with the candidate artifact as evidence only. It must turn the
+independently reproduced output into the final unlocked artifact without running
+candidate code under a deployment credential. It must
+first create a draft Netlify deploy, verify the exact draft permalink and
+closed-world expected metadata through a separate reviewed access boundary, and
+only then promote that exact deploy ID. The boundary consumes its own bearer,
+forwards no Authorization header/cookie/redirect to the candidate origin, and
+must provide a fresh candidate-Function canary proving the credential was not
+observed upstream. The
+post-promotion controller-owned port of the candidate verifier contract must authenticate the
+fixed site and receipt-bound current deploy, compare the Netlify file inventory
+twice and every original uploaded byte with the controller-held artifact,
+enforce the exact approved CSP, compose the scheduled-Function gate, validate
+the staging tenant/Supabase identity, and reject any published-deploy change.
+If any post-promotion or authenticated check fails, a separate controller-owned
+rollback job restores the exact signed baseline only while the failed deploy is
+still current. The same reconciliation deletes or revokes every rejected
+non-current draft and releases the publisher lease. Draft creation requires a
+server-side write-ahead intent so recovery still knows the exact target if the
+runner dies before recording a local receipt. A per-run watchdog outside the
+publish runner covers cancellation, timeout and runner loss, and the publisher
+broker rejects a new mutation while an earlier run remains unreconciled.
 
-The manual workflow `.github/workflows/authenticated-staging-e2e.yml` performs:
+Netlify's documented API does not provide a remote Function-bundle byte digest.
+The isolated input and prebuilt bundle hashes are strong process provenance,
+not cryptographic remote-byte attestation; the release evidence must say so.
 
-1. the complete source and embedded Postgres behavioral suite;
-2. provisioning of 11 synthetic identities: Practitioner, Doctor, Reception, Pharmacy, Production, Inventory, Quality, Billing, Admin, Super Admin and Viewer;
-3. exact `current_access_context()` tenant/role verification for each identity;
-4. the complete `department_can()` allow/deny matrix, including the rule that only Super Admin receives cross-workspace access;
-5. all 10 workspace routes in mobile Chromium for every role, including denied-route behavior and visible navigation;
-6. migration health checks for hybrid identity, clinical/financial handoffs, prescription dispensing, production and independent Quality;
-7. ten synthetic patient journeys through registration, manual-HN identity fallback, Encounter, Thai medicine diagnosis, prescription, Pharmacy review, FEFO lot allocation, Billing, payment and Encounter closure;
-8. negative segregation checks and required audit actions;
-9. reversible subscription OFF/ON proof: an already-issued Practitioner session loses `current_clinic_id()` and Clinical capability while OFF, then regains only its original tenant/department boundary after ON;
-10. JSON evidence and failure screenshots retained against the exact Git commit for 90 days.
+The controller dispatch must be made by the named staging risk owner's own
+GitHub login. The two distinct Ed25519 signatures must bind the candidate
+commit/tree, controller repository/workflow commit, run ID and attempt, a
+single-use nonce, static and Function artifact hashes, exact target, known-good
+rollback deploy ID, issue time and short expiry. This is staging-only acceptance
+of the documented hosted `supabase_admin` default-ACL residual risk. It is not
+PR #36 approval, Production authorization, real-patient-data authorization, or
+a substitute for independent review. Before any upload, the controller also
+resolves `BACKUP_ENABLED` for the staging site's production Functions context,
+requires the exact value `false`, proves the current deploy was created after
+that setting, and verifies that the daily backup, recovery scheduler and
+background worker all fail closed before configuration or Supabase access.
 
-The workflow intentionally creates synthetic staging records. Run it only after the protected environment reviewer confirms the target project and site.
+## What each workflow may prove
+
+The manual workflow
+`.github/workflows/authenticated-staging-e2e.yml` is an unprivileged candidate
+producer only. It:
+
+1. checks out the exact candidate without persisted Git credentials;
+2. runs the complete offline source and embedded PostgreSQL behavioral suite;
+3. builds a deterministic database-locked staging artifact from tracked public
+   inputs;
+4. materializes the Function source tree from Git blobs rather than the ambient
+   checkout and emits a closed-world hash manifest;
+5. proves tracked source was not changed, then uploads only those inputs with
+   `if-no-files-found: error`.
+
+It does not deploy, unlock database access, provision users, run authenticated
+journeys, receive a GitHub Environment, or consume a Netlify/database/password
+secret. Its success is not staging authorization.
+
+Only after the separate protected controller has been bootstrapped and the
+signed release packet has passed may the controller perform:
+
+1. fixed-site baseline and `BACKUP_ENABLED=false` preflight;
+2. live rollback-principal verification, draft upload, boundary-isolated
+   exact-draft verification, immediate revalidation of the pinned rollback and
+   draft-gate evidence, and promotion of that same deploy ID;
+3. the full post-promotion static/schedule gate and GET/malformed-POST denial for
+   both scheduled Functions on immutable and canonical origins;
+4. provisioning of the 11 synthetic staging identities;
+5. exact `current_access_context()` and `department_can()` role/tenant checks;
+6. all ten workspace routes in mobile Chromium, including denied-route behavior;
+7. migration health, ten synthetic clinical-to-payment journeys, audit and
+   segregation checks;
+8. reversible subscription OFF/ON proof using the original tenant boundary;
+9. a final current-deploy check, atomic publisher-lease release receipt, and a
+   cross-linked evidence manifest;
+10. automatic exact-baseline rollback on failure, plus external watchdog
+    recovery for a lost runner, rejected-draft cleanup and lease release.
+
+The protected controller intentionally creates synthetic staging records. It
+must run only after the independent Environment reviewer confirms the exact
+controller commit, signed packet, staging project and site.
 
 ## Evidence and release decision
 
-A successful run produces:
+A successful protected controller run must produce:
 
-- `staging-user-provisioning.json`;
-- `authenticated-staging-matrix.json`;
-- `authenticated-staging-synthetic-uat.json`;
-- a screenshot for any browser failure.
+- `pre-release-reconciliation.json`, `authorization.json`,
+  `authorization-verification-bundle.json`,
+  `rollback-attestation-deposit-receipt.json`,
+  `rollback-attestation-deposit-validation.json`,
+  `live-netlify-authority-boundary.json`, `function-environment.json`,
+  `backup-disable-runtime-boundary.json`, `runtime-capability.json` and
+  `preflight.json`, binding the fixed target, two signatures, immutable recovery
+  deposit, live publisher boundary, known-good rollback baseline and exact
+  source/static/Function hashes;
+- `rollback-readiness.json`, `draft-gate.json`, `draft-intent.json`,
+  `draft-receipt.json`,
+  `draft-access-boundary.json`, `draft-verification.json`,
+  `control-behavior.json`, `private-draft.json` and
+  `exclusive-publisher.json`, all bound to one draft deploy and controller run;
+- `promotion-attempt.json`, `promotion.json`, `post-promotion.json` and
+  `scheduled-route-denial.json`, `final-current.json` and
+  `publisher-release.json`, all bound to that same deploy ID;
+- `uat.json`, cross-linking the 11-role provisioning, access matrix, mobile
+  route matrix, ten synthetic journeys, migration health, audit segregation and
+  subscription-restoration evidence, plus a screenshot for any browser failure;
+- `final.json`, requiring every expected digest and receipt; or
+  `rollback-chain-validation.json` (when promotion was attempted) plus
+  reconciliation evidence proving conditional baseline restoration,
+  rejected-draft cleanup and publisher-lease release.
 
 Do not change `release-readiness.json` from `pending` based only on the presence of this harness. The authenticated staging gate may move to `passed` only after a reviewer checks the successful workflow URL, exact source commit, staging project ref, tenant code, role count, route matrix, ten journey results and unresolved failures at zero.
 
 LINE callback/replay tests, encrypted Google Drive backup + isolated restore drill, managed database backup/PITR confirmation, and privacy/security/legal review remain separate hard gates.
 
-The workflow's database proof exercises the service-role-only RPC directly and always restores a clinic that was verified ON at the start. The browser Owner route has an additional confirmed-Google-email allowlist and exact project/clinic guards. Activate and test that boundary separately using `docs/CNYOS_OWNER_CONTROL.md`; a source-only console does not pass the Owner commercial gate.
+The workflow's database proof exercises the service-role-only RPC directly and always restores a clinic that was verified ON at the start. The releasable staging Function configuration keeps `CNYOS_OWNER_CONTROL_ENABLED=false`; this controller does not authorize a persistent synthetic-UAT exception. The browser Owner route has an additional confirmed-Google-email allowlist and exact project/clinic guards. Activate and test any future ephemeral Owner capability separately using `docs/CNYOS_OWNER_CONTROL.md`, with enforced expiry and post-UAT revocation; a source-only console does not pass the Owner commercial gate.
 
 The LINE gate must use the signed Messaging API callback described in `LINE_OA_MESSAGING_GATEWAY.md`, not only a locally supplied LINE ID token. The exact staging deploy must report `enabled=true` at `/api/line-oa-webhook`, pass LINE Developers **Verify**, receive a real event from the dedicated test account, and retain non-PHI `line_oa_webhook_evidence(...)` with the LIFF/QR/revoke/HN evidence.
 
