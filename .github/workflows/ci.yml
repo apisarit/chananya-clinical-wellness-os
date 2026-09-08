@@ -18,10 +18,24 @@ jobs:
   source-and-database-contracts:
     name: Source + PostgreSQL + release evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       CNYOS_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       CNYOS_RELEASE_REF: ${{ github.event.pull_request.head.ref || github.ref }}
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d template1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Check out exact candidate commit
         uses: actions/checkout@v6
@@ -43,6 +57,82 @@ jobs:
       - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
+      - name: Verify read-only SQL and atomic ACL candidate behavior
+        run: |
+          node tests/migration-ledger-verification-contract.mjs
+          node tests/public-routine-acl-inventory-contract.mjs
+          node tests/acl-candidate-behavioral-contract.mjs
+
+      - name: Exercise public-routine observer with PostgreSQL 17 psql
+        run: node tests/public-routine-acl-inventory-psql-e2e.mjs
+
+      - name: Exercise inert ACL candidates with PostgreSQL 17 psql
+        run: node tests/acl-candidate-psql-e2e.mjs
+
+      - name: Exercise complete inert ACL remediation with PostgreSQL 17 psql
+        env:
+          CNYOS_PG17_DISPOSABLE_ACK: I_ACKNOWLEDGE_DISPOSABLE_LOOPBACK_POSTGRESQL_17
+          CNYOS_PGHOST: 127.0.0.1
+          CNYOS_PGPORT: 5432
+          CNYOS_PGUSER: postgres
+        run: node tests/public-routine-acl-complete-remediation-psql-e2e.mjs
+
+      - name: Exercise ACL rollback rehearsal controls with PostgreSQL 17 psql
+        env:
+          CNYOS_PG17_DISPOSABLE_ACK: I_ACKNOWLEDGE_DISPOSABLE_LOOPBACK_POSTGRESQL_17
+        run: node tests/public-routine-acl-rollback-rehearsal-psql-e2e.mjs
+
+      - name: Exercise migration ledger verifier with PostgreSQL 17 psql
+        run: node tests/migration-ledger-verifier-psql-e2e.mjs
+
+      - name: Generate guarded staging migration ledger artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/migration-ledger
+          CLINICAL_OS_SOURCE_COMMIT="${CNYOS_RELEASE_SHA}" \
+            node scripts/generate-migration-ledger-verification-sql.mjs \
+              config/tenant.cnyos-staging.json strict-post-remediation \
+            > artifacts/migration-ledger/cnyos-staging-strict-post-remediation-verification-only.sql
+          CLINICAL_OS_SOURCE_COMMIT="${CNYOS_RELEASE_SHA}" \
+            node scripts/generate-migration-ledger-verification-sql.mjs \
+              config/tenant.cnyos-staging.json chananya-pre-reconciliation \
+            > artifacts/migration-ledger/cnyos-staging-pre-reconciliation-verification-only.sql
+          CLINICAL_OS_SOURCE_COMMIT="${CNYOS_RELEASE_SHA}" \
+            node scripts/generate-migration-ledger-repair-sql.mjs \
+              config/tenant.cnyos-staging.json chananya-pre-reconciliation \
+            > artifacts/migration-ledger/cnyos-staging-pre-reconciliation-guarded-repair.sql
+          # Do not publish any Jitarsa verifier or repair artifact until its
+          # independent raw ACL, system identity and ledger baseline are reviewed.
+          # The disposable PG17 harness above tests target-unverified behavior
+          # without producing an operator-facing Jitarsa artifact.
+          cp supabase/manual/public_routine_acl_inventory_read_only.sql \
+            artifacts/migration-ledger/public-routine-acl-inventory-read-only.sql
+          (
+            cd artifacts/migration-ledger
+            sha256sum *.sql > SHA256SUMS
+          )
+
+      - name: Retain guarded migration ledger artifacts
+        # Review-only source outputs; no live observation, receipt, or transcript.
+        # Keep explicit paths so later files in this directory are not published.
+        # See docs/PR36_SECURITY_REVIEW.md; these artifacts authorize no SQL run.
+        uses: actions/upload-artifact@v6
+        with:
+          name: migration-ledger-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
+          path: |
+            artifacts/migration-ledger/cnyos-staging-strict-post-remediation-verification-only.sql
+            artifacts/migration-ledger/cnyos-staging-pre-reconciliation-verification-only.sql
+            artifacts/migration-ledger/cnyos-staging-pre-reconciliation-guarded-repair.sql
+            artifacts/migration-ledger/public-routine-acl-inventory-read-only.sql
+            artifacts/migration-ledger/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Exercise guarded repair with PostgreSQL 17 psql
+        run: >-
+          node tests/migration-ledger-psql-e2e.mjs
+          artifacts/migration-ledger/cnyos-staging-pre-reconciliation-guarded-repair.sql
+
       - name: Generate exact-commit evidence
         if: always()
         run: npm run evidence:release
@@ -54,6 +144,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: release-contracts-${{ env.CNYOS_RELEASE_SHA }}-${{ github.run_id }}
-          path: artifacts/release-evidence/
+          path: artifacts/release-evidence/exact-commit.json
           if-no-files-found: error
           retention-days: 90

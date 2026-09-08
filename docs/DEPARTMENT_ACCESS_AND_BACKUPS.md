@@ -95,13 +95,52 @@ If the next `20:00 UTC` boundary has already passed, do not rewrite the historic
    - `PATIENT_QR_ISSUER` (must equal the deployment's public `identity.qrIssuer`)
 5. Apply migrations through `202609011200_backup_terminal_run_guard.sql` in filename order before deploying the scheduler and background worker.
 6. Share only five direct-child destination folders under `GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID`, deploy, then enable `CNYOS_OWNER_DRIVE_ENABLED=true`. In `/owner-control.html`, assign those five distinct folders for the clinic and server-fixed production environment. Staging and production require this audited database assignment; the `GOOGLE_DRIVE_*_FOLDER_ID` variables are restore-test-only.
-7. Keep `BACKUP_ENABLED=false` until the assignment and the exact published deploy are verified. Netlify's Scheduled Functions platform protection—not the forgeable `{ "next_run": ... }` event body—is the caller-auth boundary. For both `database-backup` and `database-backup-recovery`, require current deploy metadata to contain exactly one expected `function_schedules` entry and exactly one `available_functions` entry with no `ro` property. Pipe that current metadata JSON from the authenticated Netlify control plane to `npm run verify:backup-deploy-metadata -- -`; do not retain deploy IDs or hashes in the evidence output. This proves schedule registration and absence of a custom route only; `ro` absence alone does not prove that the default Function URL is inaccessible. Run `npm run verify:backup-route-denial -- https://<published-staging-site>.netlify.app` and require Netlify's documented `404` denial for GET and POST on both default Function URLs. Any other status, a runtime response such as `{ "enabled": false }`, or `BACKUP_SCHEDULED_INVOCATION_REQUIRED` is a failed route-protection check, not proof. Preserve the four method/path/status results with the exact-commit evidence.
-8. Enable `BACKUP_ENABLED=true` only outside the configured schedule windows, redeploy, and repeat both deploy-metadata and direct-URL checks against that exact published deploy before using authenticated Netlify **Run now**. Confirm four encrypted files and one manifest and verify `backup_export_runs.status = 'completed'`.
-9. Complete an isolated restore drill from that exact encrypted set before declaring the backup operational.
+7. Keep `BACKUP_ENABLED=false` while the exact candidate completes the combined scheduled-release proof on staging described below. That proof is staging evidence only; it does not authorize a Production configuration change or deployment.
+8. Production activation requires the normal protected production promotion and deployment gates plus independently reviewed Production evidence that binds the trusted deploy output, current published deploy, approved commit and tree, authenticated schedule/no-route metadata, both deploy origins, and the no-publish-race check. The candidate-side scheduled-release verifier module intentionally requires a staging identity and must not be recorded as Production proof. Until a Production-specific gate supplies that evidence, do not enable Production backup or use Production **Run now**.
+9. After an authorized Production backup succeeds, confirm four encrypted files and one manifest, verify `backup_export_runs.status = 'completed'`, and complete an isolated restore drill from that exact encrypted set before declaring the backup operational.
 
 ## Staging configuration
 
 Staging uses a different Netlify project, Supabase project, encryption key, encrypted service-account Blob and five Drive folders. Set `BACKUP_ENVIRONMENT=staging`, a staging-marked `BACKUP_DEPLOYMENT_ID`, `BACKUP_EXPECTED_NETLIFY_SITE_ID`, `BACKUP_EXPECTED_SITE_ORIGIN`, `GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID`, `GOOGLE_DRIVE_EXPECTED_SERVICE_ACCOUNT_EMAIL`, and `BACKUP_EXPECTED_SUPABASE_PROJECT_REF` to the exact staging targets, then provision the credential as described in [GOOGLE_SERVICE_ACCOUNT_BLOB.md](./GOOGLE_SERVICE_ACCOUNT_BLOB.md). `BACKUP_PRODUCTION_SUPABASE_URL` is mandatory and must be the same customer's distinct Production origin, used only as a denylist boundary; never substitute another customer's Production URL. Assign the five folders from Owner Control only after sharing those exact direct-child staging folders with the staging service account. The worker fails closed if copied credentials run on another Netlify site ID/origin, if the Google client email differs from the authenticated tenant binding, if the Supabase URL does not match its exact expected ref, if the Production denylist is absent/invalid or matches, if the deployment ID lacks a staging marker, if the assignment is missing/partial, if a folder is outside the expected root, or if any two domain folder IDs are the same.
+
+Keep staging `BACKUP_ENABLED=false` until the assignment and exact published
+deploy are verified. Netlify's Scheduled Functions platform protection—not the
+forgeable `{ "next_run": ... }` event body—is the caller-auth boundary. A
+candidate-controlled workflow must never receive a Netlify token. The
+unprivileged producer must materialize Function inputs from exact Git blobs,
+reject unsafe modes and ambient overlays, and emit closed-world path/mode/size
+and SHA-256 evidence. A separate protected deployment controller then rehashes
+the reviewed artifact before any credential is exposed, uses its own audited and
+pinned publisher implementation and lockfile, requires a Netlify principal limited to the cnyos staging project,
+creates a draft deploy, verifies it, and promotes only that exact deploy ID.
+After promotion, run a separately reviewed controller-owned port of the contract
+in `scripts/verify-netlify-scheduled-release-gate.mjs`. The candidate-owned
+module is an offline specification, fails closed when invoked directly, and
+must never receive the token. The controller-owned port uses a
+step-scoped `NETLIFY_AUTH_TOKEN`, fixed `STAGING_NETLIFY_SITE_ID`,
+`EXPECTED_STAGING_SOURCE_COMMIT`, `EXPECTED_STAGING_NETLIFY_DEPLOY_ID`, and
+`NETLIFY_SCHEDULED_GATE_EVIDENCE_PATH`. The gate authenticates to Netlify,
+requires that receipt to be the current published deploy, binds its
+`commit_ref`, requires ready `production` hosting context, the exact closed
+Function set, exact schedules, and no custom routes for both backup Functions,
+and requires both immutable-deploy and canonical `deploy-manifest.json` to be
+publicly readable and byte-identical at the expected commit and local tree. It
+then probes GET and malformed POST on both origins and rejects a publish change
+during verification. A `403` or `404` is accepted only on those Function probes,
+after all independent bindings pass, because Netlify documents that scheduled
+Functions do not accept incoming web requests but does not promise one denial
+status. A blocked manifest/control route, any other Function status, or
+application-shaped JSON such as `{ "enabled": false }` or
+`BACKUP_SCHEDULED_INVOCATION_REQUIRED` fails the gate. Isolated source and
+prebuilt bundle hashes provide Function process provenance; the documented
+Netlify API does not expose a remote Function-bundle byte digest. Retain only
+sanitized evidence; never retain the API token, raw deploy metadata, or response
+bodies. If a post-promotion gate fails, the controller rollback must restore the
+exact signed baseline only while the failed deploy remains current. An older
+deploy without a trusted receipt cannot be promoted into exact Function
+evidence. After enabling backup outside the configured schedule windows,
+redeploy and repeat this gate against the exact new staging deploy before using
+authenticated staging **Run now**.
 
 The staging deployments are deliberately separated:
 
@@ -157,11 +196,11 @@ Initial target: daily RPO (maximum 24 hours). Folder metadata and `canAddChildre
 ## Exact-commit CI and operational workflows
 
 - `Release candidate contracts` runs on every PR/push, executes all source and PostgreSQL behavioral contracts, hashes every tracked source file and ordered migration, and retains a 90-day exact-commit artifact.
-- `Authenticated staging E2E` remains protected and proves 11 role matrices, route denial, current-access health, synthetic end-to-end journeys and existing-token denial after audited account deactivation.
-- `Real LINE hybrid identity staging E2E` requires a current ID token from a dedicated LINE test account. It proves official LINE token verification, consent/link, card/QR, practitioner confirmation, replay denial, forced expiry denial, revoke and no-phone HN fallback.
+- `Unprivileged CNYOS staging candidate evidence` runs without an Environment or credential. It retains exact-source offline contract and database-locked build evidence only; the separate protected controller accepts the commit SHA and independently rebuilds it rather than consuming this artifact as trusted input.
+- `LINE staging E2E protected-controller handoff` fails closed in this candidate-controlled repository. The separate protected controller must own the LINE test credential and verifier implementation before it may prove official token verification, consent/link, card/QR, practitioner confirmation, replay denial, forced-expiry denial, revoke and no-phone HN fallback.
 - `Isolated managed restore drill` requires the protected Drive, encryption and restore-project secrets described above.
 
-The workflows are executable harnesses, not evidence by themselves. Each commercial gate remains `pending` until its successful artifact is reviewed and tied to the exact release commit.
+The protected workflows are executable harnesses, not evidence by themselves; candidate workflow artifacts are untrusted comparison evidence only. Each commercial gate remains `pending` until a protected-controller artifact is reviewed and tied to the exact release commit.
 
 ## Release gates
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,9 +24,31 @@ assert.equal(deploy?.source?.commit, expectedCommit, 'production artifact manife
 assert.equal(deploy?.source?.tree, tree, 'production artifact manifest tree mismatch');
 assert.equal(deploy?.source?.verified, true, 'production artifact source must be verified');
 assert.equal(deploy?.build?.context, 'production', 'production artifact must be built in production context');
+assert.equal(deploy?.build?.deploymentClass, 'production', 'production artifact must have production deployment class');
 assert.equal(deploy?.safety?.previewLocked, false, 'production artifact must not be preview locked');
 assert.equal(deploy?.safety?.databaseLocked, false, 'production artifact must not contain a locked browser database config');
+assert.equal(deploy?.safety?.stagingDatabaseExplicitlyAcknowledged, false, 'production artifact must not carry staging acknowledgement');
+assert.equal(runtime?.schemaVersion, 2, 'runtime publish manifest schema mismatch');
+assert.equal(runtime?.integrityAlgorithm, 'sha256', 'runtime publish manifest integrity algorithm mismatch');
 assert.ok(Array.isArray(runtime?.files) && runtime.files.length > 0, 'runtime publish manifest is empty');
+assert.equal(runtime.fileCount, runtime.files.length, 'runtime publish manifest file count mismatch');
+assert.ok(Array.isArray(runtime.integrity), 'runtime publish manifest integrity is missing');
+assert.equal(runtime.integrity.length, runtime.files.length, 'runtime publish manifest integrity count mismatch');
+assert.deepEqual(
+  fs.readdirSync(dist).sort(),
+  [...runtime.files, 'runtime-publish-manifest.json'].sort(),
+  'production dist must exactly match the runtime publish manifest'
+);
+for (const [index, item] of runtime.integrity.entries()) {
+  assert.equal(item?.path, runtime.files[index], 'runtime publish manifest integrity order mismatch');
+  const content = fs.readFileSync(path.join(dist, item.path));
+  assert.equal(item.size, content.byteLength, `runtime publish size mismatch for ${item.path}`);
+  assert.equal(
+    item.sha256,
+    crypto.createHash('sha256').update(content).digest('hex'),
+    `runtime publish digest mismatch for ${item.path}`
+  );
+}
 
 for (const required of [
   'index.html',

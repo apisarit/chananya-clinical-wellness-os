@@ -7,7 +7,11 @@ import { PLATFORM_FEATURES, normalizePlatformLink, normalizePlatformPlan, resolv
 import { handlePlatformConsole, platformTargets } from '../netlify/functions/platform-console.mts';
 import { validatePreviewJob, canonicalPreviewAsset } from '../scripts/platform-preview-deploy.mjs';
 import { buildNetlifyPublish } from '../scripts/build-netlify-publish.mjs';
-import { validateTenantConfig, buildDeployManifest } from '../scripts/generate-tenant-config.mjs';
+import {
+  buildDeployManifest,
+  GENERATED_CONFIG_DIRECTORY,
+  validateTenantConfig
+} from '../scripts/generate-tenant-config.mjs';
 
 let count = 0;
 const test = async (name, work) => { await work(); count++; console.log(`PASS ${name}`); };
@@ -62,6 +66,8 @@ await test('normalize Drive and Supabase copied links without requesting them', 
   assert.equal(normalizePlatformLink('drive', `https://drive.google.com/drive/u/0/folders/${target.driveRootId}?usp=sharing`).id, target.driveRootId);
   assert.equal(normalizePlatformLink('database', `https://supabase.com/dashboard/project/${target.projectRef}/settings/general`).url, input.database);
   assert.equal(normalizePlatformLink('nas', 'https://192.168.1.10/backups').requiresAgent, true);
+  assert.equal(normalizePlatformLink('nas', 'smb://nas01.backups.local/clinic-a/backup').url, 'smb://nas01.backups.local/clinic-a/backup');
+  assert.equal(normalizePlatformLink('nas', '\\\\NAS01\\\\backups\\\\clinic.enc').url, '\\\\NAS01\\\\backups\\\\clinic.enc');
   assert.equal(normalizePlatformLink('nas', ''), null);
 });
 for (const [kind, value] of [
@@ -154,9 +160,20 @@ await test('package build removes unselected pages and platform console from cus
   const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'cnyos-platform-package-'));
   try {
     const files = ['index.html', 'login.html', 'auth-callback.html', 'app.js', 'app.css', 'auth-config.js', 'tenant-config.js', 'brand-config.js', 'platform-console.html', 'platform-config.js', 'owner-control.html', 'u-synthesise.js', ...PLATFORM_FEATURES.flatMap(item => item.pages.map(page => `${page}.html`))];
-    for (const name of files) await fs.writeFile(path.join(fixture, name), 'synthetic');
-    await fs.writeFile(path.join(fixture, 'deploy-manifest.json'), JSON.stringify({ package: { features: ['core', 'u-synthesise'] } }));
-    const result = await buildNetlifyPublish({ cwd: fixture });
+    const generated = path.join(fixture, GENERATED_CONFIG_DIRECTORY);
+    await fs.mkdir(generated);
+    const sourceFiles = new Map();
+    for (const name of files) {
+      const destination = ['tenant-config.js', 'brand-config.js'].includes(name)
+        ? path.join(generated, name)
+        : path.join(fixture, name);
+      await fs.writeFile(destination, 'synthetic');
+      if (!['tenant-config.js', 'brand-config.js'].includes(name)) {
+        sourceFiles.set(name, Buffer.from('synthetic'));
+      }
+    }
+    await fs.writeFile(path.join(generated, 'deploy-manifest.json'), JSON.stringify({ package: { features: ['core', 'u-synthesise'] } }));
+    const result = await buildNetlifyPublish({ cwd: fixture, sourceFiles });
     assert.ok(result.files.includes('luopan.html')); assert.ok(result.files.includes('u-synthesise.js'));
     for (const name of ['clinical-v3.html', 'pharmacy.html', 'platform-console.html', 'platform-config.js', 'owner-control.html']) assert.ok(!result.files.includes(name));
   } finally { await fs.rm(fixture, { recursive: true, force: true }); }

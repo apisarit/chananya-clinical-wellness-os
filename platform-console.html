@@ -26,7 +26,7 @@
           <section class="card"><div class="section-title"><span>02</span><div><h2>วางลิงก์แหล่งข้อมูล</h2><p>เชื่อมสิทธิ์ครั้งแรก แล้วใช้การเชื่อมต่อเดิมในครั้งต่อไป</p></div></div>
             <label><span>ฐานข้อมูล <em>Supabase</em></span><input id="database" type="url" placeholder="วางลิงก์โครงการ Supabase" maxlength="500"><small>รับลิงก์หน้าโครงการหรือ API URL โดยไม่ใส่รหัสผ่าน</small></label>
             <label><span>โฟลเดอร์สำรอง <em>Google Drive</em></span><input id="drive" placeholder="วางลิงก์โฟลเดอร์ Google Drive" maxlength="500"><small>ต้องยืนยันบัญชีและสิทธิ์เขียนก่อนเปิดสำรองอัตโนมัติ</small></label>
-            <label><span>ที่เก็บข้อมูลของคุณ <em>NAS · ทางเลือก</em></span><input id="nas" type="url" placeholder="https://nas.example.com/backup" maxlength="500"><small>ต้องมีตัวเชื่อมต่อ NAS; ลิงก์แชร์อย่างเดียวยังใช้สำรองไม่ได้</small></label>
+            <label><span>ที่เก็บข้อมูลของคุณ <em>NAS / NAS file · ทางเลือก</em></span><input id="nas" placeholder="https://nas.example.com/backup หรือ \\\\NAS01\\backups\\clinic.enc" maxlength="500"><small>ต้องมีตัวเชื่อมต่อ NAS; รองรับ HTTPS/SMB ลิงก์หรือพาธไฟล์ (เช่น UNC/SMB), ไม่รองรับรหัสผ่านในลิงก์</small></label>
             <p class="hint">การเชื่อมต่อและข้อมูลสำรองแยกตามลูกค้าและสภาพแวดล้อม</p>
           </section>
           <section class="card"><div class="section-title"><span>03</span><div><h2>เลือกฟีเจอร์</h2><p>ระบบจะเพิ่มส่วนที่จำเป็นของแต่ละฟีเจอร์ให้ครบ</p></div></div><div id="features" class="feature-grid"></div><p class="hint">สิทธิ์ของพนักงานยังจัดการแยกตามหน้าที่ในแต่ละคลินิก</p></section>
@@ -34,16 +34,48 @@
           <button class="primary wide" type="submit" id="save">ตรวจและบันทึกแบบร่าง</button>
         </form>
         <aside>
-          <section class="card review"><p class="eyebrow">DEPLOY REVIEW</p><h2 id="review-name">แอปใหม่ของคุณ</h2><p id="review-description">บันทึกแบบร่างเพื่อดูความพร้อมก่อน Deploy</p><ol id="checks" class="checks"></ol>
-            <div id="saved-info" hidden><p class="hint">แบบร่างนี้บันทึกไว้แล้ว หากแก้ไขจะสร้างฉบับใหม่พร้อมประวัติ</p><label>พิมพ์รหัสแอปเพื่อยืนยัน<input id="confirm" autocomplete="off" placeholder="รหัสแอป"></label></div>
-            <button id="deploy" class="primary wide" type="button" disabled>Deploy ทดสอบ</button>
-            <p class="hint">การทดสอบใช้เว็บไซต์ร่างและล็อกฐานข้อมูล การเปิดใช้จริงต้องผ่านขั้นตอนอนุมัติ Production</p><div id="deployment-status" role="status" aria-live="polite"></div>
-            <button id="refresh-plan" type="button" class="wide" hidden>ตรวจสถานะ Deploy</button>
-            <button id="export-plan" type="button" class="wide" hidden>ดาวน์โหลดแผนการตั้งค่า</button>
-          </section>
-          <details class="card security"><summary>สิทธิ์และการควบคุม</summary><dl><dt>Platform Owner</dt><dd>จัดการแผนเว็บไซต์ ส่งงาน Deploy และตรวจประวัติแพลตฟอร์ม</dd><dt>Clinic Super Admin / Admin</dt><dd>ดูแลผู้ใช้และงานภายในคลินิกตามสิทธิ์ ไม่มีสิทธิ์ Deploy แพลตฟอร์ม</dd><dt>ผู้ปฏิบัติงาน</dt><dd>เข้าถึงเฉพาะงานของแผนกที่ได้รับอนุญาต</dd></dl><p>ทุกคำสั่งตรวจบัญชี Owner ที่เซิร์ฟเวอร์ และบันทึกผู้ทำรายการ การ Deploy ต้องใช้การเข้าสู่ระบบ Google ล่าสุด</p></details>
-        </aside>
-      </div>
+      <section class="card review"><p class="eyebrow">DEPLOY REVIEW</p><h2 id="review-name">แอปใหม่ของคุณ</h2><p id="review-description">บันทึกแบบร่างเพื่อดูความพร้อมก่อน Deploy</p><ol id="checks" class="checks"></ol>
+        <div id="saved-info" hidden><p class="hint">แบบร่างนี้บันทึกไว้แล้ว หากแก้ไขจะสร้างฉบับใหม่พร้อมประวัติ</p><label>พิมพ์รหัสแอปเพื่อยืนยัน<input id="confirm" autocomplete="off" placeholder="รหัสแอป"></label></div>
+        <button id="deploy" class="primary wide" type="button" disabled>Deploy ทดสอบ</button>
+        <p class="hint">การทดสอบใช้เว็บไซต์ร่างและล็อกฐานข้อมูล การเปิดใช้จริงต้องผ่านขั้นตอนอนุมัติ Production</p><div id="deployment-status" role="status" aria-live="polite"></div>
+        <button id="refresh-plan" type="button" class="wide" hidden>ตรวจสถานะ Deploy</button>
+        <button id="export-plan" type="button" class="wide" hidden>ดาวน์โหลดแผนการตั้งค่า</button>
+      </section>
+      <section class="card subscription">
+        <p class="eyebrow">OWNER PROJECT CONTROL</p>
+        <h2>เปิด/ปิดระบบ Tenant แบบ Real-time</h2>
+        <p>ควบคุมสถานะแต่ละโปรเจกต์จากรายชื่อ Owner Subscription ทั้งหมด รวมรายการที่ใช้ตรวจ ON/OFF และแนบเหตุผลการเปลี่ยนแปลง</p>
+        <div id="subscription-status" role="status" aria-live="polite" class="subscription-status">กำลังโหลดรายการเจ้าของโครงการ…</div>
+        <div id="subscription-list" class="subscription-list" aria-live="polite"></div>
+        <button id="subscription-refresh" type="button" class="wide" disabled>โหลดสถานะใหม่</button>
+        <form id="subscription-form" class="subscription-form" hidden>
+          <label>โปรเจกต์ที่เลือก
+            <input id="subscription-clinic-name" value="ยังไม่เลือกโปรเจกต์" readonly aria-readonly="true">
+            <input id="subscription-clinic-code" type="hidden">
+            <input id="subscription-clinic-id" type="hidden">
+            <input id="subscription-clinic-version" type="hidden">
+          </label>
+          <label>โหมดเป้าหมาย
+            <select id="subscription-target-state">
+              <option value="true">ON — เปิดใช้งาน</option>
+              <option value="false">OFF — ระงับการเข้าถึง</option>
+            </select>
+          </label>
+          <label>พิมพ์รหัสโปรเจกต์อีกครั้งเพื่อยืนยัน
+            <input id="subscription-confirm" autocomplete="off" placeholder="เช่น JITARSA">
+          </label>
+          <label>เหตุผลการเปลี่ยนสถานะ (8–500 ตัวอักษร)
+            <textarea id="subscription-reason" minlength="8" maxlength="500" placeholder="ระบุเหตุผลเชิงปฏิบัติการและความเสี่ยงที่รับผิดชอบ" required></textarea>
+          </label>
+          <div class="subscription-actions">
+            <button id="subscription-submit" class="danger" type="submit">ยืนยันการเปลี่ยนสถานะ</button>
+            <button id="subscription-cancel" type="button">ยกเลิก</button>
+          </div>
+        </form>
+      </section>
+      <details class="card security"><summary>สิทธิ์และการควบคุม</summary><dl><dt>Platform Owner</dt><dd>จัดการแผนเว็บไซต์ ส่งงาน Deploy และตรวจประวัติแพลตฟอร์ม</dd><dt>Clinic Super Admin / Admin</dt><dd>ดูแลผู้ใช้และงานภายในคลินิกตามสิทธิ์ ไม่มีสิทธิ์ Deploy แพลตฟอร์ม</dd><dt>ผู้ปฏิบัติงาน</dt><dd>เข้าถึงเฉพาะงานของแผนกที่ได้รับอนุญาต</dd></dl><p>ทุกคำสั่งตรวจบัญชี Owner ที่เซิร์ฟเวอร์ และบันทึกผู้ทำรายการ การ Deploy ต้องใช้การเข้าสู่ระบบ Google ล่าสุด</p></details>
+      </aside>
+    </div>
       <section class="card history"><div class="section-title"><div><h2>แบบร่างและประวัติ</h2><p>เลือกฉบับเดิมเพื่อดูรายละเอียดหรือสร้างฉบับใหม่</p></div><button id="refresh-list" type="button">โหลดล่าสุด</button></div><div id="history"></div></section>
     </div>
   </main>

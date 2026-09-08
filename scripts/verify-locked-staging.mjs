@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertSameOriginFramePolicy } from './netlify-frame-policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
@@ -81,16 +82,12 @@ function assertSecurityHeaders(response, pathName) {
     'nosniff',
     `${pathName} must set X-Content-Type-Options=nosniff`
   );
-  assert.equal(
-    response.headers.get('x-frame-options'),
-    'DENY',
-    `${pathName} must set X-Frame-Options=DENY`
-  );
+  assertSameOriginFramePolicy(response.headers, pathName);
 }
 
 async function fetchText(fetchImpl, origin, pathName) {
   const response = await fetchImpl(`${origin}${pathName}`, {
-    redirect: 'follow',
+    redirect: 'error',
     cache: 'no-store',
     headers: { 'User-Agent': 'chananya-locked-staging-verifier/1.0' }
   });
@@ -158,8 +155,18 @@ export async function verifyLockedStaging({
     'Manifest clinic code must match tenant config'
   );
   assert.equal(manifest.identity?.qrIssuer, config.identity?.qrIssuer, 'Manifest QR issuer must match tenant config');
+  assert.equal(
+    manifest.build?.deploymentClass,
+    'dedicated-staging',
+    'Manifest build.deploymentClass must be dedicated-staging'
+  );
   assert.equal(manifest.safety?.previewLocked, true, 'Manifest must record previewLocked=true');
   assert.equal(manifest.safety?.databaseLocked, true, 'Manifest must record databaseLocked=true');
+  assert.equal(
+    manifest.safety?.stagingDatabaseExplicitlyAcknowledged,
+    false,
+    'Manifest must record stagingDatabaseExplicitlyAcknowledged=false while locked'
+  );
   assert.equal(manifest.source?.verified, true, 'Manifest must contain verified source provenance');
   assert.match(manifest.source?.commit || '', revision, 'Manifest source commit must be a Git revision');
   if (expectedSourceCommit) {

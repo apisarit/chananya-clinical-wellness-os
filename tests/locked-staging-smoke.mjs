@@ -24,8 +24,16 @@ const manifest = {
   tenant: config.tenant,
   identity: config.identity,
   source: { commit: sourceCommit, tree: null, verified: true },
-  build: { context: 'production', timestamp: '2026-08-28T00:00:00.000Z' },
-  safety: { previewLocked: true, databaseLocked: true }
+  build: {
+    context: 'production',
+    deploymentClass: 'dedicated-staging',
+    timestamp: '2026-08-28T00:00:00.000Z'
+  },
+  safety: {
+    previewLocked: true,
+    databaseLocked: true,
+    stagingDatabaseExplicitlyAcknowledged: false
+  }
 };
 const tenantScript = `window.CLINICAL_OS_CONFIG = Object.freeze(${JSON.stringify(config)});\n`;
 const routePaths = new Set([
@@ -48,7 +56,8 @@ function response(body, extraHeaders = {}, status = 200) {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Content-Security-Policy': "default-src 'self'; frame-ancestors 'self'; object-src 'none'",
       ...extraHeaders
     }
   });
@@ -101,6 +110,23 @@ assert.equal(passed.databaseLocked, true);
 assert.equal(passed.routes.length, 11);
 assert.equal(passed.sourceCommit, sourceCommit);
 
+let redirectRequestOptions;
+await assert.rejects(
+  verifyLockedStaging({
+    siteUrl,
+    fetchImpl: async (_input, options) => {
+      redirectRequestOptions = options;
+      return response('', { Location: 'https://attacker.example/tenant-config.js' }, 302);
+    }
+  }),
+  /tenant-config\.js must return HTTP 200/
+);
+assert.equal(
+  redirectRequestOptions.redirect,
+  'error',
+  'locked staging verification must not follow a cross-origin redirect'
+);
+
 await assert.rejects(
   verifyLockedStaging({
     siteUrl,
@@ -125,6 +151,37 @@ await assert.rejects(
   }),
   /source commit must match/
 );
+for (const [label, deployManifest, expectedError] of [
+  [
+    'missing deployment class',
+    { ...manifest, build: { context: manifest.build.context, timestamp: manifest.build.timestamp } },
+    /deploymentClass must be dedicated-staging/
+  ],
+  [
+    'production deployment class',
+    { ...manifest, build: { ...manifest.build, deploymentClass: 'production' } },
+    /deploymentClass must be dedicated-staging/
+  ],
+  [
+    'missing staging acknowledgement marker',
+    {
+      ...manifest,
+      safety: { previewLocked: manifest.safety.previewLocked, databaseLocked: manifest.safety.databaseLocked }
+    },
+    /stagingDatabaseExplicitlyAcknowledged=false/
+  ],
+  [
+    'staging acknowledgement enabled',
+    { ...manifest, safety: { ...manifest.safety, stagingDatabaseExplicitlyAcknowledged: true } },
+    /stagingDatabaseExplicitlyAcknowledged=false/
+  ]
+]) {
+  await assert.rejects(
+    verifyLockedStaging({ siteUrl, fetchImpl: mockFetch({ deployManifest }) }),
+    expectedError,
+    `${label} must fail closed`
+  );
+}
 await assert.rejects(
   verifyLockedStaging({
     siteUrl,
