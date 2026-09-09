@@ -4,3 +4,15 @@
 #owner-recovery-actions .btn { display: block; width: 100%; margin-top: .75rem; }
 #owner-recovery-actions p { line-height: 1.5; overflow-wrap: anywhere; }
 .owner-console-page #owner-refresh { margin-bottom: 1rem; }
+.owner-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.owner-action-card { display: grid; gap: .5rem; padding: 1.25rem; border: 1px solid #cbd9d2; border-radius: 1rem; background: #fffefa; color: #164c3d; text-decoration: none; overflow-wrap: anywhere; }
+.owner-action-card strong { font-size: 1.15rem; }
+.owner-action-card span, .owner-storage-guide { line-height: 1.65; }
+.owner-action-card:focus-visible, .owner-storage-guide summary:focus-visible { outline: 3px solid #ba913d; outline-offset: 3px; }
+.owner-storage-guide { margin-bottom: 1.5rem; }
+.owner-storage-guide .btn { white-space: normal; }
+.owner-storage-guide details { padding: .85rem 0; border-top: 1px solid #dce3dc; }
+.owner-storage-guide summary { cursor: pointer; font-weight: 700; min-height: 2.75rem; display: list-item; align-content: center; }
+.owner-storage-guide li + li { margin-top: .5rem; }
+#owner-storage { scroll-margin-top: 1rem; }
+@media (max-width: 640px) { .owner-quick-actions { grid-template-columns: 1fr; } }

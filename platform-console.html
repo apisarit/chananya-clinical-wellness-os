@@ -7,7 +7,7 @@
   <script src="tenant-config.js?v=platform1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
   <script src="auth-config.js?v=platform1"></script><script src="chananya-runtime.js?v=platform1"></script>
-  <script type="module" src="platform-console.js?v=1"></script>
+  <script type="module" src="platform-console.js?v=owner-setup-20260909"></script>
 </head>
 <body>
   <header class="topbar"><a class="wordmark" href="/">CNYOS <span>PLATFORM</span></a><nav aria-label="การจัดการ"><a href="/owner-control.html">Subscription &amp; Backup</a><button id="logout" type="button" disabled>ออกจากระบบ</button></nav></header>
@@ -18,15 +18,15 @@
       <div class="metrics"><div><span>แบบร่างที่บันทึก</span><strong id="draft-count">0</strong></div><div><span>ฟีเจอร์ที่เลือก</span><strong id="feature-count">0</strong></div><div><span>บริการ Deploy</span><strong id="dispatcher-label" class="metric-label">กำลังตรวจ</strong></div></div>
       <div class="layout">
         <form id="builder" autocomplete="off">
-          <section class="card"><div class="section-title"><span>01</span><div><h2>ชื่อและเว็บไซต์</h2><p>เลือกเว็บไซต์เดิม หรือเตรียมแอปสำหรับลูกค้าใหม่</p></div></div>
+          <section id="clinic-setup" class="card"><div class="section-title"><span>01</span><div><h2>เพิ่มคลินิกใหม่ / จัดการคลินิกเดิม</h2><p>บันทึกแบบร่างก่อน ยังไม่สร้างคลินิกในฐานข้อมูลหรือเปิดใช้งานจริง</p></div></div>
             <label>เว็บไซต์ปลายทาง<select id="target"><option value="">ลูกค้าใหม่ / ยังไม่ลงทะเบียนเว็บไซต์</option></select></label>
             <div class="fields"><label>ชื่อแอป<input id="name" required maxlength="80" placeholder="เช่น Jitarsa Wellness"></label><label>รหัสแอป<input id="slug" required maxlength="48" pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" placeholder="jitarsa-wellness"><small>อักษรอังกฤษตัวเล็ก ตัวเลข และขีดกลาง</small></label></div>
             <label>ลิงก์เว็บไซต์ Netlify<input id="site" type="url" placeholder="https://your-clinic.netlify.app" maxlength="500"></label>
           </section>
-          <section class="card"><div class="section-title"><span>02</span><div><h2>วางลิงก์แหล่งข้อมูล</h2><p>เชื่อมสิทธิ์ครั้งแรก แล้วใช้การเชื่อมต่อเดิมในครั้งต่อไป</p></div></div>
+          <section id="storage-setup" class="card"><div class="section-title"><span>02</span><div><h2>เพิ่มปลายทางจัดเก็บข้อมูล</h2><p>บันทึกลิงก์ Google Drive หรือ NAS ในแบบร่าง การเชื่อมต่อจริงต้องตรวจสิทธิ์แยกต่างหาก</p></div></div>
             <label><span>ฐานข้อมูล <em>Supabase</em></span><input id="database" type="url" placeholder="วางลิงก์โครงการ Supabase" maxlength="500"><small>รับลิงก์หน้าโครงการหรือ API URL โดยไม่ใส่รหัสผ่าน</small></label>
             <label><span>โฟลเดอร์สำรอง <em>Google Drive</em></span><input id="drive" placeholder="วางลิงก์โฟลเดอร์ Google Drive" maxlength="500"><small>ต้องยืนยันบัญชีและสิทธิ์เขียนก่อนเปิดสำรองอัตโนมัติ</small></label>
-            <label><span>ที่เก็บข้อมูลของคุณ <em>NAS · ทางเลือก</em></span><input id="nas" type="url" placeholder="https://nas.example.com/backup" maxlength="500"><small>ต้องมีตัวเชื่อมต่อ NAS; ลิงก์แชร์อย่างเดียวยังใช้สำรองไม่ได้</small></label>
+            <label><span>ที่เก็บข้อมูลของคุณ <em>NAS · บันทึกแผนเท่านั้น</em></span><input id="nas" type="url" placeholder="https://nas.example.com/backup" maxlength="500"><small>ยังไม่มีตัวเชื่อมต่อ NAS สำหรับสำรองจริง ห้ามใส่รหัสผ่านหรือ access token ในลิงก์</small></label>
             <p class="hint">การเชื่อมต่อและข้อมูลสำรองแยกตามลูกค้าและสภาพแวดล้อม</p>
           </section>
           <section class="card"><div class="section-title"><span>03</span><div><h2>เลือกฟีเจอร์</h2><p>ระบบจะเพิ่มส่วนที่จำเป็นของแต่ละฟีเจอร์ให้ครบ</p></div></div><div id="features" class="feature-grid"></div><p class="hint">สิทธิ์ของพนักงานยังจัดการแยกตามหน้าที่ในแต่ละคลินิก</p></section>
