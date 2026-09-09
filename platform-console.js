@@ -166,6 +166,10 @@ async function load() {
   $('dispatcher-label').textContent = data.dispatcherReady ? 'เชื่อมแล้ว' : 'รอเชื่อมสิทธิ์';
   $('access').hidden = true; $('workspace').hidden = false; $('logout').disabled = false;
   renderFeatures(); renderHistory(); renderReview();
+  const requestedSection = location.hash.slice(1);
+  if (['clinic-setup', 'storage-setup'].includes(requestedSection)) {
+    $(requestedSection).scrollIntoView({ block: 'start' });
+  }
 }
 $('target').addEventListener('change', () => {
   const target = registry.targets.find(item => item.key === $('target').value);

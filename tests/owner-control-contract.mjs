@@ -356,7 +356,7 @@ assert.doesNotMatch(worker, /console\.(?:log|error)\([^\n]*(?:serviceRoleKey|acc
 
 const consoleHtml = read('owner-control.html');
 const consoleJs = read('owner-control.js');
-assert.match(consoleHtml, /Subscription Safety Console/);
+assert.match(consoleHtml, /CNYOS Owner Console/);
 assert.match(consoleHtml, /subscription_state='suspended'/);
 assert.match(consoleJs, /crypto\.randomUUID\(\)/);
 assert.match(consoleJs, /expectedVersion/);
