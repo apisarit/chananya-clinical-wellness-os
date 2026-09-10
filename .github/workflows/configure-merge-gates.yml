@@ -1,0 +1,49 @@
+name: Configure merge gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply the reviewed main protection policy and enable repository auto-merge
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-merge-gates
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: Configure main protection
+    if: github.repository == 'apisarit/chananya-clinical-wellness-os' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Configure this environment to allow ONLY branch main BEFORE adding its
+    # REPOSITORY_ADMIN_TOKEN secret. Do not use a repository-wide admin secret.
+    environment: repository-admin
+    steps:
+      - name: Check out reviewed default-branch commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Verify installer controls without credentials
+        run: node --test tests/configure-merge-gates.mjs
+      - name: Plan or apply repository settings
+        env:
+          REPOSITORY_ADMIN_TOKEN: ${{ secrets.REPOSITORY_ADMIN_TOKEN }}
+          APPLY_MERGE_GATES: ${{ inputs.apply }}
+        run: |
+          if [ "$APPLY_MERGE_GATES" = true ]; then
+            node scripts/configure-merge-gates.mjs --apply
+          else
+            node scripts/configure-merge-gates.mjs
+          fi
