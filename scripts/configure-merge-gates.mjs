@@ -160,7 +160,11 @@ export async function configure({ request, apply = false }) {
       enabled(before?.required_signatures, 'signatures') !== enabled(latest?.required_signatures, 'signatures')) {
     throw new Error('Protection changed during planning; inspect and rerun');
   }
-  await request('PUT', protectionPath, plan);
+  const payload = structuredClone(plan);
+  // The 2026-03-10 API accepts either contexts OR checks, not both. Use checks
+  // so application bindings survive; GET returns both representations.
+  delete payload.required_status_checks.contexts;
+  await request('PUT', protectionPath, payload);
   const saved = await request('GET', protectionPath);
   if (!same(readPolicy(saved), plan) ||
       enabled(saved.required_signatures, 'signatures') !== enabled(before?.required_signatures, 'signatures')) {

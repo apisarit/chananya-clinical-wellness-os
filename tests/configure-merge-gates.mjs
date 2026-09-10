@@ -20,6 +20,7 @@ const base = () => ({
 });
 function response(plan, signatures = false) {
   const copy = structuredClone(plan);
+  copy.required_status_checks.contexts = [...new Set(copy.required_status_checks.checks.map(check => check.context))];
   for (const [key, value] of Object.entries(copy)) if (typeof value === 'boolean') copy[key] = { enabled: value };
   for (const restrictions of [copy.restrictions, copy.required_pull_request_reviews?.dismissal_restrictions,
     copy.required_pull_request_reviews?.bypass_pull_request_allowances]) {
@@ -73,6 +74,9 @@ test('apply verifies protection before enabling repository auto-merge and never 
   assert.equal((await configure({ request, apply: true })).applied, true);
   assert.deepEqual(writes(state).map(call => [call.method, call.path]), [['PUT', protectionPath], ['PATCH', root]]);
   const putIndex = state.calls.findIndex(call => call.method === 'PUT');
+  // Regression for the live API's oneOf validation: contexts + checks => 422.
+  assert.equal('contexts' in state.calls[putIndex].body.required_status_checks, false);
+  assert.equal(state.calls[putIndex].body.required_status_checks.checks.length, 2);
   assert.equal(state.calls[putIndex + 1].path, protectionPath);
   assert.equal(state.calls[putIndex + 1].method, 'GET');
   assert.equal(state.protection.required_conversation_resolution.enabled, true);
