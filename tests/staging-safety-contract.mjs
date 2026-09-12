@@ -14,6 +14,10 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const subscriptionProof = read('scripts/staging-subscription-proof.mjs');
+assert.doesNotMatch(subscriptionProof, /process\.env|staging-support|requestJson|fetch\(|supabase/i);
+assert.match(subscriptionProof, /p_expected_version/);
+assert.match(subscriptionProof, /OWNER_SUBSCRIPTION_PROOF_RECOVERY_FAILED/);
 const staging = JSON.parse(read('config/tenant.staging.example.json'));
 const production = JSON.parse(read('config/tenant.chananya.json'));
 const packageJson = JSON.parse(read('package.json'));
@@ -111,6 +115,7 @@ assert.match(verifier, /current_access_context/);
 assert.match(verifier, /department_can/);
 assert.match(verifier, /STAGING_BROWSER_E2E/);
 assert.match(verifier, /ไม่มีสิทธิ์/);
+assert.match(verifier, /runOwnerSubscriptionProof/);
 const uat = read('scripts/run-staging-synthetic-uat.mjs');
 assert.match(uat, /Exactly ten synthetic staging flows must pass/);
 assert.match(uat, /PHARMACY_DEPARTMENT_REQUIRED/);
@@ -205,6 +210,13 @@ assert.equal(
   false,
   'candidate-owned code must not contain a credentialed Netlify publisher or rollback helper'
 );
+
+const subscriptionProofContract = spawnSync(process.execPath, [
+  path.join(root, 'tests/staging-subscription-proof-contract.mjs')
+], { cwd: root, encoding: 'utf8', env: { PATH: process.env.PATH || '' } });
+assert.equal(subscriptionProofContract.status, 0, subscriptionProofContract.stderr);
+assert.equal(subscriptionProofContract.stderr, '');
+assert.match(subscriptionProofContract.stdout, /Staging subscription proof contract passed/);
 
 const releaseAuthorization = read('scripts/verify-staging-release-authorization.mjs');
 assert.match(releaseAuthorization, /CNYOS_STAGING_RELEASE_APPROVER_KEY_REGISTRY_JSON/);

@@ -17,6 +17,7 @@ import {
   supabaseUrl,
   writeEvidence
 } from './staging-support.mjs';
+import { runOwnerSubscriptionProof } from './staging-subscription-proof.mjs';
 
 const target = loadStagingTarget();
 const credentials = loadStagingCredentials();
@@ -81,6 +82,7 @@ for (const name of [
 const disabledRole = 'practitioner';
 const disabledSession = sessions.get(disabledRole);
 const disabledRoleResult = roleResults.find(result => result.role === disabledRole);
+const subscriptionRoleResult = disabledRoleResult;
 const accountDisableEvidence = { role: disabledRole, existingTokenDenied: false, reactivated: false };
 try {
   await rpc(target, superSession.access_token, 'admin_set_staff_membership_active', {
@@ -127,55 +129,28 @@ async function serviceRpc(name, body) {
     body
   });
 }
-const initialSubscriptionRows = await serviceRpc('list_owner_subscription_clinics', {});
-const initialSubscription = initialSubscriptionRows.find(row => row.clinic_id === target.config.tenant.expectedClinicId);
-assert.equal(initialSubscription?.enabled, true, 'staging subscription must start ON before the reversible enforcement proof');
-let subscriptionChangeAttempted = false;
-try {
-  subscriptionChangeAttempted = true;
-  await serviceRpc('set_clinic_subscription_state', {
-    p_request_id: subscriptionControlEvidence.offRequestId,
-    p_clinic_id: target.config.tenant.expectedClinicId,
-    p_expected_clinic_code: target.config.tenant.expectedClinicCode,
-    p_enabled: false,
-    p_reason: 'Authenticated staging database suspension proof',
-    p_actor_user_id: ownerActor.userId,
-    p_actor_email: ownerActor.email
-  });
-  await serviceRpc('set_clinic_subscription_state', {
-    p_request_id: subscriptionControlEvidence.offRequestId,
-    p_clinic_id: target.config.tenant.expectedClinicId,
-    p_expected_clinic_code: target.config.tenant.expectedClinicCode,
-    p_enabled: false,
-    p_reason: 'Authenticated staging database suspension proof',
-    p_actor_user_id: ownerActor.userId,
-    p_actor_email: ownerActor.email
-  });
-  const suspendedContext = rowOf(await rpc(target, subscriptionSession.access_token, 'current_access_context'));
-  const suspendedClinical = await rpc(target, subscriptionSession.access_token, 'department_can', {
+// runOwnerSubscriptionProof owns restoration after a confirmed OFF. If a
+// transport response was lost, state may already be OFF; the helper stops
+// further mutation and reports protected recovery required.
+Object.assign(subscriptionControlEvidence, await runOwnerSubscriptionProof({
+  serviceRpc,
+  readAccessContext: () => rpc(target, subscriptionSession.access_token, 'current_access_context'),
+  readClinicalCapability: () => rpc(target, subscriptionSession.access_token, 'department_can', {
     p_capability: 'clinical'
-  });
-  assert.equal(suspendedContext, undefined, 'existing practitioner token retained tenant context while subscription was OFF');
-  assert.equal(suspendedClinical, false, 'existing practitioner token retained Clinical capability while subscription was OFF');
-  subscriptionControlEvidence.existingTokenDenied = true;
-  subscriptionControlEvidence.databaseEnforced = true;
-} finally {
-  if (subscriptionChangeAttempted) {
-    await serviceRpc('set_clinic_subscription_state', {
-      p_request_id: subscriptionControlEvidence.onRequestId,
-      p_clinic_id: target.config.tenant.expectedClinicId,
-      p_expected_clinic_code: target.config.tenant.expectedClinicCode,
-      p_enabled: true,
-      p_reason: 'Restore staging subscription after enforcement proof',
-      p_actor_user_id: ownerActor.userId,
-      p_actor_email: ownerActor.email
-    });
-    const restoredContext = rowOf(await rpc(target, subscriptionSession.access_token, 'current_access_context'));
-    assert.equal(restoredContext?.clinic_id, target.config.tenant.expectedClinicId, 'subscription ON did not restore the original clinic boundary');
-    assert.equal(restoredContext?.clinic_role, 'practitioner', 'subscription ON widened or changed the original department role');
-    subscriptionControlEvidence.restoredOriginalBoundary = true;
+  }),
+  target: {
+    clinicId: target.config.tenant.expectedClinicId,
+    clinicCode: target.config.tenant.expectedClinicCode,
+    clinicRole: 'practitioner',
+    systemRole: subscriptionRoleResult.systemRole,
+    effectiveRole: subscriptionRoleResult.effectiveRole
+  },
+  actor: { userId: ownerActor.userId, email: ownerActor.email },
+  requestIds: {
+    off: subscriptionControlEvidence.offRequestId,
+    on: subscriptionControlEvidence.onRequestId
   }
-}
+}));
 
 async function runBrowserMatrix() {
   let chromium;
