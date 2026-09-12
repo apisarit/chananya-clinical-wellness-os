@@ -6,7 +6,7 @@ version and the files belonging to the staff-membership UAT recovery candidate.
 | Item | Version | Meaning |
 | --- | --- | --- |
 | Application/package | `3.5.0-preview.7` | Existing package and lockfile version; unchanged |
-| Staff-membership UAT helper | `1.0.0-candidate.1` | Local candidate, not a deployed release |
+| Staff-membership UAT helper | `1.0.0-candidate.2` | Checkpoint/recovery follow-up, not a deployed release |
 | Version-index schema | `1` | Format of this catalogue |
 | UAT closure-confirmation schema | `1` | Receipt-bound completion of the membership test, not a clinical encounter |
 
@@ -35,3 +35,9 @@ bounded PostgreSQL multi-session behavior; see
 [its checkpoint](STAGING_MEMBERSHIP_NATIVE_RECOVERY.md). Protected cross-process
 runner recovery, the complete deployed database graph and live staging remain
 separate work.
+
+The `1.0.0-candidate.2` follow-up adds the local persistent journal adapter,
+checkpoint/recovery tests and [integration boundary](STAGING_MEMBERSHIP_JOURNAL.md).
+Its recovery result includes the original ON `requestId` but deliberately has
+`freshUatEvidence: false` and no verified closure. Original native SQL results
+are not re-labelled as a test of this newer helper or journal.

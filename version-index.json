@@ -7,19 +7,24 @@
   "components": [
     {
       "id": "staging-membership-uat",
-      "version": "1.0.0-candidate.1",
+      "version": "1.0.0-candidate.2",
       "status": "local-review-candidate",
       "entryPoint": "scripts/staging-membership-proof.mjs",
       "versionExport": "MEMBERSHIP_PROOF_VERSION",
       "files": [
         "scripts/staging-membership-proof.mjs",
         "scripts/verify-authenticated-staging.mjs",
+        "ops/cnyos-staging-controller/scripts/membership-journal-store.mjs",
         "supabase/manual/staff_membership_recovery_candidate.sql",
         "tests/staff-membership-recovery-candidate-contract.mjs",
+        "tests/staging-membership-checkpoint-contract.mjs",
+        "tests/staging-membership-journal-contract.mjs",
+        "tests/fixtures/membership-journal-child.mjs",
         "tests/staff-membership-native-recovery.mjs",
         "tests/fixtures/staff-membership-native-fixture.sql",
         "tests/staging-safety-contract.mjs",
         "docs/STAGING_MEMBERSHIP_RECOVERY.md",
+        "docs/STAGING_MEMBERSHIP_JOURNAL.md",
         "docs/STAGING_MEMBERSHIP_NATIVE_RECOVERY.md"
       ]
     }

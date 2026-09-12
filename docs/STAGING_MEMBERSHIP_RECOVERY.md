@@ -51,7 +51,7 @@ check still attempts the exact confirmed restoration, but never reports UAT
 success. Missing v2 RPCs fail before suspension; there is no legacy fallback.
 
 On a fully successful run it returns a `closureConfirmation` with
-`schemaVersion: 1`, `componentVersion: 1.0.0-candidate.1`, `scope:
+`schemaVersion: 1`, `componentVersion: 1.0.0-candidate.2`, `scope:
 staff-membership-uat`, and `status: verified`. Its `requestId` is the
 validated ON receipt request ID; it also carries the OFF and ON request IDs,
 before/suspended/restored state versions, and both receipt completion
@@ -61,7 +61,7 @@ confirmation is returned after an unconfirmed or malformed receipt, process
 failure, failed restore, or failed denial assertion. Membership-UAT closure
 must not be interpreted as reopening or closing a clinical encounter.
 
-The candidate component version is `1.0.0-candidate.1`. Copyright ownership
+The current candidate component version is `1.0.0-candidate.2`. Copyright ownership
 is awaiting the user's holder-name confirmation in [COPYRIGHT.md](../COPYRIGHT.md).
 The [version index](../version-index.json) and [index guide](VERSION_INDEX.md)
 link the component, tests and documentation without claiming a source hash,
@@ -94,7 +94,7 @@ fixtures; this does not validate the complete deployed RLS or JWT-service graph.
 | Separate Astra technical review | PASS for bounded closure/index changes | Read-only reviewer ran all 25 membership tests, version-index and staging-safety contracts against the dirty checkout based on `9de6cd2`; no material finding confirmed | Not a reapproval of the SQL candidate, native/platform evidence, durable crash recovery, or independent human approval; root corrected the noted documentation drift |
 | Ordered migration/promotion | NOT DONE | The original ordered migration chain is unchanged; candidate is unconditionally blocked | A separately reviewed migration must be created with the Supabase CLI before promotion |
 | Native concurrency and platform review | PARTIAL: 8 native functional cases passed | [PostgreSQL 17.11 checkpoint](STAGING_MEMBERSHIP_NATIVE_RECOVERY.md) proves bounded multi-session replay/conflict, timeout and disconnect behavior with a non-superuser fixture owner | Actual legacy RPC writers, complete auth/RLS/default-ACL/trigger graph, hosted behavior and durable runner recovery remain unverified |
-| Cross-process recovery | NOT COMPLETE | Durable server receipts and stable supplied IDs are supported | The CLI still generates request IDs in memory; a protected runner must durably record IDs, original state, receipts and intended restore before mutation, with resume/watchdog handling |
+| Cross-process recovery | LOCAL COMPOSITION IMPLEMENTED; protected bridge not installed | [Write-ahead journal and process-interruption tests](STAGING_MEMBERSHIP_JOURNAL.md) preserve original IDs/state and distinguish recovery from fresh UAT | The CLI still generates IDs in memory without a journal adapter; external broker, protected-runner wiring and watchdog remain absent |
 | Managed staging and production | BLOCKED | Existing controller, review, broker and recovery-baseline gates remain unchanged | No migration, provisioning, UAT, merge or deployment is authorized by this file |
 
 If both transmissions lose their responses, the state may already be changed.
