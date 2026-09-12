@@ -662,6 +662,14 @@ Do not change `release-readiness.json` from `pending` based only on the presence
 
 LINE callback/replay tests, encrypted Google Drive backup + isolated restore drill, managed database backup/PITR confirmation, and privacy/security/legal review remain separate hard gates.
 
+The account-disable section now requires the proposed versioned membership RPCs
+described in [Staff-membership recovery candidate](STAGING_MEMBERSHIP_RECOVERY.md).
+The SQL proposal is unconditionally blocked and is not in the ordered migration
+chain; do not run this verifier against a live target until a separately reviewed
+migration, native concurrency checks and protected durable request-ID/recovery
+handling are complete. There is no fallback to the legacy unversioned activation
+RPC. Existing approvals and observations do not cover the new SQL objects.
+
 The workflow's database proof exercises the service-role-only RPC directly and uses version-bound restore after a confirmed OFF, with a maximum of two attempts per mutation/replay phase. It provides no unconditional guarantee for lost or malformed replies or process death; protected recovery/watchdog handling remains required before live activation. The releasable staging Function configuration keeps `CNYOS_OWNER_CONTROL_ENABLED=false`; this controller does not authorize a persistent synthetic-UAT exception. The browser Owner route has an additional confirmed-Google-email allowlist and exact project/clinic guards. Activate and test any future ephemeral Owner capability separately using `docs/CNYOS_OWNER_CONTROL.md`, with enforced expiry and post-UAT revocation; a source-only console does not pass the Owner commercial gate.
 
 The LINE gate must use the signed Messaging API callback described in `LINE_OA_MESSAGING_GATEWAY.md`, not only a locally supplied LINE ID token. The exact staging deploy must report `enabled=true` at `/api/line-oa-webhook`, pass LINE Developers **Verify**, receive a real event from the dedicated test account, and retain non-PHI `line_oa_webhook_evidence(...)` with the LIFF/QR/revoke/HN evidence.

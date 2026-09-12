@@ -18,6 +18,7 @@ import {
   writeEvidence
 } from './staging-support.mjs';
 import { runOwnerSubscriptionProof } from './staging-subscription-proof.mjs';
+import { runStaffMembershipProof } from './staging-membership-proof.mjs';
 
 const target = loadStagingTarget();
 const credentials = loadStagingCredentials();
@@ -83,30 +84,20 @@ const disabledRole = 'practitioner';
 const disabledSession = sessions.get(disabledRole);
 const disabledRoleResult = roleResults.find(result => result.role === disabledRole);
 const subscriptionRoleResult = disabledRoleResult;
-const accountDisableEvidence = { role: disabledRole, existingTokenDenied: false, reactivated: false };
-try {
-  await rpc(target, superSession.access_token, 'admin_set_staff_membership_active', {
-    p_user_id: disabledRoleResult.userId,
-    p_active: false,
-    p_reason: 'Authenticated staging account-disable verification'
-  });
-  const disabledContext = rowOf(await rpc(target, disabledSession.access_token, 'current_access_context'));
-  const disabledClinical = await rpc(target, disabledSession.access_token, 'department_can', {
+const accountDisableEvidence = await runStaffMembershipProof({
+  rpc: (name, body) => rpc(target, superSession.access_token, name, body),
+  readAccessContext: () => rpc(target, disabledSession.access_token, 'current_access_context'),
+  readClinicalCapability: () => rpc(target, disabledSession.access_token, 'department_can', {
     p_capability: 'clinical'
-  });
-  assert.equal(disabledContext, undefined, 'disabled practitioner retained an active clinic context');
-  assert.equal(disabledClinical, false, 'disabled practitioner retained its clinical capability');
-  accountDisableEvidence.existingTokenDenied = true;
-} finally {
-  await rpc(target, superSession.access_token, 'admin_set_staff_membership_active', {
-    p_user_id: disabledRoleResult.userId,
-    p_active: true,
-    p_reason: 'Restore synthetic viewer after staging verification'
-  });
-  const restoredContext = rowOf(await rpc(target, disabledSession.access_token, 'current_access_context'));
-  assert.equal(restoredContext?.ready, true, 'synthetic practitioner was not restored after account-disable verification');
-  accountDisableEvidence.reactivated = true;
-}
+  }),
+  target: {
+    clinicId: target.config.tenant.expectedClinicId, userId: disabledRoleResult.userId,
+    clinicRole: disabledRoleResult.clinicRole, systemRole: disabledRoleResult.systemRole,
+    effectiveRole: disabledRoleResult.effectiveRole
+  },
+  actorId: superSession.user.id,
+  requestIds: { off: randomUUID(), on: randomUUID() }
+});
 
 if (process.env.STAGING_OWNER_CONTROL_ACK !== 'TOGGLE_STAGING_SUBSCRIPTION') {
   throw new Error('STAGING_OWNER_CONTROL_ACK=TOGGLE_STAGING_SUBSCRIPTION is required');

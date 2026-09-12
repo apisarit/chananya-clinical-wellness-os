@@ -40,3 +40,9 @@ authenticated verifier remains non-activation-ready until the protected runner,
 independent review, and live staging UAT gates are completed. Its pre-existing
 account-disable flow also remains outside this subscription-only integration and
 must not be treated as durable activation evidence.
+
+Follow-up: [Staff-membership recovery candidate](STAGING_MEMBERSHIP_RECOVERY.md)
+replaces that unversioned account-disable flow in the current worktree with a
+receipt-bound helper and an inert SQL proposal. Bounded native concurrency
+checks now pass; the complete native/platform graph, cross-process/watchdog
+recovery and live activation requirements are not complete.
