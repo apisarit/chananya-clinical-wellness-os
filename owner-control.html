@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#071d18">
   <title>CNYOS Owner Control Console</title>
   <link rel="stylesheet" href="app.css?v=cnyos-owner1">
-  <link rel="stylesheet" href="owner-control.css?v=cnyos-owner-google-20260906">
+  <link rel="stylesheet" href="owner-control.css?v=cnyos-owner-google-20260906-setup-20260909">
   <script src="tenant-config.js?v=white-label1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
   <script src="auth-config.js?v=cnyos-owner1"></script>
   <script src="chananya-runtime.js?v=cnyos-owner1"></script>
-  <script defer src="owner-control.js?v=cnyos-owner-google-20260906"></script>
+  <script defer src="owner-control.js?v=cnyos-owner-google-20260906-setup-20260909"></script>
 </head>
 <body class="owner-console-page">
 <div id="boot"><div>
@@ -30,8 +30,8 @@
   <header class="owner-console-header">
     <div>
       <span class="page-kicker">CNYOS CONTROL PLANE</span>
-      <h1>Subscription Safety Console</h1>
-      <p>การ ON/OFF มีผลที่ Supabase database และ RLS ทันที ไม่ใช่การซ่อนหน้าเว็บ</p>
+      <h1>CNYOS Owner Console</h1>
+      <p>จัดการคลินิก การเปิดใช้งาน และปลายทางสำรองข้อมูล</p>
     </div>
     <div class="owner-identity">
       <small id="owner-email">—</small>
@@ -41,6 +41,16 @@
   </header>
 
   <main class="owner-console-main">
+    <nav class="owner-quick-actions" aria-label="จัดการคลินิกและที่เก็บข้อมูล">
+      <a class="owner-action-card" href="/platform-console.html#clinic-setup">
+        <strong>＋ เพิ่มคลินิกใหม่</strong>
+        <span>เริ่มแบบร่างคลินิก เลือกเว็บไซต์และฟีเจอร์ ก่อนตรวจความพร้อมเปิดใช้งาน</span>
+      </a>
+      <a class="owner-action-card" href="#owner-storage">
+        <strong>ตั้งค่าที่เก็บข้อมูล</strong>
+        <span>Google Drive หรือ NAS · ดูสถานะและขั้นตอนเชื่อมต่อ</span>
+      </a>
+    </nav>
     <section class="owner-safety-banner" aria-label="ขอบเขตความปลอดภัย">
       <strong>Database-enforced kill switch</strong>
       <span>เมื่อ OFF ระบบจะเปลี่ยน <code>subscription_state='suspended'</code> ใน transaction ที่บันทึก audit ทำให้ <code>current_clinic_id()</code> และ tenant RLS ปฏิเสธการเข้าถึงข้อมูล แม้ session เดิมยังไม่หมดอายุ โดยงานสำรองข้อมูลยังทำต่อได้</span>
@@ -78,8 +88,28 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="owner-drive-heading">
-      <div class="section-heading"><span class="section-number">3</span><div><h2 id="owner-drive-heading">Google Drive backup destination</h2><p>กำหนดโฟลเดอร์สำรองข้อมูลของแต่ละ Clinic แยกตาม environment</p></div></div>
+    <section id="owner-storage" class="card" aria-labelledby="owner-drive-heading">
+      <div class="section-heading"><span class="section-number">3</span><div><h2 id="owner-drive-heading">ที่เก็บข้อมูลสำรอง · Google Drive / NAS</h2><p>กำหนดปลายทางของแต่ละคลินิก และตรวจสิทธิ์ก่อนเริ่มสำรองข้อมูล</p></div></div>
+
+      <div class="owner-storage-guide">
+        <a class="btn ghost" href="/platform-console.html#storage-setup">＋ เพิ่มปลายทางในแบบร่างคลินิก</a>
+        <p>การบันทึกลิงก์เป็นแบบร่างยังไม่เชื่อมต่อพื้นที่จัดเก็บ และยังไม่เริ่มสำรองข้อมูล</p>
+        <details>
+          <summary>วิธีเตรียม Google Drive</summary>
+          <ol>
+            <li>เตรียมโฟลเดอร์สำรองเฉพาะคลินิก แล้วบันทึกลิงก์ในแบบร่าง</li>
+            <li>ให้ผู้ดูแลตั้งค่าบัญชีบริการและการเข้ารหัสบนเซิร์ฟเวอร์ พร้อมตรวจสิทธิ์เขียนโฟลเดอร์</li>
+            <li>เมื่อเปิดบริการแล้ว หน้านี้จะแสดงแบบฟอร์มเลือกคลินิกและบันทึกโฟลเดอร์ทั้ง 5 หมวด</li>
+            <li>ตรวจผลสำรองและทดสอบกู้คืนก่อนถือว่าพร้อมใช้งาน</li>
+          </ol>
+          <p>การเข้าสู่ Google เพื่อยืนยัน Owner ยังไม่ได้ให้สิทธิ์ระบบสำรองข้อมูลเข้าถึง Drive</p>
+        </details>
+        <details>
+          <summary>ใช้ NAS ได้อย่างไร?</summary>
+          <p>ขณะนี้บันทึกที่อยู่ NAS ในแบบร่างได้ แต่ระบบยังไม่มีตัวเชื่อมต่อสำหรับส่งข้อมูลสำรองไป NAS จริง ต้องระบุยี่ห้อ รุ่น และวิธีเชื่อมต่อ เช่น WebDAV หรือ S3 ให้ผู้ดูแลตั้งค่าก่อน</p>
+          <p>ไม่ต้องใส่รหัสผ่านหรือ access token ในลิงก์ และไม่ต้องเปิด NAS ให้เข้าถึงจากอินเทอร์เน็ตเพื่อกรอกแบบร่าง</p>
+        </details>
+      </div>
 
       <div class="owner-clinic-list">
         <div class="notice warning">
