@@ -38,7 +38,7 @@
     "check:u-synthesise": "node scripts/build-u-synthesise.mjs && node tests/u-synthesise-knowledge.mjs && node tests/u-synthesise-classical.mjs && node tests/u-synthesise-ui.mjs && node tests/u-synthesise-landscape.mjs",
     "prepare:production-approval": "node scripts/verify-production-promotion.mjs --prepare",
     "setup:production-environment": "node scripts/setup-production-environment.mjs",
-    "check:vps-staging-deploy": "node --test tests/vps-staging-deployment-contract.mjs",
+    "check:vps-staging-deploy": "node --test tests/vps-staging-deployment-contract.mjs tests/vps-staging-config-materializer.mjs",
     "check:platform": "node --experimental-loader=./tests/plain-mts-loader.mjs tests/platform-console.mjs"
   },
   "dependencies": {

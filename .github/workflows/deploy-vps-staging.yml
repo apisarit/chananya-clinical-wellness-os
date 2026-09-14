@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 45
     env:
       CNYOS_STAGING_DOMAIN: srv1506007.hstgr.cloud
+      CNYOS_STAGING_SUPABASE_ANON_KEY: ${{ vars.CNYOS_STAGING_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Check out exact main commit without persisted credentials
@@ -58,6 +59,9 @@ jobs:
           set -euo pipefail
           staging_config=config/tenant.cnyos-staging.json
           test -s "$staging_config"
+          test -n "$CNYOS_STAGING_SUPABASE_ANON_KEY"
+          runtime_staging_config="$RUNNER_TEMP/tenant.cnyos-staging.json"
+          node scripts/materialize-vps-staging-config.mjs "$staging_config" "$runtime_staging_config"
           source_tree="$(git rev-parse 'HEAD^{tree}')"
           build_time="$(git show -s --format=%cI HEAD)"
           CONTEXT=production \
@@ -66,7 +70,7 @@ jobs:
           CLINICAL_OS_STAGING_DEPLOYMENT=true \
           CLINICAL_OS_ALLOW_STAGING_DATABASE=true \
           CLINICAL_OS_STAGING_DATABASE_ACK=STAGING_ONLY \
-          CLINICAL_OS_TENANT_CONFIG_PATH="$staging_config" \
+          CLINICAL_OS_TENANT_CONFIG_PATH="$runtime_staging_config" \
           CLINICAL_OS_PRODUCTION_CONFIG_PATH=config/tenant.chananya.json \
           CLINICAL_OS_SOURCE_COMMIT="$GITHUB_SHA" \
           CLINICAL_OS_SOURCE_TREE="$source_tree" \

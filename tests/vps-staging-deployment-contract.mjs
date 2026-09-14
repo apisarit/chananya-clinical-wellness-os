@@ -66,7 +66,11 @@ test('application workflow prepares evidence without touching a privileged runne
   assert.doesNotMatch(workflow, /runs-on:.*self-hosted/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /CNYOS_STAGING_DOMAIN: srv1506007\.hstgr\.cloud/);
+  assert.match(workflow, /CNYOS_STAGING_SUPABASE_ANON_KEY: \$\{\{ vars\.CNYOS_STAGING_SUPABASE_ANON_KEY \}\}/);
   assert.match(workflow, /staging_config=config\/tenant\.cnyos-staging\.json/);
+  assert.match(workflow, /runtime_staging_config="\$RUNNER_TEMP\/tenant\.cnyos-staging\.json"/);
+  assert.match(workflow, /node scripts\/materialize-vps-staging-config\.mjs/);
+  assert.match(workflow, /CLINICAL_OS_TENANT_CONFIG_PATH="\$runtime_staging_config"/);
   assert.doesNotMatch(workflow, /CNYOS_STAGING_TENANT_CONFIG_B64|secrets\./);
   assert.match(workflow, /kind: 'cnyos_vps_staging_candidate'/);
   assert.match(workflow, /find dist -mindepth 1 -maxdepth 1 -type f -printf '%f\\0'/);
