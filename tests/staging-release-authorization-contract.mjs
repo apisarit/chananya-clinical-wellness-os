@@ -686,7 +686,7 @@ try {
   assert.doesNotMatch(serialized, /Database security reviewer/);
   assert.doesNotMatch(serialized, /protected-(?:review|observer|rehearsal|migration|regression)/);
   assert.doesNotMatch(serialized, new RegExp(controllerNonce.replaceAll('.', '\\.')));
-  assert.doesNotMatch(serialized, new RegExp(reviewerSignature.slice(0, 24)));
+  assert.equal(serialized.includes(reviewerSignature.slice(0, 24)), false);
   assert.doesNotMatch(serialized, /BEGIN PUBLIC KEY/);
   assert.equal(result.evidence.authorizationReference, undefined);
   assert.equal(result.evidence.namedRiskOwner, undefined);

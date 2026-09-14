@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily CNYOS staging backup at 02:00 Asia/Bangkok
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Bangkok
+Persistent=true
+RandomizedDelaySec=5min
+Unit=cnyos-staging-backup.service
+
+[Install]
+WantedBy=timers.target

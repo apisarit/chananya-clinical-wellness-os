@@ -1,0 +1,46 @@
+__CNYOS_STAGING_DOMAIN__ {
+	encode zstd gzip
+
+	header {
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+		X-Robots-Tag "noindex"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'sha256-vSFE5QiVms+oad3iZe8is6OKErMYJG7wTLD52HiBm3A=' 'sha256-Ck9kw/q1f48TWAyV2gBkhtBjbc/3BF8d5LVfACONiy0=' 'sha256-LvDP7RWkXGQJIvqfG2OhaxST1e5lK6nCcW2IsR9rPiM=' 'sha256-kEA+K+Dy9UH8Gj0U1pEafUnSh3hlmB+4esiB5YPUa5Y='; connect-src 'self'; img-src 'self' data:; font-src 'self'"
+	}
+
+	@health path /healthz
+	@notAllowed not remote_ip __CNYOS_STAGING_ALLOWED_CIDR__ 127.0.0.1 ::1
+	@adminAuth path /supabase/auth/v1/admin /supabase/auth/v1/admin/*
+	@supabaseAuth path /supabase/auth/v1/*
+	@supabaseRest path /supabase/rest/v1/*
+	@supabaseRealtime path /supabase/realtime/v1/*
+	@supabaseOther path /supabase /supabase/*
+	@api path /api/*
+	@hidden path /.env /.env.* /_headers /_redirects
+
+	route {
+		respond @health "ok" 200
+		respond @notAllowed 403
+		respond @adminAuth 403
+
+		handle @supabaseAuth {
+			uri strip_prefix /supabase
+			reverse_proxy 127.0.0.1:18000
+		}
+		handle @supabaseRest {
+			uri strip_prefix /supabase
+			reverse_proxy 127.0.0.1:18000
+		}
+		handle @supabaseRealtime {
+			uri strip_prefix /supabase
+			reverse_proxy 127.0.0.1:18000
+		}
+
+		respond @supabaseOther 404
+		respond @api 503
+		respond @hidden 404
+		reverse_proxy 127.0.0.1:18080
+	}
+}
