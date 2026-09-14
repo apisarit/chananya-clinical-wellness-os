@@ -70,7 +70,7 @@ test('application workflow prepares evidence without touching a privileged runne
   assert.doesNotMatch(workflow, /CNYOS_STAGING_TENANT_CONFIG_B64|secrets\./);
   assert.match(workflow, /kind: 'cnyos_vps_staging_candidate'/);
   assert.match(workflow, /find dist -mindepth 1 -maxdepth 1 -type f -printf '%f\\0'/);
-  assert.match(workflow, /tar --null --no-recursion --files-from=-/);
+  assert.match(workflow, /tar -C dist --null --no-recursion --files-from=-/);
   assert.doesNotMatch(workflow, /-C dist -cf - \./);
   assert.match(workflow, /authorization: false/);
   assert.match(workflow, /productionEligible: false/);
