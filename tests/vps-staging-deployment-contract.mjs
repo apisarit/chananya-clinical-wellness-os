@@ -62,11 +62,12 @@ test('application workflow prepares evidence without touching a privileged runne
   assert.match(workflow, /refs\/heads\/codex\/vps-staging-candidate-20260915/);
   assert.doesNotMatch(workflow, /pull_request:/);
   assert.match(workflow, /cancel-in-progress: false/);
-  assert.match(workflow, /name: staging/);
   assert.match(workflow, /runs-on: ubuntu-24\.04/);
   assert.doesNotMatch(workflow, /runs-on:.*self-hosted/);
   assert.match(workflow, /persist-credentials: false/);
-  assert.match(workflow, /CNYOS_STAGING_TENANT_CONFIG_B64: \$\{\{ secrets\./);
+  assert.match(workflow, /CNYOS_STAGING_DOMAIN: srv1506007\.hstgr\.cloud/);
+  assert.match(workflow, /staging_config=config\/tenant\.cnyos-staging\.json/);
+  assert.doesNotMatch(workflow, /CNYOS_STAGING_TENANT_CONFIG_B64|secrets\./);
   assert.match(workflow, /kind: 'cnyos_vps_staging_candidate'/);
   assert.match(workflow, /authorization: false/);
   assert.match(workflow, /productionEligible: false/);
