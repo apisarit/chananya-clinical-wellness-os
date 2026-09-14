@@ -30,6 +30,18 @@ assert.match(customer.database.url, /^https:\/\//);
 assert.match(renderTenantConfig(customer), /window\.CLINICAL_OS_CONFIG = Object\.freeze/);
 assert.doesNotMatch(renderBrandConfig(customer), /"database"|publishableKey|supabase\.co/i);
 
+for (const deploymentId of [
+  'customer-clinic-staging\nselect 1;',
+  'customer-clinic-staging\r\n\\echo forged',
+  'customer clinic staging',
+  '-customer-clinic-staging'
+]) {
+  assert.throws(
+    () => validateTenantConfig({ ...example, deploymentId }),
+    /deploymentId must start with a letter or digit and contain only letters, digits, \., _ or -/
+  );
+}
+
 assert.throws(
   () => validateTenantConfig({ ...example, database: { ...example.database, publishableKey: 'sb_secret_forbidden' } }),
   /must never contain a service-role or secret key/
@@ -118,6 +130,15 @@ const stagingPreview = loadTenantConfig({
 assert.equal(stagingPreview.safety.previewLocked, false);
 assert.match(stagingPreview.database.url, /^https:/);
 assert.equal(stagingPreview.auth.redirectOrigin, 'https://deploy-preview-7.example.net');
+const stagingPreviewManifest = buildDeployManifest(stagingPreview, {
+  CONTEXT: 'deploy-preview',
+  CLINICAL_OS_ALLOW_PREVIEW_DATABASE: 'true',
+  CLINICAL_OS_PREVIEW_DATABASE_ACK: 'STAGING_ONLY',
+  CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+  CLINICAL_OS_SOURCE_TREE: 'b'.repeat(40)
+});
+assert.equal(stagingPreviewManifest.build.deploymentClass, 'preview');
+assert.equal(stagingPreviewManifest.safety.stagingDatabaseExplicitlyAcknowledged, true);
 const lockedDedicatedStaging = loadTenantConfig({
   env: {
     CONTEXT: 'production',
@@ -149,10 +170,54 @@ const enabledDedicatedStaging = loadTenantConfig({
 });
 assert.equal(enabledDedicatedStaging.safety.previewLocked, false);
 assert.equal(enabledDedicatedStaging.auth.redirectOrigin, 'https://customer-clinical-staging.example.net');
+assert.throws(
+  () => loadTenantConfig({
+    env: {
+      CONTEXT: 'production',
+      URL: 'https://customer-clinical-staging.example.net',
+      CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+      CLINICAL_OS_ALLOW_PREVIEW_DATABASE: 'true',
+      CLINICAL_OS_PREVIEW_DATABASE_ACK: 'STAGING_ONLY',
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: JSON.stringify(chananya),
+      CLINICAL_OS_TENANT_CONFIG_JSON: JSON.stringify({
+        ...stagingExample,
+        auth: { redirectOrigin: 'https://customer-clinical-staging.example.net' }
+      })
+    },
+    cwd: root
+  }),
+  /Dedicated staging must not use preview database acknowledgement variables/
+);
+assert.throws(
+  () => loadTenantConfig({
+    env: {
+      CONTEXT: 'deploy-preview',
+      DEPLOY_PRIME_URL: 'https://deploy-preview-7.example.net',
+      CLINICAL_OS_ALLOW_STAGING_DATABASE: 'true',
+      CLINICAL_OS_STAGING_DATABASE_ACK: 'STAGING_ONLY',
+      CLINICAL_OS_PRODUCTION_CONFIG_JSON: JSON.stringify(chananya),
+      CLINICAL_OS_TENANT_CONFIG_JSON: JSON.stringify(stagingExample)
+    },
+    cwd: root
+  }),
+  /Preview deployments must not use dedicated staging database acknowledgement variables/
+);
+assert.throws(
+  () => loadTenantConfig({
+    env: {
+      CONTEXT: 'deploy-preview',
+      CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+      CLINICAL_OS_TENANT_CONFIG_JSON: JSON.stringify(stagingExample)
+    },
+    cwd: root
+  }),
+  /cannot be both dedicated staging and a preview/
+);
 const deployManifest = buildDeployManifest(
   lockedDedicatedStaging,
   {
     CONTEXT: 'production',
+    CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
     CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
     CLINICAL_OS_SOURCE_TREE: 'b'.repeat(40),
     CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true'
@@ -161,11 +226,52 @@ const deployManifest = buildDeployManifest(
 );
 assert.equal(deployManifest.source.verified, true);
 assert.equal(deployManifest.source.commit, 'a'.repeat(40));
+assert.equal(deployManifest.build.deploymentClass, 'dedicated-staging');
 assert.equal(deployManifest.safety.databaseLocked, true);
+assert.equal(deployManifest.safety.stagingDatabaseExplicitlyAcknowledged, false);
 assert.match(renderDeployManifest(deployManifest), /"databaseLocked": true/);
+const enabledDedicatedStagingManifest = buildDeployManifest(enabledDedicatedStaging, {
+  CONTEXT: 'production',
+  CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+  CLINICAL_OS_ALLOW_STAGING_DATABASE: 'true',
+  CLINICAL_OS_STAGING_DATABASE_ACK: 'STAGING_ONLY',
+  CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+  CLINICAL_OS_SOURCE_TREE: 'b'.repeat(40)
+});
+assert.equal(enabledDedicatedStagingManifest.build.deploymentClass, 'dedicated-staging');
+assert.equal(enabledDedicatedStagingManifest.safety.databaseLocked, false);
+assert.equal(enabledDedicatedStagingManifest.safety.stagingDatabaseExplicitlyAcknowledged, true);
+const wrongAcknowledgementFamilyManifest = buildDeployManifest(enabledDedicatedStaging, {
+  CONTEXT: 'production',
+  CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+  CLINICAL_OS_ALLOW_PREVIEW_DATABASE: 'true',
+  CLINICAL_OS_PREVIEW_DATABASE_ACK: 'STAGING_ONLY',
+  CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+  CLINICAL_OS_SOURCE_TREE: 'b'.repeat(40)
+});
+assert.equal(
+  wrongAcknowledgementFamilyManifest.safety.stagingDatabaseExplicitlyAcknowledged,
+  false,
+  'a dedicated staging manifest must record only the dedicated-staging acknowledgement family'
+);
+const productionManifest = buildDeployManifest(validatedDefault, {
+  CONTEXT: 'production',
+  CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+  CLINICAL_OS_SOURCE_TREE: 'b'.repeat(40)
+});
+assert.equal(productionManifest.build.deploymentClass, 'production');
+assert.equal(productionManifest.safety.stagingDatabaseExplicitlyAcknowledged, false);
 assert.throws(
   () => buildDeployManifest(lockedDedicatedStaging, { CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true' }),
-  /requires an explicit source commit/
+  /requires exact 40-character source commit and tree revisions/
+);
+assert.throws(
+  () => buildDeployManifest(lockedDedicatedStaging, {
+    CONTEXT: 'production',
+    CLINICAL_OS_STAGING_DEPLOYMENT: 'true',
+    CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40)
+  }),
+  /requires exact 40-character source commit and tree revisions/
 );
 assert.throws(
   () => loadTenantConfig({

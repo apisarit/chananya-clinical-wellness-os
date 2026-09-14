@@ -1,0 +1,1656 @@
+{
+  "schema_version": 1,
+  "artifact_schema": "cnyos-public-routine-acl-disposition/v1",
+  "status": "CLASSIFIED_COMPLETE_NOT_AUTHORIZED",
+  "source": {
+    "observation_artifact_schema": "cnyos-public-routine-acl-observation/v2",
+    "source_revision": "831543c2d1ed36b2d8242cc82af23c83e019e7a7",
+    "observer_raw_sha256": "235a2c612c78367e4c2beff0243b4bc624fd6107fbdc39b1f9c0af8ae4ace27e",
+    "observer_source_sql_sha256": "46a226f7ab7f0d3ee4f6062c1bc223dcdbee351d7640f86592e3614cb261a777",
+    "observation_composite_sha256": "9a555548d810ec5bed2dc86591651ca144941687c3fd34cf8d0828708ebb9efe",
+    "system_identifier": "7666007964130682852",
+    "project_label": "chananya-staging",
+    "project_ref": "hsmnjwxurlmsizndjlun",
+    "binding_datasets": {
+      "trigger_bindings_all_non_internal": {
+        "dataset_name": "trigger_bindings.all_non_internal",
+        "payload_sha256": "2f5ffa09ed5a895733d4ba6418ae0a69ab190d3a6718bde73e17dc73118fd15d",
+        "row_count": 173,
+        "canonical_row_sha256_input": "exact canonical evidence row including terminal LF"
+      },
+      "event_trigger_bindings_all": {
+        "dataset_name": "event_trigger_bindings.all",
+        "payload_sha256": "b0ba455cb69e75488c4c50229a387e4859c201581921c96737a313961ba6c799",
+        "row_count": 7,
+        "canonical_row_sha256_input": "exact canonical evidence row including terminal LF"
+      }
+    }
+  },
+  "classification_complete": true,
+  "authorization_flags": {
+    "reviewer_sign_off": false,
+    "approval": false,
+    "execution": false,
+    "acl_execution": false,
+    "default_acl_execution": false,
+    "search_path_execution": false,
+    "migration_execution": false,
+    "ledger_reconciliation": false,
+    "staging_deploy": false,
+    "production_deploy": false,
+    "merge": false,
+    "production_eligible": false
+  },
+  "derived_expected_access": {
+    "public": 0,
+    "anon": 0,
+    "authenticated": 70,
+    "service_role": 75,
+    "owner_only": 49,
+    "total_routines": 147
+  },
+  "routine_dispositions": {
+    "authenticated_only": [
+      "public.admin_assign_staff_role(uuid,text,text)",
+      "public.admin_set_staff_membership_active(uuid,boolean,text)",
+      "public.book_clinic_appointment(uuid,uuid,text,text,text)",
+      "public.cancel_clinic_appointment(uuid,text)",
+      "public.clinical_outcomes_summary(timestamp with time zone,timestamp with time zone)",
+      "public.confirm_patient_qr(uuid,boolean,text,jsonb)",
+      "public.create_approval_task(text,text,text,text,text,text,uuid,timestamp with time zone,jsonb)",
+      "public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)",
+      "public.current_access_context()",
+      "public.decide_approval_task(uuid,text,text)",
+      "public.hybrid_patient_identity_healthcheck()",
+      "public.issue_patient_line_link_code(uuid,text,text,boolean)",
+      "public.list_patient_identity_links(uuid)",
+      "public.resolve_patient_qr(text,text)",
+      "public.revoke_patient_identity_link(uuid,text)",
+      "public.search_clinical_outcomes(text,timestamp with time zone,timestamp with time zone,integer,integer)",
+      "public.search_patients_for_checkin(text)",
+      "public.set_clinic_appointment_status(uuid,text,text)",
+      "public.sign_clinical_record_complete(uuid,text,text,text)",
+      "public.start_manual_patient_encounter(uuid,text,boolean,text,text,jsonb)",
+      "public.super_admin_set_system_role(uuid,text,text)",
+      "public.unlock_clinical_record_for_amendment(uuid,text)",
+      "public.upsert_patient_registration(uuid,text,text,text,text,text,date,text,text,text,text,text)"
+    ],
+    "authenticated_and_service": [
+      "public.backup_restore_contract_healthcheck()",
+      "public.can_access_encounter(uuid)",
+      "public.can_access_invoice(uuid)",
+      "public.can_access_patient(uuid)",
+      "public.can_access_prescription(uuid)",
+      "public.clinical_financial_handoffs_healthcheck()",
+      "public.commit_production_import(uuid)",
+      "public.complete_production_order(uuid,numeric,numeric,numeric)",
+      "public.create_atomic_prescription_handoff(uuid,uuid,text,jsonb)",
+      "public.create_pharmacy_counter_sale(uuid,text,text,text,text,text,text,text,text)",
+      "public.create_production_request(uuid,uuid,uuid,numeric,text,timestamp with time zone,text,text)",
+      "public.current_clinic_id()",
+      "public.current_department_role()",
+      "public.current_user_role()",
+      "public.department_can(text)",
+      "public.department_persistence_healthcheck()",
+      "public.dispense_pharmacy_counter_sale(uuid)",
+      "public.has_role(text[])",
+      "public.is_admin_or_super()",
+      "public.is_appointment_operator()",
+      "public.is_appointment_practitioner()",
+      "public.is_clinic_admin()",
+      "public.is_clinic_member(uuid,text[])",
+      "public.is_practitioner()",
+      "public.is_reception_or_admin()",
+      "public.is_super_admin()",
+      "public.issue_atomic_dispensing_invoice(uuid,numeric,numeric)",
+      "public.issue_production_materials_fefo(uuid)",
+      "public.line_oa_operational_healthcheck()",
+      "public.open_production_order(uuid,uuid,numeric)",
+      "public.prescription_dispensing_healthcheck()",
+      "public.production_execution_healthcheck()",
+      "public.quality_reject_production_order(uuid,text,text)",
+      "public.quality_release_healthcheck()",
+      "public.quality_release_production_order(uuid,text,text,text,numeric,numeric,numeric)",
+      "public.record_atomic_invoice_payment(uuid,uuid,numeric,text,text)",
+      "public.remove_pharmacy_counter_sale_item(uuid)",
+      "public.save_ttm_diagnosis_atomic(uuid,text,text,text,text,text,text,text,text[],text,text,text,text,text,text,text,text,text,text,text,text,boolean,text)",
+      "public.set_product_master_active(uuid,boolean,text)",
+      "public.stage_production_import(text,text,text,jsonb)",
+      "public.transition_atomic_prescription_dispensing(uuid,text,jsonb,text)",
+      "public.transition_pharmacy_counter_sale(uuid,text,text)",
+      "public.upsert_pharmacy_counter_sale_item(uuid,uuid,uuid,numeric,numeric,text,text,text,text)",
+      "public.upsert_product_master(uuid,text,text,text,text,text,text,text,text,numeric,numeric,numeric,numeric)",
+      "public.upsert_production_formula(uuid,text,text,text,uuid,numeric,text,numeric,integer,text,text)",
+      "public.upsert_production_formula_component(uuid,uuid,uuid,integer,numeric,text,text,text)",
+      "public.upsert_supplier_master(uuid,text,text,text,text,text,text)"
+    ],
+    "service_only": [
+      "public.assert_clinic_subscription_active(uuid)",
+      "public.begin_backup_export_run(uuid,timestamp with time zone,text)",
+      "public.claim_line_oa_notification_batch(uuid,text,text,text,text,integer)",
+      "public.claim_line_oa_webhook_event(uuid,text,text,text,text,text,timestamp with time zone,boolean,text,text,text,text,text,text,text,jsonb)",
+      "public.complete_backup_export_run(uuid,text,jsonb,jsonb,text)",
+      "public.complete_patient_line_link_for_clinic(uuid,text,text,text,boolean)",
+      "public.complete_patient_line_link_with_oa_consent(text,text,text,boolean,uuid,text,text,text)",
+      "public.consume_patient_identity_rate_limit_for_clinic(uuid,text,integer,integer)",
+      "public.export_clinic_backup_domain(uuid,text)",
+      "public.finalize_line_oa_webhook_event(text,text,text,text,text)",
+      "public.finish_line_oa_notification(uuid,text,text,integer,text,text)",
+      "public.finish_line_oa_webhook_event(uuid,text,text,text,text,text,text,boolean)",
+      "public.get_clinic_drive_backup_destination(uuid,text)",
+      "public.get_exact_backup_restore_source(text,timestamp with time zone,text)",
+      "public.issue_patient_qr_for_subject_in_clinic(uuid,text,uuid,text,text,timestamp with time zone)",
+      "public.line_oa_webhook_evidence(timestamp with time zone)",
+      "public.list_backup_export_clinics()",
+      "public.list_line_linked_patients_for_clinic(uuid,text)",
+      "public.list_line_oa_notification_preferences_for_subject(text,uuid,text,text,text)",
+      "public.list_owner_drive_assignments()",
+      "public.list_owner_subscription_clinics()",
+      "public.register_line_oa_webhook_event_for_clinic(uuid,text,text,text,text,text,timestamp with time zone,boolean,text)",
+      "public.reject_production_order(uuid,text,text)",
+      "public.release_production_order(uuid,text,text,text,numeric,numeric,numeric)",
+      "public.set_clinic_drive_assignment(uuid,uuid,text,text,text,text,text,text,text,bigint,text,uuid,text)",
+      "public.set_clinic_subscription_state(uuid,uuid,text,boolean,bigint,text,uuid,text)",
+      "public.set_line_oa_notification_preference_for_subject(text,uuid,uuid,text,text,text,boolean)",
+      "public.verify_clinic_restore_trace(uuid)"
+    ],
+    "owner_only_ordinary": [
+      "public.apply_initial_encounter_intake(uuid,jsonb)",
+      "public.complete_patient_line_link(text,text,text,boolean)",
+      "public.consume_patient_identity_rate_limit(text,integer,integer)",
+      "public.export_clinic_backup_domain_v20260828(uuid,text)",
+      "public.export_clinic_backup_domain_v20260829(uuid,text)",
+      "public.export_clinic_backup_domain_v20260831(uuid,text)",
+      "public.issue_patient_qr_for_subject(text,uuid,text,text,timestamp with time zone)",
+      "public.line_oa_claim_batch_v20260829(uuid,text,text,text,text,integer)",
+      "public.line_oa_claim_webhook_v20260829(uuid,text,text,text,text,text,timestamp with time zone,boolean,text,text,text,text,text,text,text,jsonb)",
+      "public.line_oa_complete_link_consent_v20260829(text,text,text,boolean,uuid,text,text,text)",
+      "public.line_oa_finish_notification_v20260829(uuid,text,text,integer,text,text)",
+      "public.line_oa_finish_webhook_v20260829(uuid,text,text,text,text,text,text,boolean)",
+      "public.line_oa_list_preferences_v20260829(text,uuid,text,text,text)",
+      "public.line_oa_queue_notification_v20260829(uuid,text,timestamp with time zone,timestamp with time zone,text)",
+      "public.line_oa_register_gateway_v20260829(text,text,text,text,text,timestamp with time zone,boolean,text)",
+      "public.line_oa_set_preference_v20260829(text,uuid,uuid,text,text,text,boolean)",
+      "public.list_line_linked_patients(text)",
+      "public.next_clinic_counter(uuid,text)",
+      "public.next_encounter_number()",
+      "public.prepare_line_subscription_off_exception(uuid,text)",
+      "public.queue_line_oa_appointment_notification(uuid,text,timestamp with time zone,timestamp with time zone,text)",
+      "public.set_clinic_subscription_state_v20260901(uuid,uuid,text,boolean,bigint,text,uuid,text)",
+      "public.verify_clinic_restore_trace_v20260828(uuid)",
+      "public.verify_clinic_restore_trace_v20260829(uuid)",
+      "public.verify_clinic_restore_trace_v20260831(uuid)"
+    ],
+    "owner_only_trigger": [
+      "public.apply_stock_movement()",
+      "public.assign_audit_clinic()",
+      "public.assign_inventory_lot_clinic()",
+      "public.assign_patient_child_clinic()",
+      "public.assign_patient_clinic()",
+      "public.assign_pharmacy_allocation_clinic()",
+      "public.assign_pharmacy_item_clinic()",
+      "public.assign_pharmacy_sale_clinic()",
+      "public.assign_product_clinic()",
+      "public.assign_stock_movement_clinic()",
+      "public.enforce_active_subscription_tenant_write()",
+      "public.enforce_authenticated_subscription_statement_write()",
+      "public.enforce_patient_registry_write()",
+      "public.enforce_prescription_item_product_tenant()",
+      "public.enqueue_line_oa_from_appointment()",
+      "public.guard_owner_subscription_forward_only()",
+      "public.handle_new_user()",
+      "public.prevent_encounter_clinical_evidence_delete()",
+      "public.prevent_locked_clinical_record_mutation()",
+      "public.reject_append_only_mutation()",
+      "public.set_body_pain_point_updated_at()",
+      "public.set_updated_at()",
+      "public.withdraw_line_oa_on_identity_revoke()"
+    ],
+    "owner_only_event_trigger": [
+      "public.rls_auto_enable()"
+    ]
+  },
+  "trigger_bindings": [
+    {
+      "relation_schema": "auth",
+      "relation_name": "users",
+      "trigger_name": "on_auth_user_created",
+      "function_signature": "public.handle_new_user()",
+      "canonical_row_sha256": "47027d8b92b38963fd42cb383fa8eb525618aa08c27031562f921b80d1a046da",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "appointment_events",
+      "trigger_name": "trg_appointment_events_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "449f8bd88d3a4bbc6d2f490a0da33e2e192b5dc19b3dcbb8953864261f2c3502",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "appointment_events",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "61142f59276c2a56fcbdb7a355a69593aa57c1e47947b3a357a07f057b29cda5",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "appointment_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "04e992163532c068b60bcb70e5d2ebce0930425a21d923890381a268bf11ac5f",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "appointments",
+      "trigger_name": "appointments_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "e3680dba1ba2709ea5f8f1857adcd9d90a1dc9477ee7d3dc9274c64b51502cd7",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "appointments",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "c3e607dd02e6b2609835d828fe2b43687d76673927d84f531f15d5cd138122d6",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "approval_actions",
+      "trigger_name": "trg_approval_actions_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "485dab883c47c5014e6af4f68df5ae8c24cf9b21720200ec8417501e5d0683ab",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "approval_actions",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "eef78835c461abe9053e97077cb37999e8f1cfc84b2fa4bcc85a49cfabf289d8",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "approval_actions",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "59f390eb50e34a98b3a018fe9688ecb0f53633f35f61f7be1ddaffc274e97e19",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "approval_tasks",
+      "trigger_name": "approval_tasks_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "f9a1251f4bbda22b7476fac9d2cbc44dc192a723833e04839483e207ca3edca9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "approval_tasks",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "0d812dbbef15ae29991fd29d4c722f6f86c72c00c5490e02d1d5af695ef17f30",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "approval_tasks",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "364da6be71c5dd70ea2231d9c7fa2a29eb163cdb613649088be4b721683a81ed",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "audit_logs",
+      "trigger_name": "trg_assign_audit_clinic",
+      "function_signature": "public.assign_audit_clinic()",
+      "canonical_row_sha256": "c835d9744427a001b288cf1440ab411d14415da1336f3feddde9873c35c9b875",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "audit_logs",
+      "trigger_name": "trg_audit_logs_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "2abc8852ccc5047fb25a80f65d574dca49ab5efb7059a6f5a1af2765e53cd949",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "audit_logs",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "1f8e04e3e61e83ed6d4de3ca51cf43ffb31349811f3dc0e7cc54bb8df5252f29",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "audit_logs",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "53fff572fedee770e2a59031988c026d3885884cebcada28013a0e41de4e592e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "backup_export_runs",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "4d0132877089a4e0da6f083ea9ba920e0693081ff6cc1b2f57f83dddf4c2c13d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "barthel_assessments",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "7ad288cad9ad8020af11de7b89efd4be213fda658a1abab51443a11c81058d6f",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "body_pain_points",
+      "trigger_name": "trg_body_pain_points_updated_at",
+      "function_signature": "public.set_body_pain_point_updated_at()",
+      "canonical_row_sha256": "767bb8b01267908f4563a094f0508f0940fc297a81b64a30c990044ae2ab09c1",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "body_pain_points",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "3878277d6e75d1a6343b2d56d89ebde18e975cf7e5aa5503a7e4163d9b8b543a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "body_pain_points",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "5b1642ea08d078f5b5a38fee8b0a55a27b042f1e99fe00ee5a204301631d8d56",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_appointments",
+      "trigger_name": "trg_clinic_appointments_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "8ab256156de3b471826dc8fc26491f8efcbfe3aba5dbdd7b6aed00eec7451da9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_appointments",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "ebc5434d5776cfe0cececfbd705a2d985131d4f34d54906818286cf75e6d4938",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_appointments",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "5f322572e28702691456503e6a7dd286e71ca858082a2a6796ad3f4e495d6ca2",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_appointments",
+      "trigger_name": "trg_enqueue_line_oa_from_appointment",
+      "function_signature": "public.enqueue_line_oa_from_appointment()",
+      "canonical_row_sha256": "435cf68574dd0e3db6aceb9e6333a736ec249f9f62d1cec55b0fb871381f3c57",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_counters",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "a2398cf3533d175e4ff4822630dc7cdaa60fb71f1231d1b0cc0b3a010748a475",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_drive_backup_destinations",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "f252cab96e19ddce662b355ae00e6559e2e76dfc2ea23e138d7db9ae8a248468",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_drive_destination_events",
+      "trigger_name": "trg_clinic_drive_destination_events_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "4e6807296c076d4d9b2bf41e5c30b5781ef64e0be34aa1854b87a10442469866",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_drive_destination_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "aa5af22dd5f62bf57116c35e948b2deedb206826307f3865c2bf546778ab2394",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_memberships",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "fb13e3a6e4bf81611e91ba49bfce922838eba21836b8a1ee498bf690ab4e027a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_memberships",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "78b45db9866258d402687a53e6550a18903748dc2b84d321548eeb65edace7d9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_specialties",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "5fc8e5cc28f997b65be21c24fb99fea00e35d31ca35e3d7ab6897137b17bf63f",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_state",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "45903b9aa1c7648c0cdb2f6ecc081b9c0f7709e11cade25fea73b54c0b13f337",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_subscription_control_events",
+      "trigger_name": "trg_clinic_subscription_control_events_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "637ff04773d1ff096265b1c13ba3069878553d28892cca68b68d82f2000a0c10",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinic_subscription_control_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "c7689a0ec590efdf2b54bcf84b1e6fadc69471ceac29a1a92bab2848154cbd37",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_examination_findings",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "20e2f8105dd132ab79237054b2676c3635feae597bd09a5663d64f0c4a7f8045",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_examination_findings",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "d510a6991c0a2b6cbd7ff4dfc6bbca0a42eac0ba8bd7772b55a5cd62c18a80b6",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_followup_notes",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "3ad66bef2965071db053acedd203c5ed249bb044ad2545efddff58871600e638",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_followup_notes",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "6b19398e108a16fcdf87c596515b8ee24250ec1986edfc9cbb15334473a03f76",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_record_audit_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "226c9d902634c26ac6e6bcde82d22b940a530bc426797e507d62db013a623f4a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_record_signoffs",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "454f35d41053357577a80843615be5a3c57b37d1a679f4bb6c94258ab690585d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_treatment_plans",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "ffeb8a5d22f24f9ed410686614f2fb3dff5ab8f8f18ffbe7d61bd0d20fedfc74",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_treatment_plans",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "505d613f9d9ffedade885b024ba909b5e3692cc18f20fc65281fab3d8c33a5c6",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_treatment_sessions",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "9a20da662c716e1c4bb4fd34558b9312cadd2b6e1fcb4a7e6d9150fb3d35d932",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinical_treatment_sessions",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "25e9f32d6231f8f2bc02f516e9bf68bf40c7ef42bed842e0770e08ce5bf9848b",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinics",
+      "trigger_name": "trg_clinics_owner_subscription_forward_only",
+      "function_signature": "public.guard_owner_subscription_forward_only()",
+      "canonical_row_sha256": "2ac79f53333afc4c64c7af39fdcc1ccabdef722a571e369bb13869b56f53d4ec",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "clinics",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "6f564da9173b3333e82d0aac3a39f410bb01513947e5ff0da5904ee91f900270",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "dispensing_items",
+      "trigger_name": "dispensing_items_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "5c9f7f2215c4c50ffcf632aaf1d8b1c0292a62bf9ff8b1ad5fb0e463c993dd8e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "dispensing_items",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "0e894b0454d14b13e2057fa56f5f0499c1ef9e9b618b7844ac422fa7457bf41b",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "dispensing_orders",
+      "trigger_name": "dispensing_orders_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "d78113434656923b2fc2ec152128634b1c24c6b9288fc7c78b9aa353e36bbe3c",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "dispensing_orders",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "c145f16e2f79507670e3a3a30573fe96be8b963a73ccb1669da50aa19a4b8c45",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "encounter_identity_verifications",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "013b43c20486248653ae20b0aeb14c905249d5e02ffa2a5ea88b8de29eca21c5",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "encounter_identity_verifications",
+      "trigger_name": "trg_encounter_identity_verifications_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "f57f3a6a2f64c39032137ae8cef448b543da772dbfbde8fb7c5c28b2f6c041ad",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "encounters",
+      "trigger_name": "encounters_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "b182ec7b3375e0a22ae43db8517ae2fc422c44a02fd913d9b405743b8fb41702",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "encounters",
+      "trigger_name": "trg_assign_encounter_clinic",
+      "function_signature": "public.assign_patient_child_clinic()",
+      "canonical_row_sha256": "f0b793ee0af2321dbbd04df97713eca06f63b2c3edbb1ae8acd8f4f2dc6e2193",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "encounters",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "18c4361bd143a3157f083fa7de600a5557dfec52951458075eb83f026a5ab2b7",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "encounters",
+      "trigger_name": "trg_prevent_encounter_clinical_evidence_delete",
+      "function_signature": "public.prevent_encounter_clinical_evidence_delete()",
+      "canonical_row_sha256": "6bd50fbeecb1eb1e80bdd1074eecc9ff3fdcc47deb72e0b1d49b1b2cd5aa40ff",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "finished_goods_receipts",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "9ab2730eda4e7d3551fbb281b7a138ef5c2d77cab53686e2120976b2f7ecafea",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "followups",
+      "trigger_name": "followups_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "33b16beb6f68190cf94147835900054183f9747511068cf2ef394d857e6ef825",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "followups",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "3f1a22fe8fe91561f74ff7022aeca3be65862295ccfc38c816a02d3b29632c73",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "formula_components",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "677318ba231fe401210fcac2e4c651513f2c2bfc3846c3af637982e274102c5e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "formulas",
+      "trigger_name": "formulas_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "1180e812eaffbef73632fa8728967fea82bcf74044464773e683ce9d066f5c35",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "formulas",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "48e4f90d2e1ef9cf2114acdf200329f53915234416b22e5864349f0781c2a6df",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "import_batches",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "d119d22baae31d84462abdb1614988e732c308d1e7017fcc183383a724164dc1",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "import_rows",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "b5cc3912391247caec941d2676c4dc2a3dd260ab79b36b52e5c906b273d77ee8",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "intermediate_care_assessments",
+      "trigger_name": "intermediate_care_assessments_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "9b2b84218a16e3c94fee0e0291898f56f71cb6632dd39a5885395cd56d92e92e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "intermediate_care_assessments",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "3030512ba4f587ce62c94b98aa11051969826ea7a066b89910e96eaccad21b08",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "inventory_lots",
+      "trigger_name": "inventory_lots_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "5c63bb29fedcd97e9b0af32c26b8443c37fecd14de48754dae1d8d6e40bfd177",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "inventory_lots",
+      "trigger_name": "trg_assign_inventory_lot_clinic",
+      "function_signature": "public.assign_inventory_lot_clinic()",
+      "canonical_row_sha256": "a3fbf016d759ca27409c036272ae4cc6b8933d8e4dbf6abd40018079aa01804a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "inventory_lots",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "2afe19691f0832436ddcc9cd5376c472e0841d20b1fada4a5a8c08c1a5ad62a8",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "inventory_lots",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "063c6e8863681b8b99a6da0dbe5efb17552b3b51f706b5e0752620786434c567",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "invoice_items",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "0985a948205ecb49307b074174b184114b7033937e8a86b23a93aca4c54df1bc",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "invoices",
+      "trigger_name": "invoices_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "9f554e31bdaf2e0bf1bf1361320d9d1811d72e8db6a02deb77a32a12c14f6ceb",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "invoices",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "5dd93f42114f1370467bf602c38cc1cccec1c82caae5475725451861025e1d5b",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_contacts",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "64325ebad0ecb86b8ff1581e0abc2605d55ab623edca7766bd155c1b5d0c0835",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_contacts",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "a2ac61b8a990863df25483a639cef180cb7287e899061ebeff879a95547504d9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_delivery_events",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "01621f41ad3babd136b539388d13d8cd3668779b249c8698fb5a1d83eba1f70a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_delivery_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "240237b0849ad0f47dd854049fd1a1eecb2384f87eb2e4bfc2c7b1c89befbf4e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_delivery_events",
+      "trigger_name": "trg_line_oa_delivery_events_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "e1d8a8c222d1e5054d4cad083f982897d074c39024fb62536a2eca852324a576",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_gateway_contact_states",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "245a8621bb452303a9f591126e3e90cbb3b23fdd8ef4e524241585af5801f8a1",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_gateway_webhook_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "ac8ab938c3585b889f74e7202f847c4ef9e8ab339cb01f268892868c4b68b82e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_notification_outbox",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "bd09e525efc27c7006fd75217b6a03ec19927d7105566c0dbd10e8441e9863a8",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_notification_outbox",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "867664023aba42d28df15ff9e388299e467fd60977ddf39d765bd14d2c49cb2d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_notification_preferences",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "517dbf6c97eafcdff8fc32f50999b1342100d3b5c1addab5952c4945965113bd",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_notification_preferences",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "889ae990421518afe86d687af3fbaad910260db540e74daf47d443830819a33c",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_webhook_events",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "3d3cfb5201a6e574fc4db3affa51928ad7a108a4c209d75e86c70612adea2372",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "line_oa_webhook_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "de96a5ba10abf9c69f1dc792c27fbb7677c80cbb52ef7be91babcd936f04bc03",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "owner_control_historical_replay_guard",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "8bef9a5645ee4456a51b2f066621302d8766091ecbfc2edcdd32f305ca7a2942",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pain_assessments",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "b384f7cfe8e6e045226653140d9bd45221afbd87c991b9bd96b79cbe9fec1a9b",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pain_markers",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "7f997ce6a2bb4c6f9c719cc6d149259f147e79146e51644a4476292de340ebe4",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_allergies",
+      "trigger_name": "patient_allergies_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "6f7d21701a5605cf696ec5c8019f009aadff2878194d8b20f13997f9266437f3",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_allergies",
+      "trigger_name": "trg_assign_allergy_clinic",
+      "function_signature": "public.assign_patient_child_clinic()",
+      "canonical_row_sha256": "62ff96bb8614a5d63a489f65bc055b4a4c55ffd8f4ed44615f44453f0ce1a0a7",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_allergies",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "bfff8ae0bf44cfc1f0075c3cbaa3d2d8e119521850085ad157361b9a20be091e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_allergies",
+      "trigger_name": "trg_enforce_patient_allergy_write",
+      "function_signature": "public.enforce_patient_registry_write()",
+      "canonical_row_sha256": "71e63ad42357a60c73e854fdc9b623eac5df71dc1ec66a181919e366d384f9ea",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_events",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "ff433122ae15be63ed50d6395dccb28612c39626e120047559bf3e8932f85054",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_events",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "4e948711352af5aaa10feca8cf8fe95805ac0fac9e4e0c274522218f3f927ca8",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_events",
+      "trigger_name": "trg_patient_identity_events_append_only",
+      "function_signature": "public.reject_append_only_mutation()",
+      "canonical_row_sha256": "08b9c7b4a2e78452ddafbe1c542ab345dad30f91d438d024012d33d1ac32bffe",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_link_requests",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "611aa40edd49a6b283c10664e2b48b8d47ba537edd6cefc9e553a8058debd151",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_link_requests",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "eb01a514a4b11a429ac36b4dc7d51b2823d33d4defb25a71ff866267a8516908",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_links",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "3b3b4e14c320d95e294b19d574334533077e501f60fea9484699d09fef55bf57",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_links",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "93bfa579b2d43240eb041f59dacaa72e6eb6383ea10fc6f3dab4707062f201e9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_links",
+      "trigger_name": "trg_withdraw_line_oa_on_identity_revoke",
+      "function_signature": "public.withdraw_line_oa_on_identity_revoke()",
+      "canonical_row_sha256": "578e73d16bb2807d30ba0a4fa68dad14a56409ff36ee4100109759469cd2f9d1",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_identity_rate_limits",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "e82616229f513cbbdac52410bb502c17d4f22c775433932e20278b236147fe00",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_qr_sessions",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "fd6f1c3797932b81e99955d53455aef16b5eaefbd83aca2957b3bb645d4db39e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_qr_sessions",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "9e38e1d165bc282fc6f34d42f6704b65d9799d7fd9d6e08441af90fe8d679e0d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patient_user_links",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "e71855e23cbfc97f7dd3b1ab946798aa1a391aa8651254565102bb7d4b07403b",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patients",
+      "trigger_name": "patients_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "c7553fb15869a35d9b55886c8444170dbd1af98110be666626fdf2b79cd9186e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patients",
+      "trigger_name": "trg_assign_patient_clinic",
+      "function_signature": "public.assign_patient_clinic()",
+      "canonical_row_sha256": "44c5990ad035b2bb1e9e0901d681ed9d4869f0da782ebf705eca0c2ab26712c8",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patients",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "2023f3825072b3aaad7527ac07e478b2700ca6a59cb46f3e7819242ad303276a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "patients",
+      "trigger_name": "trg_enforce_patient_registry_write",
+      "function_signature": "public.enforce_patient_registry_write()",
+      "canonical_row_sha256": "e3fcd7058e8451ed5aafb91591b1d9da150e5dfe8bef435d219576db10a52ee3",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "payments",
+      "trigger_name": "payments_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "d06af935de0964fef8350ed71ebafe5ad7ab3d9cd735d19437a15fc51585b42d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "payments",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "a89d60f3f262865c9598f5afddd41eab3f823066967d60516740d4de3a09c052",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_allocations",
+      "trigger_name": "trg_assign_pharmacy_allocation_clinic",
+      "function_signature": "public.assign_pharmacy_allocation_clinic()",
+      "canonical_row_sha256": "8b6ed01f4edea93c7ad76557b8f0d55ebbefd5900a18ba884364dea15f98215d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_allocations",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "537283b3da80302fe017e583db3b1fae513778eec8cc61999bac3fa1d91751f9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_sale_items",
+      "trigger_name": "pharmacy_counter_sale_items_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "f0ba9bb6c4e1c82db78f437268e0f6f988d7b9f0b69758ef1ac64256b6083c42",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_sale_items",
+      "trigger_name": "trg_assign_pharmacy_item_clinic",
+      "function_signature": "public.assign_pharmacy_item_clinic()",
+      "canonical_row_sha256": "b41a1af5f140465e3aedabdc6fa77b6e18778225f77853f8a8975424476146b6",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_sale_items",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "411c5c86d0b2267dcb0a8791a84b103bc18aec087cd4d05b9deb8845d903e82d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_sales",
+      "trigger_name": "pharmacy_counter_sales_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "0e04d7c864a553cdfa82be6af2df5fdd1ded622f849f8e830850fd855fa69d5e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_sales",
+      "trigger_name": "trg_assign_pharmacy_sale_clinic",
+      "function_signature": "public.assign_pharmacy_sale_clinic()",
+      "canonical_row_sha256": "5214ff6a98c54c8364f7ee362d067738200fdfbddc2b5097aab95af7813e78e1",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "pharmacy_counter_sales",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "80eaf6af2dcc592e4e20111c63b57d64ca4abfc675d6dd30a37394e7e70c23f5",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "practitioner_schedules",
+      "trigger_name": "trg_cnyos_active_subscription_write",
+      "function_signature": "public.enforce_active_subscription_tenant_write()",
+      "canonical_row_sha256": "0c11a9f7b695850875bf9bee3d51fb86e82c098ec6c7b85e506105a01164e2a9",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "practitioner_schedules",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "1144391d2c69eb717336300f212b80bcebd3b443386dcb4a143b6c2a746ea4f4",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "practitioner_schedules",
+      "trigger_name": "trg_practitioner_schedules_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "1e637ef6c69c920d4393ee4c4193d9a5be7934199433599d68d5c442684320ac",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "practitioner_specialties",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "4fe919deff00227bb43ca9c15808d192f3692229937735e5cae8e63e872ab74a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "prescription_items",
+      "trigger_name": "prescription_items_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "db224bec84fd6845cc84cb96c9c63ec4c5a6d6cd42944f56b5dae727b135941d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "prescription_items",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "5336d4338ee43c352e954de9cf83ea4cc5c30a1a193af444165aa72f09184c52",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "prescription_items",
+      "trigger_name": "trg_prescription_item_product_tenant",
+      "function_signature": "public.enforce_prescription_item_product_tenant()",
+      "canonical_row_sha256": "89626427c65af7a6087b0458efbf6bedcfc61c386a2b29011647425c4e117133",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "prescriptions",
+      "trigger_name": "prescriptions_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "0ed16ee331dc5992a2ea218f867344bd5260e61cd5668512682386311ea4010a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "prescriptions",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "4bc90e2959a8231e3dbd6936c337601cd101c0f09fff738d1ae81b01b66a04a5",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "price_list_items",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "c8a8aefdee714831b8029e0810af06c2a5ea48ffa0ae243be837a4f03a674896",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "price_lists",
+      "trigger_name": "price_lists_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "27d8a4c42038fbd3d99479f2c820bbac4d571c394b99dc950a3d579431bf149d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "price_lists",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "aa11cbe0d1b524e65a10ede9b6351fa279264b4c64c4c0c3023ac25289797705",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_material_issues",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "c4798cd3ca43c1fe3bc3e1535e424530f25d40600d95eb099fc1562bf3913ba5",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_orders",
+      "trigger_name": "production_orders_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "418f62ccd581d7751a36117a554b8292c58d6cc32ef03a2f810105c17394d6c2",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_orders",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "ffe0f7dd78e0339d4e74fd20e445fe34992847fd9a251873faf3949a50ed59c3",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_qc",
+      "trigger_name": "production_qc_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "7990b9fc119c94d84e27edbf8e796961dbd2f9429004288ae33dc079d9fbdf7c",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_qc",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "d72f5cfcbd2e8adb515b31f51733420dcffbbc8a1a9659b03e9f385a590d4922",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_requests",
+      "trigger_name": "production_requests_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "6d7fc7d054919bdc9a9dc2ef017270682c30d921916d46164a5cebb656770019",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "production_requests",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "12dd005035e928362d60d02a3bcdd06fc7edbda0c0403715416b5c538d6f692a",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "products",
+      "trigger_name": "products_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "0a8796f801c3228af9635a8e1d12a5cc526dd0662e09674efeaaee3e346a2f3f",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "products",
+      "trigger_name": "trg_assign_product_clinic",
+      "function_signature": "public.assign_product_clinic()",
+      "canonical_row_sha256": "92550386b0c056bc63750b56d4e00edbf15d61ea7094f453f15a4a34022e1f00",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "products",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "6f0542b059616c83284e8b26f3004ca835491f7714511168dca6b92feddf665e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "profiles",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "eca9c050439b359a9d2bd4f472c4c1bacd2eb7e680d0b7e8c0e06727f070538d",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "sen_line_master",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "8975308715e507510249a6dacdd8a7b293a6040034b11f9287b851ede2d332f4",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "services",
+      "trigger_name": "services_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "46571769ff2f5b41277c141e56fe5652cdbecec1eaa400ae8559965cd35e8ba0",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "services",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "5ae2c1ce96f3387314ae7bf4c7a26ad09f7bca1c4a68c97b43d054e431626716",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "stock_movements",
+      "trigger_name": "stock_movement_apply",
+      "function_signature": "public.apply_stock_movement()",
+      "canonical_row_sha256": "ea4b9f62ab6a3eb6c286f7a8fa690c6c8c1ea8a31ed15286e7c0fe6c05e71733",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "stock_movements",
+      "trigger_name": "trg_assign_stock_movement_clinic",
+      "function_signature": "public.assign_stock_movement_clinic()",
+      "canonical_row_sha256": "2d45fdc68661d7f1e7bd88e2d1c6528b218bcffe6779c1b0e8cd5d43b4cd7633",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "stock_movements",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "0580b82612a1ccd36d2c139477a99ee0d9022bf8d447d6f75bacf74a0f60c989",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "suppliers",
+      "trigger_name": "suppliers_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "31b4054d826706329d6adc7fc3d54fe84cb9cba9d1cdf35a06bd93f62ac161ec",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "suppliers",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "f0000f1d30e329215beceea1a08dfbcca2407cc12ddeb99b337f899eb78bc456",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "treatment_orders",
+      "trigger_name": "treatment_orders_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "f40bb6ad2fe1c7c87d1393c8261034b12d9f66bfd0659bf5fbd4cd46e78f7863",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "treatment_orders",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "92f56c5e37e51d974188acab00ff81ab3e0a2c52c458fb5791a3c90224fcad3c",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "treatment_sessions",
+      "trigger_name": "treatment_sessions_set_updated_at",
+      "function_signature": "public.set_updated_at()",
+      "canonical_row_sha256": "c2190577513ac75d213d3a5c9d56f29b52a6f46ce50791809da480e8d193d7f6",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "treatment_sessions",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "ee7d1398850ae8a80345dea648a608b008bb9b5d6c92d3a8a2f017613f667c7f",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_concept_relations",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "5ba306b0e8ea3466313017a9a83fcfd17d1bf0ca7706d2476f29621bf0d1e2e3",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_concept_terms",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "0a07103a92ad04e7ee3964b24118fb6d27d99ca4061872a50beb2152b24e1fb3",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_concepts",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "23c81b79a897208de8935588549caa9f92fa778d1dec149fd6974192a5ffc3fb",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_diagnostic_contexts",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "4408f5009c8cedfee640e312ba019e3400fa08a88683255923bb68ab52423be0",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_diagnostic_contexts",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "049848f814fe7ffc829655442035d2fff366eeb61c16a56330694add6a97e2d7",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_diagnostic_knowledge",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "3219e95ed627a7b7e493b52b458eedf620a96264ed9e4a5d783efaf791989377",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_encounter_concepts",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "a532bdee86f2ca021d5c1edf65b4cefedc07a5cc60cf74b54659b10f8c9beb6b",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_opd_histories",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "789a35010922b33a53416b23f0ec9c77e494dc668fc886c3145d256124e430b2",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_opd_histories",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "9ee02b4ee3a6536ce0fc1432b90e7e508998d6ba0869f2306df34cf339331564",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_sources",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "be504ffbd655e7efe9943eaa8d0260f9d8db593d1d78e49179a57393855abb8e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_structured_diagnoses",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "881e1f37bf1298e99e4ac7a324edfce181cf6ccb0f2da906ab82ccacffc7abb3",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "ttm_structured_diagnoses",
+      "trigger_name": "trg_prevent_locked_record",
+      "function_signature": "public.prevent_locked_clinical_record_mutation()",
+      "canonical_row_sha256": "b6ae6aa764efac1ece9ebe54f919243d199e4f4a6de4d42a6b20e6e9f30e1f8e",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "public",
+      "relation_name": "vital_signs",
+      "trigger_name": "trg_cnyos_authenticated_subscription_statement_write",
+      "function_signature": "public.enforce_authenticated_subscription_statement_write()",
+      "canonical_row_sha256": "bb908e15f7c698f6714a6b644c49ee3c128083ff976811cf7ed3a12349ea67b1",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "relation_schema": "realtime",
+      "relation_name": "subscription",
+      "trigger_name": "tr_check_filters",
+      "function_signature": "realtime.subscription_check_filters()",
+      "canonical_row_sha256": "2453a89d8b449b7658943c011c517c17006e8ed9a38c284cf277972df2b73572",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "relation_schema": "storage",
+      "relation_name": "buckets",
+      "trigger_name": "enforce_bucket_name_length_trigger",
+      "function_signature": "storage.enforce_bucket_name_length()",
+      "canonical_row_sha256": "1f180c271953dcbb4aefbe6d2164cbc8d37f88b4da13338f306d80caee8144ca",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "relation_schema": "storage",
+      "relation_name": "buckets",
+      "trigger_name": "protect_buckets_delete",
+      "function_signature": "storage.protect_delete()",
+      "canonical_row_sha256": "a2cc88c0c0cadb444cda9f4bd24f95bedd5b7dc49fdee3ab15668a53d9f7684b",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "relation_schema": "storage",
+      "relation_name": "objects",
+      "trigger_name": "protect_objects_delete",
+      "function_signature": "storage.protect_delete()",
+      "canonical_row_sha256": "13ecc3ebed035f911b96ad3f35cb14bdce4ccc273fcf6d2fe56876fc796dd474",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "relation_schema": "storage",
+      "relation_name": "objects",
+      "trigger_name": "update_objects_updated_at",
+      "function_signature": "storage.update_updated_at_column()",
+      "canonical_row_sha256": "99f77c17247fd1969e56f3c77a0e7131fb98b45532f84be12fe0aab73c03ec74",
+      "disposition": "preserve_platform_managed_binding"
+    }
+  ],
+  "event_trigger_bindings": [
+    {
+      "event_trigger_name": "ensure_rls",
+      "event": "ddl_command_end",
+      "function_signature": "public.rls_auto_enable()",
+      "canonical_row_sha256": "b020b67fda9fae6184fdd365024fe593892f265ea2841c26712cb9158cb5c953",
+      "disposition": "preserve_and_harden_public_handler_owner_only"
+    },
+    {
+      "event_trigger_name": "issue_graphql_placeholder",
+      "event": "sql_drop",
+      "function_signature": "extensions.set_graphql_placeholder()",
+      "canonical_row_sha256": "67d904ec705f346b713354121c24aac62285d12ddaab55a13573c102702149ff",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "event_trigger_name": "issue_pg_cron_access",
+      "event": "ddl_command_end",
+      "function_signature": "extensions.grant_pg_cron_access()",
+      "canonical_row_sha256": "5a4d0836d90b9d374a9d0cd41a8b63bdd84e0a9bf18227d1d82521171f44991e",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "event_trigger_name": "issue_pg_graphql_access",
+      "event": "ddl_command_end",
+      "function_signature": "extensions.grant_pg_graphql_access()",
+      "canonical_row_sha256": "3f41df5d167551b05b16e4d0b0954a9f9f072f4908dc530026099d1deff2e613",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "event_trigger_name": "issue_pg_net_access",
+      "event": "ddl_command_end",
+      "function_signature": "extensions.grant_pg_net_access()",
+      "canonical_row_sha256": "bcf1059f61ad21327bcf1c60e0cb960cee42a76f1207546ffd9de7cf448ad365",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "event_trigger_name": "pgrst_ddl_watch",
+      "event": "ddl_command_end",
+      "function_signature": "extensions.pgrst_ddl_watch()",
+      "canonical_row_sha256": "9e3f00cf37c14d686617b939c75db1d181b134a18770f6bb93b282889e16af1a",
+      "disposition": "preserve_platform_managed_binding"
+    },
+    {
+      "event_trigger_name": "pgrst_drop_watch",
+      "event": "sql_drop",
+      "function_signature": "extensions.pgrst_drop_watch()",
+      "canonical_row_sha256": "521e2f1ce6639c6a5bda3fb14bc6b6811a78f7ad50e3554c06120c25748eef34",
+      "disposition": "preserve_platform_managed_binding"
+    }
+  ],
+  "canonical_disposition_digest": {
+    "payload_schema": "cnyos-public-routine-acl-disposition-payload/v1",
+    "canonical_format": "one compact positional JSON payload including terminal LF",
+    "entry_count": 327,
+    "payload_sha256": "b64789650acf4dd435d7cd41e114fac6c71b35d995cf78b2ce954ad8b571d343"
+  }
+}

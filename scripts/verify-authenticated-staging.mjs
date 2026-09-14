@@ -182,7 +182,7 @@ async function runBrowserMatrix() {
   try {
     ({ chromium } = await import('playwright'));
   } catch {
-    throw new Error('STAGING_BROWSER_E2E=true requires playwright@1.55.0; use the protected staging workflow');
+    throw new Error('STAGING_BROWSER_E2E=true requires playwright@1.55.1; use the protected staging workflow');
   }
 
   const browser = await chromium.launch({ headless: true });

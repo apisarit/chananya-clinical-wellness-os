@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { randomUUID, createHash } from 'node:crypto';
 import { PLATFORM_FEATURES, normalizePlatformLink, normalizePlatformPlan, resolvePlatformFeatures, platformPlanInput, platformPreflight } from '../platform-config.js';
 import { handlePlatformConsole, platformTargets } from '../netlify/functions/platform-console.mts';
 import { validatePreviewJob, canonicalPreviewAsset } from '../scripts/platform-preview-deploy.mjs';
 import { buildNetlifyPublish } from '../scripts/build-netlify-publish.mjs';
-import { validateTenantConfig, buildDeployManifest } from '../scripts/generate-tenant-config.mjs';
+import {
+  buildDeployManifest,
+  GENERATED_CONFIG_DIRECTORY,
+  validateTenantConfig
+} from '../scripts/generate-tenant-config.mjs';
 
 let count = 0;
 const test = async (name, work) => { await work(); count++; console.log(`PASS ${name}`); };
@@ -58,10 +63,81 @@ function setup(overrides = {}) {
 const save = env => env.call({ action: 'save', requestId: randomUUID(), plan: input });
 const deploy = (env, record, overrides = {}) => env.call({ action: 'deploy-preview', requestId: randomUUID(), planId: record.id, planHash: record.hash, confirmSlug: record.plan.slug, ...overrides });
 
+await test('merged NAS field accepts path plans without claiming a working connector', async () => {
+  const html = await fs.readFile(new URL('../platform-console.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /^(<<<<<<<|=======|>>>>>>>)/m);
+  const field = html.match(/<input\b[^>]*\bid="nas"[^>]*>/)?.[0];
+  assert.ok(field);
+  assert.doesNotMatch(field, /type="url"/);
+  assert.match(html, /NAS.*บันทึกแผนเท่านั้น/);
+  assert.match(html, /ยังไม่มีตัวเชื่อมต่อ NAS สำหรับสำรองจริง/);
+  assert.match(html, /ห้ามใส่รหัสผ่านหรือ access token/);
+  for (const id of ['clinic-setup', 'storage-setup']) {
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1);
+  }
+});
+
+async function loadHarness({ hash, refreshFails = false, missingSection = false, apiFails = false }) {
+  const source = await fs.readFile(new URL('../platform-console.js', import.meta.url), 'utf8');
+  const loadSource = source.match(/async function load\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(loadSource);
+  const events = [];
+  const elements = new Map(['actor', 'target', 'dispatcher-label', 'access', 'workspace', 'logout', 'clinic-setup', 'storage-setup']
+    .map(id => [id, { hidden: id === 'workspace', disabled: true, replaceChildren() {},
+      scrollIntoView() { events.push(`scroll:${id}`); } }]));
+  if (missingSection) elements.delete(hash.slice(1));
+  const context = {
+    registry: null, subscriptionUncertain: false, location: { hash },
+    $: id => elements.get(id), Option: function () {},
+    api: async () => {
+      if (apiFails) throw new Error('AUTH_DENIED');
+      return { actor: 'synthetic-owner', targets: [], dispatcherReady: false };
+    },
+    renderFeatures() {}, renderHistory() {}, renderReview() {},
+    refreshSubscription: async () => { events.push('refresh'); if (refreshFails) throw new Error('UNAVAILABLE'); },
+    errorText: error => error.message,
+    setSubscriptionStatus: (message, failed) => events.push(`status:${message}:${failed}`),
+    setSubscriptionControlsState: () => events.push('controls')
+  };
+  const load = vm.runInNewContext(`(${loadSource})`, context);
+  return { load, context, elements, events };
+}
+for (const section of ['clinic-setup', 'storage-setup']) {
+  await test(`load retains ${section} navigation before subscription refresh`, async () => {
+    const app = await loadHarness({ hash: `#${section}` });
+    await app.load();
+    assert.deepEqual(app.events, [`scroll:${section}`, 'refresh']);
+  });
+}
+await test('load ignores unlisted hashes but still refreshes subscription', async () => {
+  const app = await loadHarness({ hash: '#logout' });
+  await app.load();
+  assert.deepEqual(app.events, ['refresh']);
+});
+await test('missing optional section does not stop subscription refresh', async () => {
+  const app = await loadHarness({ hash: '#clinic-setup', missingSection: true });
+  await app.load();
+  assert.deepEqual(app.events, ['refresh']);
+});
+await test('subscription failure preserves navigation and uncertain control state', async () => {
+  const app = await loadHarness({ hash: '#storage-setup', refreshFails: true });
+  await app.load();
+  assert.deepEqual(app.events, ['scroll:storage-setup', 'refresh', 'status:UNAVAILABLE:true', 'controls']);
+  assert.equal(app.context.subscriptionUncertain, true);
+});
+await test('failed authorization cannot navigate or reveal the workspace', async () => {
+  const app = await loadHarness({ hash: '#clinic-setup', apiFails: true });
+  await assert.rejects(app.load, /AUTH_DENIED/);
+  assert.deepEqual(app.events, []);
+  assert.equal(app.elements.get('workspace').hidden, true);
+});
+
 await test('normalize Drive and Supabase copied links without requesting them', () => {
   assert.equal(normalizePlatformLink('drive', `https://drive.google.com/drive/u/0/folders/${target.driveRootId}?usp=sharing`).id, target.driveRootId);
   assert.equal(normalizePlatformLink('database', `https://supabase.com/dashboard/project/${target.projectRef}/settings/general`).url, input.database);
   assert.equal(normalizePlatformLink('nas', 'https://192.168.1.10/backups').requiresAgent, true);
+  assert.equal(normalizePlatformLink('nas', 'smb://nas01.backups.local/clinic-a/backup').url, 'smb://nas01.backups.local/clinic-a/backup');
+  assert.equal(normalizePlatformLink('nas', '\\\\NAS01\\\\backups\\\\clinic.enc').url, '\\\\NAS01\\\\backups\\\\clinic.enc');
   assert.equal(normalizePlatformLink('nas', ''), null);
 });
 for (const [kind, value] of [
@@ -154,9 +230,20 @@ await test('package build removes unselected pages and platform console from cus
   const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'cnyos-platform-package-'));
   try {
     const files = ['index.html', 'login.html', 'auth-callback.html', 'app.js', 'app.css', 'auth-config.js', 'tenant-config.js', 'brand-config.js', 'platform-console.html', 'platform-config.js', 'owner-control.html', 'u-synthesise.js', ...PLATFORM_FEATURES.flatMap(item => item.pages.map(page => `${page}.html`))];
-    for (const name of files) await fs.writeFile(path.join(fixture, name), 'synthetic');
-    await fs.writeFile(path.join(fixture, 'deploy-manifest.json'), JSON.stringify({ package: { features: ['core', 'u-synthesise'] } }));
-    const result = await buildNetlifyPublish({ cwd: fixture });
+    const generated = path.join(fixture, GENERATED_CONFIG_DIRECTORY);
+    await fs.mkdir(generated);
+    const sourceFiles = new Map();
+    for (const name of files) {
+      const destination = ['tenant-config.js', 'brand-config.js'].includes(name)
+        ? path.join(generated, name)
+        : path.join(fixture, name);
+      await fs.writeFile(destination, 'synthetic');
+      if (!['tenant-config.js', 'brand-config.js'].includes(name)) {
+        sourceFiles.set(name, Buffer.from('synthetic'));
+      }
+    }
+    await fs.writeFile(path.join(generated, 'deploy-manifest.json'), JSON.stringify({ package: { features: ['core', 'u-synthesise'] } }));
+    const result = await buildNetlifyPublish({ cwd: fixture, sourceFiles });
     assert.ok(result.files.includes('luopan.html')); assert.ok(result.files.includes('u-synthesise.js'));
     for (const name of ['clinical-v3.html', 'pharmacy.html', 'platform-console.html', 'platform-config.js', 'owner-control.html']) assert.ok(!result.files.includes(name));
   } finally { await fs.rm(fixture, { recursive: true, force: true }); }

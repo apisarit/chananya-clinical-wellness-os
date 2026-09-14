@@ -1,4 +1,4 @@
-name: Authenticated staging E2E
+name: Unprivileged CNYOS staging candidate evidence
 
 on:
   workflow_dispatch:
@@ -7,32 +7,26 @@ permissions:
   contents: read
 
 concurrency:
-  group: authenticated-staging-e2e
+  group: cnyos-staging-candidate-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  verify-staging:
-    name: 11 roles + 10 synthetic journeys
+  candidate-evidence:
+    name: Offline contracts and immutable candidate inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    environment: staging
-    env:
-      CLINICAL_OS_STAGING_ACK: STAGING_ONLY
-      CLINICAL_OS_STAGING_CONFIG_JSON: ${{ secrets.CLINICAL_OS_STAGING_CONFIG_JSON }}
-      CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
-      STAGING_SITE_URL: ${{ vars.STAGING_SITE_URL }}
-      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
-      STAGING_TEST_EMAIL_DOMAIN: ${{ vars.STAGING_TEST_EMAIL_DOMAIN }}
-      STAGING_TEST_EMAIL_PREFIX: clinical-os-e2e
-      STAGING_TEST_PASSWORD: ${{ secrets.STAGING_TEST_PASSWORD }}
-      STAGING_BROWSER_E2E: "true"
-      STAGING_SYNTHETIC_UAT_ACK: CREATE_SYNTHETIC_RECORDS
-      STAGING_OWNER_CONTROL_ACK: TOGGLE_STAGING_SUBSCRIPTION
-      STAGING_UAT_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-      STAGING_EVIDENCE_DIR: artifacts/staging-e2e
     steps:
-      - name: Check out exact release candidate
+      - name: Require a fresh manual evidence run
+        shell: bash
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_ACTOR"
+
+      - name: Check out the exact candidate without persisted credentials
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -40,41 +34,68 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install locked application dependencies
+      - name: Bind the exact candidate source
+        shell: bash
+        run: |
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          echo "CLINICAL_OS_SOURCE_TREE=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_ENV"
+          echo "CLINICAL_OS_BUILD_TIMESTAMP=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "CNYOS_STAGING_FUNCTION_SOURCE_TREE=$(git rev-parse 'HEAD:netlify/functions')" >> "$GITHUB_ENV"
+
+      - name: Install locked candidate dependencies without deployment credentials
         run: npm ci
 
-      - name: Install pinned browser runner
-        run: npm install --no-save --package-lock=false playwright@1.55.0
+      - name: Install the pinned browser binary without deployment credentials
+        run: ./node_modules/.bin/playwright install --with-deps chromium
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run source and database behavioral contracts
+      - name: Run all offline source and database behavioral contracts
         run: npm run check
 
-      - name: Prove scheduled backup Functions have no public URLs
-        run: npm run verify:backup-route-denial -- "$STAGING_SITE_URL"
-
-      - name: Provision synthetic role identities
-        run: npm run staging:provision
-
-      - name: Verify authenticated role and workspace matrix
-        run: npm run staging:verify
-
-      - name: Run ten audited synthetic patient journeys
-        run: npm run staging:uat
-
-      - name: Generate exact-commit evidence
-        if: always()
-        run: npm run evidence:release
+      - name: Build a database-locked staging candidate from tracked inputs
+        run: npm run build:staging-artifact
         env:
-          RELEASE_EVIDENCE_DIR: artifacts/staging-e2e/release
+          CONTEXT: production
+          URL: https://cnyos.netlify.app
+          CLINICAL_OS_STAGING_DEPLOYMENT: "true"
+          CLINICAL_OS_TENANT_CONFIG_PATH: config/tenant.cnyos-staging.json
+          CLINICAL_OS_SOURCE_COMMIT: ${{ github.sha }}
+          CLINICAL_OS_REQUIRE_SOURCE_COMMIT: "true"
 
-      - name: Retain exact-commit evidence
-        if: always()
+      - name: Materialize Function inputs only from the exact Git tree
+        run: >-
+          node scripts/materialize-staging-functions.mjs
+          --output artifacts/staging-candidate/functions
+          --manifest artifacts/staging-candidate/function-input-manifest.json
+
+      - name: Prove candidate scripts did not mutate tracked source
+        shell: bash
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$CLINICAL_OS_SOURCE_TREE"
+          test "$(git rev-parse 'HEAD:netlify/functions')" = "$CNYOS_STAGING_FUNCTION_SOURCE_TREE"
+
+      - name: Retain immutable unprivileged candidate evidence
+        id: candidate_artifact
         uses: actions/upload-artifact@v6
         with:
-          name: authenticated-staging-${{ github.sha }}-${{ github.run_id }}
-          path: artifacts/staging-e2e/
-          if-no-files-found: warn
-          retention-days: 90
+          name: cnyos-staging-candidate-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            dist/
+            artifacts/staging-candidate/functions/
+            artifacts/staging-candidate/function-input-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false
+
+      - name: Report the candidate evidence
+        shell: bash
+        run: |
+          test -n "$ARTIFACT_DIGEST"
+          echo "Candidate commit: $GITHUB_SHA"
+          echo "Candidate tree: $CLINICAL_OS_SOURCE_TREE"
+          echo "Candidate artifact SHA-256: $ARTIFACT_DIGEST"
+          echo "No Netlify, database service-role, tenant-config secret, or patient credential was available."
+        env:
+          ARTIFACT_DIGEST: ${{ steps.candidate_artifact.outputs.artifact-digest }}

@@ -52,6 +52,30 @@ function urlInput(value, field) {
 export function normalizePlatformLink(kind, value) {
   const input = cleanText(value || '', kind, 500, true);
   if (!input) return null;
+  if (kind === 'nas') {
+    if (input.startsWith('smb://')) {
+      let smb;
+      try { smb = new URL(input); } catch { throw platformError('PLATFORM_NAS_LINK_INVALID', kind); }
+      if (smb.protocol !== 'smb:' || smb.hash || smb.username || smb.password || smb.port || smb.search
+        || !/^[a-z0-9.-]+$/i.test(smb.hostname)) {
+        throw platformError('PLATFORM_NAS_LINK_INVALID', kind);
+      }
+      const normalized = `${smb.protocol}//${smb.host}${smb.pathname}`.replace(/\/$/, '');
+      if (!normalized) throw platformError('PLATFORM_NAS_LINK_INVALID', kind);
+      return { kind, url: normalized, requiresAgent: true };
+    }
+    if (input.startsWith('http://') || input.startsWith('https://')) {
+      const url = urlInput(input, kind);
+      if (url.search) throw platformError('PLATFORM_LINK_SECRET_DENIED', kind);
+      if (!/^[a-z0-9.-]+$/i.test(url.hostname)) throw platformError('PLATFORM_NAS_LINK_INVALID', kind);
+      return { kind, url: url.toString().replace(/\/$/, ''), requiresAgent: true };
+    }
+    const startsAsPath = input.startsWith('\\\\') || /^[A-Za-z]:\\/.test(input) || input.startsWith('/');
+    const hasForbiddenChars = /[<>:"|?*\u0000-\u001f]/.test(input)
+      || (input.includes(':') && !/^[A-Za-z]:/.test(input));
+    if (!startsAsPath || hasForbiddenChars) throw platformError('PLATFORM_NAS_LINK_INVALID', kind);
+    return { kind, url: input.replace(/[\\/]$/, ''), requiresAgent: true };
+  }
   if (kind === 'drive') {
     let id = input;
     if (input.includes('://')) {
@@ -65,24 +89,22 @@ export function normalizePlatformLink(kind, value) {
     if (!/^[A-Za-z0-9_-]{10,200}$/.test(id)) throw platformError('PLATFORM_DRIVE_LINK_INVALID', kind);
     return { kind, id, url: `https://drive.google.com/drive/folders/${id}` };
   }
-  const url = urlInput(input, kind);
-  if (url.search) throw platformError('PLATFORM_LINK_SECRET_DENIED', kind);
   if (kind === 'database') {
+    const url = urlInput(input, kind);
+    if (url.search) throw platformError('PLATFORM_LINK_SECRET_DENIED', kind);
     const ref = (url.hostname === 'supabase.com'
       ? url.pathname.match(/^\/dashboard\/project\/([a-z]{20})(?:\/[a-zA-Z0-9/_-]*)?$/)?.[1]
       : url.pathname === '/' ? url.hostname.match(/^([a-z]{20})\.supabase\.co$/)?.[1] : '');
     if (!ref) throw platformError('PLATFORM_DATABASE_LINK_INVALID', kind);
     return { kind, projectRef: ref, url: `https://${ref}.supabase.co` };
   }
+  const url = urlInput(input, kind);
+  if (url.search) throw platformError('PLATFORM_LINK_SECRET_DENIED', kind);
   if (kind === 'site') {
     if (url.pathname !== '/' || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/.test(url.hostname)) {
       throw platformError('PLATFORM_SITE_LINK_INVALID', kind);
     }
     return { kind, url: url.origin };
-  }
-  if (kind === 'nas') {
-    if (!/^[a-z0-9.-]+$/i.test(url.hostname)) throw platformError('PLATFORM_NAS_LINK_INVALID', kind);
-    return { kind, url: url.toString().replace(/\/$/, ''), requiresAgent: true };
   }
   throw platformError('PLATFORM_LINK_KIND_INVALID', kind);
 }

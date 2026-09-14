@@ -1,0 +1,17 @@
+{
+  "name": "cnyos-staging-protected-controller",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node tests/controller-contract.mjs && node tests/uat-evidence-schema-contract.mjs",
+    "test:activation": "node scripts/run-activation-contracts.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "10.7.13",
+    "qrcode": "1.5.4"
+  }
+}

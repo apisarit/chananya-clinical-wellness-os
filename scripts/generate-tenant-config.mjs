@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { resolvePlatformFeatures } from '../platform-config.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const GENERATED_CONFIG_DIRECTORY = '.cnyos-generated';
 const hex = /^#[0-9a-f]{6}$/i;
 const clinicCode = /^[A-Z][A-Z0-9_-]{1,23}$/;
+const deploymentIdentifier = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
 const sourceRevision = /^[0-9a-f]{7,40}$/i;
 const legacyClinicId = '00000000-0000-0000-0000-000000000001';
@@ -102,6 +104,10 @@ export function validateTenantConfig(input) {
     normalizedColors[key] = value.toLowerCase();
   }
 
+  const deploymentId = requiredString(input.deploymentId, 'deploymentId', 80);
+  if (!deploymentIdentifier.test(deploymentId)) {
+    throw new Error('deploymentId must start with a letter or digit and contain only letters, digits, ., _ or -');
+  }
   const expectedClinicCode = requiredString(input.tenant?.expectedClinicCode, 'tenant.expectedClinicCode', 24).toUpperCase();
   if (!clinicCode.test(expectedClinicCode)) throw new Error('tenant.expectedClinicCode must be 2-24 uppercase letters, digits, _ or -');
   const expectedClinicId = requiredString(input.tenant?.expectedClinicId, 'tenant.expectedClinicId', 36).toLowerCase();
@@ -131,7 +137,7 @@ export function validateTenantConfig(input) {
   return {
     schemaVersion: 1,
     ...(input.features === undefined ? {} : { features: resolvePlatformFeatures(input.features) }),
-    deploymentId: requiredString(input.deploymentId, 'deploymentId', 80),
+    deploymentId,
     brand: {
       appName,
       shortName,
@@ -177,6 +183,35 @@ export function renderBrandConfig(config) {
     `window.CLINICAL_OS_CONFIG = Object.freeze(${payload});\n`;
 }
 
+export function classifyDeployment(env = process.env) {
+  const context = String(env.CONTEXT || 'local').trim() || 'local';
+  const dedicatedStaging = env.CLINICAL_OS_STAGING_DEPLOYMENT === 'true';
+  const preview = context === 'deploy-preview' || context === 'branch-deploy';
+  if (dedicatedStaging && preview) {
+    throw new Error('A deployment cannot be both dedicated staging and a preview');
+  }
+  if (dedicatedStaging) return 'dedicated-staging';
+  if (preview) return 'preview';
+  if (context === 'production') return 'production';
+  return 'local';
+}
+
+function stagingDatabaseExplicitlyAcknowledged(config, env, deploymentClass) {
+  const enabled = config.safety?.previewLocked === false &&
+    Boolean(config.database?.url) &&
+    Boolean(config.database?.publishableKey);
+  if (!enabled) return false;
+  if (deploymentClass === 'dedicated-staging') {
+    return env.CLINICAL_OS_ALLOW_STAGING_DATABASE === 'true' &&
+      env.CLINICAL_OS_STAGING_DATABASE_ACK === 'STAGING_ONLY';
+  }
+  if (deploymentClass === 'preview') {
+    return env.CLINICAL_OS_ALLOW_PREVIEW_DATABASE === 'true' &&
+      env.CLINICAL_OS_PREVIEW_DATABASE_ACK === 'STAGING_ONLY';
+  }
+  return false;
+}
+
 export function buildDeployManifest(config, env = process.env, now = new Date()) {
   const commit = String(
     env.CLINICAL_OS_SOURCE_COMMIT || env.COMMIT_REF || env.GITHUB_SHA || ''
@@ -188,11 +223,14 @@ export function buildDeployManifest(config, env = process.env, now = new Date())
   if (tree && !sourceRevision.test(tree)) {
     throw new Error('Source tree must be a 7-40 character hexadecimal Git revision');
   }
-  if (env.CLINICAL_OS_REQUIRE_SOURCE_COMMIT === 'true' && !commit) {
-    throw new Error('This deployment requires an explicit source commit');
-  }
   const timestamp = now instanceof Date ? now : new Date(now);
   if (Number.isNaN(timestamp.getTime())) throw new Error('Deploy manifest timestamp is invalid');
+  const deploymentClass = classifyDeployment(env);
+  const exactSourceBound = /^[0-9a-f]{40}$/.test(commit) && /^[0-9a-f]{40}$/.test(tree);
+  if ((env.CLINICAL_OS_REQUIRE_SOURCE_COMMIT === 'true' || deploymentClass === 'dedicated-staging') &&
+    !exactSourceBound) {
+    throw new Error('This deployment requires exact 40-character source commit and tree revisions');
+  }
   const databaseLocked = config.safety?.previewLocked === true &&
     config.database?.url === '' &&
     config.database?.publishableKey === '';
@@ -207,16 +245,22 @@ export function buildDeployManifest(config, env = process.env, now = new Date())
     source: {
       commit: commit || null,
       tree: tree || null,
-      verified: Boolean(commit)
+      verified: exactSourceBound
     },
     ...(config.features ? { package: { features: config.features } } : {}),
     build: {
       context: String(env.CONTEXT || 'local').trim() || 'local',
+      deploymentClass,
       timestamp: timestamp.toISOString()
     },
     safety: {
       previewLocked: config.safety?.previewLocked === true,
-      databaseLocked
+      databaseLocked,
+      stagingDatabaseExplicitlyAcknowledged: stagingDatabaseExplicitlyAcknowledged(
+        config,
+        env,
+        deploymentClass
+      )
     }
   };
 }
@@ -235,12 +279,28 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
     input = JSON.parse(fs.readFileSync(target, 'utf8'));
   }
   const config = validateTenantConfig(applyTenantEnvOverrides(input, env));
-  const preview = env.CONTEXT === 'deploy-preview' || env.CONTEXT === 'branch-deploy';
-  const dedicatedStaging = env.CLINICAL_OS_STAGING_DEPLOYMENT === 'true';
+  const deploymentClass = classifyDeployment(env);
+  const preview = deploymentClass === 'preview';
+  const dedicatedStaging = deploymentClass === 'dedicated-staging';
   const guardedNonProduction = preview || dedicatedStaging;
-  const databaseAllowed = env.CLINICAL_OS_ALLOW_STAGING_DATABASE === 'true' ||
-    env.CLINICAL_OS_ALLOW_PREVIEW_DATABASE === 'true';
-  const databaseAck = env.CLINICAL_OS_STAGING_DATABASE_ACK || env.CLINICAL_OS_PREVIEW_DATABASE_ACK;
+  if (dedicatedStaging &&
+    (env.CLINICAL_OS_ALLOW_PREVIEW_DATABASE || env.CLINICAL_OS_PREVIEW_DATABASE_ACK)) {
+    throw new Error('Dedicated staging must not use preview database acknowledgement variables');
+  }
+  if (preview &&
+    (env.CLINICAL_OS_ALLOW_STAGING_DATABASE || env.CLINICAL_OS_STAGING_DATABASE_ACK)) {
+    throw new Error('Preview deployments must not use dedicated staging database acknowledgement variables');
+  }
+  const databaseAllowed = dedicatedStaging
+    ? env.CLINICAL_OS_ALLOW_STAGING_DATABASE === 'true'
+    : preview
+      ? env.CLINICAL_OS_ALLOW_PREVIEW_DATABASE === 'true'
+      : false;
+  const databaseAck = dedicatedStaging
+    ? env.CLINICAL_OS_STAGING_DATABASE_ACK
+    : preview
+      ? env.CLINICAL_OS_PREVIEW_DATABASE_ACK
+      : '';
   const nonProductionOrigin = dedicatedStaging
     ? String(env.URL || config.auth.redirectOrigin).replace(/\/$/, '')
     : String(env.DEPLOY_PRIME_URL || config.auth.redirectOrigin).replace(/\/$/, '');
@@ -294,11 +354,14 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
 
 function main() {
   const config = loadTenantConfig();
-  const manifest = buildDeployManifest(config);
-  const output = path.join(root, 'tenant-config.js');
+  const buildTimestamp = String(process.env.CLINICAL_OS_BUILD_TIMESTAMP || '').trim();
+  const manifest = buildDeployManifest(config, process.env, buildTimestamp || new Date());
+  const generated = path.join(root, GENERATED_CONFIG_DIRECTORY);
+  fs.mkdirSync(generated, { recursive: true, mode: 0o700 });
+  const output = path.join(generated, 'tenant-config.js');
   fs.writeFileSync(output, renderTenantConfig(config), { encoding: 'utf8', mode: 0o644 });
-  fs.writeFileSync(path.join(root, 'brand-config.js'), renderBrandConfig(config), { encoding: 'utf8', mode: 0o644 });
-  fs.writeFileSync(path.join(root, 'deploy-manifest.json'), renderDeployManifest(manifest), { encoding: 'utf8', mode: 0o644 });
+  fs.writeFileSync(path.join(generated, 'brand-config.js'), renderBrandConfig(config), { encoding: 'utf8', mode: 0o644 });
+  fs.writeFileSync(path.join(generated, 'deploy-manifest.json'), renderDeployManifest(manifest), { encoding: 'utf8', mode: 0o644 });
   process.stdout.write(
     `Tenant browser config generated for ${config.deploymentId} (${config.tenant.expectedClinicCode}); source ${manifest.source.commit || 'unversioned'}\n`
   );

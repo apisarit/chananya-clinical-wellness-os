@@ -1,0 +1,166 @@
+# DORMANT TEMPLATE. This must live on the protected default branch of the
+# separate controller repository. It is independent of the candidate ref.
+name: CNYOS staging rollback watchdog
+
+on:
+  workflow_run:
+    workflows: ["CNYOS staging protected controller"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cnyos-staging-rollback-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+env:
+  CNYOS_CONTROLLER_PROTECTED_REF: refs/heads/main
+  CNYOS_CONTROLLER_EXPECTED_REPOSITORY: apisarit/cnyos-staging-deployment-control
+  CNYOS_CONTROLLER_WORKFLOW_PATH: .github/workflows/cnyos-staging-rollback-watchdog.yml
+
+jobs:
+  watchdog:
+    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cnyos-staging-rollback
+    steps:
+      - name: Bootstrap stop — intentionally fail closed
+        env:
+          CNYOS_CONTROLLER_BOOTSTRAP_STATE: BLOCKED_UNTIL_SEPARATE_PROTECTED_CONTROLLER_IS_REVIEWED
+          SOURCE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          test "$CNYOS_CONTROLLER_BOOTSTRAP_STATE" = "REVIEWED_AND_ACTIVATED"
+          test "$GITHUB_REF_PROTECTED" = "true"
+          test "$GITHUB_REF" = "$CNYOS_CONTROLLER_PROTECTED_REF"
+          test "$GITHUB_REPOSITORY" = "$CNYOS_CONTROLLER_EXPECTED_REPOSITORY"
+          test "$SOURCE_HEAD_BRANCH" = "main"
+          test "$SOURCE_EVENT" = "workflow_dispatch"
+          test "$SOURCE_RUN_ATTEMPT" = "1"
+          echo "$SOURCE_HEAD_SHA" | grep -Eq '^[0-9a-f]{40}$'
+      - name: Check out protected watchdog
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require the complete controller activation boundary
+        run: |
+          test -f ops/cnyos-staging-controller/package-lock.json
+          test -f ops/cnyos-staging-controller/approver-registry.json
+          test -f ops/cnyos-staging-controller/state/cnyos-staging-known-good.json
+          test -f ops/cnyos-staging-controller/config/cnyos-public-staging.json
+          test -f ops/cnyos-staging-controller/config/cnyos-production-denylist.json
+          test -f ops/cnyos-staging-controller/scripts/controller-function-bundle.mjs
+          test -f ops/cnyos-staging-controller/scripts/controller-static-reproducibility.mjs
+          test -f ops/cnyos-staging-controller/scripts/controller-authenticated-uat.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-runtime-capability-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-live-netlify-authority-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-live-github-release-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-rollback-attestation-deposit.mjs
+          test -f ops/cnyos-staging-controller/scripts/deposit-rollback-attestation.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-netlify-control-file-behavior.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-netlify-exclusive-publisher.mjs
+          test -f ops/cnyos-staging-controller/scripts/release-netlify-exclusive-publisher.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-private-draft-lifecycle.mjs
+          test -f ops/cnyos-staging-controller/scripts/private-draft-access-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/create-netlify-draft-with-durable-intent.mjs
+          test -f ops/cnyos-staging-controller/scripts/cleanup-netlify-draft.mjs
+          test -f ops/cnyos-staging-controller/scripts/reconcile-netlify-release-state.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-backup-disable-runtime-boundary.mjs
+          test -f ops/cnyos-staging-controller/scripts/verify-rollback-authorization-chain.mjs
+          test -f ops/cnyos-staging-controller/scripts/rollback-readiness.mjs
+          test -f ops/cnyos-staging-controller/scripts/scheduled-function-route-denial.mjs
+          test -f ops/cnyos-staging-controller/tests/controller-authenticated-uat-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/uat-evidence-schema-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/controller-function-bundle-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/controller-static-reproducibility-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/netlify-control-file-behavior-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/netlify-exclusive-publisher-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/private-draft-lifecycle-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/private-draft-access-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/draft-mutation-recovery-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/release-state-reconciliation-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/backup-disable-runtime-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-authorization-chain-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-principal-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-readiness-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/scheduled-function-route-denial-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/runtime-capability-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/live-netlify-authority-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/live-github-release-boundary-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/authorization-foundation-security-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/external-broker-trust-boundaries-contract.mjs
+          test -f ops/cnyos-staging-controller/tests/rollback-attestation-deposit-contract.mjs
+          test -f .github/workflows/cnyos-staging-release.yml
+          test -f .github/workflows/cnyos-staging-rollback-watchdog.yml
+          for protected_file in \
+            ops/cnyos-staging-controller/package.json \
+            ops/cnyos-staging-controller/package-lock.json \
+            ops/cnyos-staging-controller/controller-policy.json \
+            ops/cnyos-staging-controller/approver-registry.json \
+            ops/cnyos-staging-controller/state/cnyos-staging-known-good.json \
+            ops/cnyos-staging-controller/config/cnyos-public-staging.json \
+            ops/cnyos-staging-controller/config/cnyos-production-denylist.json \
+            .github/workflows/cnyos-staging-release.yml \
+            .github/workflows/cnyos-staging-rollback-watchdog.yml
+          do
+            test -f "$protected_file"
+            test ! -L "$protected_file"
+          done
+          ! rg -n '__[A-Z_]+__|BLOCKED_UNTIL' \
+            .github/workflows/cnyos-staging-release.yml \
+            .github/workflows/cnyos-staging-rollback-watchdog.yml \
+            ops/cnyos-staging-controller/controller-policy.json \
+            ops/cnyos-staging-controller/approver-registry.json \
+            ops/cnyos-staging-controller/state/cnyos-staging-known-good.json \
+            ops/cnyos-staging-controller/config/cnyos-public-staging.json \
+            ops/cnyos-staging-controller/config/cnyos-production-denylist.json
+      - name: Set up the protected watchdog test runtime
+        uses: actions/setup-node@__PINNED_SETUP_NODE_COMMIT_SHA__
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: ops/cnyos-staging-controller/package-lock.json
+      - name: Install the reviewed controller lock without lifecycle scripts
+        working-directory: ops/cnyos-staging-controller
+        run: npm ci --ignore-scripts
+      - name: Execute the bootstrap and closed-world activation suites
+        working-directory: ops/cnyos-staging-controller
+        run: |
+          npm test
+          npm run test:activation
+      - name: Check out and bind the failed controller source as data
+        uses: actions/checkout@__PINNED_CHECKOUT_COMMIT_SHA__
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: target-controller
+          persist-credentials: false
+      - name: Prove the fetched source is the workflow_run head
+        working-directory: target-controller
+        env:
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Reconcile rollback, rejected drafts, and publisher lease for the failed run
+        env:
+          CNYOS_GITHUB_ACTIONS_READ_TOKEN: ${{ github.token }}
+          CNYOS_STAGING_NETLIFY_AUTH_TOKEN: ${{ secrets.CNYOS_STAGING_NETLIFY_ROLLBACK_TOKEN }}
+          CNYOS_TARGET_CONTROLLER_RUN_ID: ${{ github.event.workflow_run.id }}
+          CNYOS_TARGET_CONTROLLER_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          CNYOS_ROLLBACK_ATTESTATION_BROKER_URL: ${{ vars.CNYOS_ROLLBACK_ATTESTATION_BROKER_URL }}
+          CNYOS_NETLIFY_PUBLISH_BROKER_URL: ${{ vars.CNYOS_NETLIFY_PUBLISH_BROKER_URL }}
+          CNYOS_DRAFT_LIFECYCLE_BROKER_URL: ${{ vars.CNYOS_DRAFT_LIFECYCLE_BROKER_URL }}
+          CNYOS_CONTROLLER_RECONCILIATION_EVIDENCE_DIRECTORY: ${{ runner.temp }}/reconciliation
+        run: node ops/cnyos-staging-controller/scripts/reconcile-netlify-release-state.mjs recover-workflow-run
+      - name: Retain watchdog reconciliation evidence
+        uses: actions/upload-artifact@__PINNED_UPLOAD_ARTIFACT_COMMIT_SHA__
+        with:
+          name: cnyos-watchdog-reconciliation-${{ github.event.workflow_run.id }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/reconciliation/
+          if-no-files-found: error
+          retention-days: 365

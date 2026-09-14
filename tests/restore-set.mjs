@@ -114,9 +114,13 @@ assert.match(ciWorkflow, /npm run check/);
 assert.match(ciWorkflow, /evidence:release/);
 
 const lineWorkflow = read('.github/workflows/line-staging-e2e.yml');
-assert.match(lineWorkflow, /STAGING_LINE_ID_TOKEN/);
-assert.match(lineWorkflow, /DEDICATED_TEST_LINE_ACCOUNT/);
-assert.match(lineWorkflow, /staging:line/);
+assert.match(lineWorkflow, /protected-controller handoff/);
+assert.match(lineWorkflow, /disabled in this candidate-controlled repository/);
+assert.match(lineWorkflow, /exit 1/);
+assert.doesNotMatch(
+  lineWorkflow,
+  /environment:|\$\{\{\s*secrets\.|STAGING_LINE_ID_TOKEN|staging:line|actions\/checkout|npm\s+(?:ci|run)/
+);
 const lineScript = read('scripts/verify-line-staging.mjs');
 for (const proof of [
   'issue_patient_line_link_code','confirm_patient_qr','start_manual_patient_encounter',
