@@ -1,9 +1,6 @@
 name: Prepare protected VPS staging candidate
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -16,7 +13,7 @@ concurrency:
 jobs:
   prepare-staging-candidate:
     name: Build and retain exact staging candidate
-    if: github.repository == 'apisarit/chananya-clinical-wellness-os' && github.ref == 'refs/heads/main'
+    if: github.repository == 'apisarit/chananya-clinical-wellness-os' && github.ref == 'refs/heads/codex/vps-staging-candidate-20260915'
     environment:
       name: staging
       url: https://${{ vars.CNYOS_STAGING_DOMAIN }}
@@ -39,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = apisarit/chananya-clinical-wellness-os
-          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF" = refs/heads/codex/vps-staging-candidate-20260915
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Set up pinned Node major
