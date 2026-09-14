@@ -2,6 +2,9 @@ name: Prepare protected VPS staging candidate
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/vps-staging-candidate-20260915
 
 permissions:
   contents: read

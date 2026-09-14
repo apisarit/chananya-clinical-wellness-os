@@ -57,7 +57,8 @@ test('Caddy permits only exact hashes for current inline authentication styles',
 test('application workflow prepares evidence without touching a privileged runner', () => {
   const workflow = read('.github/workflows/deploy-vps-staging.yml');
   assert.match(workflow, /^  workflow_dispatch:\s*$/m);
-  assert.doesNotMatch(workflow, /^\s+(?:push|pull_request):/m);
+  assert.match(workflow, /^  push:\s*$/m);
+  assert.match(workflow, /^      - codex\/vps-staging-candidate-20260915$/m);
   assert.match(workflow, /refs\/heads\/codex\/vps-staging-candidate-20260915/);
   assert.doesNotMatch(workflow, /pull_request:/);
   assert.match(workflow, /cancel-in-progress: false/);
