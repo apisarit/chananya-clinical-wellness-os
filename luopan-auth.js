@@ -13,6 +13,7 @@
       if (!session) { location.replace('/login.html'); return; }
       const profile = await runtime.getProfile(session.user.id);
       if (!profile) throw new Error('ไม่พบ Profile');
+      if (profile.access_context_ready !== true) { runtime.showAccountStatus(profile, session); return; }
       if (!runtime.can(profile, 'luopan_read')) throw new Error('บัญชีนี้ไม่มีสิทธิ์เปิด Luopan');
 
       window.ChananyaShell?.mount({ profile, session, active: 'luopan' });

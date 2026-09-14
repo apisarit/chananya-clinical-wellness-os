@@ -93,6 +93,54 @@
     return (await getDb().auth.getSession()).data.session || null;
   }
 
+  async function accountRequest(action) {
+    const session = await getSession();
+    if (!session?.access_token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
+    const response = await fetch('/api/account-access', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action }), signal: AbortSignal.timeout(45000)
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.ok !== true) {
+      const messages = {
+        ACCOUNT_SESSION_INVALID: 'Session หมดอายุ กรุณาออกจากระบบแล้วเข้าใหม่',
+        ACCOUNT_GOVERNANCE_REQUIRED: 'บัญชีนี้ยังไม่มีสิทธิ์จัดการผู้ใช้ของคลินิก',
+        ACCOUNT_SERVICE_UNAVAILABLE: 'ตรวจสอบบัญชีไม่สำเร็จ กรุณาลองอีกครั้งหรือติดต่อผู้ดูแล'
+      };
+      throw new Error(messages[result?.code] || 'ตรวจสอบบัญชีไม่สำเร็จ กรุณาลองอีกครั้ง');
+    }
+    return result;
+  }
+
+  function showAccountStatus(profile, session) {
+    const boot = document.getElementById('boot');
+    if (!boot) return;
+    boot.querySelector('.spinner')?.classList.add('hidden');
+    const pending = profile?.account_status === 'pending_approval';
+    const title = boot.querySelector('h2');
+    if (title) title.textContent = pending ? 'เข้าสู่ระบบแล้ว · รอกำหนดสิทธิ์' : 'ยังเข้าใช้งานคลินิกไม่ได้';
+    const message = document.getElementById('boot-error');
+    if (message) message.textContent = pending
+      ? 'บัญชีพร้อมให้ Super Admin เลือกในศูนย์ควบคุม → ผู้ใช้และสิทธิ์ กรุณารอการกำหนดแผนกก่อนเข้าใช้งาน'
+      : 'กรุณาให้ผู้ดูแลตรวจสอบสมาชิกคลินิกและสถานะการใช้งานของบัญชีนี้';
+    document.getElementById('account-status-actions')?.remove();
+    const panel = document.createElement('div');
+    panel.id = 'account-status-actions'; panel.className = 'account-status-actions';
+    const email = document.createElement('p'); email.textContent = session?.user?.email || profile?.email || ''; panel.appendChild(email);
+    const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'btn'; refresh.textContent = 'ตรวจสอบสิทธิ์อีกครั้ง';
+    refresh.addEventListener('click', () => location.reload()); panel.appendChild(refresh);
+    const logout = document.createElement('button'); logout.type = 'button'; logout.className = 'btn'; logout.textContent = 'ออกจากระบบ / เปลี่ยนบัญชี';
+    logout.addEventListener('click', async () => {
+      logout.disabled = true;
+      try {
+        const result = await getDb().auth.signOut({ scope: 'local' });
+        if (result.error) throw result.error;
+        location.replace('/login.html');
+      } catch { logout.disabled = false; if (message) message.textContent = 'ออกจากระบบไม่สำเร็จ กรุณาลองอีกครั้ง'; }
+    });
+    panel.appendChild(logout); boot.firstElementChild.appendChild(panel);
+  }
+
   async function getProfile(userId) {
     if (!userId) return null;
     const { data, error } = await getDb()
@@ -101,7 +149,13 @@
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;
-    if (!data) return null;
+    if (!data) {
+      const account = await accountRequest('status');
+      if (account.profile?.id !== userId) throw new Error('บัญชีเข้าสู่ระบบเปลี่ยนไป กรุณาโหลดหน้าใหม่');
+      // Identity display only. A server response never supplies operational roles.
+      return Object.freeze({ id: userId, full_name: account.profile.full_name, email: account.profile.email,
+        role: 'viewer', system_role: 'staff', access_context_ready: false, account_status: account.status });
+    }
 
     const access = await getDb().rpc('current_access_context');
     if (access.error) {
@@ -140,5 +194,5 @@
     });
   }
 
-  window.ChananyaRuntime = Object.freeze({ getDb, getSession, getProfile, rolesOf, roleOf, can, permissions });
+  window.ChananyaRuntime = Object.freeze({ getDb, getSession, getProfile, accountRequest, showAccountStatus, rolesOf, roleOf, can, permissions });
 })();

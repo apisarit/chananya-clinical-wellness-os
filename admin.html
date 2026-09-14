@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Admin Task Center</title>
-  <link rel="stylesheet" href="app.css?v=clinical-os-department1">
+  <link rel="stylesheet" href="app.css?v=account-access1">
   <script src="tenant-config.js?v=white-label1"></script>
   <script src="tenant-brand.js?v=white-label1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
   <script src="auth-config.js?v=clinical-os-ia1"></script>
-  <script src="chananya-runtime.js?v=clinical-os-department1"></script>
+  <script src="chananya-runtime.js?v=account-access1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="admin.js?v=clinical-os-department1"></script>
+  <script defer src="admin.js?v=account-access1"></script>
   <script defer src="admin-clinical-audit.js?v=clinical-os-ia1"></script>
 </head>
 <body data-page="admin">
@@ -66,6 +66,7 @@
   <div class="grid2">
     <div class="card">
       <h3>กำหนด Role ปฏิบัติงาน</h3>
+      <p>ผู้ใช้ใหม่ต้องเข้าสู่ระบบ Google ก่อน จากนั้น Super Admin เลือกบัญชีที่รอกำหนดสิทธิ์และบันทึกแผนก หากใช้เฉพาะ U Synthesise เลือก viewer</p>
       <form id="staff-role-form" class="form">
         <label class="full">ผู้ใช้<select id="staff-user" required></select></label>
         <label>แผนก / Department role<select id="staff-role"><option value="practitioner">ผู้ประกอบวิชาชีพ — practitioner</option><option value="doctor">แพทย์ — doctor</option><option value="reception">ต้อนรับ — reception</option><option value="pharmacy">ห้องยา — pharmacy</option><option value="production">ผลิต — production</option><option value="inventory">คลัง — inventory</option><option value="quality">คุณภาพ — quality</option><option value="billing">การเงิน — billing</option><option value="viewer">ดูอย่างเดียว — viewer</option></select></label>
@@ -83,7 +84,7 @@
       </form>
     </div>
   </div>
-  <div class="card"><h3>รายชื่อและสิทธิ์</h3><div id="user-list" class="list"></div></div>
+  <div class="card"><div class="row"><h3>รายชื่อและสิทธิ์</h3><button type="button" class="btn ghost" id="refresh-users">โหลดรายชื่อใหม่</button></div><div id="user-list" class="list"></div></div>
 </section>
 <section class="view" id="history"><div class="card"><h3>ประวัติการอนุมัติ</h3><div id="action-list" class="list"></div></div></section>
 <section class="view" id="clinical-audit">

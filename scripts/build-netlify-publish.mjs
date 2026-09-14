@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PLATFORM_FEATURES, resolvePlatformFeatures } from '../platform-config.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'dist');
@@ -38,9 +39,17 @@ export async function buildNetlifyPublish({ cwd = root } = {}) {
   await fs.mkdir(target, { recursive: true, mode: 0o755 });
 
   const entries = await fs.readdir(cwd, { withFileTypes: true });
+  const deployment = JSON.parse(await fs.readFile(path.join(cwd, 'deploy-manifest.json'), 'utf8'));
+  const selected = deployment.package?.features ? resolvePlatformFeatures(deployment.package.features) : null;
+  const excludedPages = selected ? PLATFORM_FEATURES.filter(item => !selected.includes(item.id)).flatMap(item => item.pages) : [];
+  const excludedFile = name => selected && (
+    excludedPages.some(page => name === `${page}.html` || name === `${page}.js` || name === `${page}.css`)
+    || (!selected.includes('u-synthesise') && /^(?:luopan|u-synthesise)[-.]/.test(name))
+    || /^(?:platform-console|platform-config|owner-control)[.]/.test(name)
+  );
   const copied = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !isPublicRuntimeRootFile(entry.name)) continue;
+    if (!entry.isFile() || !isPublicRuntimeRootFile(entry.name) || excludedFile(entry.name)) continue;
     await fs.copyFile(path.join(cwd, entry.name), path.join(target, entry.name));
     copied.push(entry.name);
   }

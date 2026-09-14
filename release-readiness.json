@@ -1,11 +1,12 @@
 {
   "schemaVersion": 3,
+  "gateModelVersion": 2,
   "releaseChannel": "preview",
   "status": "production_candidate_under_verification",
   "commercialProductionReady": false,
   "releaseCommit": null,
   "productionApprovalSource": "external_exact_commit_attestation",
-  "claimPolicy": "This source-controlled file is a fail-closed policy baseline and must not be mutated to approve its own Git commit. Production approval is supplied as an external exact-commit attestation from a production environment whose protection and approval rules are separately verified. Real patient data remains blocked until the separate post-deploy production attestation passes.",
+  "claimPolicy": "This source-controlled file is a fail-closed policy baseline and must not be mutated to approve its own Git commit. Production approval is supplied as an external exact-commit attestation from a production environment whose protection and approval rules are separately verified. Every gate remains pending until its retained evidence is independently reviewed. Real patient data remains blocked until the separate post-deploy production attestation passes.",
   "promotionPolicy": {
     "allRequiredGatesMustPass": true,
     "evidenceMustMatchReleaseCommit": true,
@@ -27,66 +28,206 @@
     ],
     "postDeployAttestationRequiredBeforeRealPatientData": true
   },
+  "notificationPolicy": {
+    "trackerIssue": 11,
+    "recipient": "apisarit",
+    "notifyOnlyAfterSuccessfulPostDeployAttestation": true,
+    "requiresSuccessfulPromotionAndDeploymentForSameCommit": true,
+    "idempotentCompletionMarker": "cnyos-production-complete"
+  },
   "requiredGates": [
     {
       "id": "owner_subscription_database_enforcement",
-      "label": "CNYOS Owner subscription ON/OFF enforced by database authorization",
+      "label": "Google Owner completes live OFF → existing-session denial → ON recovery, with original tenant/department boundary and audit event retained",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Owner authenticates through the production-bound Google identity.",
+        "Owner reads the target tenant status before mutation.",
+        "OFF immediately removes access for an already-issued staff session at the database/RLS boundary.",
+        "ON restores only the original tenant and department boundary.",
+        "All read, mutation, denial and recovery events are retained against the exact release commit."
+      ]
     },
     {
       "id": "authenticated_staging_all_roles",
-      "label": "Authenticated staging E2E for every role",
+      "label": "Authenticated staging E2E passes for all 11 roles, negative cases, session lifecycle and synthetic journeys",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Every configured role signs in and completes its permitted workflow.",
+        "Cross-department, disabled-account, expired-session and unauthorized-route denials pass.",
+        "Ten synthetic patient-to-payment journeys complete without real patient data.",
+        "Artifacts identify the exact release commit and isolated staging target."
+      ]
+    },
+    {
+      "id": "tenant_isolation",
+      "label": "Chananya/CNYOS and Jitarsa cross-tenant isolation passes at UI, API, RPC, RLS and database boundaries",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Tenant A identities cannot enumerate, read, mutate or infer Tenant B records.",
+        "Service endpoints reject mismatched tenant identifiers and destinations.",
+        "Positive and negative tests cover UI, REST/RPC, RLS and direct database assertions.",
+        "Isolation evidence is retained for both tenant directions."
+      ]
     },
     {
       "id": "line_callback",
-      "label": "LINE OA signed callback, consent, revoke, QR expiry and replay denial",
+      "label": "LINE OA signed callback, follow/unfollow, consent, revoke, QR issue/expiry/replay denial and manual HN fallback pass",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Real signed callback verification passes with a dedicated synthetic LINE account.",
+        "Consent, link, revoke, follow and unfollow state transitions are auditable.",
+        "QR expiry and replay attempts fail closed.",
+        "Manual HN fallback completes without bypassing identity or consent controls."
+      ]
     },
     {
-      "id": "encrypted_backup_restore_drill",
-      "label": "Encrypted Google Drive export and isolated restore drill with measured RPO/RTO",
+      "id": "encrypted_backup",
+      "label": "Encrypted off-site backup is created, checksummed, downloadable and retained under the approved policy",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "A complete encrypted backup is generated from the release candidate environment.",
+        "Checksum and manifest validation pass before upload.",
+        "Authorized recovery staff can retrieve the backup without exposing application secrets.",
+        "Retention, rotation and deletion behavior are evidenced."
+      ]
     },
     {
-      "id": "privacy_security_legal_review",
-      "label": "Privacy, security, clinical-safety and applicable legal review with zero unresolved release blockers",
+      "id": "isolated_restore_drill",
+      "label": "Backup restores into a fresh isolated target with reconciliation, integrity verification and measured RPO/RTO",
       "status": "pending",
-      "evidence": null
-    },
-    {
-      "id": "isolated_staging_migrations",
-      "label": "Required migrations applied to isolated staging with migration and rollback evidence",
-      "status": "pending",
-      "evidence": null
-    },
-    {
-      "id": "independent_quality_segregation",
-      "label": "Independent Quality SOP and producer-versus-approver segregation verified",
-      "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Restore uses a fresh isolated database/project rather than the source environment.",
+        "Row counts, checksums and clinical transaction chains reconcile.",
+        "Measured RPO and RTO are recorded.",
+        "Failure, partial restore and cleanup behavior are documented."
+      ]
     },
     {
       "id": "managed_database_backup_pitr",
-      "label": "Managed database backup/PITR configuration verified separately from Google Drive export",
+      "label": "Managed database backups and agreed PITR recovery level are enabled and recovery-tested separately from off-site export",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Managed backup status and retention are verified in the database provider.",
+        "The agreed PITR or alternative recovery objective is documented.",
+        "A provider-level recovery test is completed independently from Google Drive export.",
+        "Evidence records recovery timestamp, target and reconciliation result."
+      ]
     },
     {
-      "id": "operational_monitoring_incident_response",
-      "label": "Production monitoring, alert ownership, incident response, containment, rollback and recovery procedures verified with retained evidence",
+      "id": "isolated_staging_migrations",
+      "label": "Migration apply, failure, rollback/recovery and ledger reconciliation pass on production-like isolated staging",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "All required migrations apply in deterministic order.",
+        "A controlled failure demonstrates fail-safe recovery.",
+        "Rollback or forward-fix procedure is executed where supported.",
+        "Migration ledger and live schema reconcile with the exact release commit."
+      ]
+    },
+    {
+      "id": "operational_monitoring",
+      "label": "Error, uptime, security, backup, database, function and tenant-health monitoring alerts are active and delivery-tested",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Minimum production telemetry covers application, functions, database, backups and tenant health.",
+        "Synthetic failures prove alert delivery to a named owner.",
+        "Alert thresholds, deduplication and escalation are documented.",
+        "A dashboard without tested alert delivery does not satisfy this gate."
+      ]
+    },
+    {
+      "id": "incident_response_drill",
+      "label": "SEV-1 tabletop proves containment, credential rotation, rollback, recovery, communication and reopening",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Named incident roles execute the approved SEV-1 scenario.",
+        "Server-side containment and credential rotation are rehearsed.",
+        "Application rollback and database recovery decisions are tested separately.",
+        "Reopening criteria, timeline, decisions and post-incident actions are retained."
+      ]
+    },
+    {
+      "id": "independent_security_review",
+      "label": "Independent application security assessment and penetration test close all production blockers",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Reviewer is independent from the implementation author.",
+        "Scope covers authentication, session handling, authorization, tenant isolation, APIs, RLS, secrets and deployment surface.",
+        "Findings include severity, reproducibility and remediation evidence.",
+        "No unresolved Critical or High production blocker remains."
+      ]
+    },
+    {
+      "id": "privacy_legal_review",
+      "label": "PDPA, DPA, privacy notice, retention, deletion, DSAR, breach response and DPO assessment are approved",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Data inventory and record of processing are complete.",
+        "Controller/processor roles, DPA and subprocessors are approved.",
+        "Retention, deletion, DSAR and breach workflows are executable.",
+        "DPO and cross-border transfer assessments are documented where applicable."
+      ]
+    },
+    {
+      "id": "clinical_governance",
+      "label": "Licensed practitioners approve knowledge, workflow, dosage safeguards, intended use and clinical limitations",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Named licensed reviewers approve the knowledge version and workflow.",
+        "Dosage, allergy, contraindication and escalation safeguards are reviewed.",
+        "Intended use and non-automated clinical decision boundary are approved.",
+        "Correction, withdrawal and version-control procedures are documented."
+      ]
+    },
+    {
+      "id": "commercial_operations",
+      "label": "Provisioning, billing, entitlement, SLA, support, upgrade, export and offboarding operate end to end",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "A tenant can be provisioned from approved commercial order data.",
+        "Billing and entitlement states reconcile with access control.",
+        "SLA, support, upgrade and rollback processes have named owners.",
+        "Customer export, termination, retention and offboarding complete without orphaned access."
+      ]
+    },
+    {
+      "id": "independent_quality_segregation",
+      "label": "Independent Quality SOP and producer-versus-approver segregation are verified",
+      "status": "pending",
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Production and Quality permissions are segregated.",
+        "The producer cannot self-approve or release the same batch.",
+        "Rejection, rework and release actions are auditable.",
+        "Quality evidence is reviewed independently."
+      ]
     },
     {
       "id": "release_provenance_ci_merge_protection",
-      "label": "Exact release-candidate provenance, automated checks, review status, main-branch protection and production-environment protection/approval verified before production deployment",
+      "label": "Exact source/deploy provenance, required CI/review, protected main and protected production environment pass",
       "status": "pending",
-      "evidence": null
+      "evidence": null,
+      "acceptanceCriteria": [
+        "Release source commit and tree match the deployed artifact.",
+        "Required CI and review checks pass for the exact commit.",
+        "Main/ release branch protection prevents unreviewed or failing changes.",
+        "Production environment protection and approval are independently verified."
+      ]
     }
   ],
   "postDeploymentGate": {

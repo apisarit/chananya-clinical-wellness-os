@@ -9,10 +9,12 @@ const runbook = read('docs/PRODUCTION_OPERATIONS_RUNBOOK.md');
 const milestone = read('docs/PRODUCTION_MILESTONE_STACK.md');
 const readiness = JSON.parse(read('release-readiness.json'));
 
-const operationsGate = readiness.requiredGates.find(gate => gate.id === 'operational_monitoring_incident_response');
-assert.ok(operationsGate, 'production operations must remain an explicit pre-deployment release gate');
-assert.equal(operationsGate.status, 'pending', 'operations gate must fail closed before retained live evidence exists');
-assert.equal(operationsGate.evidence, null, 'operations evidence must not be invented');
+for (const id of ['operational_monitoring', 'incident_response_drill']) {
+  const gate = readiness.requiredGates.find(item => item.id === id);
+  assert.ok(gate, `${id} must remain an explicit pre-deployment release gate`);
+  assert.equal(gate.status, 'pending', `${id} must fail closed before retained live evidence exists`);
+  assert.equal(gate.evidence, null, `${id} evidence must not be invented`);
+}
 
 for (const required of [
   'Incident Commander',
@@ -45,4 +47,4 @@ assert.match(runbook, /same exact release commit required by `release-readiness\
 assert.match(milestone, /M7 — Production operations/, 'milestone stack must include production operations before release controls');
 assert.match(milestone, /M10 — Production deploy \+ admission/, 'deployment/admission must remain after operations and promotion');
 
-console.log('Production operations contract passed: monitoring, ownership, incident, rollback and recovery remain fail-closed release requirements');
+console.log('Production operations contract passed: monitoring and incident-response drills remain separate fail-closed release requirements');
