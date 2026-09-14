@@ -80,8 +80,10 @@ jobs:
           packet="artifacts/vps-staging-candidate"
           mkdir -p "$packet"
           source_epoch="$(git show -s --format=%ct HEAD)"
-          tar --sort=name --mtime="@$source_epoch" --owner=0 --group=0 --numeric-owner \
-            -C dist -cf - . | gzip -n > "$packet/cnyos-static-$GITHUB_SHA.tar.gz"
+          test -z "$(find dist -mindepth 2 -type f -print -quit)"
+          find dist -mindepth 1 -maxdepth 1 -type f -printf '%f\0' | LC_ALL=C sort -z | \
+            tar --null --no-recursion --files-from=- --mtime="@$source_epoch" --owner=0 --group=0 --numeric-owner \
+              -C dist -cf - | gzip -n > "$packet/cnyos-static-$GITHUB_SHA.tar.gz"
           node - "$packet" "$GITHUB_SHA" "$(git rev-parse 'HEAD^{tree}')" <<'NODE'
           const crypto = require('node:crypto');
           const fs = require('node:fs');

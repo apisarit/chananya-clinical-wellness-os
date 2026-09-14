@@ -69,6 +69,9 @@ test('application workflow prepares evidence without touching a privileged runne
   assert.match(workflow, /staging_config=config\/tenant\.cnyos-staging\.json/);
   assert.doesNotMatch(workflow, /CNYOS_STAGING_TENANT_CONFIG_B64|secrets\./);
   assert.match(workflow, /kind: 'cnyos_vps_staging_candidate'/);
+  assert.match(workflow, /find dist -mindepth 1 -maxdepth 1 -type f -printf '%f\\0'/);
+  assert.match(workflow, /tar --null --no-recursion --files-from=-/);
+  assert.doesNotMatch(workflow, /-C dist -cf - \./);
   assert.match(workflow, /authorization: false/);
   assert.match(workflow, /productionEligible: false/);
   assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/);
