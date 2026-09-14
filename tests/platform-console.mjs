@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { randomUUID, createHash } from 'node:crypto';
 import { PLATFORM_FEATURES, normalizePlatformLink, normalizePlatformPlan, resolvePlatformFeatures, platformPlanInput, platformPreflight } from '../platform-config.js';
 import { handlePlatformConsole, platformTargets } from '../netlify/functions/platform-console.mts';
@@ -61,6 +62,75 @@ function setup(overrides = {}) {
 }
 const save = env => env.call({ action: 'save', requestId: randomUUID(), plan: input });
 const deploy = (env, record, overrides = {}) => env.call({ action: 'deploy-preview', requestId: randomUUID(), planId: record.id, planHash: record.hash, confirmSlug: record.plan.slug, ...overrides });
+
+await test('merged NAS field accepts path plans without claiming a working connector', async () => {
+  const html = await fs.readFile(new URL('../platform-console.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /^(<<<<<<<|=======|>>>>>>>)/m);
+  const field = html.match(/<input\b[^>]*\bid="nas"[^>]*>/)?.[0];
+  assert.ok(field);
+  assert.doesNotMatch(field, /type="url"/);
+  assert.match(html, /NAS.*บันทึกแผนเท่านั้น/);
+  assert.match(html, /ยังไม่มีตัวเชื่อมต่อ NAS สำหรับสำรองจริง/);
+  assert.match(html, /ห้ามใส่รหัสผ่านหรือ access token/);
+  for (const id of ['clinic-setup', 'storage-setup']) {
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1);
+  }
+});
+
+async function loadHarness({ hash, refreshFails = false, missingSection = false, apiFails = false }) {
+  const source = await fs.readFile(new URL('../platform-console.js', import.meta.url), 'utf8');
+  const loadSource = source.match(/async function load\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(loadSource);
+  const events = [];
+  const elements = new Map(['actor', 'target', 'dispatcher-label', 'access', 'workspace', 'logout', 'clinic-setup', 'storage-setup']
+    .map(id => [id, { hidden: id === 'workspace', disabled: true, replaceChildren() {},
+      scrollIntoView() { events.push(`scroll:${id}`); } }]));
+  if (missingSection) elements.delete(hash.slice(1));
+  const context = {
+    registry: null, subscriptionUncertain: false, location: { hash },
+    $: id => elements.get(id), Option: function () {},
+    api: async () => {
+      if (apiFails) throw new Error('AUTH_DENIED');
+      return { actor: 'synthetic-owner', targets: [], dispatcherReady: false };
+    },
+    renderFeatures() {}, renderHistory() {}, renderReview() {},
+    refreshSubscription: async () => { events.push('refresh'); if (refreshFails) throw new Error('UNAVAILABLE'); },
+    errorText: error => error.message,
+    setSubscriptionStatus: (message, failed) => events.push(`status:${message}:${failed}`),
+    setSubscriptionControlsState: () => events.push('controls')
+  };
+  const load = vm.runInNewContext(`(${loadSource})`, context);
+  return { load, context, elements, events };
+}
+for (const section of ['clinic-setup', 'storage-setup']) {
+  await test(`load retains ${section} navigation before subscription refresh`, async () => {
+    const app = await loadHarness({ hash: `#${section}` });
+    await app.load();
+    assert.deepEqual(app.events, [`scroll:${section}`, 'refresh']);
+  });
+}
+await test('load ignores unlisted hashes but still refreshes subscription', async () => {
+  const app = await loadHarness({ hash: '#logout' });
+  await app.load();
+  assert.deepEqual(app.events, ['refresh']);
+});
+await test('missing optional section does not stop subscription refresh', async () => {
+  const app = await loadHarness({ hash: '#clinic-setup', missingSection: true });
+  await app.load();
+  assert.deepEqual(app.events, ['refresh']);
+});
+await test('subscription failure preserves navigation and uncertain control state', async () => {
+  const app = await loadHarness({ hash: '#storage-setup', refreshFails: true });
+  await app.load();
+  assert.deepEqual(app.events, ['scroll:storage-setup', 'refresh', 'status:UNAVAILABLE:true', 'controls']);
+  assert.equal(app.context.subscriptionUncertain, true);
+});
+await test('failed authorization cannot navigate or reveal the workspace', async () => {
+  const app = await loadHarness({ hash: '#clinic-setup', apiFails: true });
+  await assert.rejects(app.load, /AUTH_DENIED/);
+  assert.deepEqual(app.events, []);
+  assert.equal(app.elements.get('workspace').hidden, true);
+});
 
 await test('normalize Drive and Supabase copied links without requesting them', () => {
   assert.equal(normalizePlatformLink('drive', `https://drive.google.com/drive/u/0/folders/${target.driveRootId}?usp=sharing`).id, target.driveRootId);
