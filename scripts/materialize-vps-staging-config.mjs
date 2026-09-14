@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { validateTenantConfig } from './generate-tenant-config.mjs';
 
 const EXPECTED_DOMAIN = 'srv1506007.hstgr.cloud';
+const EXPECTED_CLINIC_ID = '784ec3b0-7618-42ad-9ba0-eed606d22358';
+const EXPECTED_CLINIC_CODE = 'CNYOS-VPS-STG';
 
 export function validateBrowserKey(value) {
   const key = String(value || '').trim();
@@ -25,9 +27,12 @@ export function validateBrowserKey(value) {
 export function materializeVpsStagingConfig({ sourcePath, outputPath, domain, browserKey }) {
   if (domain !== EXPECTED_DOMAIN) throw new Error('CNYOS_VPS_STAGING_DOMAIN_REJECTED');
   const config = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
+  config.tenant.expectedClinicId = EXPECTED_CLINIC_ID;
+  config.tenant.expectedClinicCode = EXPECTED_CLINIC_CODE;
   config.database.url = `https://${EXPECTED_DOMAIN}/supabase`;
   config.database.publishableKey = validateBrowserKey(browserKey);
   config.auth.redirectOrigin = `https://${EXPECTED_DOMAIN}`;
+  config.identity.qrIssuer = EXPECTED_CLINIC_CODE;
   const validated = validateTenantConfig(config);
   fs.writeFileSync(outputPath, `${JSON.stringify(validated, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
   return validated;

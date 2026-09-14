@@ -31,6 +31,9 @@ test('writes a private same-origin runtime config without mutating the source', 
   });
   assert.equal(result.database.url, 'https://srv1506007.hstgr.cloud/supabase');
   assert.equal(result.auth.redirectOrigin, 'https://srv1506007.hstgr.cloud');
+  assert.equal(result.tenant.expectedClinicId, '784ec3b0-7618-42ad-9ba0-eed606d22358');
+  assert.equal(result.tenant.expectedClinicCode, 'CNYOS-VPS-STG');
+  assert.equal(result.identity.qrIssuer, 'CNYOS-VPS-STG');
   assert.equal(result.database.publishableKey, legacy('anon'));
   assert.equal(fs.statSync(outputPath).mode & 0o777, 0o600);
   assert.equal(fs.readFileSync(sourcePath, 'utf8'), before);
