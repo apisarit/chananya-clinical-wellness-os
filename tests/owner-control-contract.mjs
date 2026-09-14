@@ -157,6 +157,16 @@ const payload = await supabaseOwnerRequest({
   }
 });
 assert.equal(payload.email, ownerUser.email);
+
+for (const status of [401, 403]) {
+  await assert.rejects(supabaseOwnerRequest({
+    url: 'https://stagingprojectrefabc.supabase.co',
+    serviceRoleKey: 'server-service-role-test-key',
+    bearer: 'expired-user-session', resource: '/auth/v1/user',
+    fetchImpl: async () => new Response(JSON.stringify({ message: 'Invalid JWT' }), { status })
+  }), /CNYOS_OWNER_SESSION_INVALID/, 'Auth rejection must be recoverable, not a database failure');
+}
+
 assert.equal(calls[0].options.headers.apikey, 'server-service-role-test-key');
 assert.equal(calls[0].options.headers.Authorization, 'Bearer user-session-test-token');
 const rpcCalls = [];
@@ -333,7 +343,7 @@ assert.match(worker, /CNYOS_OWNER_EXPECTED_PROJECT_REF/);
 assert.match(worker, /CNYOS_OWNER_EXPECTED_NETLIFY_SITE_ID/);
 assert.match(worker, /CNYOS_OWNER_EXPECTED_SITE_ORIGIN/);
 assert.match(worker, /assertOwnerRuntime/);
-assert.match(worker, /const config = configuration\(deps\.getEnv \|\| env\);[\s\S]*assertOwnerRuntime\([\s\S]*authenticateOwner\(request, config, deps\.ownerRequest\)/);
+assert.match(worker, /const config = configuration\(deps\.getEnv \|\| env\);[\s\S]*assertOwnerRuntime\([\s\S]*authenticateOwner\(request, config, deps\.ownerRequest, deps\.googleFetch\)/);
 assert.match(worker, /CNYOS_OWNER_CLINIC_CODES/);
 assert.match(worker, /BACKUP_ENVIRONMENT/);
 assert.match(worker, /BACKUP_DEPLOYMENT_ID/);

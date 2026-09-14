@@ -59,7 +59,7 @@ function harness(options = {}) {
     onAuthStateChange: callback => { authCallback = callback; return { data: { subscription: { unsubscribe() {} } } }; },
     signOut: () => state.signOut ? state.signOut() : Promise.resolve({ error: null })
   } };
-  window.ChananyaRuntime = { getDb: () => db }; window.confirm = () => true;
+  window.ChananyaRuntime = { getDb: () => { if (state.runtimeFails) throw new Error('Runtime unavailable'); return db; } }; window.confirm = () => true;
   const context = vm.createContext({ window, document: { querySelector: s => el(s.slice(1)), createElement: () => new Element() },
     location: { replace: target => redirects.push(target) },
     sessionStorage: { setItem(key, value) {
@@ -115,6 +115,26 @@ await check('same-user SIGNED_IN does not wipe state or recursively call auth', 
   const h = harness(); await flush(); const before = h.state.getSessionCalls;
   h.auth('SIGNED_IN', userSession());
   assert.equal(h.state.getSessionCalls, before); assert.equal(h.el('owner-clinic-list').children.length, 1);
+});
+await check('Owner requests use the latest SDK Google token without persisting another copy', async () => {
+  const h = harness({ session: { ...userSession(), provider_token: 'synthetic-old-google-proof' } }); await flush();
+  assert.equal(h.calls[0].headers['X-Owner-Google-Token'], 'synthetic-old-google-proof');
+  assert.equal(h.calls[0].redirect, 'error', 'Never forward the Google credential through a redirect');
+  h.state.session = { ...userSession('fresh-session'), provider_token: 'synthetic-fresh-google-proof' };
+  await h.el('owner-drive-retry').dispatch('click');
+  assert.equal(h.calls.at(-1).headers['X-Owner-Google-Token'], 'synthetic-fresh-google-proof');
+  assert.deepEqual(h.storageWrites, []);
+  h.auth('TOKEN_REFRESHED', userSession('refreshed-without-provider-token'));
+  await h.el('owner-drive-retry').dispatch('click');
+  assert.equal(h.calls.at(-1).headers['X-Owner-Google-Token'], undefined, 'Do not reuse a stale Google token after refresh');
+});
+await check('Google proof cannot survive account switching in an in-flight Owner request', async () => {
+  const h = harness({ session: { ...userSession(), provider_token: 'synthetic-google-proof' } }); await flush();
+  const pending = deferred(); h.state.getSession = () => pending.promise;
+  const before = h.calls.length; const retry = h.el('owner-drive-retry').dispatch('click'); await flush();
+  h.auth('SIGNED_IN', userSession('other-session', 'another-owner'));
+  pending.resolve({ data: { session: { ...userSession(), provider_token: 'synthetic-google-proof' } } });
+  await retry; assertCleared(h); assert.equal(h.calls.length, before);
 });
 await check('cross-tab logout clears all rendered and entered Owner state', async () => {
   const h = harness(); await flush(); h.el('owner-reason').value = 'Private entered reason';
@@ -207,4 +227,145 @@ for (const status of [401, 403]) {
     await h.el('owner-drive-retry').dispatch('click'); assertCleared(h);
   });
 }
+await check('initial session timeout gives a usable recovery panel and rejects late completion', async () => {
+  const pending = deferred(); const h = harness({ getSession: () => pending.promise });
+  await flush(); h.timeouts[0].abort(); await flush();
+  assertCleared(h); assert.equal(h.el('owner-recovery-actions').hidden, false);
+  assert.equal(h.el('owner-boot-spinner').hidden, true);
+  assert.match(h.el('boot-error').textContent, /15 วินาที/);
+  pending.resolve({ data: { session: userSession() } }); await flush();
+  assertCleared(h); assert.equal(h.calls.length, 0);
+});
+await check('bootstrap API failure exposes recovery without granting Owner access', async () => {
+  const h = harness({ fetch: () => { throw new Error('Offline'); } }); await flush();
+  assertCleared(h); assert.equal(h.el('owner-recovery-actions').hidden, false);
+  assert.equal(h.el('owner-recovery-login').disabled, false);
+  assert.match(h.el('boot-error').textContent, /เชื่อมต่อ Owner Functions/);
+});
+await check('recovery reload never repeats a subscription mutation', async () => {
+  const h = harness({ fetch: () => { throw new Error('Offline'); } }); await flush();
+  await h.el('owner-recovery-retry').dispatch('click');
+  assert.deepEqual(h.redirects, ['/owner-control.html']);
+  assert.equal(h.calls.filter(call => call.method === 'POST').length, 0);
+});
+await check('runtime setup failure stays locked and permits page reload without account-reset claims', async () => {
+  const h = harness({ runtimeFails: true }); await flush();
+  assertCleared(h); assert.equal(h.el('owner-recovery-login').disabled, true);
+  assert.equal(h.el('owner-recovery-actions').hidden, false);
+  await h.el('owner-recovery-retry').dispatch('click');
+  assert.deepEqual(h.redirects, ['/owner-control.html']); assert.equal(h.calls.length, 0);
+});
+for (const httpStatus of [401, 403]) {
+  await check(`HTTP ${httpStatus} cannot create a login/Owner redirect loop or wait for a response body`, async () => {
+    let bodyReads = 0;
+    const h = harness({ fetch: () => ({ ok: false, status: httpStatus,
+      json: () => { bodyReads++; return new Promise(() => {}); } }) });
+    await flush(); assertCleared(h);
+    assert.equal(bodyReads, 0); assert.equal(h.redirects.length, 0);
+    assert.equal(h.el('owner-recovery-actions').hidden, false);
+    assert.match(h.el('boot-error').textContent, new RegExp(String(httpStatus)));
+  });
+}
+await check('recovery sign-out works even when initial authorization never succeeded', async () => {
+  let attempts = 0;
+  const h = harness({ fetch: () => response({ ok: false }, 403),
+    signOut: async () => { attempts++; return { error: null }; } }); await flush();
+  await h.el('owner-recovery-login').dispatch('click');
+  assertCleared(h); assert.equal(attempts, 1); assert.deepEqual(h.redirects, ['/login.html']);
+  assert.deepEqual(h.storageWrites, [['cnyos:post_auth_path', '/owner-control.html']]);
+});
+await check('failed sign-out can be retried explicitly from recovery rather than a hidden button', async () => {
+  let attempts = 0;
+  const h = harness({ signOut: async () => ({ error: ++attempts === 1 ? new Error('Offline') : null }) }); await flush();
+  await h.el('owner-logout').dispatch('click'); assertCleared(h);
+  assert.equal(h.el('owner-recovery-login').disabled, false);
+  await h.el('owner-recovery-login').dispatch('click');
+  assert.equal(attempts, 2); assert.deepEqual(h.redirects, ['/login.html']); assertCleared(h);
+});
+await check('hanging sign-out times out and a late success cannot claim completion or navigate', async () => {
+  const pending = deferred(); const h = harness({ signOut: () => pending.promise }); await flush();
+  const logout = h.el('owner-logout').dispatch('click'); await flush();
+  h.timeouts.at(-1).abort(); await logout;
+  assertCleared(h); assert.equal(h.el('owner-recovery-actions').hidden, false);
+  assert.equal(h.el('owner-recovery-login').disabled, false); assert.equal(h.redirects.length, 0);
+  pending.resolve({ error: null }); await flush(); assert.equal(h.redirects.length, 0);
+});
+await check('duplicate sign-out and recovery reload are suppressed while sign-out is pending', async () => {
+  const pending = deferred(); let attempts = 0;
+  const h = harness({ signOut: () => { attempts++; return pending.promise; } }); await flush();
+  const logout = h.el('owner-logout').dispatch('click');
+  await h.el('owner-recovery-login').dispatch('click');
+  await h.el('owner-recovery-retry').dispatch('click');
+  assert.equal(attempts, 1); assert.equal(h.redirects.length, 0);
+  pending.resolve({ error: null }); await logout; assert.deepEqual(h.redirects, ['/login.html']);
+});
+await check('duplicate subscription submits and manual refresh cannot overlap an in-flight mutation', async () => {
+  const pending = deferred(); const h = harness(); await flush();
+  h.state.fetch = (_, init) => init.method === 'POST' ? pending.promise : response({ ok: true, clinics });
+  const post = h.submit(); await flush(); const before = h.calls.length;
+  await h.submit(); await h.el('owner-refresh').dispatch('click');
+  assert.equal(h.calls.length, before); assert.equal(h.el('owner-refresh').disabled, true);
+  pending.resolve(response({ ok: true })); await post;
+  assert.equal(h.calls.filter(call => call.method === 'POST').length, 1);
+  assert.equal(h.el('owner-refresh').disabled, false); assert.equal(h.el('owner-submit').disabled, false);
+});
+await check('read-only refresh recovers an uncertain subscription result without retrying the write', async () => {
+  const h = harness(); await flush(); h.state.fetch = () => { throw new Error('Lost response'); };
+  await h.submit(); assert.equal(h.el('owner-submit').disabled, true);
+  h.state.fetch = () => response({ ok: true, clinics });
+  await h.el('owner-refresh').dispatch('click');
+  assert.equal(h.el('owner-submit').disabled, false);
+  assert.equal(h.calls.filter(call => call.method === 'POST').length, 1);
+  assert.equal(h.calls.at(-1).method, 'GET');
+});
+await check('malformed clinic state fails closed instead of claiming an empty successful connection', async () => {
+  for (const value of [undefined, {}, [{ clinic_id: 'synthetic-clinic' }]]) {
+    const h = harness({ fetch: () => response({ ok: true, clinics: value }) }); await flush();
+    assertCleared(h); assert.equal(h.el('owner-recovery-actions').hidden, false);
+  }
+});
+await check('version conflict followed by failed refresh remains blocked until a successful read', async () => {
+  const h = harness(); await flush(); h.state.fetch = (_, init) => {
+    if (init.method === 'POST') return response({ ok: false, code: 'CNYOS_OWNER_SUBSCRIPTION_VERSION_CONFLICT' }, 409);
+    throw new Error('Refresh offline');
+  };
+  await h.submit(); assert.equal(h.el('owner-submit').disabled, true);
+  const before = h.calls.length; await h.submit(); assert.equal(h.calls.length, before);
+});
+await check('disabled Drive setup is a separate state and does not break the authorized subscription console', async () => {
+  const h = harness({ fetch: url => url === '/api/owner-drive'
+    ? response({ ok: false, code: 'CNYOS_OWNER_DRIVE_DISABLED' }, 503) : response({ ok: true, clinics }) }); await flush();
+  assert.equal(h.el('owner-app').classList.contains('hidden'), false);
+  assert.equal(h.el('owner-submit').disabled, false); assert.equal(h.el('owner-drive-submit').disabled, true);
+  assert.equal(h.el('owner-drive-form').hidden, true);
+  assert.equal(h.el('owner-drive-status').classList.contains('danger'), false);
+  assert.equal(h.el('owner-toast').textContent, ''); assert.equal(h.redirects.length, 0);
+});
+function prepareDrive(h) {
+  h.el('owner-drive-clinic').value = 'synthetic-clinic';
+  h.el('owner-drive-confirm-code').value = 'TEST-STG';
+  h.el('owner-drive-reason').value = 'Synthetic Drive regression';
+  for (const key of folderKeys) h.el(`owner-drive-${key}`).value = `synthetic-${key}`;
+}
+await check('unknown Drive mutation outcome requires fresh status and does not allow an automatic second POST', async () => {
+  const h = harness(); await flush(); prepareDrive(h);
+  h.state.fetch = () => { throw new Error('Lost Drive response'); };
+  await h.el('owner-drive-form').dispatch('submit');
+  assert.equal(h.el('owner-drive-submit').disabled, true);
+  await h.el('owner-drive-form').dispatch('submit');
+  assert.equal(h.calls.filter(call => call.method === 'POST').length, 1);
+  h.state.fetch = () => response(drivePayload);
+  await h.el('owner-drive-retry').dispatch('click');
+  assert.equal(h.el('owner-drive-submit').disabled, false);
+  assert.equal(h.calls.filter(call => call.method === 'POST').length, 1);
+});
+await check('duplicate Drive submit dispatch is ignored while the first is in flight', async () => {
+  const h = harness(); await flush(); prepareDrive(h); const pending = deferred();
+  h.state.fetch = (_, init) => init.method === 'POST' ? pending.promise : response(drivePayload);
+  const post = h.el('owner-drive-form').dispatch('submit'); await flush();
+  await h.el('owner-drive-form').dispatch('submit');
+  assert.equal(h.calls.filter(call => call.method === 'POST').length, 1);
+  pending.resolve(response({ ok: true })); await post;
+  assert.equal(h.el('owner-drive-submit').disabled, false);
+});
 console.log(`Owner session lifecycle passed: ${passed} synthetic browser-controller cases; no live authentication or deployment claimed.`);

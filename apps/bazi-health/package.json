@@ -1,0 +1,10 @@
+{
+  "name": "chananya-bazi-health",
+  "version": "1.6.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node tests/contracts.mjs",
+    "build": "node scripts/build.mjs"
+  }
+}

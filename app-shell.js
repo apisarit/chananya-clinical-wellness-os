@@ -7,6 +7,7 @@
     { key: 'appointments', href: '/appointments.html', icon: '◷', label: 'นัดหมาย', note: 'ตารางแพทย์และคิว', capability: 'appointments_view' },
     { key: 'checkin', href: '/check-in.html', icon: '▣', label: 'ยืนยันผู้รับบริการ', note: 'LINE QR หรือ HN', capability: 'patient_checkin' },
     { key: 'foundation', href: '/foundation.html', icon: 'ร', label: 'รากวิชา', note: 'คัมภีร์และองค์ความรู้', capability: 'knowledge_read' },
+    { key: 'luopan', href: '/luopan.html', icon: '◉', label: 'U Synthesise', note: 'หล่อแก · ดวง · สมุฏฐาน', capability: 'luopan_read' },
     { key: 'clinical', href: '/clinical-v3.html', icon: '✚', label: 'เวชระเบียน', note: 'ตรวจ วินิจฉัย รักษา', capability: 'clinical_read' },
     { key: 'outcomes', href: '/outcomes.html', icon: '◎', label: 'ผลลัพธ์', note: 'Outcome และติดตามผล', capability: 'clinical_read' },
     { key: 'pharmacy', href: '/pharmacy.html', icon: 'Rx', label: 'ห้องยา', note: 'จ่ายยาและผลิตภัณฑ์', capability: 'pharmacy_operate' },
@@ -17,7 +18,10 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const allowed = (route, profile) => !route.capability || Boolean(window.ChananyaRuntime?.can(profile, route.capability));
+  const featureByRoute = { appointments: 'appointments', foundation: 'knowledge', luopan: 'u-synthesise', clinical: 'clinical', outcomes: 'outcomes', pharmacy: 'pharmacy', production: 'production', quality: 'quality' };
+  const allowed = (route, profile) => (!Array.isArray(window.CLINICAL_OS_CONFIG?.features)
+    || !featureByRoute[route.key] || window.CLINICAL_OS_CONFIG.features.includes(featureByRoute[route.key]))
+    && (!route.capability || Boolean(window.ChananyaRuntime?.can(profile, route.capability)));
 
   function routeMarkup(route, active) {
     return `<a href="${route.href}"${route.key === active ? ' aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${route.icon}</span><span class="nav-copy"><b>${esc(route.label)}</b><small>${esc(route.note)}</small></span></a>`;

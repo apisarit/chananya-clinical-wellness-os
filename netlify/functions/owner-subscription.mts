@@ -9,7 +9,7 @@ import {
   ownerPublicError,
   readOwnerJson,
   supabaseOwnerRequest,
-  validateOwnerUser
+  validateOwnerUserWithGoogleProof
 } from './_shared/owner-control.mjs';
 
 const responseHeaders = Object.freeze({
@@ -75,7 +75,7 @@ function configuration(getEnv = env) {
   });
 }
 
-async function authenticateOwner(request, config, ownerRequest = supabaseOwnerRequest) {
+async function authenticateOwner(request, config, ownerRequest = supabaseOwnerRequest, googleFetch = fetch) {
   const token = extractBearerToken(request);
   const user = await ownerRequest({
     url: config.supabaseUrl,
@@ -83,7 +83,9 @@ async function authenticateOwner(request, config, ownerRequest = supabaseOwnerRe
     resource: '/auth/v1/user',
     bearer: token
   });
-  return validateOwnerUser(user, config.ownerEmails, token);
+  return validateOwnerUserWithGoogleProof({
+    request, user, allowedEmails: config.ownerEmails, verifiedAccessToken: token, fetchImpl: googleFetch
+  });
 }
 
 async function listClinics(config, ownerRequest = supabaseOwnerRequest) {
@@ -133,7 +135,7 @@ export async function handleOwnerSubscription(request, context, deps = {}) {
       config.expectedNetlifySiteId,
       config.expectedSiteOrigin
     );
-    const owner = await authenticateOwner(request, config, deps.ownerRequest);
+    const owner = await authenticateOwner(request, config, deps.ownerRequest, deps.googleFetch);
     if (request.method === 'GET') {
       return json({ ok: true, clinics: await listClinics(config, deps.ownerRequest) });
     }

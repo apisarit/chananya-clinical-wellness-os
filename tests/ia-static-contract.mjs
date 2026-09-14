@@ -12,6 +12,7 @@ const contracts = [
   { page: 'appointments.html', scripts: ['app-shell.js', 'appointments.js'] },
   { page: 'check-in.html', scripts: ['app-shell.js', 'check-in.js'] },
   { page: 'foundation.html', scripts: ['app-shell.js', 'foundation.js'] },
+  { page: 'luopan.html', scripts: ['app-shell.js', 'luopan-auth.js'] },
   {
     page: 'clinical-v3.html',
     scripts: ['app-shell.js', 'clinical-v3.js', 'clinical-context-guard.js', 'body-pain-map.js', 'ttm-diagnosis-assistant.js', 'diagnosis-atomic-bridge.js', 'opd-workflow.js', 'clinical-signoff.js']

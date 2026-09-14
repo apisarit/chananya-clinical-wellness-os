@@ -1,0 +1,1415 @@
+{
+  "reference": "lunar-javascript 1.7.7 (MIT)",
+  "referenceUrl": "https://github.com/6tail/lunar-javascript",
+  "convention": "UTC+8 solar-term instants converted from selected offset; local civil day; midnight day rollover and next-day late-Zi hour stem",
+  "cases": [
+    {
+      "input": {
+        "year": 1900,
+        "month": 1,
+        "day": 15,
+        "hour": 1,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "己亥",
+        "丁丑",
+        "戊子",
+        "癸丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 2,
+        "day": 15,
+        "hour": 3,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "戊寅",
+        "己未",
+        "丙寅"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 3,
+        "day": 15,
+        "hour": 5,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "己卯",
+        "丁亥",
+        "癸卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 4,
+        "day": 15,
+        "hour": 7,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "庚辰",
+        "戊午",
+        "丙辰"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 5,
+        "day": 15,
+        "hour": 9,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "辛巳",
+        "戊子",
+        "丁巳"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 6,
+        "day": 15,
+        "hour": 11,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "壬午",
+        "己未",
+        "庚午"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 7,
+        "day": 15,
+        "hour": 13,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "癸未",
+        "己丑",
+        "辛未"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 8,
+        "day": 15,
+        "hour": 15,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "甲申",
+        "庚申",
+        "甲申"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 9,
+        "day": 15,
+        "hour": 17,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "乙酉",
+        "辛卯",
+        "丁酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 10,
+        "day": 15,
+        "hour": 19,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "丙戌",
+        "辛酉",
+        "戊戌"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 11,
+        "day": 15,
+        "hour": 21,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "丁亥",
+        "壬辰",
+        "辛亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 1900,
+        "month": 12,
+        "day": 15,
+        "hour": 23,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚子",
+        "戊子",
+        "壬戌",
+        "壬子"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 1,
+        "day": 15,
+        "hour": 1,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "己卯",
+        "丁丑",
+        "丁巳",
+        "辛丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 2,
+        "day": 15,
+        "hour": 3,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "戊寅",
+        "戊子",
+        "甲寅"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 3,
+        "day": 15,
+        "hour": 5,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "己卯",
+        "丁巳",
+        "癸卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 4,
+        "day": 15,
+        "hour": 7,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "庚辰",
+        "戊子",
+        "丙辰"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 5,
+        "day": 15,
+        "hour": 9,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "辛巳",
+        "戊午",
+        "丁巳"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 6,
+        "day": 15,
+        "hour": 11,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "壬午",
+        "己丑",
+        "庚午"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 7,
+        "day": 15,
+        "hour": 13,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "癸未",
+        "己未",
+        "辛未"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 8,
+        "day": 15,
+        "hour": 15,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "甲申",
+        "庚寅",
+        "甲申"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 9,
+        "day": 15,
+        "hour": 17,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "乙酉",
+        "辛酉",
+        "丁酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 10,
+        "day": 15,
+        "hour": 19,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "丙戌",
+        "辛卯",
+        "戊戌"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 11,
+        "day": 15,
+        "hour": 21,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "丁亥",
+        "壬戌",
+        "辛亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 1940,
+        "month": 12,
+        "day": 15,
+        "hour": 23,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "戊子",
+        "壬辰",
+        "壬子"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 1,
+        "day": 15,
+        "hour": 1,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙寅",
+        "辛丑",
+        "甲子",
+        "乙丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 2,
+        "day": 15,
+        "hour": 3,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "壬寅",
+        "乙未",
+        "戊寅"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 3,
+        "day": 15,
+        "hour": 5,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "癸卯",
+        "癸亥",
+        "乙卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 4,
+        "day": 15,
+        "hour": 7,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "甲辰",
+        "甲午",
+        "戊辰"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 5,
+        "day": 15,
+        "hour": 9,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "乙巳",
+        "甲子",
+        "己巳"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 6,
+        "day": 15,
+        "hour": 11,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "丙午",
+        "乙未",
+        "壬午"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 7,
+        "day": 15,
+        "hour": 13,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "丁未",
+        "乙丑",
+        "癸未"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 8,
+        "day": 15,
+        "hour": 15,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "戊申",
+        "丙申",
+        "丙申"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 9,
+        "day": 15,
+        "hour": 17,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "己酉",
+        "丁卯",
+        "己酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 10,
+        "day": 15,
+        "hour": 19,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "庚戌",
+        "丁酉",
+        "庚戌"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 11,
+        "day": 15,
+        "hour": 21,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "辛亥",
+        "戊辰",
+        "癸亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 12,
+        "day": 15,
+        "hour": 23,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "壬子",
+        "戊戌",
+        "甲子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 1,
+        "day": 15,
+        "hour": 1,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "己卯",
+        "丁丑",
+        "壬申",
+        "辛丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 2,
+        "day": 15,
+        "hour": 3,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "戊寅",
+        "癸卯",
+        "甲寅"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 3,
+        "day": 15,
+        "hour": 5,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "己卯",
+        "壬申",
+        "癸卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 4,
+        "day": 15,
+        "hour": 7,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "庚辰",
+        "癸卯",
+        "丙辰"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 5,
+        "day": 15,
+        "hour": 9,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "辛巳",
+        "癸酉",
+        "丁巳"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 6,
+        "day": 15,
+        "hour": 11,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "壬午",
+        "甲辰",
+        "庚午"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 7,
+        "day": 15,
+        "hour": 13,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "癸未",
+        "甲戌",
+        "辛未"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 8,
+        "day": 15,
+        "hour": 15,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "甲申",
+        "乙巳",
+        "甲申"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 9,
+        "day": 15,
+        "hour": 17,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "乙酉",
+        "丙子",
+        "丁酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 10,
+        "day": 15,
+        "hour": 19,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "丙戌",
+        "丙午",
+        "戊戌"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 11,
+        "day": 15,
+        "hour": 21,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "丁亥",
+        "丁丑",
+        "辛亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 12,
+        "day": 15,
+        "hour": 23,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "戊子",
+        "丁未",
+        "壬子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 1,
+        "day": 15,
+        "hour": 1,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "乙未",
+        "己丑",
+        "丙申",
+        "己丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 2,
+        "day": 15,
+        "hour": 3,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "庚寅",
+        "丁卯",
+        "壬寅"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 3,
+        "day": 15,
+        "hour": 5,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "辛卯",
+        "丙申",
+        "辛卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 4,
+        "day": 15,
+        "hour": 7,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "壬辰",
+        "丁卯",
+        "甲辰"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 5,
+        "day": 15,
+        "hour": 9,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "癸巳",
+        "丁酉",
+        "乙巳"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 6,
+        "day": 15,
+        "hour": 11,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "甲午",
+        "戊辰",
+        "戊午"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 7,
+        "day": 15,
+        "hour": 13,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "乙未",
+        "戊戌",
+        "己未"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 8,
+        "day": 15,
+        "hour": 15,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "丙申",
+        "己巳",
+        "壬申"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 9,
+        "day": 15,
+        "hour": 17,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "丁酉",
+        "庚子",
+        "乙酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 10,
+        "day": 15,
+        "hour": 19,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "戊戌",
+        "庚午",
+        "丙戌"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 11,
+        "day": 15,
+        "hour": 21,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "己亥",
+        "辛丑",
+        "己亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 12,
+        "day": 15,
+        "hour": 23,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "庚子",
+        "辛未",
+        "庚子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 15,
+        "hour": 1,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "乙巳",
+        "己丑",
+        "己丑",
+        "乙丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 2,
+        "day": 15,
+        "hour": 3,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "庚寅",
+        "庚申",
+        "戊寅"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 3,
+        "day": 15,
+        "hour": 5,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "辛卯",
+        "戊子",
+        "乙卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 4,
+        "day": 15,
+        "hour": 7,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "壬辰",
+        "己未",
+        "戊辰"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 5,
+        "day": 15,
+        "hour": 9,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "癸巳",
+        "己丑",
+        "己巳"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 6,
+        "day": 15,
+        "hour": 11,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "甲午",
+        "庚申",
+        "壬午"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 7,
+        "day": 15,
+        "hour": 13,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "乙未",
+        "庚寅",
+        "癸未"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 8,
+        "day": 15,
+        "hour": 15,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "丙申",
+        "辛酉",
+        "丙申"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 9,
+        "day": 15,
+        "hour": 17,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "丁酉",
+        "壬辰",
+        "己酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 10,
+        "day": 15,
+        "hour": 19,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "戊戌",
+        "壬戌",
+        "庚戌"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 11,
+        "day": 15,
+        "hour": 21,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "己亥",
+        "癸巳",
+        "癸亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 12,
+        "day": 15,
+        "hour": 23,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙午",
+        "庚子",
+        "癸亥",
+        "甲子"
+      ]
+    },
+    {
+      "input": {
+        "year": 1987,
+        "month": 10,
+        "day": 29,
+        "hour": 22,
+        "minute": 19,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丁卯",
+        "庚戌",
+        "辛亥",
+        "己亥"
+      ]
+    },
+    {
+      "input": {
+        "year": 2016,
+        "month": 9,
+        "day": 9,
+        "hour": 5,
+        "minute": 30,
+        "tzOffset": 7
+      },
+      "expected": [
+        "丙申",
+        "丁酉",
+        "甲午",
+        "丁卯"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 12,
+        "minute": 0,
+        "tzOffset": 7
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "壬午"
+      ]
+    },
+    {
+      "input": {
+        "year": 1988,
+        "month": 2,
+        "day": 15,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 8
+      },
+      "expected": [
+        "戊辰",
+        "甲寅",
+        "庚子",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2000,
+        "month": 2,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "tzOffset": 7
+      },
+      "expected": [
+        "庚辰",
+        "戊寅",
+        "丁巳",
+        "庚子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": -8
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 0
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 5.5
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 7
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 8
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 9
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 23,
+        "minute": 30,
+        "tzOffset": 14
+      },
+      "expected": [
+        "乙巳",
+        "戊子",
+        "乙亥",
+        "戊子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2025,
+        "month": 2,
+        "day": 3,
+        "hour": 18,
+        "minute": 10,
+        "tzOffset": 8
+      },
+      "expected": [
+        "甲辰",
+        "丁丑",
+        "癸卯",
+        "辛酉"
+      ]
+    },
+    {
+      "input": {
+        "year": 2025,
+        "month": 2,
+        "day": 4,
+        "hour": 2,
+        "minute": 10,
+        "tzOffset": 8
+      },
+      "expected": [
+        "乙巳",
+        "戊寅",
+        "甲辰",
+        "乙丑"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 2,
+        "day": 4,
+        "hour": 0,
+        "minute": 2,
+        "tzOffset": 8
+      },
+      "expected": [
+        "乙巳",
+        "己丑",
+        "己酉",
+        "甲子"
+      ]
+    },
+    {
+      "input": {
+        "year": 2026,
+        "month": 2,
+        "day": 4,
+        "hour": 8,
+        "minute": 2,
+        "tzOffset": 8
+      },
+      "expected": [
+        "丙午",
+        "庚寅",
+        "己酉",
+        "戊辰"
+      ]
+    }
+  ]
+}
