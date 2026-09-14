@@ -1,0 +1,39 @@
+name: Automated Tests
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automated-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    name: Run Automated Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test merge configuration controls
+        run: node --test tests/configure-merge-gates.mjs
+      - name: Run project contracts
+        run: npm run check
+
+# A successful test run is CI evidence. It never submits an independent review,
+# changes Draft state, enables auto-merge on a PR, or accesses a bot credential.
