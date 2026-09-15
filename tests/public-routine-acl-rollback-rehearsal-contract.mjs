@@ -140,6 +140,11 @@ for (const [mode, sql] of [
   );
   assert.match(sql, /current_setting\('application_name'\)/);
   assert.match(sql, /CNYOS_COMPLETE_ACL_REHEARSAL_CLINIC_IDENTITY_INVALID/);
+  assert.doesNotMatch(
+    sql,
+    /count\(\*\)\s+from\s+public\.clinics/,
+    `${mode} SQL must not reject valid multi-clinic staging by global clinic count`
+  );
   assert.match(
     sql,
     /CNYOS_COMPLETE_ACL_REHEARSAL_TRANSACTION_CLINIC_IDENTITY_INVALID/

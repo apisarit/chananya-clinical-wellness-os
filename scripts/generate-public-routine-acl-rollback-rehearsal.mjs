@@ -162,9 +162,10 @@ function buildTransactionClinicIdentityRecheck(profile) {
   return `  -- Revalidate the Chananya staging clinic only after the exact
   -- 91-relation ShareLock proof and inside the explicit read-write transaction.
   -- public.clinics is one of those locked relations, so the identity cannot
-  -- change between this check and the proposed mutation.
+  -- change between this check and the proposed mutation.  Staging is
+  -- multi-clinic, so the UUID primary key and exact target row—not a global
+  -- count of clinics—bind this rehearsal to Chananya.
   if pg_catalog.to_regclass('public.clinics') is null
-     or (select pg_catalog.count(*) from public.clinics) <> 1
      or not exists (
        select 1
        from public.clinics clinic
@@ -310,7 +311,6 @@ ${bypassed}
     raise exception 'CNYOS_COMPLETE_ACL_REHEARSAL_PRELOCK_TARGET_INVALID';
   end if;
   if pg_catalog.to_regclass('public.clinics') is null
-     or (select pg_catalog.count(*) from public.clinics) <> 1
      or not exists (
        select 1
        from public.clinics clinic
@@ -612,7 +612,6 @@ begin
     raise exception 'CNYOS_COMPLETE_ACL_SNAPSHOT_TARGET_INVALID';
   end if;
   if pg_catalog.to_regclass('public.clinics') is null
-     or (select pg_catalog.count(*) from public.clinics)<>1
      or not exists (
        select 1 from public.clinics clinic
        where clinic.id=${sqlLiteral(profile.clinicId)}::uuid
