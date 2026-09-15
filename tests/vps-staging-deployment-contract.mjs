@@ -42,6 +42,16 @@ test('native Caddy template preserves Supabase loopback and proxies the web loop
   assert.doesNotMatch(caddy, /host\.docker\.internal|reverse_proxy web:/);
 });
 
+test('native Caddy frame policy allows only the authenticated same-origin U Synthesize wheel', () => {
+  const caddy = read('deploy/vps-staging/Caddyfile');
+  assert.match(caddy, /@luopanShell path \/luopan\.html/);
+  assert.match(caddy, /@luopanWheel path \/luopan-wheel\.html/);
+  assert.match(caddy, /@notLuopan \{[\s\S]*?not path \/luopan\.html \/luopan-wheel\.html[\s\S]*?\}/);
+  assert.match(caddy, /header @notLuopan \{[\s\S]*?X-Frame-Options "DENY"[\s\S]*?Content-Security-Policy "default-src 'none';/);
+  assert.match(caddy, /header @luopanShell \{[\s\S]*?X-Frame-Options "SAMEORIGIN"[\s\S]*?frame-ancestors 'self'[\s\S]*?frame-src 'self' https:\/\/\*\.line\.me/);
+  assert.match(caddy, /header @luopanWheel \{[\s\S]*?X-Frame-Options "SAMEORIGIN"[\s\S]*?frame-ancestors 'self'[\s\S]*?frame-src 'none'/);
+});
+
 test('Caddy permits only exact hashes for current inline authentication styles', () => {
   const caddy = read('deploy/vps-staging/Caddyfile');
   for (const file of ['login.html', 'auth.html', 'login-v3.html', 'auth-callback.html']) {

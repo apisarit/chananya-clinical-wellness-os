@@ -1,6 +1,6 @@
-# U Synthesise — Classical Luopan atlas
+# U Synthesize — Classical Luopan atlas
 
-Added in U Synthesise 0.2.0; atlas data version 1.0.0 (2026-09-05).
+Added in U Synthesize 0.2.0; atlas data version 1.0.0 (2026-09-05).
 
 This extends the existing authenticated `/luopan.html` spatial mode. The original birth-time wheel and its 113 TTM rules are preserved. The atlas is a traditional knowledge reference with named methods, not an automated fortune, building-safety, or medical assessment.
 
@@ -67,4 +67,4 @@ SVG views are rendered from the actual UI implementation for visual inspection. 
 
 ## Jin Suo Yu Guan extension
 
-U Synthesise 0.3.0 adds an explicitly scoped eight-palace landscape baseline; see [U_SYNTHESISE_LANDSCAPE.md](U_SYNTHESISE_LANDSCAPE.md). The prior atlas, three-plate and time calculations remain available.
+U Synthesize 0.3.0 adds an explicitly scoped eight-palace landscape baseline; see [U_SYNTHESISE_LANDSCAPE.md](U_SYNTHESISE_LANDSCAPE.md). The prior atlas, three-plate and time calculations remain available.

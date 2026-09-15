@@ -1,4 +1,5 @@
-// U Synthesise is the owner's chosen spelling. This foundation does not replace V1.
+// U Synthesize is the owner's chosen display spelling. Internal ids remain
+// `u-synthesise` for backwards-compatible routes and feature flags.
 export function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.values(value).forEach(deepFreeze);
@@ -8,7 +9,7 @@ export function deepFreeze(value) {
 }
 
 export const identity = deepFreeze({
-  name: 'U Synthesise', id: 'u-synthesise', version: '0.3.1', status: 'foundation_draft',
+  name: 'U Synthesize', id: 'u-synthesise', version: '0.3.1', status: 'foundation_draft',
   baselineCommit: '40cb673f02e8b9e2641c46702441cff8c8ef19bd',
   legacyFile: 'luopan-knowledge.js',
   legacySha256: '79e0c23c763aa580665cdabfedc989275b3bbbdce867f02e4fc38d618acf1951',
@@ -20,7 +21,7 @@ export const sources = deepFreeze({
   solar: {kind: 'astronomical_reference', title: 'Hong Kong Observatory — 24 Solar Terms', url: 'https://www.hko.gov.hk/en/gts/time/24solarterms.htm'},
   stems: {kind: 'calendar_reference', title: 'Hong Kong Observatory — Stems and Branches', url: 'https://www.hko.gov.hk/en/gts/time/stemsandbranches.htm'},
   wuxing: {kind: 'traditional_theory', title: 'Beijing University of Chinese Medicine — 五行', url: 'https://www.bucm.edu.cn/kxyj/9e3411c63652410d8d7c99d8435e7ef5.htm'},
-  owner: {kind: 'project_convention', title: 'คำยืนยันผู้ใช้: กาลสมุฏฐาน 12 ชั่วโมง × 2 รอบ; วงปีเริ่มเมษายน; ชื่อ U Synthesise', recorded: '2026-09-05'},
+  owner: {kind: 'project_convention', title: 'คำยืนยันผู้ใช้: กาลสมุฏฐาน 12 ชั่วโมง × 2 รอบ; วงปีเริ่มเมษายน; ชื่อ U Synthesize', recorded: '2026-09-05'},
   legacy: {kind: 'preserved_source', title: 'ข้อมูลเดิมจาก Excel 24 ชีต และ BaZi v1.8', path: 'luopan-knowledge.js', baselineCommit: identity.baselineCommit},
 });
 

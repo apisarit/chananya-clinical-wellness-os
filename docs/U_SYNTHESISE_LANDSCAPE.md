@@ -1,6 +1,6 @@
-# U Synthesise 0.3.0 — Jin Suo Yu Guan landscape study
+# U Synthesize 0.3.0 — Jin Suo Yu Guan landscape study
 
-The user requested trying the landscape/water layer pictured on a 金锁玉关 reference ruler inside the existing U Synthesise application. This release adds two rings to the authenticated spatial view, taking the full atlas from 14 to 16 layers. The existing 23 time layers, April-start calendar, shared ray, birth calculations and all 113 legacy TTM rows remain intact.
+The user requested trying the landscape/water layer pictured on a 金锁玉关 reference ruler inside the existing U Synthesize application. This release adds two rings to the authenticated spatial view, taking the full atlas from 14 to 16 layers. The existing 23 time layers, April-start calendar, shared ray, birth calculations and all 113 legacy TTM rows remain intact.
 
 ## Included behavior
 

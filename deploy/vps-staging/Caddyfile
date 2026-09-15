@@ -1,7 +1,16 @@
 __CNYOS_STAGING_DOMAIN__ {
 	encode zstd gzip
 
-	header {
+	@luopanShell path /luopan.html
+	@luopanWheel path /luopan-wheel.html
+	@notLuopan {
+		not path /luopan.html /luopan-wheel.html
+	}
+
+	# Keep the strict default-deny policy on every route except the two
+	# same-origin Luopan documents below. The matchers do not overlap, so a
+	# later catch-all header cannot overwrite the frame policy.
+	header @notLuopan {
 		Cache-Control "no-store"
 		X-Content-Type-Options "nosniff"
 		X-Robots-Tag "noindex"
@@ -19,6 +28,25 @@ __CNYOS_STAGING_DOMAIN__ {
 	@supabaseOther path /supabase /supabase/*
 	@api path /api/*
 	@hidden path /.env /.env.* /_headers /_redirects
+
+	# Only the authenticated Luopan shell may embed the same-origin wheel.
+	# These matchers are mutually exclusive with @notLuopan above.
+	header @luopanShell {
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+		X-Robots-Tag "noindex"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'sha256-vSFE5QiVms+oad3iZe8is6OKErMYJG7wTLD52HiBm3A=' 'sha256-Ck9kw/q1f48TWAyV2gBkhtBjbc/3BF8d5LVfACONiy0=' 'sha256-LvDP7RWkXGQJIvqfG2OhaxST1e5lK6nCcW2IsR9rPiM=' 'sha256-kEA+K+Dy9UH8Gj0U1pEafUnSh3hlmB+4esiB5YPUa5Y='; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.line.me https://*.line-scdn.net; img-src 'self' data: blob: https://*.line-scdn.net; font-src 'self' data:; frame-src 'self' https://*.line.me"
+	}
+	header @luopanWheel {
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+		X-Robots-Tag "noindex"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; object-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'none'; manifest-src 'none'; worker-src 'none'"
+	}
 
 	route {
 		respond @health "ok" 200
