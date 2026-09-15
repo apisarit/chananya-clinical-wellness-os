@@ -2547,6 +2547,13 @@ function buildMigrationLedgerSql({
   }
   const isChananyaPreReconciliation =
     resolvedAclPhase === MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION;
+  // The reviewed Chananya observer pins `search_path` to pg_catalog, pg_temp.
+  // Keep the generated classified guard on that same path so regprocedure and
+  // trigger deparsing retain explicit schemas in the stable digest. Strict
+  // post-remediation output keeps its existing public-schema path.
+  const ledgerGuardSearchPath = isChananyaPreReconciliation
+    ? 'pg_catalog, pg_temp'
+    : 'pg_catalog, pg_temp, public';
   const clinicalTreatmentSessionAclContract = isChananyaPreReconciliation
     ? REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.preReconciliationAcl
     : REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.strictPostRemediationAcl;
@@ -2873,7 +2880,7 @@ $cnyos_psql_lock_busy_abort$;
         `set local lock_timeout = '5s';\n`
       : `begin isolation level repeatable read read write;\n` +
         canonicalCatalogOutputGucSql) +
-    `set local search_path = pg_catalog, pg_temp, public;\n` +
+    `set local search_path = ${ledgerGuardSearchPath};\n` +
     `do $ledger_guard$\n` +
     `declare\n` +
     `  v_missing text;\n` +

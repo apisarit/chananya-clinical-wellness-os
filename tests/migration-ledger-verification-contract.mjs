@@ -1390,7 +1390,7 @@ const repairBeginIndex = preReconciliationRepairSql.indexOf(
   '\nbegin isolation level repeatable read read write;\n'
 );
 const repairWriteSearchPathIndex = preReconciliationRepairSql.indexOf(
-  'set local search_path = pg_catalog, pg_temp, public;',
+  'set local search_path = pg_catalog, pg_temp;',
   repairBeginIndex
 );
 const repairGuardIndex = preReconciliationRepairSql.indexOf('do $ledger_guard$');
