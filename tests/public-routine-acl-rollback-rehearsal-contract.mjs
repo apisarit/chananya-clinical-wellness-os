@@ -128,7 +128,16 @@ for (const [mode, sql] of [
   assert.match(sql, /current_setting\('transaction_read_only'\)='on'/);
   assert.match(sql, /CNYOS_COMPLETE_ACL_REHEARSAL_INTERLOCK_INVALID/);
   assert.match(sql, /CNYOS_COMPLETE_ACL_REHEARSAL_PRELOCK_TARGET_INVALID/);
-  assert.match(sql, /pg_catalog\.host\(pg_catalog\.inet_server_addr\(\)\)/);
+  assert.doesNotMatch(
+    sql,
+    /pg_catalog\.host\(pg_catalog\.inet_server_addr\(\)\)<>/,
+    `${mode} SQL must not equate the provider-private backend address with the public service hostaddr`
+  );
+  assert.match(
+    sql,
+    /service-file inspection above binds the connection target/,
+    `${mode} SQL must bind the connection through the validated service file`
+  );
   assert.match(sql, /current_setting\('application_name'\)/);
   assert.match(sql, /CNYOS_COMPLETE_ACL_REHEARSAL_CLINIC_IDENTITY_INVALID/);
   assert.match(

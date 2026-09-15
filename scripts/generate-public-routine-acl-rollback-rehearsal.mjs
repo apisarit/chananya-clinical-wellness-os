@@ -297,7 +297,11 @@ ${bypassed}
      or current_setting('server_version_num')::integer / 10000 <> 17
      or current_setting('server_encoding')<>'UTF8'
      or current_setting('application_name')<>${sqlLiteral(profile.applicationName)}
-     or pg_catalog.host(pg_catalog.inet_server_addr())<>${sqlLiteral(profile.directHostAddress)}
+     -- The managed PostgreSQL backend reports its private interface here,
+     -- not the public hostaddr pinned in the direct service file.  The
+     -- service-file inspection above binds the connection target; comparing
+     -- inet_server_addr() to that public address would reject a valid TLS
+     -- direct connection behind the provider's network boundary.
      or v_system_identifier<>${sqlLiteral(profile.systemIdentifier)}
      ${profile.requireSsl ? `or not coalesce((
        select ssl from pg_catalog.pg_stat_ssl
@@ -598,7 +602,9 @@ begin
      or current_setting('transaction_read_only')<>'on'
      or current_setting('transaction_isolation')<>'repeatable read'
      or current_setting('application_name')<>${sqlLiteral(profile.applicationName)}
-     or pg_catalog.host(pg_catalog.inet_server_addr())<>${sqlLiteral(profile.directHostAddress)}
+     -- The managed PostgreSQL backend reports a private server address.  The
+     -- pinned direct service file (validated before this SQL runs) is the
+     -- authoritative host/hostaddr binding for this connection.
      ${requireSsl ? `or not coalesce((
        select ssl from pg_catalog.pg_stat_ssl
        where pid=pg_catalog.pg_backend_pid()
