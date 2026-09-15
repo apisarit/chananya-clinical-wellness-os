@@ -1394,6 +1394,16 @@ const repairWriteSearchPathIndex = preReconciliationRepairSql.indexOf(
   repairBeginIndex
 );
 const repairGuardIndex = preReconciliationRepairSql.indexOf('do $ledger_guard$');
+assert.match(
+  preReconciliationRepairSql.slice(repairBeginIndex, repairGuardIndex),
+  /set local search_path = pg_catalog, pg_temp;\n/,
+  'Chananya pre-reconciliation guard must use the observer-pinned catalog/temp path'
+);
+assert.doesNotMatch(
+  preReconciliationRepairSql.slice(repairBeginIndex, repairGuardIndex),
+  /set local search_path = pg_catalog, pg_temp, public;\n/,
+  'Chananya pre-reconciliation guard must not reintroduce public-schema deparsing'
+);
 const repairLiveAclInventoryBlockerIndex = preReconciliationRepairSql.indexOf(
   'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED'
 );
