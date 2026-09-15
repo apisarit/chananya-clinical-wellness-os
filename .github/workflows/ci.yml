@@ -57,6 +57,9 @@ jobs:
       - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
+      - name: Verify staged treatment-service invoice source boundary
+        run: npm run check:treatment-service-invoice
+
       - name: Verify read-only SQL and atomic ACL candidate behavior
         run: |
           node tests/migration-ledger-verification-contract.mjs
