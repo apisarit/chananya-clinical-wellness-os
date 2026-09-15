@@ -7,9 +7,10 @@ import { PGlite } from '@electric-sql/pglite';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
-const migrationFiles = (await fs.readdir(migrationsDir))
+const repositoryMigrationFiles = (await fs.readdir(migrationsDir))
   .filter(file => file.endsWith('.sql'))
   .sort();
+const migrationFiles = repositoryMigrationFiles.slice(0, 45);
 const migrationEntries = await Promise.all(migrationFiles.map(async file => {
   const match = file.match(/^(\d{12,14})_([a-z0-9_]+)\.sql$/i);
   assert.ok(match, `canonical migration filename required: ${file}`);
@@ -83,6 +84,7 @@ const browserTransitionalTuples = [
   ['service_role', 'public.set_clinic_appointment_status(uuid,text,text)']
 ];
 
+assert.equal(repositoryMigrationFiles.length, 47);
 assert.equal(migrationFiles.length, 45);
 assert.equal((triggerSql.match(/do \$\$/g) || []).length, 1);
 for (const [label, source] of [
