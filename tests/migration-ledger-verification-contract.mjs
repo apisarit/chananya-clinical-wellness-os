@@ -18,11 +18,11 @@ import {
   MIGRATION_LEDGER_ACL_PHASE_STRICT,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   buildMigrationLedgerRepairSql,
-  loadMigrationEntries
+  loadReviewedMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const entries = loadMigrationEntries(root);
+const entries = loadReviewedMigrationEntries(root);
 const revision = '2ebadf8f029da9febcba24b8335fd1c0275be964';
 const productionDatabaseName = 'postgres';
 const productionDatabaseRole = 'postgres';

@@ -10,7 +10,7 @@ import {
   REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   buildMigrationLedgerRepairSql,
-  loadMigrationEntries
+  loadReviewedMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 import {
   buildMigrationLedgerVerificationSql,
@@ -901,7 +901,7 @@ function assertSuccessfulVerificationEvidence(
   );
 }
 
-const entries = loadMigrationEntries(root);
+const entries = loadReviewedMigrationEntries(root);
 assert.equal(entries.length, 45, 'the psql fixture must load the reviewed 45 migrations');
 
 const loaderPath = await writeRuntimeFile('load-reviewed-schema.sql', [
