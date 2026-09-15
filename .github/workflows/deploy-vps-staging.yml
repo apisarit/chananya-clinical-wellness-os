@@ -17,6 +17,8 @@ jobs:
   prepare-staging-candidate:
     name: Build and retain exact staging candidate
     if: github.repository == 'apisarit/chananya-clinical-wellness-os' && github.ref == 'refs/heads/codex/vps-staging-candidate-20260915'
+    environment:
+      name: staging
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
