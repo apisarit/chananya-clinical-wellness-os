@@ -7,10 +7,13 @@ CSV or JSON with fixed columns. Arbitrary table names, columns, destinations,
 credentials and raw LINE payloads are not accepted.
 
 The current implementation is intentionally local/pure and does not upload to
-Google Drive or NAS. Google Drive backup remains encrypted `.cdb.json.enc`
-output; the NAS field remains configuration-only until a separately reviewed
-connector is implemented. A future authenticated owner endpoint may call this
-module after tenant, role, audit and destination checks are complete.
+Google Drive or NAS. In the Operations patient registry, `admin` and
+`super_admin` can select up to 100 visible patients and download CSV or JSON.
+The rows were already returned through the logged-in Supabase client and are
+projected to the fixed allowlist before the browser creates a download; no new
+database read or external request is made by the export action. Google Drive
+backup remains encrypted `.cdb.json.enc` output; the NAS field remains
+configuration-only until a separately reviewed connector is implemented.
 
 Run the contract test with:
 
