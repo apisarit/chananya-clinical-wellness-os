@@ -122,8 +122,8 @@ the stale `public.rls_auto_enable()` disposition with the current
 Staging runtime, ACL correction, backup/restore, and read-only migration
 reconciliation now have fresh evidence. Production remains blocked: the
 protected publisher/OIDC broker and independent human security sign-off are
-not established, and the Hostinger account currently visible cannot manage
-`cnyos.cloud` (the domain belongs to another Hostinger account). No merge or
+not established. The staging DNS record is now managed in the active
+Hostinger account; no apex or Production record was changed. No merge or
 Production deployment is authorized by this checkpoint.
 
 ## Custom staging hostname
