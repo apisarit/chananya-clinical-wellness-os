@@ -62,7 +62,7 @@ Use a clean checkout of the final reviewed `main` commit. GitHub CLI must alread
 Provide:
 
 1. A valid Netlify deploy token in the process environment variable `NETLIFY_AUTH_TOKEN`, supplied by your existing credential manager. Do not put it in command arguments or source files.
-2. A private JSON file containing the verified production tenant config, including its actual production database, clinic identity, branding and `https://cnyos.netlify.app` auth origin.
+2. A private JSON file containing the verified production tenant config, including its actual production database, clinic identity, branding and `https://cnyos.cloud` auth origin.
 3. A private JSON file containing genuine external approval and evidence for all 16 release gates, matching that exact commit. Follow `docs/RELEASE_GATE_RECOVERY.md`; an unapproved draft is rejected.
 
 Inspect a plan with those input files, then apply:

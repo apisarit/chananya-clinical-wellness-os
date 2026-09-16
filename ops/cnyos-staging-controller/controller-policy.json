@@ -23,7 +23,7 @@
     "authRedirectOrigin": "https://cnyos.netlify.app"
   },
   "productionDenylist": {
-    "netlifyOrigin": "https://chananya.netlify.app",
+    "netlifyOrigin": "https://cnyos.cloud",
     "supabaseProjectRef": "qptxnrldzzinlcabudjv",
     "supabaseOrigin": "https://qptxnrldzzinlcabudjv.supabase.co",
     "clinicId": "00000000-0000-0000-0000-000000000001",
