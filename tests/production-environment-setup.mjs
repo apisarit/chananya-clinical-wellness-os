@@ -9,9 +9,12 @@ import { prepareProductionAttestation } from '../scripts/verify-production-promo
 const read = file => JSON.parse(fs.readFileSync(new URL(`../${file}`, import.meta.url)));
 const readiness = read('release-readiness.json');
 const stagingConfig = read('config/tenant.cnyos-staging.json');
+const productionSource = read('config/tenant.chananya.json');
 const commit = 'a'.repeat(40);
 assert.equal(target.origin, 'https://cnyos.cloud');
 assert.equal(target.hostname, 'cnyos.cloud');
+assert.equal(productionSource.auth.redirectOrigin, target.origin);
+assert.notEqual(stagingConfig.auth.redirectOrigin, target.origin);
 const token = 'TEST_ONLY_NETLIFY_TOKEN_NEVER_USE';
 const config = read('config/tenant.example.json');
 config.deploymentId = 'cnyos-production';
