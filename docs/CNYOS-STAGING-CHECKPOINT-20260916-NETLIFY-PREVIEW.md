@@ -125,3 +125,17 @@ protected publisher/OIDC broker and independent human security sign-off are
 not established, and the Hostinger account currently visible cannot manage
 `cnyos.cloud` (the domain belongs to another Hostinger account). No merge or
 Production deployment is authorized by this checkpoint.
+
+## Custom staging hostname
+
+After the domain was moved into the active Hostinger account, the DNS zone was
+updated with one staging-only record: `A staging → 76.13.208.39` (TTL 14400).
+Authoritative DNS (`cosmos.dns-parking.com`, `nova.dns-parking.com`, Google, and
+Cloudflare resolvers) returns that address. Caddy now serves both
+`srv1506007.hstgr.cloud` and `staging.cnyos.cloud` from the same guarded route;
+configuration validation/reload passed and HTTPS checks with the new hostname
+return HTTP 200 for `/`, `/healthz`, `/login.html`, and `/luopan.html`.
+
+The local browser may continue showing `ERR_NAME_NOT_RESOLVED` until its DNS
+cache refreshes. The apex `cnyos.cloud` and `www.cnyos.cloud` records were not
+changed and remain outside this staging deployment.
