@@ -34,7 +34,7 @@ window.CLINICAL_OS_CONFIG = Object.freeze({
     "publishableKey": "sb_publishable_YCIY8LZeCfRgcSZYgmP6JA_r9OVbpcJ"
   },
   "auth": {
-    "redirectOrigin": "https://chananya.netlify.app",
+    "redirectOrigin": "https://cnyos.cloud",
     "provider": "google"
   },
   "identity": {

@@ -10,6 +10,8 @@ const read = file => JSON.parse(fs.readFileSync(new URL(`../${file}`, import.met
 const readiness = read('release-readiness.json');
 const stagingConfig = read('config/tenant.cnyos-staging.json');
 const commit = 'a'.repeat(40);
+assert.equal(target.origin, 'https://cnyos.cloud');
+assert.equal(target.hostname, 'cnyos.cloud');
 const token = 'TEST_ONLY_NETLIFY_TOKEN_NEVER_USE';
 const config = read('config/tenant.example.json');
 config.deploymentId = 'cnyos-production';
