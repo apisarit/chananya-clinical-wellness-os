@@ -32,6 +32,7 @@
     "check:membership-native": "node tests/staff-membership-native-recovery.mjs",
     "staging:line": "node scripts/verify-line-staging.mjs",
     "staging:uat": "node scripts/run-staging-synthetic-uat.mjs",
+    "check:synthetic-buffer": "node scripts/validate-ollama-synthetic-buffer.mjs check",
     "staging:smoke:locked": "node scripts/verify-locked-staging.mjs",
     "staging:materialize-functions": "node scripts/materialize-staging-functions.mjs",
     "check:evidence": "node tests/evidence-ui-contract.mjs && node tests/evidence-search-contract.mjs",
