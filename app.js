@@ -15,6 +15,7 @@
   let role = 'viewer';
   let lockTimer;
   let patientFilter = '';
+  const selectedPatientIds = new Set();
   let editingPatientId = null;
   let hybridDatabaseReady = false;
   let lineIdentityReady = false;
@@ -151,11 +152,40 @@
       const allergies = activeAllergies(item.id).map(allergy => allergy.allergen_name).join(' ');
       return !term || [item.hn, patientName(item.id), item.phone, allergies].some(value => String(value || '').toLowerCase().includes(term));
     });
-    $('#patient-list').innerHTML = rows.slice(0, 200).map(item => {
+    const visibleRows = rows.slice(0, 200);
+    for (const id of selectedPatientIds) if (!data.patients.some(item => item.id === id)) selectedPatientIds.delete(id);
+    $('#patient-export').hidden = !['admin', 'super_admin'].includes(role);
+    $('#patient-export-count').textContent = selectedPatientIds.size;
+    $('#patient-list').innerHTML = visibleRows.map(item => {
       const allergies = activeAllergies(item.id);
       const canLink = lineIdentityReady && window.ChananyaRuntime.can(profile, 'patient_identity_link');
-      return `<article class="item"><div><b>${esc(item.hn)} • ${esc(patientName(item.id))}</b><small>${esc(item.phone || 'ไม่มีโทรศัพท์')}${allergies.length ? ` • แพ้: ${esc(allergies.map(allergy => allergy.allergen_name).join(', '))}` : ''}</small></div><div class="actions"><span class="badge">${esc(item.payment_right || 'ทั่วไป')}</span>${canLink ? `<button class="btn ghost" data-link-patient="${esc(item.id)}">เชื่อม LINE</button>` : ''}${canView('patients') ? `<button class="btn ghost" data-edit-patient="${esc(item.id)}">แก้ไข</button>` : ''}</div></article>`;
+      const exportControl = ['admin', 'super_admin'].includes(role)
+        ? `<label class="check-row" title="เลือกรายการสำหรับ export"><input type="checkbox" data-export-patient="${esc(item.id)}"${selectedPatientIds.has(item.id) ? ' checked' : ''}>เลือก</label>`
+        : '';
+      return `<article class="item"><div><b>${esc(item.hn)} • ${esc(patientName(item.id))}</b><small>${esc(item.phone || 'ไม่มีโทรศัพท์')}${allergies.length ? ` • แพ้: ${esc(allergies.map(allergy => allergy.allergen_name).join(', '))}` : ''}</small></div><div class="actions">${exportControl}<span class="badge">${esc(item.payment_right || 'ทั่วไป')}</span>${canLink ? `<button class="btn ghost" data-link-patient="${esc(item.id)}">เชื่อม LINE</button>` : ''}${canView('patients') ? `<button class="btn ghost" data-edit-patient="${esc(item.id)}">แก้ไข</button>` : ''}</div></article>`;
     }).join('') || '<p class="muted">ไม่พบผู้รับบริการ</p>';
+    // Avoid retaining selections that are no longer in the current dataset.
+    for (const id of selectedPatientIds) if (!data.patients.some(item => item.id === id)) selectedPatientIds.delete(id);
+  }
+
+  function downloadSelectedPatients() {
+    if (!['admin', 'super_admin'].includes(role)) throw new Error('บัญชีนี้ไม่มีสิทธิ์ Export ผู้รับบริการ');
+    const ids = [...selectedPatientIds];
+    if (ids.length < 1) throw new Error('กรุณาเลือกรายการผู้รับบริการก่อน Export');
+    if (ids.length > 100) throw new Error('Export ได้ไม่เกิน 100 รายการต่อครั้ง');
+    const rows = ids.map(id => data.patients.find(item => item.id === id)).filter(Boolean)
+      .map(item => window.CnyosSelectedExport.projectPatient(item));
+    const format = $('#patient-export-format').value;
+    const body = format === 'json'
+      ? `${JSON.stringify(rows, null, 2)}\n`
+      : window.CnyosSelectedExport.patientCsv(rows);
+    const blob = new Blob([body], { type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `cnyos-patients-selected-${new Date().toISOString().replace(/[:.]/g, '-')}.${format}`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    toast(`ดาวน์โหลด ${rows.length} รายการแล้ว (ข้อมูลยังอยู่ในเครื่องนี้)`);
   }
 
   function billingOrders() { return data.dispensing.filter(order => order.status === 'submitted_to_billing'); }
@@ -491,6 +521,35 @@
     if (editButton) beginPatientEdit(editButton.dataset.editPatient);
     const linkButton = event.target.closest('[data-link-patient]');
     if (linkButton) openIdentityLinkDialog(linkButton.dataset.linkPatient).catch(fail);
+  });
+  $('#patient-list').addEventListener('change', event => {
+    const checkbox = event.target.closest('[data-export-patient]');
+    if (!checkbox) return;
+    if (checkbox.checked) {
+      if (selectedPatientIds.size >= 100) {
+        checkbox.checked = false;
+        return toast('เลือกได้ไม่เกิน 100 รายการต่อครั้ง');
+      }
+      selectedPatientIds.add(checkbox.dataset.exportPatient);
+    } else selectedPatientIds.delete(checkbox.dataset.exportPatient);
+    $('#patient-export-count').textContent = selectedPatientIds.size;
+  });
+  $('#patient-export-all').addEventListener('click', () => {
+    const visible = [...document.querySelectorAll('[data-export-patient]')];
+    const remaining = 100 - selectedPatientIds.size;
+    if (visible.filter(input => !selectedPatientIds.has(input.dataset.exportPatient)).length > remaining) {
+      return toast('เลือกได้ไม่เกิน 100 รายการต่อครั้ง');
+    }
+    visible.forEach(input => { input.checked = true; selectedPatientIds.add(input.dataset.exportPatient); });
+    $('#patient-export-count').textContent = selectedPatientIds.size;
+  });
+  $('#patient-export-clear').addEventListener('click', () => {
+    selectedPatientIds.clear();
+    document.querySelectorAll('[data-export-patient]').forEach(input => { input.checked = false; });
+    $('#patient-export-count').textContent = '0';
+  });
+  $('#patient-export-download').addEventListener('click', () => {
+    try { downloadSelectedPatients(); } catch (error) { fail(error); }
   });
   $('#patient-form').addEventListener('submit', event => savePatient(event).catch(fail));
   $('#patient-cancel').addEventListener('click', resetPatientForm);
