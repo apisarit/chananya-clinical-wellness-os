@@ -137,6 +137,12 @@ assert.match(legacyLogin, /auth-login\.js/);
 assert.match(callback, /auth-callback\.js/);
 assert.match(read('auth-login.js'), /detectSessionInUrl:\s*false/);
 assert.match(read('auth-callback.js'), /exchangeCodeForSession/);
+assert.match(read('auth-login.js'), /redirectOrigin/);
+assert.match(read('auth-callback.js'), /cnyos\.netlify\.app[\s\S]*cnyos\.cloud/);
+assert.match(read('app-shell.js'), /redirectProductionAlias/);
+const clinicalMarkup = read('clinical-v3.html');
+assert.match(clinicalMarkup, /id="enc-temp" type="text" inputmode="decimal"/);
+assert.match(read('clinical-v3.js'), /replace\(',', '\.'\)/);
 
 const netlify = read('netlify.toml');
 const cspMatch = netlify.match(/Content-Security-Policy = "([^"]+)"/);

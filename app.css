@@ -162,6 +162,7 @@ main { width: min(100%, 1440px); margin: 0 auto; padding: clamp(16px, 2.4vw, 30p
 .form, .opd-grid, .bm-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
 .full { grid-column: 1 / -1; }
 label { min-width: 0; display: grid; gap: 6px; color: #39473f; font-size: .78rem; font-weight: 760; }
+label .field-help { color: var(--muted); font-size: .72rem; font-weight: 500; }
 .check-row { display: flex; align-items: center; gap: 8px; }
 input, select, textarea { width: 100%; min-width: 0; border: 1px solid #d5dfda; border-radius: 11px; padding: 10px 11px; color: var(--ink); background: #fff; outline: none; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
 input:focus, select:focus, textarea:focus { border-color: var(--forest-700); box-shadow: 0 0 0 3px rgba(33,99,77,.12); }

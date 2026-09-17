@@ -23,6 +23,19 @@
     || !featureByRoute[route.key] || window.CLINICAL_OS_CONFIG.features.includes(featureByRoute[route.key]))
     && (!route.capability || Boolean(window.ChananyaRuntime?.can(profile, route.capability)));
 
+  function redirectProductionAlias() {
+    const config = window.CLINICAL_OS_CONFIG || {};
+    const targetOrigin = String(config.auth?.redirectOrigin || '').trim();
+    if (config.deploymentId !== 'chananya-clinical-production'
+      || location.hostname !== 'cnyos.netlify.app'
+      || targetOrigin !== 'https://cnyos.cloud') return;
+    const target = new URL(targetOrigin);
+    target.pathname = location.pathname;
+    target.search = location.search;
+    target.hash = location.hash;
+    location.replace(target.href);
+  }
+
   function routeMarkup(route, active) {
     return `<a href="${route.href}"${route.key === active ? ' aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${route.icon}</span><span class="nav-copy"><b>${esc(route.label)}</b><small>${esc(route.note)}</small></span></a>`;
   }
@@ -71,5 +84,6 @@
   }
 
   document.addEventListener('keydown', event => { if (event.key === 'Escape') setMenu(false); });
+  redirectProductionAlias();
   window.ChananyaShell = Object.freeze({ routes, mount, setMenu });
 })();

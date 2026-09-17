@@ -16,6 +16,13 @@
 
   async function exchangeAuthorizationCode() {
     const config = window.CHANANYA_AUTH || {};
+    if (location.hostname === 'cnyos.netlify.app' && String(config.redirectTo || '').trim() === 'https://cnyos.cloud') {
+      const target = new URL('https://cnyos.cloud/auth-callback.html');
+      target.search = location.search || '';
+      target.hash = location.hash || '';
+      location.replace(target.href);
+      return;
+    }
     const url = config.url || config.supabaseUrl;
     const key = config.anonKey || config.publishableKey;
     if (!window.supabase || !url || !key) throw new Error('ไม่พบ Supabase configuration');

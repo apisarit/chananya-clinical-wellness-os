@@ -4,7 +4,12 @@
   const $ = selector => document.querySelector(selector);
   const $$ = selector => [...document.querySelectorAll(selector)];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const num = value => value === '' || value == null ? null : Number(value);
+  const num = value => {
+    const normalized = String(value ?? '').trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   const csv = value => String(value || '').split(',').map(item => item.trim()).filter(Boolean);
 
   let db;
