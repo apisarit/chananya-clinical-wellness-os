@@ -5,8 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   assertRuntimeWorktreeMatchesGit,
+  applyProductionDomainRedirect,
   buildNetlifyPublish,
-  isPublicRuntimeRootFile
+  isPublicRuntimeRootFile,
+  PRODUCTION_DOMAIN_REDIRECT
 } from '../scripts/build-netlify-publish.mjs';
 import { GENERATED_CONFIG_DIRECTORY } from '../scripts/generate-tenant-config.mjs';
 
@@ -17,6 +19,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 assert.match(netlifyToml, /publish\s*=\s*"dist"/, 'Netlify must publish only the generated dist directory');
 assert.doesNotMatch(netlifyToml, /publish\s*=\s*"\."/, 'repository root must never be the Netlify publish directory');
 assert.match(packageJson.scripts.build, /build-netlify-publish\.mjs/, 'build must generate the restricted runtime publish surface');
+assert.doesNotMatch(netlifyToml, /cnyos\.netlify\.app[\s\S]*cnyos\.cloud/, 'canonical redirect must not be global');
 
 for (const file of [
   'index.html',
@@ -68,13 +71,20 @@ try {
     const destination = ['tenant-config.js', 'brand-config.js', 'deploy-manifest.json'].includes(name)
       ? path.join(generated, name)
       : path.join(fixture, name);
-    fs.writeFileSync(destination, name === 'deploy-manifest.json' ? '{}' : `fixture:${name}`);
+    fs.writeFileSync(
+      destination,
+      name === 'deploy-manifest.json'
+        ? JSON.stringify({ build: { deploymentClass: 'production' } })
+        : `fixture:${name}`
+    );
     if (!['tenant-config.js', 'brand-config.js', 'deploy-manifest.json'].includes(name)) {
       sourceFiles.set(name, Buffer.from(`fixture:${name}`));
     }
   }
   fs.writeFileSync(path.join(fixture, '_headers'), 'fixture headers');
   sourceFiles.set('_headers', Buffer.from('fixture headers'));
+  fs.writeFileSync(path.join(fixture, '_redirects'), '/  /index.html  200\n');
+  sourceFiles.set('_redirects', Buffer.from('/  /index.html  200\n'));
   fs.writeFileSync(path.join(fixture, '.env.example'), 'SHOULD_NOT_DEPLOY=true');
   fs.writeFileSync(path.join(fixture, 'npm-debug.log.js'), 'ignored backdoor candidate');
   fs.writeFileSync(path.join(fixture, 'release-readiness.json'), '{"commercialProductionReady":false}');
@@ -99,6 +109,26 @@ try {
   assert.ok(manifest.integrity.every(item => /^[0-9a-f]{64}$/.test(item.sha256)));
   assert.equal(fs.existsSync(generated), false, 'temporary generated config directory must be removed');
   assert.equal(manifest.files.includes('.env.example'), false);
+  const productionRedirects = fs.readFileSync(path.join(fixture, 'dist', '_redirects'), 'utf8');
+  assert.match(
+    productionRedirects,
+    new RegExp(PRODUCTION_DOMAIN_REDIRECT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  );
+
+  const stagingFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'cnyos-staging-publish-'));
+  try {
+    fs.writeFileSync(path.join(stagingFixture, '_redirects'), '/  /index.html  200\n');
+    await applyProductionDomainRedirect({
+      target: stagingFixture,
+      deployment: { build: { deploymentClass: 'dedicated-staging' } }
+    });
+    assert.doesNotMatch(
+      fs.readFileSync(path.join(stagingFixture, '_redirects'), 'utf8'),
+      /cnyos\.cloud/
+    );
+  } finally {
+    fs.rmSync(stagingFixture, { recursive: true, force: true });
+  }
 
   fs.writeFileSync(path.join(fixture, 'app.js'), 'generated-but-not-committed');
   await assert.rejects(
