@@ -196,6 +196,36 @@ export function classifyDeployment(env = process.env) {
   return 'local';
 }
 
+/**
+ * A Netlify production build must only be created by the guarded release
+ * workflow.  Netlify's normal branch auto-publish path also sets CONTEXT to
+ * production, so relying on CONTEXT alone can publish a staging-configured
+ * artifact.  Keep the check here, before any files are written, and require
+ * the same immutable inputs that production-netlify-deploy.yml supplies.
+ */
+export function assertProductionBuildInputs(env = process.env) {
+  if (classifyDeployment(env) !== 'production') return;
+
+  if (env.CLINICAL_OS_REQUIRE_SOURCE_COMMIT !== 'true') {
+    throw new Error('PRODUCTION_BUILD_REQUIRES_GUARDED_WORKFLOW');
+  }
+
+  const commit = String(
+    env.CLINICAL_OS_SOURCE_COMMIT || env.COMMIT_REF || env.GITHUB_SHA || ''
+  ).trim();
+  if (!/^[0-9a-f]{40}$/i.test(commit)) {
+    throw new Error('PRODUCTION_BUILD_REQUIRES_EXACT_SOURCE_COMMIT');
+  }
+
+  if (!String(env.CLINICAL_OS_PRODUCTION_CONFIG_JSON || env.CLINICAL_OS_PRODUCTION_CONFIG_PATH || '').trim()) {
+    throw new Error('PRODUCTION_BUILD_REQUIRES_PRODUCTION_CONFIG');
+  }
+
+  if (!String(env.PRODUCTION_RELEASE_ATTESTATION_JSON || '').trim()) {
+    throw new Error('PRODUCTION_BUILD_REQUIRES_RELEASE_ATTESTATION');
+  }
+}
+
 function stagingDatabaseExplicitlyAcknowledged(config, env, deploymentClass) {
   const enabled = config.safety?.previewLocked === false &&
     Boolean(config.database?.url) &&
@@ -353,6 +383,7 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
 }
 
 function main() {
+  assertProductionBuildInputs(process.env);
   const config = loadTenantConfig();
   const buildTimestamp = String(process.env.CLINICAL_OS_BUILD_TIMESTAMP || '').trim();
   const manifest = buildDeployManifest(config, process.env, buildTimestamp || new Date());
