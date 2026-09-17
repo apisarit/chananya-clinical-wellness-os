@@ -73,6 +73,23 @@ an independent reviewer verifies the complete routine classification, hosted
 concurrency assumptions, fresh observer protocol, migration-ledger treatment,
 rollback rehearsal, and exact post-commit observation.
 
+## Production artifact fail-closed additions
+
+After the accidental Netlify auto-publish was rolled back to the prior
+production deploy, two local commits add release-surface checks. These are
+review material, not deployment authorization:
+
+- `d8ae412` makes a `CONTEXT=production` build fail unless it is running from
+  the guarded workflow with an exact source commit, explicit production config,
+  and `PRODUCTION_RELEASE_ATTESTATION_JSON`.
+- `5846e51` makes the public deployment verifier reject staging markers in the
+  deployment ID, clinic code, or QR issuer even if the manifest claims
+  `deploymentClass=production`.
+
+Both changes pass the complete local contract suite. They have not been
+published or merged after this handoff and require independent review before
+use in a production release.
+
 ## Required independent review actions
 
 - Re-run the read-only observer against the exact source commit and staging
