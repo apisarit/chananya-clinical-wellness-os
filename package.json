@@ -45,7 +45,9 @@
     "check:vps-staging-deploy": "node --test tests/vps-staging-deployment-contract.mjs tests/vps-staging-config-materializer.mjs",
     "check:platform": "node --experimental-loader=./tests/plain-mts-loader.mjs tests/platform-console.mjs",
     "check:who-icd": "node tests/who-icd-contract.mjs",
-    "check:selected-export": "node tests/selected-export-contract.mjs"
+    "check:selected-export": "node tests/selected-export-contract.mjs",
+    "check:ollama-local": "node tests/ollama-local-wrapper-contract.mjs",
+    "review:ollama": "bash scripts/ollama-qwen-review.sh"
   },
   "dependencies": {
     "@netlify/blobs": "10.7.13",
