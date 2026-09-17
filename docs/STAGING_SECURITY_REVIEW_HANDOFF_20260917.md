@@ -10,7 +10,8 @@ any production gate as passed.
 ## Exact source and target
 
 - Source checkout: `codex/production-guard-20260917`
-- Source commit: `c748068c23bfd54446d2c55cca1c0ec02b4a8818` at this handoff.
+- Source commit: `c748068c23bfd54446d2c55cca1c0ec02b4a8818` at this handoff
+  snapshot. The later metadata-only handoff refresh is `1970e9a0d342361bc6661d93c896f37e0f979f76`.
   A reviewer must independently re-check `git rev-parse HEAD` and record the
   exact post-handoff commit in the protected evidence store.
 - Staging Supabase project: `hsmnjwxurlmsizndjlun` (`chananya-clinical-staging`)
@@ -89,8 +90,9 @@ review material, not deployment authorization:
 
 Both changes pass the complete local contract suite. They have not been
 merged to `main` and require independent review before use in a production
-release. They are published only on review PR #42, whose head is the exact
-commit above; the Netlify deploy-preview is not a production deployment.
+release. They are published only on review PR #42; its current exact head is
+recorded in the PR metadata and must be re-verified before review. The Netlify
+deploy-preview is not a production deployment.
 
 ## PostgreSQL 17 rollback-harness correction
 
