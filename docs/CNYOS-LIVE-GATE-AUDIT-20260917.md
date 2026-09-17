@@ -63,3 +63,20 @@ chat. The explanatory card/help text was clarified in the candidate commit.
 
 Until these external artifacts exist, `release-readiness.json` must remain
 `commercialProductionReady: false` and all 16 gates must remain `pending`.
+
+The repository now includes a read-only fail-closed check for the eventual
+Production runtime. After the Production artifact and secrets are configured,
+run it with the exact expected identity (never with secrets in the command):
+
+```bash
+CNYOS_LIVE_CHECK_ACK=READ_ONLY_RUNTIME_CHECK \
+CNYOS_LIVE_ORIGIN=https://cnyos.cloud \
+CNYOS_LIVE_EXPECTED_DEPLOYMENT_ID=chananya-clinical-production \
+CNYOS_LIVE_EXPECTED_CLINIC_CODE=CHANANYA-PRD \
+CNYOS_LIVE_EXPECTED_REDIRECT_ORIGIN=https://cnyos.cloud \
+npm run verify:live-line
+```
+
+It must reject the current public staging artifact and will only write a
+redacted capability evidence file after identity, redirect, LINE enablement,
+and no-PHI chat checks all pass.
