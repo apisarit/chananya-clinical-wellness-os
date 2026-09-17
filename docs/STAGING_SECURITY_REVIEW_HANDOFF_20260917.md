@@ -10,7 +10,7 @@ any production gate as passed.
 ## Exact source and target
 
 - Source checkout: `codex/production-guard-20260917`
-- Source commit: `3190c6c176dab5fc4181630bc3c6707762ac7e99` at this handoff.
+- Source commit: `f179f519d2233462ca70e0c9a5b6677a4bc3e939` at this handoff.
   A reviewer must independently re-check `git rev-parse HEAD` and record the
   exact post-handoff commit in the protected evidence store.
 - Staging Supabase project: `hsmnjwxurlmsizndjlun` (`chananya-clinical-staging`)
