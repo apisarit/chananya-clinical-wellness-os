@@ -42,6 +42,23 @@
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
+  // This is deliberately an in-memory reviewer aid. It must never become a
+  // second source of truth or imply that checking a box is release approval.
+  function setupLiveChecklist() {
+    const form = $('#live-prelaunch-checklist-form');
+    if (!form) return;
+    const checks = $$('[data-live-check]');
+    const progress = $('#live-check-progress');
+    const update = () => {
+      const checked = checks.filter(input => input.checked).length;
+      if (progress) progress.textContent = `${checked}/${checks.length} checked`;
+      form.dataset.complete = String(checked === checks.length);
+    };
+    checks.forEach(input => input.addEventListener('change', update));
+    form.addEventListener('reset', () => queueMicrotask(update));
+    update();
+  }
+
   document.addEventListener('click', event => {
     const route = event.target.closest('[data-review-route]');
     if (route) {
@@ -55,5 +72,6 @@
 
   window.addEventListener('hashchange', () => activate(location.hash.slice(1), false));
   document.addEventListener('keydown', event => { if (event.key === 'Escape') setMenu(false); });
+  setupLiveChecklist();
   activate(location.hash.slice(1), false);
 })();

@@ -62,6 +62,27 @@
             <div class="section-heading"><span class="section-number">GATE</span><div><h2>ยังไม่ใช่ Commercial Production 100%</h2><p>ห้ามประกาศพร้อมขาย/พร้อมใช้จริงจนกว่าหลักฐานด้านล่างผ่านครบ</p></div></div>
             <div class="coverage-grid"><div><b>Authenticated staging ทุก role</b><span class="coverage-state pending">ยังไม่ผ่านหลักฐาน</span></div><div><b>LINE callback จริง</b><span class="coverage-state pending">ยังไม่ทดสอบครบ</span></div><div><b>Encrypted backup + restore drill</b><span class="coverage-state pending">ยังไม่ทำ drill</span></div><div><b>Privacy / Security / Legal review</b><span class="coverage-state pending">ยังไม่อนุมัติ</span></div></div>
           </section>
+          <section class="card space-top-md live-checklist-card" id="live-prelaunch-checklist" data-local-only="true" aria-labelledby="live-prelaunch-checklist-title">
+            <div class="section-heading"><span class="section-number">✓</span><div><h2 id="live-prelaunch-checklist-title">Live pre-launch checklist</h2><p>ติ๊กเมื่อสังเกตหน้าเว็บจริงแล้วเท่านั้น สถานะนี้อยู่ในหน้านี้ชั่วคราว ไม่บันทึก ไม่ส่ง API และไม่ใช่การอนุมัติ deploy</p></div></div>
+            <div class="live-checklist-summary" role="status" aria-live="polite"><strong id="live-check-progress">0/11 checked</strong><span>ตรวจแล้วต้องแนบหลักฐาน route, role, commit และเวลาทดสอบให้ผู้ตรวจอิสระ</span></div>
+            <form class="live-checklist-form" id="live-prelaunch-checklist-form" novalidate>
+              <fieldset>
+                <legend>เส้นทางที่ต้องตรวจทีละหน้า</legend>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/"><span><b>Operations</b><small>/</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/appointments.html"><span><b>Appointments</b><small>/appointments.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/check-in.html"><span><b>LINE / HN check-in</b><small>/check-in.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/foundation.html"><span><b>Knowledge foundation</b><small>/foundation.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/clinical-v3.html?step=history"><span><b>Clinical history</b><small>/clinical-v3.html?step=history</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/outcomes.html"><span><b>Clinical outcomes</b><small>/outcomes.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/pharmacy.html"><span><b>Pharmacy</b><small>/pharmacy.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/production.html"><span><b>Production / inventory</b><small>/production.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/quality.html"><span><b>Independent quality</b><small>/quality.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/admin.html"><span><b>Admin / audit</b><small>/admin.html</small></span></label>
+                <label class="live-check-row"><input type="checkbox" data-live-check data-live-check-path="/owner-control.html"><span><b>Owner control</b><small>/owner-control.html</small></span></label>
+              </fieldset>
+              <button class="btn ghost" type="reset">ล้างเครื่องหมายในหน้านี้</button>
+            </form>
+          </section>
         </section>
 
         <section class="review-workspace" id="review-appointments" data-review-workspace="appointments" hidden>

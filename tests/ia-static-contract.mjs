@@ -84,6 +84,14 @@ for (const gate of ['Authenticated staging ทุก role', 'LINE callback จ�
 assert.match(platformReview, /ปิตตะ 42 \/ วาตะ 80 \/ เสมหะ 20[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must not claim complete disease coverage');
 assert.match(platformReview, /รูปธาตุ 42 \/ อวัยวะแผนไทย[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must disclose incomplete rupa-dhatu coverage');
 assert.match(platformReview, /Clinical outcome timeline/, 'platform review must expose the restored outcomes timeline');
+assert.match(platformReview, /id="live-prelaunch-checklist"[^>]*data-local-only="true"/, 'platform review must expose a local-only live checklist');
+const liveChecklist = platformReview.match(/<section[^>]*id="live-prelaunch-checklist"[\s\S]*?<\/section>/)?.[0] ?? '';
+assert.ok(liveChecklist, 'platform review must contain the live checklist section');
+assert.doesNotMatch(liveChecklist, /supabase|auth-config|fetch\s*\(/i, 'live checklist must remain credential-free and non-networked');
+for (const route of ['/', '/appointments.html', '/check-in.html', '/foundation.html', '/clinical-v3.html?step=history', '/outcomes.html', '/pharmacy.html', '/production.html', '/quality.html', '/admin.html', '/owner-control.html']) {
+  assert.match(liveChecklist, new RegExp(`data-live-check-path=["']${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`), `live checklist should include ${route}`);
+}
+assert.doesNotMatch(platformReviewSource, /fetch\s*\(|XMLHttpRequest|supabase|localStorage|sessionStorage/i, 'live checklist controller must remain credential-free and non-persistent');
 const platformReviewIds = [...platformReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(platformReviewIds).size, platformReviewIds.length, 'platform review should not contain duplicate IDs');
 const coverageManifest = read('docs/PLATFORM_COVERAGE_AND_RELEASE_GATES.md');

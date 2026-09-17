@@ -470,6 +470,19 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 .coverage-state.pending, .coverage-state.missing, .coverage-state.blocked { color: var(--danger); background: var(--danger-soft); }
 .release-gate-card { border-color: #e9c4bc; background: linear-gradient(135deg,#fff,#fff8f6); }
 .release-gate-card .section-number { color: var(--danger); border-color: #e9c4bc; background: var(--danger-soft); }
+.live-checklist-card { border-color: #b9d8cc; background: linear-gradient(135deg,#fff,#f4fbf7); }
+.live-checklist-card .section-number { color: var(--forest-800); border-color: #b9d8cc; background: var(--forest-50); }
+.live-checklist-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; margin: 0 0 14px; padding: 11px 13px; border: 1px solid #cfe3d8; border-radius: 11px; color: var(--forest-800); background: #f5fbf7; }
+.live-checklist-summary strong { font-size: 1.05rem; }
+.live-checklist-summary span { color: var(--muted); font-size: .82rem; }
+.live-checklist-form fieldset { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin: 0 0 14px; padding: 0; border: 0; }
+.live-checklist-form legend { width: 100%; margin-bottom: 8px; color: var(--forest-950); font-weight: 700; }
+.live-check-row { display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); cursor: pointer; }
+.live-check-row input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--forest-800); }
+.live-check-row span { display: grid; gap: 3px; min-width: 0; }
+.live-check-row small { color: var(--muted); overflow-wrap: anywhere; }
+.live-check-row:has(input:checked) { border-color: #8fc3a8; background: #eef9f1; }
+@media (max-width: 600px) { .live-checklist-form fieldset { grid-template-columns: 1fr; } }
 
 /* Clinical outcomes */
 .outcomes-hero h2, .outcomes-hero p { position: relative; z-index: 1; }
