@@ -77,6 +77,7 @@ for (const [name, workflow] of [['promotion', promotionWorkflow], ['deploy', dep
   assert.match(workflow, /secrets\.PRODUCTION_RELEASE_ATTESTATION_JSON/, `${name} workflow must load protected external attestation`);
   assert.match(workflow, /RELEASE_GATE_EVIDENCE_DIR:/, `${name} workflow must retain gate diagnostics when attestation is absent`);
   assert.match(workflow, /npm run verify:production-promotion/, `${name} workflow must validate external exact-commit approval`);
+  assert.doesNotMatch(workflow, /cnyos\.netlify\.app/, `${name} workflow must not target the legacy Netlify hostname`);
 }
 
 console.log('Production release attestation contract passed: protected external exact-commit approval avoids Git self-reference and keeps real data blocked');
