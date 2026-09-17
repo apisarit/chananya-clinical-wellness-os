@@ -35,6 +35,26 @@ The five fixtures are synthetic staging records, not real patients. No source
 change in this handoff authorizes importing them into `patients`, `encounters`,
 or any production table.
 
+### Live buffer snapshot (staging only)
+
+The latest read-only query against project `hsmnjwxurlmsizndjlun` observed:
+
+```text
+total_rows=5
+active_rows=5
+event_rows=5
+case_keys=TEST-001,TEST-002,TEST-003,TEST-004,TEST-005
+versions=1,1,1,1,1
+```
+
+The `public.edit_staging_test_case`, `public.remove_staging_test_case`, and
+`public.restore_staging_test_case` wrappers are `SECURITY INVOKER` functions.
+The authenticated role has no direct table UPDATE privilege but has EXECUTE on
+those wrappers; the `anon` role has neither direct table access nor wrapper
+EXECUTE. The editor guard still requires an authenticated `admin` or
+`super_admin` session. This snapshot is evidence that the editable buffer is
+persisted, not evidence of a production approval or of real-patient data.
+
 ## Read-only security observations
 
 The current staging advisor snapshot reports:
