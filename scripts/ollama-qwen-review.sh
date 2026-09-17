@@ -100,4 +100,7 @@ done
 
 # Keep the invocation local. Never pipe model output to a shell, git, SQL
 # client, or deployment command.
-OLLAMA_NO_CLOUD=1 ollama run "$model" <<<"$request"
+# Keep routine reviews token-efficient and quiet. A caller can still override
+# the model through OLLAMA_MODEL, but this wrapper never enables cloud access
+# or thinking traces by default.
+OLLAMA_NO_CLOUD=1 ollama run "$model" --think=false --hidethinking --nowordwrap <<<"$request"
