@@ -173,6 +173,20 @@ export const REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST = Object.freeze({
 const reviewedMigrationManifestSha256 =
   'b21bf64a89aaa01cf757a14c74dcbd02caa5c7dfb6e43bc2215bbd70291a1e0a';
 const reviewedMigrationManifestCount = 45;
+export const DECLARED_POST_BASELINE_MIGRATIONS = Object.freeze([
+  Object.freeze({
+    version: '20260913125900',
+    name: 'treatment_service_invoice',
+    file: '20260913125900_treatment_service_invoice.sql',
+    sha256: '780fffb90f0fc5ad3faaf2766c993eb0ffb3fdeb5c72a6dd17c3d247a538352d'
+  }),
+  Object.freeze({
+    version: '20260915073000',
+    name: 'harden_treatment_service_invoice',
+    file: '20260915073000_harden_treatment_service_invoice.sql',
+    sha256: '298720cbeda2342609c9c9f0ab838274f7354e40ea5575b3101063e9f28e304c'
+  })
+]);
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';
 
 const classifiedDispositionPath = path.join(
@@ -2406,6 +2420,28 @@ export function loadMigrationEntries(cwd = root) {
   return entries;
 }
 
+// Repair and read-only verification remain pinned to the separately observed
+// 45-file hosted baseline. A declared later migration may be present in the
+// repository, but file presence alone must never widen that reviewed target.
+export function loadReviewedMigrationEntries(cwd = root) {
+  const repositoryEntries = loadMigrationEntries(cwd);
+  if (repositoryEntries.length < reviewedMigrationManifestCount) {
+    throw new Error('Reviewed migration baseline is incomplete');
+  }
+  const reviewedEntries = repositoryEntries.slice(0, reviewedMigrationManifestCount);
+  if (migrationManifestSha256(reviewedEntries) !== reviewedMigrationManifestSha256) {
+    throw new Error('Reviewed migration baseline SHA-256 mismatch');
+  }
+  const postBaselineEntries = repositoryEntries.slice(reviewedMigrationManifestCount);
+  if (
+    postBaselineEntries.length !== 0 &&
+    JSON.stringify(postBaselineEntries) !== JSON.stringify(DECLARED_POST_BASELINE_MIGRATIONS)
+  ) {
+    throw new Error('Repository contains undeclared post-baseline migrations');
+  }
+  return reviewedEntries;
+}
+
 export function buildMigrationLedgerRepairSql(options) {
   return buildMigrationLedgerSql({ ...options, verificationOnly: false });
 }
@@ -2446,7 +2482,7 @@ function resolveMigrationLedgerAclPhase(target, requestedPhase = MIGRATION_LEDGE
 
 function buildMigrationLedgerSql({
   config,
-  entries = loadMigrationEntries(),
+  entries = loadReviewedMigrationEntries(),
   sourceRevision = '',
   verificationOnly,
   aclPhase = MIGRATION_LEDGER_ACL_PHASE_STRICT
@@ -2511,6 +2547,13 @@ function buildMigrationLedgerSql({
   }
   const isChananyaPreReconciliation =
     resolvedAclPhase === MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION;
+  // The reviewed Chananya observer pins `search_path` to pg_catalog, pg_temp.
+  // Keep the generated classified guard on that same path so regprocedure and
+  // trigger deparsing retain explicit schemas in the stable digest. Strict
+  // post-remediation output keeps its existing public-schema path.
+  const ledgerGuardSearchPath = isChananyaPreReconciliation
+    ? 'pg_catalog, pg_temp'
+    : 'pg_catalog, pg_temp, public';
   const clinicalTreatmentSessionAclContract = isChananyaPreReconciliation
     ? REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.preReconciliationAcl
     : REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST.strictPostRemediationAcl;
@@ -2837,7 +2880,7 @@ $cnyos_psql_lock_busy_abort$;
         `set local lock_timeout = '5s';\n`
       : `begin isolation level repeatable read read write;\n` +
         canonicalCatalogOutputGucSql) +
-    `set local search_path = pg_catalog, pg_temp, public;\n` +
+    `set local search_path = ${ledgerGuardSearchPath};\n` +
     `do $ledger_guard$\n` +
     `declare\n` +
     `  v_missing text;\n` +
@@ -5048,7 +5091,7 @@ function main() {
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   process.stdout.write(buildMigrationLedgerRepairSql({
     config,
-    entries: loadMigrationEntries(root),
+    entries: loadReviewedMigrationEntries(root),
     sourceRevision: process.env.CLINICAL_OS_SOURCE_COMMIT || '',
     aclPhase: process.argv[3] || process.env.CNYOS_MIGRATION_LEDGER_ACL_PHASE ||
       MIGRATION_LEDGER_ACL_PHASE_STRICT

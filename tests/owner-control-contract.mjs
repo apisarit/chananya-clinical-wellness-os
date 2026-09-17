@@ -224,11 +224,12 @@ const endpointInput = Object.freeze({
   reason: 'Restore reviewed staging subscription'
 });
 const simulatedOnResult = Object.freeze({
-  clinic_id: endpointInput.clinicId,
-  clinic_code: endpointInput.clinicCode,
-  previous_state: 'suspended',
-  subscription_state: 'active',
-  subscription_version: 9,
+  clinicId: endpointInput.clinicId,
+  clinicCode: endpointInput.clinicCode,
+  enabled: true,
+  state: 'active',
+  version: 9,
+  changedAt: '2026-09-01T08:00:00.000Z',
   changed: true,
   idempotent: false
 });
@@ -336,6 +337,24 @@ assert.match(concurrencyMigration, /trg_clinic_subscription_control_events_appen
 assert.match(concurrencyMigration, /drop function public\.set_clinic_subscription_state\(uuid,uuid,text,boolean,text,uuid,text\)/);
 assert.match(concurrencyMigration, /grant execute on function public\.set_clinic_subscription_state\(uuid,uuid,text,boolean,bigint,text,uuid,text\)[\s\S]*to service_role/);
 assert.doesNotMatch(concurrencyMigration, /grant execute on function public\.set_clinic_subscription_state[^;\n]*to authenticated/);
+
+// This is a source-contract guard only (not a SQL parser or runtime proof):
+// every current receipt branch must keep the exact JSON keyset consumed above.
+const mutationStart = concurrencyMigration.indexOf(
+  'create or replace function public.set_clinic_subscription_state('
+);
+const mutationEnd = concurrencyMigration.indexOf('\n$$;', mutationStart);
+assert.ok(mutationStart >= 0 && mutationEnd > mutationStart, 'Current subscription mutation definition must be present');
+const mutationBody = concurrencyMigration.slice(mutationStart, mutationEnd);
+const receiptBranches = [...mutationBody.matchAll(/return jsonb_build_object\(([\s\S]*?)\n\s*\);/g)];
+const receiptKeys = new Set(['clinicId', 'clinicCode', 'enabled', 'state', 'version', 'changedAt', 'changed', 'idempotent']);
+assert.deepEqual(new Set(Object.keys(simulatedOnResult)), receiptKeys, 'Mocked ON receipt keyset must match the canonical SQL receipt keyset');
+assert.equal(receiptBranches.length, 3, 'Current subscription mutation must have exactly three receipt branches');
+for (const [index, match] of receiptBranches.entries()) {
+  const keys = [...match[1].matchAll(/^\s*'([^']+)'\s*,/gm)].map(([, key]) => key);
+  assert.deepEqual(new Set(keys), receiptKeys, `Receipt branch ${index + 1} keyset drifted from the UAT fixture`);
+  assert.equal(keys.length, receiptKeys.size, `Receipt branch ${index + 1} must not duplicate receipt keys`);
+}
 
 const worker = read('netlify/functions/owner-subscription.mts');
 assert.match(worker, /CNYOS_OWNER_CONTROL_ENABLED/);

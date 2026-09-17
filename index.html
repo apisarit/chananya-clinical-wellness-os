@@ -101,6 +101,16 @@
               <div class="section-heading"><span class="section-number">01</span><div><h2>ทะเบียนผู้รับบริการ</h2><p>ค้นด้วย HN ชื่อ โทรศัพท์ หรือข้อมูลการแพ้</p></div></div>
               <a class="btn primary wide space-bottom-md" href="/check-in.html">สแกน QR / เปิด Encounter ด้วย HN</a>
               <label>ค้นหา<input id="patient-search" type="search" placeholder="HN / ชื่อ / โทรศัพท์ / การแพ้"></label>
+              <div id="patient-export" class="notice" data-perm="audit" hidden>
+                <strong>Export selected</strong>
+                <p class="muted">ส่งออกเฉพาะรายการผู้รับบริการที่เลือกจากข้อมูลที่บัญชีนี้อ่านได้ ไม่ใช่ backup และไม่ส่งขึ้น Drive/NAS</p>
+                <div class="actions">
+                  <button class="btn ghost" id="patient-export-all" type="button">เลือกทั้งหมดที่แสดง</button>
+                  <button class="btn ghost" id="patient-export-clear" type="button">ล้างที่เลือก</button>
+                  <select id="patient-export-format" aria-label="รูปแบบไฟล์"><option value="csv">CSV</option><option value="json">JSON</option></select>
+                  <button class="btn primary" id="patient-export-download" type="button">ดาวน์โหลดที่เลือก (<span id="patient-export-count">0</span>)</button>
+                </div>
+              </div>
               <div id="patient-list" class="list space-top-sm"></div>
             </section>
           </div>
@@ -169,5 +179,6 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
+  <script src="selected-export-browser.js?v=selected-export1"></script>
 </body>
 </html>

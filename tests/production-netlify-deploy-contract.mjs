@@ -22,6 +22,7 @@ assert.match(workflow, /PRODUCTION_NETLIFY_SITE_ID/, 'production site ID must co
 assert.match(workflow, /secrets\.NETLIFY_AUTH_TOKEN/, 'Netlify auth token must come from a secret');
 assert.match(workflow, /CLINICAL_OS_PRODUCTION_CONFIG_JSON/, 'production tenant config must come from the protected environment');
 assert.doesNotMatch(workflow, /7da5e39e-580d-44f1-8623-605313e2fb2b/, 'production site ID must not be hard-coded into source');
+assert.doesNotMatch(workflow, /cnyos\.netlify\.app/, 'production workflow must not target the legacy Netlify hostname');
 
 const promotionIndex = workflow.indexOf('npm run verify:production-promotion');
 const buildIndex = workflow.indexOf('npm run build');

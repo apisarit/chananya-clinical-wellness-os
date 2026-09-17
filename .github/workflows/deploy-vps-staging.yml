@@ -1,0 +1,125 @@
+name: Prepare protected VPS staging candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/vps-staging-candidate-20260915
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnyos-vps-staging-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-staging-candidate:
+    name: Build and retain exact staging candidate
+    if: github.repository == 'apisarit/chananya-clinical-wellness-os' && github.ref == 'refs/heads/codex/vps-staging-candidate-20260915'
+    environment:
+      name: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CNYOS_STAGING_DOMAIN: srv1506007.hstgr.cloud
+      CNYOS_STAGING_SUPABASE_ANON_KEY: ${{ vars.CNYOS_STAGING_SUPABASE_ANON_KEY }}
+
+    steps:
+      - name: Check out exact main commit without persisted credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Verify exact candidate boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = apisarit/chananya-clinical-wellness-os
+          test "$GITHUB_REF" = refs/heads/codex/vps-staging-candidate-20260915
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Set up pinned Node major
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies and run release contracts
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm audit --omit=dev --audit-level=high
+          npm run check
+
+      - name: Build exact-commit dedicated staging artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_config=config/tenant.cnyos-staging.json
+          test -s "$staging_config"
+          test -n "$CNYOS_STAGING_SUPABASE_ANON_KEY"
+          runtime_staging_config="$RUNNER_TEMP/tenant.cnyos-staging.json"
+          node scripts/materialize-vps-staging-config.mjs "$staging_config" "$runtime_staging_config"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          build_time="$(git show -s --format=%cI HEAD)"
+          CONTEXT=production \
+          URL="https://$CNYOS_STAGING_DOMAIN" \
+          CLINICAL_OS_BUILD_TIMESTAMP="$build_time" \
+          CLINICAL_OS_STAGING_DEPLOYMENT=true \
+          CLINICAL_OS_ALLOW_STAGING_DATABASE=true \
+          CLINICAL_OS_STAGING_DATABASE_ACK=STAGING_ONLY \
+          CLINICAL_OS_TENANT_CONFIG_PATH="$runtime_staging_config" \
+          CLINICAL_OS_PRODUCTION_CONFIG_PATH=config/tenant.chananya.json \
+          CLINICAL_OS_SOURCE_COMMIT="$GITHUB_SHA" \
+          CLINICAL_OS_SOURCE_TREE="$source_tree" \
+          CLINICAL_OS_REQUIRE_SOURCE_COMMIT=true \
+          npm run build:staging-artifact
+
+      - name: Create immutable staging candidate packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          packet="artifacts/vps-staging-candidate"
+          mkdir -p "$packet"
+          source_epoch="$(git show -s --format=%ct HEAD)"
+          test -z "$(find dist -mindepth 2 -type f -print -quit)"
+          find dist -mindepth 1 -maxdepth 1 -type f -printf '%f\0' | LC_ALL=C sort -z | \
+            tar -C dist --null --no-recursion --files-from=- --mtime="@$source_epoch" --owner=0 --group=0 --numeric-owner \
+              -cf - | gzip -n > "$packet/cnyos-static-$GITHUB_SHA.tar.gz"
+          node - "$packet" "$GITHUB_SHA" "$(git rev-parse 'HEAD^{tree}')" <<'NODE'
+          const crypto = require('node:crypto');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const [packet, commit, tree] = process.argv.slice(2);
+          const archive = `cnyos-static-${commit}.tar.gz`;
+          const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+          const request = {
+            schemaVersion: 1,
+            kind: 'cnyos_vps_staging_candidate',
+            authorization: false,
+            productionEligible: false,
+            source: { repository: process.env.GITHUB_REPOSITORY, commit, tree },
+            workflow: { runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT },
+            artifact: { file: archive, sha256: hash(path.join(packet, archive)) },
+            runtimeManifestSha256: hash('dist/runtime-publish-manifest.json'),
+            deployManifestSha256: hash('dist/deploy-manifest.json'),
+            note: 'Build evidence only. A protected controller must authorize and deploy this exact packet.'
+          };
+          fs.writeFileSync(path.join(packet, 'release-request.json'), JSON.stringify(request, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          (cd "$packet" && sha256sum cnyos-static-*.tar.gz release-request.json > SHA256SUMS)
+
+      - name: Retain staging candidate for protected controller
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: cnyos-vps-staging-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            artifacts/vps-staging-candidate/cnyos-static-${{ github.sha }}.tar.gz
+            artifacts/vps-staging-candidate/release-request.json
+            artifacts/vps-staging-candidate/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

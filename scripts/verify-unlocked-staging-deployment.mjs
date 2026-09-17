@@ -84,7 +84,7 @@ export const CNYOS_UNLOCKED_STAGING_IDENTITY = Object.freeze({
 });
 
 export const CNYOS_PRODUCTION_DENYLIST_IDENTITY = Object.freeze({
-  origin: 'https://chananya.netlify.app',
+  origin: 'https://cnyos.cloud',
   projectRef: 'qptxnrldzzinlcabudjv',
   clinicId: '00000000-0000-0000-0000-000000000001',
   clinicCode: 'CHANANYA',

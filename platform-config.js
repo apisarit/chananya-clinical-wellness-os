@@ -3,7 +3,7 @@ export const PLATFORM_FEATURES = Object.freeze([
   { id: 'core', name: 'ระบบหลัก', detail: 'บัญชีผู้ใช้ สิทธิ์ ศูนย์ปฏิบัติการ และ Audit', requires: [], required: true, pages: [] },
   { id: 'appointments', name: 'นัดหมาย', detail: 'ตารางแพทย์และคิวผู้รับบริการ', requires: ['core'], pages: ['appointments'] },
   { id: 'knowledge', name: 'ฐานความรู้แผนไทย', detail: 'รากวิชาและสมุฏฐานวินิจฉัย', requires: ['core'], pages: ['foundation', 'evidence'] },
-  { id: 'u-synthesise', name: 'U Synthesise', detail: 'Luopan · Wuxing–BaZi · โหรไทย · สมุฏฐาน', requires: ['core'], pages: ['luopan', 'luopan-wheel'] },
+  { id: 'u-synthesise', name: 'U Synthesize', detail: 'Luopan · Wuxing–BaZi · โหรไทย · สมุฏฐาน', requires: ['core'], pages: ['luopan', 'luopan-wheel'] },
   { id: 'clinical', name: 'เวชระเบียน', detail: 'ตรวจ วินิจฉัย และแผนการรักษา', requires: ['knowledge'], pages: ['clinical-v3'] },
   { id: 'outcomes', name: 'ติดตามผล', detail: 'ผลการรักษาและการติดตามผู้รับบริการ', requires: ['clinical'], pages: ['outcomes'] },
   { id: 'pharmacy', name: 'ห้องยา', detail: 'ใบสั่งยา การจ่ายยา และผลิตภัณฑ์', requires: ['clinical'], pages: ['pharmacy'] },

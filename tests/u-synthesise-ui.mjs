@@ -21,7 +21,7 @@ const window = {};
 vm.runInNewContext(read('luopan-knowledge.js'), {window});
 const document = {getElementById: id => ids[id] || null, createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag)};
 mountUSynthesise(document, window);
-assert.match(ids['us-version'].textContent, /U Synthesise 0\.3\.1.*113/);
+assert.match(ids['us-version'].textContent, /U Synthesize 0\.3\.1.*113/);
 assert.equal(ids['us-modules'].children.length, 4);
 assert.equal(ids['us-layer-frames'].children.length, 23);
 assert.equal(ids['us-wuxing'].children.length, 5);
@@ -60,12 +60,12 @@ ids['us-mode'].value = 'astro_medical'; ids['us-mode'].events.change();
 assert.equal(ids['us-spatial'].hidden, true);
 assert.equal(ids['luopan-birthdate-ray'].hidden, false);
 assert.doesNotMatch(read('u-synthesise.js'), /fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|supabase|DeviceOrientationEvent/);
-assert.match(read('app-shell.js'), /label: 'U Synthesise'.*capability: 'luopan_read'/);
+assert.match(read('app-shell.js'), /label: 'U Synthesize'.*capability: 'luopan_read'/);
 for (const name of ['catalog', 'engine', 'classical', 'landscape']) {
   const expected = '// Generated from knowledge/u-synthesise/' + name + '.mjs\n' + read('knowledge/u-synthesise/' + name + '.mjs').replace(/from '\.\/(catalog|classical|landscape)\.mjs'/g, (_, name) => "from './u-synthesise-" + name + ".js'");
   assert.equal(read('u-synthesise-' + name + '.js'), expected, 'published module must match its tested source');
 }
-console.log('U Synthesise UI passed: two modes, fixed geometry, birthdate separation, uncertain and invalid headings, complete catalog and generated module identity');
+console.log('U Synthesize UI passed: two modes, fixed geometry, birthdate separation, uncertain and invalid headings, complete catalog and generated module identity');
 
 const allText=el=>[el.textContent,...el.children.map(allText)].join(' ');
 assert.equal(ids['us-mountain-cards'].children.length,24);

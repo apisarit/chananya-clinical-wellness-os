@@ -9,7 +9,8 @@ import {
   MIGRATION_LEDGER_ACL_PHASE_CHANANYA_PRE_RECONCILIATION,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   buildMigrationLedgerRepairSql,
-  loadMigrationEntries
+  loadMigrationEntries,
+  loadReviewedMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 import { buildTenantBootstrapSql } from '../scripts/generate-tenant-bootstrap-sql.mjs';
 import {
@@ -22,7 +23,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
 const config = JSON.parse(await fs.readFile(path.join(root, 'config', 'tenant.cnyos-staging.json'), 'utf8'));
 const chananyaConfig = JSON.parse(await fs.readFile(path.join(root, 'config', 'tenant.chananya.json'), 'utf8'));
-const entries = loadMigrationEntries(root);
+const repositoryEntries = loadMigrationEntries(root);
 const expectedOwnerControlMigrationHashes = new Map([
   ['202608311800_owner_subscription_control.sql', 'f4a00ed5595d710cb2c66107e7f1071fdb2179adfa3fff6b9a690a88556f8c43'],
   ['202609010500_owner_drive_assignment.sql', '4dd57c65339b37a9e17aa388e65768a4de29949a3671cf2d9a07d6b65d63ccc7'],
@@ -36,8 +37,39 @@ const expectedOwnerControlMigrationHashes = new Map([
   ['202609011300_archive_delegate_execution_hardening.sql', 'f3bbdf8e9e8527dc1125c143e2bc8de6da42d5e1c3d6b19f0cb2db3ec9df89f7']
 ]);
 
-assert.equal(entries.length, 45);
-assert.deepEqual(entries, [...entries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+const expectedPostBaselineMigrations = Object.freeze([
+  Object.freeze({
+    version: '20260913125900',
+    name: 'treatment_service_invoice',
+    file: '20260913125900_treatment_service_invoice.sql',
+    sha256: '780fffb90f0fc5ad3faaf2766c993eb0ffb3fdeb5c72a6dd17c3d247a538352d'
+  }),
+  Object.freeze({
+    version: '20260915073000',
+    name: 'harden_treatment_service_invoice',
+    file: '20260915073000_harden_treatment_service_invoice.sql',
+    sha256: '298720cbeda2342609c9c9f0ab838274f7354e40ea5575b3101063e9f28e304c'
+  })
+]);
+
+assert.equal(repositoryEntries.length, 47, 'repository must contain the 47-file source chain');
+assert.deepEqual(
+  repositoryEntries,
+  [...repositoryEntries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)
+);
+assert.deepEqual(
+  repositoryEntries.slice(-2),
+  expectedPostBaselineMigrations,
+  'migration ledger tail must bind the treatment-service source and hardening migrations'
+);
+const entries = loadReviewedMigrationEntries(root);
+assert.equal(entries.length, 45, 'reviewed hosted baseline must remain the exact 45-file prefix');
+assert.ok(
+  expectedPostBaselineMigrations.every(
+    candidate => !entries.some(entry => entry.file === candidate.file)
+  ),
+  'pending migrations must not silently widen the reviewed hosted repair baseline'
+);
 assert.equal(config.tenant.expectedClinicId, '00000000-0000-4000-8000-00000000a001');
 assert.ok(entries.every(entry => /^[0-9a-f]{64}$/.test(entry.sha256)));
 for (const [file, sha256] of expectedOwnerControlMigrationHashes) {
@@ -47,6 +79,16 @@ for (const [file, sha256] of expectedOwnerControlMigrationHashes) {
     `${file} must keep its reviewed migration-ledger fingerprint`
   );
 }
+
+const ownerClosureMigration = await fs.readFile(
+  path.join(migrationsDir, '202609011000_owner_subscription_kill_switch_closure.sql'),
+  'utf8'
+);
+assert.match(
+  ownerClosureMigration,
+  /create or replace view public\.v_clinical_herbal_traceability\s+with \(security_invoker\s*=\s*true\)[\s\S]*where e\.clinic_id = public\.current_clinic_id\(\)/i,
+  'clinical traceability view must use invoker rights and an explicit tenant predicate'
+);
 
 const repairAuthorizationBlockerStatement =
   "  raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED: classified live ACL evidence is complete, but independent security review and explicit ledger repair authorization are required before any ledger repair';\n";
@@ -3459,4 +3501,4 @@ assert.deepEqual(
 );
 
 await db.close();
-console.log(`Migration ledger contract passed: ${entries.length} exact migrations, staging guards, schema fingerprint and non-null SHA-256 evidence`);
+console.log(`Migration ledger contract passed: ${entries.length} reviewed baseline migrations, ${repositoryEntries.length} repository migrations, staging guards, schema fingerprint and non-null SHA-256 evidence`);

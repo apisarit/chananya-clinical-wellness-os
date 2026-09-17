@@ -77,7 +77,7 @@ export function mountUSynthesise(document, window) {
       link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
     }
   } catch {
-    q('us-version').textContent = 'U Synthesise: ฐานความรู้โหลดไม่ครบ กรุณาโหลดหน้าใหม่';
+    q('us-version').textContent = 'U Synthesize: ฐานความรู้โหลดไม่ครบ กรุณาโหลดหน้าใหม่';
     q('us-mode').disabled = true;
     return;
   }

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "application": {
+    "name": "chananya-clinical-wellness-os",
+    "version": "3.5.0-preview.7"
+  },
+  "components": [
+    {
+      "id": "staging-membership-uat",
+      "version": "1.0.0-candidate.2",
+      "status": "local-review-candidate",
+      "entryPoint": "scripts/staging-membership-proof.mjs",
+      "versionExport": "MEMBERSHIP_PROOF_VERSION",
+      "files": [
+        "scripts/staging-membership-proof.mjs",
+        "scripts/verify-authenticated-staging.mjs",
+        "ops/cnyos-staging-controller/scripts/membership-journal-store.mjs",
+        "supabase/manual/staff_membership_recovery_candidate.sql",
+        "tests/staff-membership-recovery-candidate-contract.mjs",
+        "tests/staging-membership-checkpoint-contract.mjs",
+        "tests/staging-membership-journal-contract.mjs",
+        "tests/fixtures/membership-journal-child.mjs",
+        "tests/staff-membership-native-recovery.mjs",
+        "tests/fixtures/staff-membership-native-fixture.sql",
+        "tests/staging-safety-contract.mjs",
+        "docs/STAGING_MEMBERSHIP_RECOVERY.md",
+        "docs/STAGING_MEMBERSHIP_JOURNAL.md",
+        "docs/STAGING_MEMBERSHIP_NATIVE_RECOVERY.md"
+      ]
+    }
+  ],
+  "copyright": {
+    "status": "awaiting_owner_confirmation",
+    "holder": null,
+    "noticePath": "COPYRIGHT.md",
+    "thirdPartyNotices": [
+      "docs/licenses/ASTRONOMY_ENGINE_LICENSE.txt"
+    ]
+  },
+  "evidenceLimits": {
+    "stagingVerified": false,
+    "productionAuthorized": false,
+    "cryptographicManifest": false,
+    "description": "Version/path catalogue only; not a signed receipt, complete source digest, copyright determination, or release approval."
+  }
+}

@@ -74,7 +74,7 @@ assert.throws(() => branchBearingOverlay('戊'));
 
 const options = {era: 'BE', utcOffsetMinutes: 420};
 const birth = readBirthTime('29/10/2530 22.19', options);
-assert.equal(birth.system, 'U Synthesise');
+assert.equal(birth.system, 'U Synthesize');
 assert.equal(birth.civil.instant, '1987-10-29T15:19:00.000Z');
 assert.equal(birth.kala.name, 'ปิตตะ');
 assert.equal(birth.chineseHour.symbol, '亥');
@@ -133,4 +133,4 @@ assert.throws(() => { attached.legacy.source.ttmRaw.pop(); });
 const incomplete = structuredClone(legacy); incomplete.source.ttmRaw.pop();
 assert.throws(() => attachLegacyKnowledge(incomplete), /baseline changed/);
 
-console.log('U Synthesise foundation passed: separate coordinate frames, 24 mountains, uncertainty, Kala boundaries, calendar, Wuxing and lossless 113-rule legacy bridge');
+console.log('U Synthesize foundation passed: separate coordinate frames, 24 mountains, uncertainty, Kala boundaries, calendar, Wuxing and lossless 113-rule legacy bridge');

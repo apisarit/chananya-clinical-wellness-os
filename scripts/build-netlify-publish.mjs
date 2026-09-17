@@ -23,6 +23,9 @@ const generatedConfigFiles = Object.freeze([
   'deploy-manifest.json'
 ]);
 
+export const PRODUCTION_DOMAIN_REDIRECT =
+  'https://cnyos.netlify.app/* https://cnyos.cloud/:splat 301!';
+
 const allowedExtensions = new Set([
   '.html',
   '.js',
@@ -86,6 +89,32 @@ export async function assertRuntimeWorktreeMatchesGit(cwd, sourceFiles) {
   }
 }
 
+/**
+ * Domain redirects are global when declared in netlify.toml.  Add the
+ * technical-host redirect to the generated production artifact instead, so a
+ * staging or preview artifact can never redirect users to cnyos.cloud.
+ */
+export async function applyProductionDomainRedirect({ target, deployment }) {
+  if (deployment?.build?.deploymentClass !== 'production') return false;
+  const redirectsPath = path.join(target, '_redirects');
+  let existing;
+  try {
+    existing = await fs.readFile(redirectsPath, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+  const lines = existing.split(/\r?\n/).map(line => line.trim());
+  if (lines.includes(PRODUCTION_DOMAIN_REDIRECT)) return false;
+  const separator = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
+  await fs.writeFile(
+    redirectsPath,
+    `${existing}${separator}${PRODUCTION_DOMAIN_REDIRECT}\n`,
+    { encoding: 'utf8', mode: 0o644 }
+  );
+  return true;
+}
+
 export async function buildNetlifyPublish({
   cwd = root,
   env = process.env,
@@ -109,6 +138,8 @@ export async function buildNetlifyPublish({
     await fs.copyFile(path.join(generated, name), path.join(target, name));
     copied.push(name);
   }
+
+  await applyProductionDomainRedirect({ target, deployment });
 
   const required = [
     'index.html',

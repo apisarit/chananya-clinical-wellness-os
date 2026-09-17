@@ -10,8 +10,8 @@ export const target = Object.freeze({
   repository: 'apisarit/chananya-clinical-wellness-os',
   environment: 'production',
   siteId: '7da5e39e-580d-44f1-8623-605313e2fb2b',
-  origin: 'https://cnyos.netlify.app',
-  hostname: 'cnyos.netlify.app'
+  origin: 'https://cnyos.cloud',
+  hostname: 'cnyos.cloud'
 });
 export const variables = Object.freeze({
   PRODUCTION_NETLIFY_SITE_ID: target.siteId,

@@ -9,7 +9,7 @@ import {
   MIGRATION_LEDGER_ACL_PHASE_STRICT,
   REPOSITORY_STRICT_ACL_FIXTURE_MANIFEST,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
-  loadMigrationEntries
+  loadReviewedMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 import {
   buildMigrationLedgerVerificationSql,
@@ -447,7 +447,7 @@ function stopExternalLockHolder(name) {
   }
 }
 
-const entries = loadMigrationEntries(root);
+const entries = loadReviewedMigrationEntries(root);
 assert.equal(entries.length, 45, 'verifier fixture must load the reviewed migration set');
 const loaderPath = await writeRuntimeFile('load-reviewed-schema.sql', [
   '\\set ON_ERROR_STOP 1',

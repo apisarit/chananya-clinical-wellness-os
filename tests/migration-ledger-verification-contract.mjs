@@ -18,11 +18,11 @@ import {
   MIGRATION_LEDGER_ACL_PHASE_STRICT,
   REPOSITORY_DERIVED_CLINICAL_TREATMENT_SESSION_ACL_MANIFEST,
   buildMigrationLedgerRepairSql,
-  loadMigrationEntries
+  loadReviewedMigrationEntries
 } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const entries = loadMigrationEntries(root);
+const entries = loadReviewedMigrationEntries(root);
 const revision = '2ebadf8f029da9febcba24b8335fd1c0275be964';
 const productionDatabaseName = 'postgres';
 const productionDatabaseRole = 'postgres';
@@ -1390,10 +1390,20 @@ const repairBeginIndex = preReconciliationRepairSql.indexOf(
   '\nbegin isolation level repeatable read read write;\n'
 );
 const repairWriteSearchPathIndex = preReconciliationRepairSql.indexOf(
-  'set local search_path = pg_catalog, pg_temp, public;',
+  'set local search_path = pg_catalog, pg_temp;',
   repairBeginIndex
 );
 const repairGuardIndex = preReconciliationRepairSql.indexOf('do $ledger_guard$');
+assert.match(
+  preReconciliationRepairSql.slice(repairBeginIndex, repairGuardIndex),
+  /set local search_path = pg_catalog, pg_temp;\n/,
+  'Chananya pre-reconciliation guard must use the observer-pinned catalog/temp path'
+);
+assert.doesNotMatch(
+  preReconciliationRepairSql.slice(repairBeginIndex, repairGuardIndex),
+  /set local search_path = pg_catalog, pg_temp, public;\n/,
+  'Chananya pre-reconciliation guard must not reintroduce public-schema deparsing'
+);
 const repairLiveAclInventoryBlockerIndex = preReconciliationRepairSql.indexOf(
   'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED'
 );

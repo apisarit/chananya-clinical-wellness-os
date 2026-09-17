@@ -19,6 +19,23 @@ Use the dedicated
 [Chananya staging ACL maintenance protocol](security/CHANANYA_STAGING_ACL_MAINTENANCE_PROTOCOL.md)
 for quiescence, rollback rehearsal, managed-platform exception, and ambiguous-result handling.
 
+## Exact-candidate verifier update — 2026-09-16
+
+The pre-reconciliation verifier for source commit
+`25a2d4166bda26377cae21f32e550cd5100796f4` now uses the observer-pinned
+`search_path = pg_catalog, pg_temp` for its classified guard. This corrects the
+schema-elision digest mismatch without changing the strict post-remediation
+path. The contract suite and GitHub release-contract run both passed.
+
+A fresh direct PostgreSQL 17 read-only run reached the next real guard:
+`STAGING_CLINICAL_TREATMENT_SESSION_ACL_INVALID: anon:EXECUTE,
+service_role:EXECUTE`. The run emitted no stdout and made no durable change;
+restricted evidence is retained outside the repository. This is a confirmed
+ACL finding on the exact `public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)`
+signature, not an authorization to apply a fix. The complete 147-routine ACL
+candidate remains blocked pending independent security review, hosted
+concurrency/rollback acceptance, and explicit staging mutation authorization.
+
 The classified discovery summary is
 [Chananya staging public-routine ACL observation — 2026-09-08](security/CHANANYA_STAGING_PUBLIC_ROUTINE_ACL_OBSERVATION_2026-09-08.md).
 It is evidence of blockers, not security sign-off.

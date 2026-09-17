@@ -11,7 +11,7 @@ import {
   MIGRATION_LEDGER_ACL_PHASE_STRICT,
   buildMigrationLedgerSchemaGuardSql,
   isExactReviewedChananyaStagingTarget,
-  loadMigrationEntries
+  loadReviewedMigrationEntries
 } from './generate-migration-ledger-repair-sql.mjs';
 import { validateTenantConfig } from './generate-tenant-config.mjs';
 
@@ -63,7 +63,7 @@ $cnyos_verification_lock_abort$;
 
 export function buildMigrationLedgerVerificationSql({
   config,
-  entries = loadMigrationEntries(root),
+  entries = loadReviewedMigrationEntries(root),
   sourceRevision = '',
   aclPhase = MIGRATION_LEDGER_ACL_PHASE_STRICT
 }) {
@@ -311,7 +311,7 @@ function main() {
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   process.stdout.write(buildMigrationLedgerVerificationSql({
     config,
-    entries: loadMigrationEntries(root),
+    entries: loadReviewedMigrationEntries(root),
     sourceRevision: process.env.CLINICAL_OS_SOURCE_COMMIT || '',
     aclPhase: process.argv[3] || process.env.CNYOS_MIGRATION_LEDGER_ACL_PHASE ||
       MIGRATION_LEDGER_ACL_PHASE_STRICT
