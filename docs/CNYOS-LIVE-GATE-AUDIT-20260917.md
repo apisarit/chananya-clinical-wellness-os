@@ -25,6 +25,13 @@ Both public hosts also advertise the staging OAuth redirect origin
 `https://cnyos.netlify.app`. Therefore `cnyos.cloud` is not currently a
 Production artifact and must not receive real LINE events or patient data.
 
+Their public `deploy-manifest.json` reports source commit
+`0adba0dee32216c344d7ed852dce9ade80d87671` and build context `production`, but
+also reports `deploymentId: chananya-clinical-staging`, `CHANANYA-STG`, and
+`qrIssuer: CHANANYA-STG`. A production build context alone does not override
+the staging tenant identity; the manifest therefore fails the production
+classification gate.
+
 ## LINE flow implemented in source
 
 1. The owner adds the Chananya LINE OA and receives a privacy-safe Patient Card
