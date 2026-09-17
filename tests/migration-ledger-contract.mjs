@@ -80,6 +80,16 @@ for (const [file, sha256] of expectedOwnerControlMigrationHashes) {
   );
 }
 
+const ownerClosureMigration = await fs.readFile(
+  path.join(migrationsDir, '202609011000_owner_subscription_kill_switch_closure.sql'),
+  'utf8'
+);
+assert.match(
+  ownerClosureMigration,
+  /create or replace view public\.v_clinical_herbal_traceability\s+with \(security_invoker\s*=\s*true\)[\s\S]*where e\.clinic_id = public\.current_clinic_id\(\)/i,
+  'clinical traceability view must use invoker rights and an explicit tenant predicate'
+);
+
 const repairAuthorizationBlockerStatement =
   "  raise exception 'CNYOS_LEDGER_REPAIR_INDEPENDENT_REVIEW_AND_AUTHORIZATION_REQUIRED: classified live ACL evidence is complete, but independent security review and explicit ledger repair authorization are required before any ledger repair';\n";
 
