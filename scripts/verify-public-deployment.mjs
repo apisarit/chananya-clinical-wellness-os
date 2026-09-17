@@ -8,6 +8,7 @@ import { assertSameOriginFramePolicy } from './netlify-frame-policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha40 = /^[0-9a-f]{40}$/i;
+const stagingIdentityMarker = /(?:^|[-_.])(staging|stage|stg|nonprod|test)(?:$|[-_.])/i;
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 
 export const forbiddenPublicPaths = Object.freeze([
@@ -48,6 +49,17 @@ export function assertProductionManifestClassification(manifest) {
     false,
     'production deploy manifest must record stagingDatabaseExplicitlyAcknowledged=false'
   );
+  for (const [label, value] of [
+    ['deploymentId', manifest?.deploymentId],
+    ['tenant.expectedClinicCode', manifest?.tenant?.expectedClinicCode],
+    ['identity.qrIssuer', manifest?.identity?.qrIssuer]
+  ]) {
+    assert.equal(
+      stagingIdentityMarker.test(String(value || '')),
+      false,
+      `production deploy manifest must not contain a staging identity in ${label}`
+    );
+  }
 }
 
 function required(name) {

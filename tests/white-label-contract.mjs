@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import {
   applyTenantEnvOverrides,
+  assertProductionBuildInputs,
   buildDeployManifest,
   loadTenantConfig,
   renderBrandConfig,
@@ -17,6 +18,42 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const example = JSON.parse(read('config/tenant.example.json'));
 const chananya = JSON.parse(read('config/tenant.chananya.json'));
+
+assert.doesNotThrow(() => assertProductionBuildInputs({
+  CONTEXT: 'production',
+  CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true',
+  CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+  CLINICAL_OS_PRODUCTION_CONFIG_JSON: '{}',
+  PRODUCTION_RELEASE_ATTESTATION_JSON: '{"approvedForProduction":true}'
+}));
+for (const [label, env, expected] of [
+  ['missing guarded workflow marker', {
+    CONTEXT: 'production',
+    CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+    CLINICAL_OS_PRODUCTION_CONFIG_JSON: '{}',
+    PRODUCTION_RELEASE_ATTESTATION_JSON: '{}'
+  }, /PRODUCTION_BUILD_REQUIRES_GUARDED_WORKFLOW/],
+  ['missing exact commit', {
+    CONTEXT: 'production',
+    CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true',
+    CLINICAL_OS_PRODUCTION_CONFIG_JSON: '{}',
+    PRODUCTION_RELEASE_ATTESTATION_JSON: '{}'
+  }, /PRODUCTION_BUILD_REQUIRES_EXACT_SOURCE_COMMIT/],
+  ['missing production config', {
+    CONTEXT: 'production',
+    CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true',
+    CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+    PRODUCTION_RELEASE_ATTESTATION_JSON: '{}'
+  }, /PRODUCTION_BUILD_REQUIRES_PRODUCTION_CONFIG/],
+  ['missing release attestation', {
+    CONTEXT: 'production',
+    CLINICAL_OS_REQUIRE_SOURCE_COMMIT: 'true',
+    CLINICAL_OS_SOURCE_COMMIT: 'a'.repeat(40),
+    CLINICAL_OS_PRODUCTION_CONFIG_JSON: '{}'
+  }, /PRODUCTION_BUILD_REQUIRES_RELEASE_ATTESTATION/]
+]) {
+  assert.throws(() => assertProductionBuildInputs(env), expected, label);
+}
 
 const customer = validateTenantConfig(example);
 assert.equal(customer.tenant.expectedClinicCode, 'CUSTOMER');

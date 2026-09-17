@@ -9,9 +9,11 @@ any production gate as passed.
 
 ## Exact source and target
 
-- Source checkout: `codex/u-synthesize-staging-fix-20260915`
-- Source commit: bind at review time with `git rev-parse HEAD`; the reviewer
-  must record that exact post-handoff commit in the protected evidence store.
+- Source checkout: `codex/production-guard-20260917`
+- Source commit: `c748068c23bfd54446d2c55cca1c0ec02b4a8818` at this handoff
+  snapshot. The later metadata-only handoff refresh is `1970e9a0d342361bc6661d93c896f37e0f979f76`.
+  A reviewer must independently re-check `git rev-parse HEAD` and record the
+  exact post-handoff commit in the protected evidence store.
 - Staging Supabase project: `hsmnjwxurlmsizndjlun` (`chananya-clinical-staging`)
 - Production project was not targeted by the observations or remediations below.
 - Production real-patient-data admission remains blocked.
@@ -72,6 +74,38 @@ The 81-function ACL candidate remains **inert**. It must not be enabled until
 an independent reviewer verifies the complete routine classification, hosted
 concurrency assumptions, fresh observer protocol, migration-ledger treatment,
 rollback rehearsal, and exact post-commit observation.
+
+## Production artifact fail-closed additions
+
+After the accidental Netlify auto-publish was rolled back to the prior
+production deploy, two local commits add release-surface checks. These are
+review material, not deployment authorization:
+
+- `d8ae412` makes a `CONTEXT=production` build fail unless it is running from
+  the guarded workflow with an exact source commit, explicit production config,
+  and `PRODUCTION_RELEASE_ATTESTATION_JSON`.
+- `5846e51` makes the public deployment verifier reject staging markers in the
+  deployment ID, clinic code, or QR issuer even if the manifest claims
+  `deploymentClass=production`.
+
+Both changes pass the complete local contract suite. They have not been
+merged to `main` and require independent review before use in a production
+release. They are published only on review PR #42; its current exact head is
+recorded in the PR metadata and must be re-verified before review. The Netlify
+deploy-preview is not a production deployment.
+
+## PostgreSQL 17 rollback-harness correction
+
+The earlier release-contract run `34167902583` failed in the native ACL
+rollback rehearsal because the disposable PostgreSQL service reported its
+Docker bridge address (`172.18.0.2`) while the assertion required
+`127.0.0.1`. This was a test-harness identity mismatch, not a schema or
+migration failure. Commits `23fc22a` and `926b4de` now accept only loopback or
+RFC1918 disposable-service addresses, bind the generated snapshot to the
+validated server-reported address, and retain the source-level guard against
+non-loopback client targets. The corrected exact candidate passed the native
+test locally and in release-contract run `35226159819`, including ACL rollback,
+migration-ledger verification, guarded repair, and exact-commit evidence.
 
 ## Required independent review actions
 
