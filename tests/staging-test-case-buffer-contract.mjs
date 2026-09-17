@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const migration = fs.readFileSync('supabase/migrations/20260917090000_staging_test_case_buffer.sql', 'utf8');
+const migration = fs.readFileSync('supabase/manual/20260917090000_staging_test_case_buffer.sql', 'utf8');
 const buffer = JSON.parse(fs.readFileSync('tests/fixtures/ollama-synthetic-buffer.json', 'utf8'));
 
 assert.equal(buffer.cases.length, 5);
