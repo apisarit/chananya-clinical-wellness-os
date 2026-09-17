@@ -22,6 +22,9 @@ assert.throws(() => validateProductionOrigin('https://evil.example', 'cnyos.netl
 assert.throws(() => validateProductionOrigin('https://localhost', 'localhost'), /PRODUCTION_SITE_HOST_INVALID/);
 
 const productionManifestClassification = {
+  deploymentId: 'chananya-clinical-production',
+  tenant: { expectedClinicCode: 'CHANANYA' },
+  identity: { qrIssuer: 'CHANANYA' },
   build: { deploymentClass: 'production' },
   safety: { stagingDatabaseExplicitlyAcknowledged: false }
 };
@@ -46,6 +49,17 @@ for (const [label, candidate, expectedError] of [
     'staging acknowledgement enabled',
     { build: { deploymentClass: 'production' }, safety: { stagingDatabaseExplicitlyAcknowledged: true } },
     /stagingDatabaseExplicitlyAcknowledged=false/
+  ],
+  [
+    'staging deployment identity',
+    {
+      deploymentId: 'chananya-clinical-staging',
+      tenant: { expectedClinicCode: 'CHANANYA-STG' },
+      identity: { qrIssuer: 'CHANANYA-STG' },
+      build: { deploymentClass: 'production' },
+      safety: { stagingDatabaseExplicitlyAcknowledged: false }
+    },
+    /must not contain a staging identity/
   ]
 ]) {
   assert.throws(
