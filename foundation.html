@@ -159,6 +159,21 @@
             <div class="section-heading"><span class="section-number">C</span><div><h2>Rule coverage</h2><p>จำนวนกฎตาม domain แยก approved กับ review_required</p></div></div>
             <div id="ttm-rule-coverage" class="foundation-coverage-table"></div>
           </section>
+          <section class="card" id="ttm-review-flow">
+            <div class="section-heading"><span class="section-number">R</span><div><h2>เสนอแก้ไขและรับรององค์ความรู้</h2><p>แพทย์/ผู้ประกอบวิชาชีพส่ง suggestion ได้ • Super Admin ต่างคนเป็นผู้อนุมัติเท่านั้น</p></div></div>
+            <div class="notice space-bottom-sm" id="ttm-review-boundary">ไม่มีการเขียนตารางความรู้จาก browser โดยตรง ทุกคำขอจะถูกบันทึกหลักฐานและรอ RPC ที่ผ่านการตรวจ</div>
+            <form id="ttm-suggestion-form" class="form">
+              <label>ตารางเป้าหมาย<select id="ttm-suggestion-target"><option value="ttm_diagnostic_knowledge">กฎวินิจฉัย TTM</option><option value="ttm_concepts">Concept ใน graph</option></select></label>
+              <label>การแก้ไข<select id="ttm-suggestion-action"><option value="create">เสนอรายการใหม่</option><option value="update">เสนอแก้รายการเดิม</option></select></label>
+              <label class="full">Target UUID (เว้นว่างเมื่อสร้างใหม่)<input id="ttm-suggestion-target-id" autocomplete="off" placeholder="เช่น 00000000-0000-0000-0000-000000000000"></label>
+              <label class="full">Payload JSON (ห้ามใส่ review_status/active)<textarea id="ttm-suggestion-payload" rows="5" required placeholder='{"domain":"age_samutthan","rule_key":"...","input_key":"...","output_value":"..."}'></textarea></label>
+              <label class="full">แหล่งอ้างอิง / citation<input id="ttm-suggestion-source" required minlength="3" maxlength="500"></label>
+              <label class="full">เหตุผลและสิ่งที่ตรวจสอบแล้ว<textarea id="ttm-suggestion-reason" rows="3" required minlength="8" maxlength="2000"></textarea></label>
+              <button class="btn primary full" id="ttm-suggestion-submit" type="submit">ส่ง suggestion เข้าคิวทบทวน</button>
+            </form>
+            <div class="section-heading space-top-md"><span class="section-number">Q</span><div><h3>คิวทบทวน</h3><p>Super Admin เห็นคิวของคลินิกและ approve/reject พร้อมเหตุผล</p></div></div>
+            <div id="ttm-suggestion-queue" class="list"><p class="muted">กำลังตรวจสิทธิ์และคิวทบทวน</p></div>
+          </section>
           <section class="card foundation-commercial-gate">
             <div class="section-heading"><span class="section-number">G</span><div><h2>Commercial readiness gate</h2><p>มีข้อมูลจำนวนมากไม่ได้แปลว่าพร้อมใช้วินิจฉัย</p></div></div>
             <div class="foundation-gates">
