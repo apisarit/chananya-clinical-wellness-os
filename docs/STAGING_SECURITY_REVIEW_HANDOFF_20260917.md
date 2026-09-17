@@ -22,8 +22,8 @@ any production gate as passed.
    table read is retained.
 2. `public.set_updated_at()` has a pinned `search_path = pg_catalog, public`.
 3. Direct `PUBLIC`/`anon` table privileges were revoked from the reviewed
-   staging application tables; authenticated grants were preserved where the
-   existing policies require them.
+   staging application tables and seven public views; authenticated grants
+   were preserved where the existing policies require them.
 4. Five non-PHI staging fixtures (`TEST-001` … `TEST-005`) are persisted in
    `public.staging_test_case_buffer`. They are editable only through the
    role-checked RPCs, require a reason and optimistic version, and use
@@ -41,6 +41,8 @@ The current staging advisor snapshot reports:
 
 - 16 RLS-enabled internal tables with no policies. They have no direct
   `PUBLIC`/`anon` table privileges and are intentionally service/internal-only.
+- The seven reviewed public views have no `anon` SELECT/INSERT/UPDATE/DELETE
+  privileges; authenticated SELECT remains available.
 - 81 `SECURITY DEFINER` functions still executable by `anon`.
 - 84 `SECURITY DEFINER` functions executable by `authenticated`.
 - The leaked-password-protection warning is no longer present after enabling
