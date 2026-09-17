@@ -14,6 +14,7 @@ assert.match(migration, /status in \('active', 'removed'\)/i);
 assert.match(migration, /VERSION_CONFLICT/i);
 assert.match(migration, /staging_test_case_buffer_events/i);
 assert.match(migration, /STAGING_TEST_CASE_EVENT_APPEND_ONLY/i);
+assert.match(migration, /STAGING_TEST_CASE_PHYSICAL_DELETE_FORBIDDEN/i);
 assert.match(migration, /cnyos_staging_internal\.record_buffer_event/i);
 assert.match(migration, /cnyos_staging_internal\.edit_staging_test_case/i);
 assert.match(migration, /cnyos_staging_internal\.remove_staging_test_case/i);

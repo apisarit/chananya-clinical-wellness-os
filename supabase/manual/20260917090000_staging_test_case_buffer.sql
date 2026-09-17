@@ -78,22 +78,22 @@ as $$
 declare
   v_reason text := coalesce(nullif(current_setting('cnyos.staging_buffer_reason', true), ''), 'unspecified');
 begin
+  if tg_op = 'DELETE' then
+    raise exception 'STAGING_TEST_CASE_PHYSICAL_DELETE_FORBIDDEN';
+  end if;
   insert into public.staging_test_case_buffer_events(
     case_key, action, before_payload, after_payload, reason, actor_id
   ) values (
-    case when tg_op = 'DELETE' then old.case_key else new.case_key end,
+    new.case_key,
     case when tg_op = 'INSERT' then 'created'
          when new.status = 'removed' and old.status <> 'removed' then 'removed'
          when new.status <> 'removed' and old.status = 'removed' then 'restored'
          else 'updated' end,
     case when tg_op = 'INSERT' then null else old.payload end,
-    case when tg_op = 'DELETE' then null else new.payload end,
+    new.payload,
     v_reason,
     auth.uid()
   );
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
   return new;
 end;
 $$;
