@@ -91,6 +91,11 @@ assert.doesNotMatch(liveChecklist, /supabase|auth-config|fetch\s*\(/i, 'live che
 const liveCheckInputs = [...liveChecklist.matchAll(/<input[^>]*data-live-check[^>]*>/g)].map(match => match[0]);
 assert.equal(liveCheckInputs.length, 11, 'live checklist should expose all 11 interactive checks');
 assert.ok(liveCheckInputs.every(input => !/\b(?:disabled|readonly)\b/i.test(input)), 'interactive read-only checks must remain clickable and settable');
+const simulationActions = [...platformReview.matchAll(/<button[^>]*data-simulation-action[^>]*>/g)].map(match => match[0]);
+assert.ok(simulationActions.length >= 4, 'review workflow should expose clickable simulation actions');
+assert.ok(simulationActions.every(button => !/\bdisabled\b/i.test(button)), 'simulation actions must remain clickable');
+assert.match(platformReviewSource, /SIMULATION_ONLY/, 'review controller must disclose simulation-only result');
+assert.ok(platformReview.indexOf('id="review-simulation-status"') < platformReview.indexOf('id="review-operations"'), 'simulation result must be visible from every workspace');
 for (const route of ['/', '/appointments.html', '/check-in.html', '/foundation.html', '/clinical-v3.html?step=history', '/outcomes.html', '/pharmacy.html', '/production.html', '/quality.html', '/admin.html', '/owner-control.html']) {
   assert.match(liveChecklist, new RegExp(`data-live-check-path=["']${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`), `live checklist should include ${route}`);
 }

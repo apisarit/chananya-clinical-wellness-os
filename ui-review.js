@@ -59,7 +59,23 @@
     update();
   }
 
+  // Review-only actions must be exercisable without ever reaching a live API.
+  // This keeps the controls clickable while making the non-persistence boundary
+  // explicit to the reviewer.
+  function announceSimulation(action) {
+    const status = $('#review-simulation-status');
+    if (!status) return;
+    status.hidden = false;
+    status.textContent = `SIMULATION_ONLY: ${action} — ไม่มีการส่งข้อมูลหรือเขียนฐานข้อมูล`;
+  }
+
   document.addEventListener('click', event => {
+    const simulation = event.target.closest('[data-simulation-action]');
+    if (simulation) {
+      event.preventDefault();
+      announceSimulation(simulation.dataset.simulationAction || 'action');
+      return;
+    }
     const route = event.target.closest('[data-review-route]');
     if (route) {
       event.preventDefault();
