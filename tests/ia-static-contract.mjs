@@ -88,6 +88,9 @@ assert.match(platformReview, /id="live-prelaunch-checklist"[^>]*data-local-only=
 const liveChecklist = platformReview.match(/<section[^>]*id="live-prelaunch-checklist"[\s\S]*?<\/section>/)?.[0] ?? '';
 assert.ok(liveChecklist, 'platform review must contain the live checklist section');
 assert.doesNotMatch(liveChecklist, /supabase|auth-config|fetch\s*\(/i, 'live checklist must remain credential-free and non-networked');
+const liveCheckInputs = [...liveChecklist.matchAll(/<input[^>]*data-live-check[^>]*>/g)].map(match => match[0]);
+assert.equal(liveCheckInputs.length, 11, 'live checklist should expose all 11 interactive checks');
+assert.ok(liveCheckInputs.every(input => !/\b(?:disabled|readonly)\b/i.test(input)), 'interactive read-only checks must remain clickable and settable');
 for (const route of ['/', '/appointments.html', '/check-in.html', '/foundation.html', '/clinical-v3.html?step=history', '/outcomes.html', '/pharmacy.html', '/production.html', '/quality.html', '/admin.html', '/owner-control.html']) {
   assert.match(liveChecklist, new RegExp(`data-live-check-path=["']${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`), `live checklist should include ${route}`);
 }
