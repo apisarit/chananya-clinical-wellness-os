@@ -87,7 +87,7 @@ If the next `20:00 UTC` boundary has already passed, do not rewrite the historic
    - `BACKUP_DEPLOYMENT_ID` (must not contain a staging marker)
    - `BACKUP_EXPECTED_SUPABASE_PROJECT_REF` (must exactly match `SUPABASE_URL`)
    - `BACKUP_EXPECTED_NETLIFY_SITE_ID` (immutable site UUID; must exactly match the Functions runtime)
-   - `BACKUP_EXPECTED_SITE_ORIGIN` (exact lowercase `https://<site>.netlify.app` origin)
+   - `BACKUP_EXPECTED_SITE_ORIGIN` (`https://cnyos.cloud` for CNYOS production; the exact `https://<site>.netlify.app` origin for a separately configured staging site)
    - `BACKUP_INTERNAL_DISPATCH_SECRET` (distinct random secret, Functions-only)
    - `BACKUP_MAX_CLINICS_PER_RUN` (optional, maximum 25)
    - `SUPABASE_URL`

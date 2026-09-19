@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { isSupportedSiteHostname } from './site-origin.mjs';
 
 export const RESTORE_SOURCE_FORMAT = 'chananya-exact-restore-source/v1';
 export const RESTORE_DATA_DOMAINS = Object.freeze([
@@ -153,7 +154,7 @@ function restoreSourceSiteOrigin(value) {
       || url.pathname !== '/'
       || url.search
       || url.hash
-      || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/.test(url.hostname)) {
+      || !isSupportedSiteHostname(url.hostname)) {
     throw new Error('RESTORE_SOURCE_SITE_CONFIG_INVALID');
   }
   return url.origin;

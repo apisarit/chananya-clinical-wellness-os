@@ -53,6 +53,44 @@ const exactOwnerContext = Object.freeze({
     published: true
   })
 });
+const productionOwnerContext = {
+  ...exactOwnerContext,
+  site: { ...exactOwnerContext.site, url: 'https://cnyos.cloud' }
+};
+assert.equal(assertOwnerRuntime(
+  new Request('https://cnyos.cloud/api/owner-subscription'),
+  productionOwnerContext, exactOwnerContext.site.id, 'https://cnyos.cloud'
+).siteOrigin, 'https://cnyos.cloud');
+for (const invalidOrigin of [
+  'http://cnyos.cloud', 'https://www.cnyos.cloud', 'https://evil.cnyos.cloud',
+  'https://cnyos.cloud.evil.example', 'https://cnyos.cloud:8443',
+  'https://user:pass@cnyos.cloud', 'https://cnyos.cloud/path',
+  'https://cnyos.cloud/?query=1', 'https://cnyos.cloud/#fragment',
+  'https://127.0.0.1', 'https://[::1]', 'https://example.com'
+]) {
+  assert.throws(() => assertOwnerRuntime(
+    new Request('https://cnyos.cloud/api/owner-subscription'),
+    productionOwnerContext, exactOwnerContext.site.id, invalidOrigin
+  ), /SITE_CONFIG_INVALID/, 'custom-domain support must not permit arbitrary origins');
+}
+for (const context of [
+  exactOwnerContext,
+  { ...productionOwnerContext, site: { ...productionOwnerContext.site, id: '20000000-0000-4000-8000-000000000020' } }
+]) {
+  assert.throws(() => assertOwnerRuntime(
+    new Request('https://cnyos.cloud/api/owner-subscription'),
+    context, exactOwnerContext.site.id, 'https://cnyos.cloud'
+  ), /RUNTIME_MISMATCH/);
+}
+assert.throws(() => assertOwnerRuntime(
+  new Request('https://cnyos.netlify.app/api/owner-subscription'),
+  productionOwnerContext, exactOwnerContext.site.id, 'https://cnyos.cloud'
+), /RUNTIME_MISMATCH/, 'the old domain must not become an alternate authorized origin');
+assert.throws(() => assertOwnerRuntime(
+  new Request('https://cnyos.cloud/api/owner-subscription'),
+  { ...productionOwnerContext, deploy: { ...productionOwnerContext.deploy, published: false } },
+  exactOwnerContext.site.id, 'https://cnyos.cloud'
+), /DEPLOY_CONTEXT_DENIED/);
 assert.deepEqual(assertOwnerRuntime(
   new Request('https://synthetic-owner-staging.netlify.app/api/owner-subscription'),
   exactOwnerContext,

@@ -45,7 +45,7 @@ paste runtime secrets into public config files. Reuse the exact site bindings:
 | `CNYOS_OWNER_EXPECTED_PROJECT_REF` | Exact 20-letter project reference |
 | `CNYOS_RUNTIME_EXPECTED_CLINIC_ID` | Exact clinic UUID for this isolated site |
 | `CNYOS_OWNER_EXPECTED_NETLIFY_SITE_ID` | Exact intended Netlify site UUID |
-| `CNYOS_OWNER_EXPECTED_SITE_ORIGIN` | Exact intended `https://…netlify.app` origin |
+| `CNYOS_OWNER_EXPECTED_SITE_ORIGIN` | `https://cnyos.cloud` for CNYOS production; exact intended `https://…netlify.app` origin for a dedicated staging site |
 
 The existing runtime binding permits only a published deploy on the configured
 site (including a standalone staging site whose Netlify deploy context is

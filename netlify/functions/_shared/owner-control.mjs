@@ -1,3 +1,5 @@
+import { isSupportedSiteHostname } from './site-origin.mjs';
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLINIC_CODE_PATTERN = /^[A-Z][A-Z0-9_-]{1,23}$/;
 
@@ -62,7 +64,7 @@ function ownerSiteOrigin(value) {
     || parsed.pathname !== '/'
     || parsed.search
     || parsed.hash
-    || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/.test(parsed.hostname)) {
+    || !isSupportedSiteHostname(parsed.hostname)) {
     throw new Error('CNYOS_OWNER_SITE_CONFIG_INVALID');
   }
   return parsed.origin;

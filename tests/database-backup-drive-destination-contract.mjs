@@ -37,6 +37,15 @@ function configWith(overrides = {}) {
 
 const noEnvFallback = configWith();
 assert.equal(noEnvFallback.hasCompleteEnvFolderIds, false, 'DB assignments must allow folder env vars to be omitted');
+assert.equal(configWith({ BACKUP_EXPECTED_SITE_ORIGIN: 'https://cnyos.cloud' }).expectedSiteOrigin,
+  'https://cnyos.cloud', 'production backup must accept the configured canonical domain');
+for (const invalidOrigin of ['http://cnyos.cloud', 'https://www.cnyos.cloud',
+  'https://cnyos.cloud.evil.example', 'https://cnyos.cloud:8443',
+  'https://user@cnyos.cloud', 'https://cnyos.cloud/path',
+  'https://cnyos.cloud/?query=1', 'https://cnyos.cloud/#fragment']) {
+  assert.throws(() => configWith({ BACKUP_EXPECTED_SITE_ORIGIN: invalidOrigin }),
+    /BACKUP_EXPECTED_SITE_ORIGIN_INVALID/);
+}
 const stagingTarget = Object.freeze({
   BACKUP_ENVIRONMENT: 'staging',
   BACKUP_DEPLOYMENT_ID: 'synthetic-clinic-staging',
