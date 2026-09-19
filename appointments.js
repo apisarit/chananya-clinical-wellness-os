@@ -17,16 +17,20 @@
   let session;
   let profile;
   let canOperate = false;
+  let canClinicalStatus = false;
   let allPatients = [];
   let allSchedules = [];
   let scheduleRequestVersion = 0;
+  let appointmentRequestVersion = 0;
   let patientRequestVersion = 0;
   let patientSearchTimer;
   let scheduleCreateInFlight = false;
   let bookingInFlight = false;
+  const appointmentActionsInFlight = new Set();
 
   const patientName = patient => [patient.title || patient.prefix, patient.first_name, patient.last_name].filter(Boolean).join(' ') || patient.full_name || patient.name || 'ไม่ระบุชื่อ';
   const patientLabel = patient => `${patient.hn || patient.patient_no || '-'} — ${patientName(patient)}${patient.phone ? ` • ${patient.phone}` : ''}`;
+  const appointmentStatusLabel = status => ({ booked: 'จองแล้ว', confirmed: 'ยืนยันแล้ว', checked_in: 'เช็กอินแล้ว', in_service: 'กำลังรับบริการ', completed: 'เสร็จสิ้น', cancelled: 'ยกเลิก', no_show: 'ไม่มาตามนัด', rescheduled: 'เลื่อนนัด' }[status] || status || '-');
 
   function toast(message) {
     const element = $('#toast');
@@ -191,19 +195,21 @@
   }
 
   async function loadAppointments() {
+    const version = ++appointmentRequestVersion;
     $('#appointment-list').innerHTML = '<p class="muted">กำลังโหลด…</p>';
     const day = $('#appointments-date').value;
     const status = $('#status-filter').value;
-    let request = db.from('clinic_appointments').select('*').order('scheduled_start');
+    let request = db.from('clinic_appointments').select('*,patient:patients!clinic_appointments_patient_clinic_fkey(id,hn,prefix,first_name,last_name,phone)').order('scheduled_start');
     if (day) request = request.gte('scheduled_start', new Date(`${day}T00:00:00+07:00`).toISOString()).lte('scheduled_start', new Date(`${day}T23:59:59.999+07:00`).toISOString());
     if (status) request = request.eq('status', status);
     const result = await request;
+    if (version !== appointmentRequestVersion) return;
     if (result.error) throw result.error;
-    const patientMap = Object.fromEntries(allPatients.map(patient => [patient.id, patient]));
     $('#appointment-list').innerHTML = (result.data || []).map(item => {
-      const patient = patientMap[item.patient_id] || {};
-      const actions = canOperate ? `${item.status === 'booked' ? `<button class="btn ghost" data-status="confirmed" data-id="${item.id}">ยืนยัน</button>` : ''}${['booked', 'confirmed'].includes(item.status) ? `<button class="btn ghost" data-status="checked_in" data-id="${item.id}">Check-in</button>` : ''}${item.status === 'checked_in' ? `<button class="btn ghost" data-status="in_service" data-id="${item.id}">เริ่มบริการ</button>` : ''}${item.status === 'in_service' ? `<button class="btn ghost" data-status="completed" data-id="${item.id}">เสร็จสิ้น</button>` : ''}${['booked', 'confirmed'].includes(item.status) ? `<button class="btn danger" data-cancel="${item.id}">ยกเลิก</button>` : ''}` : '';
-      return `<article class="appt-row"><div><b>${esc(item.appointment_no)} • คิว ${item.queue_number}</b><small>${esc(patientLabel(patient))}</small><small>${esc(dateTime(item.scheduled_start))} • ${esc(item.status)}</small><small>${esc(item.chief_complaint || '')}</small></div><div class="actions">${actions}</div></article>`;
+      const patient = item.patient || {};
+      const mayProvideCare = canClinicalStatus && item.practitioner_id === session.user.id;
+      const actions = (canOperate || mayProvideCare) ? `${canOperate && item.status === 'booked' ? `<button class="btn ghost" data-status="confirmed" data-id="${item.id}">ยืนยัน</button>` : ''}${canOperate && ['booked', 'confirmed'].includes(item.status) ? `<button class="btn ghost" data-status="checked_in" data-id="${item.id}">Check-in</button>` : ''}${(canOperate || mayProvideCare) && item.status === 'checked_in' ? `<button class="btn ghost" data-status="in_service" data-id="${item.id}">เริ่มบริการ</button>` : ''}${(canOperate || mayProvideCare) && item.status === 'in_service' ? `<button class="btn ghost" data-status="completed" data-id="${item.id}">เสร็จสิ้น</button>` : ''}${canOperate && ['booked', 'confirmed'].includes(item.status) ? `<button class="btn danger" data-cancel="${item.id}">ยกเลิก</button>` : ''}` : '';
+      return `<article class="appt-row"><div><b>${esc(item.appointment_no)} • คิว ${item.queue_number}</b><small>${esc(patientLabel(patient))}</small><small>${esc(dateTime(item.scheduled_start))} • ${esc(appointmentStatusLabel(item.status))}</small><small>${esc(item.chief_complaint || '')}</small></div><div class="actions">${actions}</div></article>`;
     }).join('') || '<p class="muted">ไม่มีรายการนัดหมาย</p>';
     document.querySelectorAll('[data-status]').forEach(button => { button.onclick = () => setStatus(button.dataset.id, button.dataset.status).catch(fail); });
     document.querySelectorAll('[data-cancel]').forEach(button => { button.onclick = () => cancelAppointment(button.dataset.cancel).catch(fail); });
@@ -211,20 +217,37 @@
 
   async function setStatus(id, status) {
     if (!canOperate) throw new Error('บัญชีนี้มีสิทธิ์ดูเท่านั้น');
-    const result = await db.rpc('set_clinic_appointment_status', { p_appointment_id: id, p_new_status: status, p_note: null });
-    if (result.error) throw result.error;
-    toast('อัปเดตสถานะแล้ว');
-    await loadAppointments();
+    if (appointmentActionsInFlight.has(id)) return;
+    appointmentActionsInFlight.add(id);
+    document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = true; });
+    try {
+      const result = await db.rpc('set_clinic_appointment_status', { p_appointment_id: id, p_new_status: status, p_note: null });
+      if (result.error) throw result.error;
+      toast('อัปเดตสถานะแล้ว');
+      await loadAppointments();
+    } finally {
+      appointmentActionsInFlight.delete(id);
+      document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = false; });
+    }
   }
 
   async function cancelAppointment(id) {
     if (!canOperate) throw new Error('บัญชีนี้มีสิทธิ์ดูเท่านั้น');
     const reason = prompt('เหตุผลที่ยกเลิก');
     if (reason === null) return;
-    const result = await db.rpc('cancel_clinic_appointment', { p_appointment_id: id, p_reason: reason });
-    if (result.error) throw result.error;
-    toast('ยกเลิกนัดแล้ว');
-    await Promise.all([loadSchedules(), loadAppointments()]);
+    if (!reason.trim()) throw new Error('กรุณาระบุเหตุผลที่ยกเลิก');
+    if (appointmentActionsInFlight.has(id)) return;
+    appointmentActionsInFlight.add(id);
+    document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = true; });
+    try {
+      const result = await db.rpc('cancel_clinic_appointment', { p_appointment_id: id, p_reason: reason.trim() });
+      if (result.error) throw result.error;
+      toast('ยกเลิกนัดแล้ว');
+      await Promise.all([loadSchedules(), loadAppointments()]);
+    } finally {
+      appointmentActionsInFlight.delete(id);
+      document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = false; });
+    }
   }
 
   async function init() {
@@ -238,8 +261,10 @@
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'appointments_view')) throw new Error('บัญชีนี้ไม่มีสิทธิ์ดูระบบนัดหมาย');
       canOperate = runtime.can(profile, 'appointments_operate');
+      canClinicalStatus = runtime.can(profile, 'appointments_clinical_status');
       window.ChananyaShell?.mount({ profile, session, active: 'appointments' });
       $('#view-only-notice').classList.toggle('hidden', canOperate);
+      if (!canOperate && canClinicalStatus) $('#view-only-notice').textContent = 'บัญชีผู้ให้บริการดูตารางนัดได้ และเริ่มหรือจบการรักษาได้เฉพาะนัดของตน';
       $('#booking-section').classList.toggle('hidden', !canOperate);
       $('#schedule-setup').classList.toggle('hidden', !canOperate);
       const today = new Date();

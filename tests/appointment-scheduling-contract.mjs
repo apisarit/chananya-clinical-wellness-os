@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const html = fs.readFileSync(new URL('../appointments.html', import.meta.url), 'utf8');
 const js = fs.readFileSync(new URL('../appointments.js', import.meta.url), 'utf8');
 const sql = fs.readFileSync(new URL('../supabase/migrations/20260919214500_appointment_schedule_self_service.sql', import.meta.url), 'utf8');
+const cancellationSql = fs.readFileSync(new URL('../supabase/migrations/20260919231610_require_appointment_cancellation_reason.sql', import.meta.url), 'utf8');
 
 assert.match(html, /id="schedule-form"/);
 assert.match(html, /id="schedule-submit"/);
@@ -28,6 +29,13 @@ assert.match(js, /\$\('#booking-submit'\)\.disabled = true/);
 assert.match(js, /await Promise\.all\(\[loadSchedules\(\), loadAppointments\(\)\]\);\s*\$\('#booking-status'\)\.textContent = confirmation/);
 assert.match(js, /new Date\(`\$\{day\}T00:00:00\+07:00`\)/);
 assert.match(js, /thaiTime\(item\.ends_at\)/);
+assert.match(js, /patients!clinic_appointments_patient_clinic_fkey\(id,hn,prefix,first_name,last_name,phone\)/);
+assert.match(js, /if \(version !== appointmentRequestVersion\) return/);
+assert.match(js, /appointmentStatusLabel\(item\.status\)/);
+assert.match(js, /if \(!reason\.trim\(\)\) throw new Error\('กรุณาระบุเหตุผลที่ยกเลิก'\)/);
+assert.match(js, /appointmentActionsInFlight\.has\(id\)/);
+assert.match(js, /runtime\.can\(profile, 'appointments_clinical_status'\)/);
+assert.match(js, /item\.practitioner_id === session\.user\.id/);
 
 assert.match(sql, /create or replace function public\.is_appointment_operator\(\)/i);
 assert.match(sql, /p\.system_role in \('admin','super_admin'\)/i);
@@ -38,6 +46,15 @@ assert.match(sql, /m\.clinic_role in \('practitioner','doctor'\)/i);
 assert.match(sql, /p_starts_at <= now\(\)/i);
 assert.match(sql, /grant execute on function public\.create_practitioner_schedule[\s\S]+to authenticated/i);
 assert.doesNotMatch(sql, /grant execute[\s\S]+to anon/i);
+assert.match(cancellationSql, /nullif\(trim\(p_reason\), ''\) is null then raise exception 'CANCELLATION_REASON_REQUIRED'/i);
+assert.match(cancellationSql, /set search_path = pg_catalog, public, pg_temp/i);
+assert.match(cancellationSql, /revoke all on function public\.cancel_clinic_appointment\(uuid,text\) from public, anon, authenticated, service_role/i);
+assert.match(cancellationSql, /grant execute on function public\.cancel_clinic_appointment\(uuid,text\) to authenticated/i);
+assert.match(cancellationSql, /v_old = 'checked_in' and p_new_status = 'in_service'/i);
+assert.match(cancellationSql, /v_old = 'in_service' and p_new_status = 'completed'/i);
+assert.match(cancellationSql, /raise exception 'INVALID_APPOINTMENT_TRANSITION'/i);
+assert.doesNotMatch(cancellationSql, /p_new_status not in \([^\n]*'cancelled'/i);
+assert.match(cancellationSql, /revoke all on function public\.set_clinic_appointment_status\(uuid,text,text\) from public, anon, authenticated, service_role/i);
 
 // Execute the actual schedule loader against synthetic rows, without live writes.
 const nodes = new Map();
