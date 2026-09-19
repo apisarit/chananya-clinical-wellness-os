@@ -40,6 +40,13 @@
             <label>ค้นหา<input id="search" placeholder="ชื่อผู้ให้บริการ สาขา ห้อง หรือบริการ"></label>
             <button id="search-btn" class="btn primary">ค้นหา</button>
           </div>
+          <fieldset class="toolbar"><legend>ช่วงเวลาที่ต้องการ (เวลาไทย เลือกได้หลายช่วง)</legend>
+            <label><input type="checkbox" name="time-window" value="10:00-12:00">10:00–12:00</label>
+            <label><input type="checkbox" name="time-window" value="13:00-15:00">13:00–15:00</label>
+            <label><input type="checkbox" name="time-window" value="15:00-18:00">15:00–18:00</label>
+            <label><input type="checkbox" name="time-window" value="18:00-21:00">18:00–21:00</label>
+          </fieldset>
+          <p>ไม่เลือก = แสดงทุกช่วงเวลา ช่องเหล่านี้กรองตารางที่เปิดรับนัดแล้ว ไม่ได้สร้างตารางใหม่</p>
           <div id="schedule-status" class="notice space-block-md">กำลังโหลดช่วงเวลาว่าง…</div>
           <div id="schedule-list" class="schedule-grid"></div>
           <details id="schedule-setup" class="space-top-md hidden">

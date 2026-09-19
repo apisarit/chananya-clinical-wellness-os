@@ -3,7 +3,9 @@
 
   const $ = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const dateTime = value => new Date(value).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateTime = value => new Date(value).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' });
+  const thaiTime = value => new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Bangkok' });
+  const scheduleLabel = item => `${dateTime(item.starts_at)} – ${thaiTime(item.ends_at)} น. • ${item.practitioner_name || '-'} • ${item.title}`;
 
   let db;
   let session;
@@ -46,14 +48,15 @@
     const result = await request;
     if (result.error) throw result.error;
     const term = $('#search').value.trim().toLowerCase();
-    const rows = (result.data || []).filter(item => !term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term)));
+    const windows = Array.from(document.querySelectorAll('[name="time-window"]:checked'), input => input.value.split('-'));
+    const rows = (result.data || []).filter(item => (!term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term))) && (!windows.length || windows.some(([start, end]) => thaiTime(item.starts_at) >= start && thaiTime(item.starts_at) < end)));
     allSchedules = rows;
-    $('#schedule-status').textContent = `พบ ${rows.length} ช่วงเวลาที่ว่าง`;
+    $('#schedule-status').textContent = rows.length ? `พบ ${rows.length} ช่วงเวลาที่ว่าง` : 'ไม่พบตารางเปิดรับนัดตามวันและเวลาที่เลือก — ลองเปลี่ยนตัวกรอง หรือเพิ่มช่วงเวลารับนัด';
     $('#schedule-list').innerHTML = rows.map(item => `<article class="schedule-card"><h3>${esc(item.title)}</h3><div class="meta"><span>${esc(item.practitioner_name || '-')}</span><span>${esc(item.specialty_name_th || item.specialty_name_en || '-')}</span><span>${esc(dateTime(item.starts_at))} – ${esc(new Date(item.ends_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }))}</span><span>สาขา ${esc(item.branch_code || '-')} • ห้อง ${esc(item.room_code || '-')}</span></div><p><span class="capacity">ว่าง ${item.available_capacity}/${item.max_patients}</span></p>${canOperate ? `<button class="btn primary" data-book="${item.id}" data-label="${esc(item.title)} • ${esc(dateTime(item.starts_at))} • ${esc(item.practitioner_name || '-')}">เลือกช่วงเวลานี้</button>` : ''}</article>`).join('') || `<div class="notice warning"><b>ยังไม่มีช่วงเวลาที่เปิดรับนัด</b><br>${canOperate ? 'กด “เพิ่มช่วงเวลารับนัด” เพื่อสร้างช่วงเวลาแรก แล้วจึงเลือกผู้รับบริการ' : 'กรุณาให้ Admin หรือ Reception เพิ่มตารางรับนัด'}</div>`;
     document.querySelectorAll('[data-book]').forEach(button => {
       button.onclick = () => {
         $('#selected-schedule').value = button.dataset.book;
-        $('#selected-schedule-label').value = button.dataset.label;
+        $('#selected-schedule-label').value = scheduleLabel(allSchedules.find(item => item.id === button.dataset.book));
         $('#booking-status').textContent = 'เลือกช่วงเวลาแล้ว กรุณาเลือกผู้รับบริการ';
         $('#booking-section').scrollIntoView({ behavior: 'smooth' });
       };
@@ -87,7 +90,7 @@
     const item = allSchedules.find(row => row.id === scheduleId);
     if (!item) return false;
     $('#selected-schedule').value = item.id;
-    $('#selected-schedule-label').value = `${item.title} • ${dateTime(item.starts_at)} • ${item.practitioner_name || '-'}`;
+    $('#selected-schedule-label').value = scheduleLabel(item);
     $('#booking-status').textContent = 'เลือกช่วงเวลาแล้ว กรุณาเลือกผู้รับบริการ';
     return true;
   }
@@ -214,6 +217,7 @@
     renderPatients(term ? allPatients.filter(patient => patientLabel(patient).toLowerCase().includes(term)).slice(0, 100) : allPatients);
   });
   $('#search-btn').addEventListener('click', () => loadSchedules().catch(fail));
+  document.querySelectorAll('[name="time-window"]').forEach(input => input.addEventListener('change', () => loadSchedules().catch(fail)));
   $('#schedule-form').addEventListener('submit', event => createSchedule(event).catch(error => { $('#schedule-create-status').textContent = error.message; $('#schedule-create-status').classList.add('danger'); fail(error); }));
   $('#booking-form').addEventListener('submit', event => bookAppointment(event).catch(error => { $('#booking-status').textContent = error.message; $('#booking-status').classList.add('danger'); fail(error); }));
   $('#refresh-appts').addEventListener('click', () => loadAppointments().catch(fail));
