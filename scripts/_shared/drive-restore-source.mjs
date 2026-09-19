@@ -11,6 +11,7 @@ import {
   RESTORE_DATA_DOMAINS,
   RESTORE_FOLDER_DOMAINS
 } from '../../netlify/functions/_shared/restore-source.mjs';
+import { isSupportedSiteHostname } from '../../netlify/functions/_shared/site-origin.mjs';
 
 const API_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43,256}$/;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
@@ -113,7 +114,7 @@ export function assertRestoreSourceEndpoint(value) {
   try { url = new URL(String(value || '')); }
   catch { throw new Error('RESTORE_SOURCE_API_URL_INVALID'); }
   if (url.protocol !== 'https:'
-      || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/i.test(url.hostname)
+      || !isSupportedSiteHostname(url.hostname)
       || url.port
       || url.username
       || url.password

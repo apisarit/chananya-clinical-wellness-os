@@ -384,6 +384,29 @@ assert.deepEqual(assertRestoreSourceRuntime(
   siteOrigin: stagingConfig.BACKUP_EXPECTED_SITE_ORIGIN,
   deployId: exactRestoreContext.deploy.id
 });
+const productionRestoreContext = {
+  ...exactRestoreContext, site: { ...exactRestoreContext.site, url: 'https://cnyos.cloud' }
+};
+assert.equal(assertRestoreSourceRuntime(
+  new Request('https://cnyos.cloud/api/restore-source'), productionRestoreContext,
+  stagingConfig.BACKUP_EXPECTED_NETLIFY_SITE_ID, 'https://cnyos.cloud'
+).siteOrigin, 'https://cnyos.cloud');
+assert.throws(() => assertRestoreSourceRuntime(
+  new Request('https://cnyos.cloud/api/restore-source'), exactRestoreContext,
+  stagingConfig.BACKUP_EXPECTED_NETLIFY_SITE_ID, 'https://cnyos.cloud'
+), /RUNTIME_MISMATCH/, 'custom domain must still match the provider runtime origin');
+assert.throws(() => assertRestoreSourceRuntime(
+  new Request('https://cnyos.netlify.app/api/restore-source'), productionRestoreContext,
+  stagingConfig.BACKUP_EXPECTED_NETLIFY_SITE_ID, 'https://cnyos.cloud'
+), /RUNTIME_MISMATCH/);
+for (const invalidOrigin of ['http://cnyos.cloud', 'https://www.cnyos.cloud',
+  'https://evil.cnyos.cloud', 'https://cnyos.cloud:8443', 'https://user@cnyos.cloud',
+  'https://cnyos.cloud/path', 'https://cnyos.cloud/?q=1', 'https://cnyos.cloud/#x']) {
+  assert.throws(() => assertRestoreSourceRuntime(
+    new Request('https://cnyos.cloud/api/restore-source'), productionRestoreContext,
+    stagingConfig.BACKUP_EXPECTED_NETLIFY_SITE_ID, invalidOrigin
+  ), /SITE_CONFIG_INVALID/);
+}
 assert.throws(() => assertRestoreSourceRuntime(
   new Request('https://synthetic-drive-staging.netlify.app/api/restore-source'),
   {
@@ -425,6 +448,15 @@ assert.equal(
   'https://synthetic-drive-staging.netlify.app/api/restore-source'
 );
 assert.throws(() => assertRestoreSourceEndpoint('https://example.test/api/restore-source'), /URL_INVALID/);
+assert.equal(assertRestoreSourceEndpoint('https://cnyos.cloud/api/restore-source'),
+  'https://cnyos.cloud/api/restore-source');
+for (const endpoint of ['http://cnyos.cloud/api/restore-source',
+  'https://www.cnyos.cloud/api/restore-source', 'https://evil.cnyos.cloud/api/restore-source',
+  'https://cnyos.cloud.evil.example/api/restore-source', 'https://cnyos.cloud:8443/api/restore-source',
+  'https://user@cnyos.cloud/api/restore-source', 'https://cnyos.cloud/elsewhere',
+  'https://cnyos.cloud/api/restore-source?q=1', 'https://cnyos.cloud/api/restore-source#x']) {
+  assert.throws(() => assertRestoreSourceEndpoint(endpoint), /URL_INVALID/);
+}
 const apiCalls = [];
 const fetched = await fetchExactRestoreSource({
   endpoint: 'https://synthetic-drive-staging.netlify.app/api/restore-source',

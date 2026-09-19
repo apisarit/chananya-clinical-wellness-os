@@ -30,6 +30,13 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_ID=<new immutable rotation ID>
 GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_BASE64=<new 32-byte base64 key>
 ```
 
+For CNYOS production use `BACKUP_EXPECTED_SITE_ORIGIN=https://cnyos.cloud`.
+Keep the exact dedicated Netlify origin for staging. The origin is authenticated
+in the encrypted credential binding: a Blob provisioned for `cnyos.netlify.app`
+cannot simply be relabelled or reused for `cnyos.cloud`. Provision a new credential
+version with the approved production binding; preserve the old version for
+rollback. The runtime still checks the exact site UUID and origin.
+
 Validate locally without writing:
 
 ```bash

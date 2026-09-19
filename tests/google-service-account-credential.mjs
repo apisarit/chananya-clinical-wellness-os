@@ -113,6 +113,7 @@ assert.deepEqual(decryptGoogleServiceAccountCredential(JSON.stringify(envelope),
 for (const changed of [
   { siteId: '20000000-0000-4000-8000-000000000020' },
   { siteOrigin: 'https://another-staging.netlify.app' },
+  { siteOrigin: 'https://cnyos.cloud' },
   { supabaseProjectRef: 'anotherprojectrefabc' },
   { deploymentId: 'another-clinic-staging' },
   { environment: 'production' },
@@ -135,6 +136,23 @@ for (const changed of [
 }
 
 const tamperedTag = Buffer.from(envelope.tag, 'base64');
+const productionBindingInput = {
+  siteId: binding.netlify_site_id, siteOrigin: 'https://cnyos.cloud',
+  supabaseProjectRef: binding.supabase_project_ref, deploymentId: 'cnyos-production',
+  environment: 'production', wrapKeyId: binding.wrap_key_id,
+  expectedServiceAccountEmail: clientEmail
+};
+const productionBinding = createGoogleServiceAccountBinding(productionBindingInput);
+const productionEnvelope = encryptGoogleServiceAccountCredential(source, wrapKey, productionBinding);
+assert.equal(decryptGoogleServiceAccountCredential(
+  JSON.stringify(productionEnvelope), wrapKey, productionBinding
+).clientEmail, clientEmail, 'credential encryption and decryption must support the canonical domain');
+for (const siteOrigin of ['http://cnyos.cloud', 'https://www.cnyos.cloud',
+  'https://evil.cnyos.cloud', 'https://cnyos.cloud:8443', 'https://user@cnyos.cloud',
+  'https://cnyos.cloud/path', 'https://cnyos.cloud/?q=1', 'https://cnyos.cloud/#x']) {
+  assert.throws(() => createGoogleServiceAccountBinding({ ...productionBindingInput, siteOrigin }),
+    /BINDING_SITE_ORIGIN_INVALID/);
+}
 tamperedTag[0] ^= 1;
 assert.throws(
   () => decryptGoogleServiceAccountCredential(JSON.stringify({

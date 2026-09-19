@@ -92,21 +92,21 @@ Never place a service-role key, service-account JSON, encryption key, OAuth clie
 
 ## Staging activation
 
-Apply the ordered migration set to the isolated staging project, then configure these values on the CNYOS Netlify site with Production context and Functions-only scope:
+Apply the ordered migration set to the isolated staging project, then configure these values on a **dedicated staging Netlify site** with Production context and Functions-only scope. Netlify's context name does not make the application production. Do not apply this staging template to the production site serving `cnyos.cloud`.
 
 ```text
 CNYOS_OWNER_CONTROL_ENABLED=true
 CNYOS_OWNER_DRIVE_ENABLED=false
 CNYOS_OWNER_EMAILS=<exact confirmed Google owner email>
 CNYOS_OWNER_EXPECTED_PROJECT_REF=hsmnjwxurlmsizndjlun
-CNYOS_OWNER_EXPECTED_NETLIFY_SITE_ID=7da5e39e-580d-44f1-8623-605313e2fb2b
-CNYOS_OWNER_EXPECTED_SITE_ORIGIN=https://cnyos.netlify.app
+CNYOS_OWNER_EXPECTED_NETLIFY_SITE_ID=<dedicated staging site UUID>
+CNYOS_OWNER_EXPECTED_SITE_ORIGIN=https://<dedicated-staging-site>.netlify.app
 CNYOS_OWNER_CLINIC_CODES=CHANANYA-STG
 BACKUP_ENVIRONMENT=staging
 BACKUP_DEPLOYMENT_ID=chananya-clinical-staging
 BACKUP_EXPECTED_SUPABASE_PROJECT_REF=hsmnjwxurlmsizndjlun
-BACKUP_EXPECTED_NETLIFY_SITE_ID=7da5e39e-580d-44f1-8623-605313e2fb2b
-BACKUP_EXPECTED_SITE_ORIGIN=https://cnyos.netlify.app
+BACKUP_EXPECTED_NETLIFY_SITE_ID=<same dedicated staging site UUID>
+BACKUP_EXPECTED_SITE_ORIGIN=https://<dedicated-staging-site>.netlify.app
 BACKUP_PRODUCTION_SUPABASE_URL=https://qptxnrldzzinlcabudjv.supabase.co
 GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID=1eQLyI8f4YBI1spmk2ArueBptkvLl1h83
 GOOGLE_DRIVE_EXPECTED_SERVICE_ACCOUNT_EMAIL=<exact dedicated CNYOS service-account email>
@@ -114,6 +114,13 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_ID=<immutable CNYOS credential version>
 GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_BASE64=<Functions-only secret>
 BACKUP_ENABLED=false
 ```
+
+For a reviewed CNYOS production configuration, both expected site origins are
+`https://cnyos.cloud`, bound to production site UUID
+`7da5e39e-580d-44f1-8623-605313e2fb2b`. Use the production project, clinic and
+credentials, not the staging values above. Owner and restore requests must match
+that exact origin and the published Functions deployment; the Netlify alias,
+preview URLs and arbitrary `*.cnyos.cloud` hosts are not interchangeable.
 
 Keep `CNYOS_OWNER_DRIVE_ENABLED=false` until the encrypted service-account Blob is provisioned and the service account has been shared only to this root's five direct-child folders. Keep `BACKUP_ENABLED=false` until the assignment is stored. Then enable and test one gate at a time, with a new deploy after each Functions environment change. Keep `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_BASE64` and `BACKUP_ENCRYPTION_KEY_BASE64` secret and Functions-only; all three protected values must be distinct. Staging and production reject raw `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`. The owner allowlist should also be stored as a secret because it contains personal data. `BACKUP_PRODUCTION_SUPABASE_URL` is a required origin-only denylist for staging, not a Production credential; never place a Production service-role key in a staging site.
 

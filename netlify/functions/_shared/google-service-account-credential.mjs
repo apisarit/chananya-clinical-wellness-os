@@ -7,6 +7,7 @@ import {
   timingSafeEqual
 } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
+import { isSupportedSiteHostname } from './site-origin.mjs';
 
 export const GOOGLE_SERVICE_ACCOUNT_BLOB_STORE = 'cnyos-functions-secrets';
 export const GOOGLE_SERVICE_ACCOUNT_BLOB_FORMAT = 'cnyos-google-service-account-credential/v1';
@@ -114,7 +115,7 @@ function parseNetlifyOrigin(value) {
     || parsed.pathname !== '/'
     || parsed.search
     || parsed.hash
-    || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/.test(parsed.hostname)) {
+    || !isSupportedSiteHostname(parsed.hostname)) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_BINDING_SITE_ORIGIN_INVALID');
   }
   return parsed.origin;

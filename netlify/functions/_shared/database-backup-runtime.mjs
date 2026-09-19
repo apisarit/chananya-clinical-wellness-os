@@ -21,6 +21,7 @@ import {
   resolveGoogleServiceAccountCredential
 } from './google-service-account-credential.mjs';
 import { inspectDriveFolder } from './owner-drive.mjs';
+import { isSupportedSiteHostname } from './site-origin.mjs';
 
 const responseHeaders = Object.freeze({
   'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
@@ -177,7 +178,7 @@ function parseExpectedSiteOrigin(value) {
     || parsed.pathname !== '/'
     || parsed.search
     || parsed.hash
-    || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.netlify\.app$/.test(parsed.hostname)) {
+    || !isSupportedSiteHostname(parsed.hostname)) {
     throw new Error('BACKUP_EXPECTED_SITE_ORIGIN_INVALID');
   }
   return parsed.origin;
