@@ -11,7 +11,7 @@
     "build:staging-artifact": "node scripts/generate-tenant-config.mjs && node scripts/build-u-synthesise.mjs && node scripts/build-netlify-publish.mjs",
     "tenant:bootstrap-sql": "node scripts/generate-tenant-bootstrap-sql.mjs",
     "migration:ledger-repair-sql": "node scripts/generate-migration-ledger-repair-sql.mjs",
-    "precheck": "npm run check:synthetic-buffer && npm run check:staging-test-case-buffer && npm run check:production-runtime-binding",
+    "precheck": "npm run check:synthetic-buffer && npm run check:staging-test-case-buffer && npm run check:production-runtime-binding && npm run check:opd-encounter-sync",
     "check:production-runtime-binding": "node tests/verify-production-runtime-binding-contract.mjs",
     "check:treatment-service-invoice": "node tests/treatment-service-invoice-contract.mjs",
     "check:legacy-upgrade": "node tests/legacy-clinical-upgrade-rehearsal.mjs",
@@ -51,6 +51,7 @@
     "check:who-icd": "node tests/who-icd-contract.mjs",
     "check:selected-export": "node tests/selected-export-contract.mjs",
     "check:ollama-local": "node tests/ollama-local-wrapper-contract.mjs",
+    "check:opd-encounter-sync": "node tests/opd-encounter-sync-contract.mjs",
     "review:ollama": "bash scripts/ollama-qwen-review.sh"
   },
   "dependencies": {
