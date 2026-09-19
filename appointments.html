@@ -42,6 +42,22 @@
           </div>
           <div id="schedule-status" class="notice space-block-md">กำลังโหลดช่วงเวลาว่าง…</div>
           <div id="schedule-list" class="schedule-grid"></div>
+          <details id="schedule-setup" class="space-top-md hidden">
+            <summary class="btn ghost">เพิ่มช่วงเวลารับนัด</summary>
+            <form id="schedule-form" class="form space-top-md">
+              <label>ผู้ให้บริการ<select id="schedule-practitioner" required><option value="">เลือกผู้ให้บริการ</option></select></label>
+              <label>ชื่อช่วงเวลา<input id="schedule-title" required value="ตรวจรักษา"></label>
+              <label>เริ่ม<input id="schedule-start" type="datetime-local" required></label>
+              <label>สิ้นสุด<input id="schedule-end" type="datetime-local" required></label>
+              <label>สาขา<input id="schedule-branch" value="MAIN" required></label>
+              <label>ห้อง<input id="schedule-room" placeholder="เช่น TTM-1"></label>
+              <label>จำนวนที่รับ<input id="schedule-capacity" type="number" min="1" max="200" value="1" required></label>
+              <label>นาทีต่อคิว<input id="schedule-slot-minutes" type="number" min="5" max="480" value="30" required></label>
+              <label class="full">หมายเหตุ<input id="schedule-notes"></label>
+              <button class="btn primary full">บันทึกช่วงเวลาและเลือกเพื่อจอง</button>
+            </form>
+            <div id="schedule-create-status" class="notice space-top-sm">กรอกวันเวลาในอนาคต แล้วบันทึกเพื่อเปิดรับนัด</div>
+          </details>
         </section>
 
         <section class="card" id="booking-section">

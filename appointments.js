@@ -10,6 +10,7 @@
   let profile;
   let canOperate = false;
   let allPatients = [];
+  let allSchedules = [];
 
   const patientName = patient => [patient.title || patient.prefix, patient.first_name, patient.last_name].filter(Boolean).join(' ') || patient.full_name || patient.name || 'ไม่ระบุชื่อ';
   const patientLabel = patient => `${patient.hn || patient.patient_no || '-'} — ${patientName(patient)}${patient.phone ? ` • ${patient.phone}` : ''}`;
@@ -46,8 +47,9 @@
     if (result.error) throw result.error;
     const term = $('#search').value.trim().toLowerCase();
     const rows = (result.data || []).filter(item => !term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term)));
+    allSchedules = rows;
     $('#schedule-status').textContent = `พบ ${rows.length} ช่วงเวลาที่ว่าง`;
-    $('#schedule-list').innerHTML = rows.map(item => `<article class="schedule-card"><h3>${esc(item.title)}</h3><div class="meta"><span>${esc(item.practitioner_name || '-')}</span><span>${esc(item.specialty_name_th || item.specialty_name_en || '-')}</span><span>${esc(dateTime(item.starts_at))} – ${esc(new Date(item.ends_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }))}</span><span>สาขา ${esc(item.branch_code || '-')} • ห้อง ${esc(item.room_code || '-')}</span></div><p><span class="capacity">ว่าง ${item.available_capacity}/${item.max_patients}</span></p>${canOperate ? `<button class="btn primary" data-book="${item.id}" data-label="${esc(item.title)} • ${esc(dateTime(item.starts_at))} • ${esc(item.practitioner_name || '-')}">เลือกช่วงเวลานี้</button>` : ''}</article>`).join('') || '<p class="muted">ไม่พบช่วงเวลาว่างตามเงื่อนไข</p>';
+    $('#schedule-list').innerHTML = rows.map(item => `<article class="schedule-card"><h3>${esc(item.title)}</h3><div class="meta"><span>${esc(item.practitioner_name || '-')}</span><span>${esc(item.specialty_name_th || item.specialty_name_en || '-')}</span><span>${esc(dateTime(item.starts_at))} – ${esc(new Date(item.ends_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }))}</span><span>สาขา ${esc(item.branch_code || '-')} • ห้อง ${esc(item.room_code || '-')}</span></div><p><span class="capacity">ว่าง ${item.available_capacity}/${item.max_patients}</span></p>${canOperate ? `<button class="btn primary" data-book="${item.id}" data-label="${esc(item.title)} • ${esc(dateTime(item.starts_at))} • ${esc(item.practitioner_name || '-')}">เลือกช่วงเวลานี้</button>` : ''}</article>`).join('') || `<div class="notice warning"><b>ยังไม่มีช่วงเวลาที่เปิดรับนัด</b><br>${canOperate ? 'กด “เพิ่มช่วงเวลารับนัด” เพื่อสร้างช่วงเวลาแรก แล้วจึงเลือกผู้รับบริการ' : 'กรุณาให้ Admin หรือ Reception เพิ่มตารางรับนัด'}</div>`;
     document.querySelectorAll('[data-book]').forEach(button => {
       button.onclick = () => {
         $('#selected-schedule').value = button.dataset.book;
@@ -56,6 +58,69 @@
         $('#booking-section').scrollIntoView({ behavior: 'smooth' });
       };
     });
+  }
+
+  function localDateTimeValue(date) {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  }
+
+  async function loadPractitioners() {
+    if (!canOperate) return;
+    const result = await db.rpc('list_appointment_practitioners');
+    if (result.error) throw result.error;
+    const rows = result.data || [];
+    $('#schedule-practitioner').innerHTML = '<option value="">เลือกผู้ให้บริการ</option>' + rows.map(item => `<option value="${item.practitioner_id}">${esc(item.display_name)} • ${esc(item.clinic_role)}</option>`).join('');
+    $('#schedule-setup').classList.remove('hidden');
+    const start = new Date();
+    start.setMinutes(Math.ceil((start.getMinutes() + 15) / 30) * 30, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60000);
+    $('#schedule-start').value = localDateTimeValue(start);
+    $('#schedule-end').value = localDateTimeValue(end);
+    if (!rows.length) {
+      $('#schedule-create-status').textContent = 'ยังไม่มีผู้ให้บริการที่มีบทบาท practitioner หรือ doctor กรุณากำหนดสิทธิ์ก่อน';
+      $('#schedule-form button').disabled = true;
+    }
+  }
+
+  function selectSchedule(scheduleId) {
+    const item = allSchedules.find(row => row.id === scheduleId);
+    if (!item) return false;
+    $('#selected-schedule').value = item.id;
+    $('#selected-schedule-label').value = `${item.title} • ${dateTime(item.starts_at)} • ${item.practitioner_name || '-'}`;
+    $('#booking-status').textContent = 'เลือกช่วงเวลาแล้ว กรุณาเลือกผู้รับบริการ';
+    return true;
+  }
+
+  async function createSchedule(event) {
+    event.preventDefault();
+    if (!canOperate) throw new Error('บัญชีนี้มีสิทธิ์ดูเท่านั้น');
+    const startsAt = new Date($('#schedule-start').value);
+    const endsAt = new Date($('#schedule-end').value);
+    if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) throw new Error('กรุณาระบุวันเวลาให้ครบ');
+    $('#schedule-create-status').classList.remove('danger');
+    $('#schedule-create-status').textContent = 'กำลังบันทึกช่วงเวลา…';
+    const result = await db.rpc('create_practitioner_schedule', {
+      p_practitioner_id: $('#schedule-practitioner').value,
+      p_title: $('#schedule-title').value,
+      p_starts_at: startsAt.toISOString(),
+      p_ends_at: endsAt.toISOString(),
+      p_branch_code: $('#schedule-branch').value,
+      p_room_code: $('#schedule-room').value || null,
+      p_max_patients: Number($('#schedule-capacity').value),
+      p_slot_minutes: Number($('#schedule-slot-minutes').value),
+      p_notes: $('#schedule-notes').value || null
+    });
+    if (result.error) throw result.error;
+    $('#date-from').value = localDateTimeValue(startsAt).slice(0, 10);
+    $('#date-to').value = localDateTimeValue(startsAt).slice(0, 10);
+    $('#search').value = '';
+    await loadSchedules();
+    if (!selectSchedule(result.data.id)) throw new Error('สร้างช่วงเวลาแล้ว แต่ยังโหลดกลับมาไม่ได้ กรุณากดค้นหาอีกครั้ง');
+    $('#schedule-create-status').textContent = 'สร้างช่วงเวลาแล้ว และเลือกไว้สำหรับการจองนี้';
+    $('#schedule-setup').open = false;
+    $('#booking-section').scrollIntoView({ behavior: 'smooth' });
+    toast('เพิ่มช่วงเวลารับนัดแล้ว');
   }
 
   async function bookAppointment(event) {
@@ -128,13 +193,14 @@
       window.ChananyaShell?.mount({ profile, session, active: 'appointments' });
       $('#view-only-notice').classList.toggle('hidden', canOperate);
       $('#booking-section').classList.toggle('hidden', !canOperate);
+      $('#schedule-setup').classList.toggle('hidden', !canOperate);
       const today = new Date();
       const in14 = new Date(today); in14.setDate(in14.getDate() + 14);
       $('#date-from').value = today.toISOString().slice(0, 10);
       $('#date-to').value = in14.toISOString().slice(0, 10);
       $('#appointments-date').value = today.toISOString().slice(0, 10);
       await loadPatients();
-      await Promise.all([loadSchedules(), loadAppointments()]);
+      await Promise.all([loadSchedules(), loadAppointments(), loadPractitioners()]);
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
     } catch (error) {
@@ -148,6 +214,7 @@
     renderPatients(term ? allPatients.filter(patient => patientLabel(patient).toLowerCase().includes(term)).slice(0, 100) : allPatients);
   });
   $('#search-btn').addEventListener('click', () => loadSchedules().catch(fail));
+  $('#schedule-form').addEventListener('submit', event => createSchedule(event).catch(error => { $('#schedule-create-status').textContent = error.message; $('#schedule-create-status').classList.add('danger'); fail(error); }));
   $('#booking-form').addEventListener('submit', event => bookAppointment(event).catch(error => { $('#booking-status').textContent = error.message; $('#booking-status').classList.add('danger'); fail(error); }));
   $('#refresh-appts').addEventListener('click', () => loadAppointments().catch(fail));
   $('#logout').addEventListener('click', async () => { await db.auth.signOut(); location.replace('/login.html'); });
