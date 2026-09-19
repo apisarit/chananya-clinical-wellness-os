@@ -57,6 +57,9 @@ jobs:
       - name: Run source and PostgreSQL behavioral contracts
         run: npm run check
 
+      - name: Preserve populated legacy clinical records across migration replay
+        run: npm run check:legacy-upgrade
+
       - name: Verify staged treatment-service invoice source boundary
         run: npm run check:treatment-service-invoice
 
