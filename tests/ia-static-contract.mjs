@@ -84,6 +84,22 @@ for (const gate of ['Authenticated staging ทุก role', 'LINE callback จ�
 assert.match(platformReview, /ปิตตะ 42 \/ วาตะ 80 \/ เสมหะ 20[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must not claim complete disease coverage');
 assert.match(platformReview, /รูปธาตุ 42 \/ อวัยวะแผนไทย[\s\S]*?ยังไม่บรรจุครบ/, 'platform review must disclose incomplete rupa-dhatu coverage');
 assert.match(platformReview, /Clinical outcome timeline/, 'platform review must expose the restored outcomes timeline');
+assert.match(platformReview, /id="live-prelaunch-checklist"[^>]*data-local-only="true"/, 'platform review must expose a local-only live checklist');
+const liveChecklist = platformReview.match(/<section[^>]*id="live-prelaunch-checklist"[\s\S]*?<\/section>/)?.[0] ?? '';
+assert.ok(liveChecklist, 'platform review must contain the live checklist section');
+assert.doesNotMatch(liveChecklist, /supabase|auth-config|fetch\s*\(/i, 'live checklist must remain credential-free and non-networked');
+const liveCheckInputs = [...liveChecklist.matchAll(/<input[^>]*data-live-check[^>]*>/g)].map(match => match[0]);
+assert.equal(liveCheckInputs.length, 11, 'live checklist should expose all 11 interactive checks');
+assert.ok(liveCheckInputs.every(input => !/\b(?:disabled|readonly)\b/i.test(input)), 'interactive read-only checks must remain clickable and settable');
+const simulationActions = [...platformReview.matchAll(/<button[^>]*data-simulation-action[^>]*>/g)].map(match => match[0]);
+assert.ok(simulationActions.length >= 4, 'review workflow should expose clickable simulation actions');
+assert.ok(simulationActions.every(button => !/\bdisabled\b/i.test(button)), 'simulation actions must remain clickable');
+assert.match(platformReviewSource, /SIMULATION_ONLY/, 'review controller must disclose simulation-only result');
+assert.ok(platformReview.indexOf('id="review-simulation-status"') < platformReview.indexOf('id="review-operations"'), 'simulation result must be visible from every workspace');
+for (const route of ['/', '/appointments.html', '/check-in.html', '/foundation.html', '/clinical-v3.html?step=history', '/outcomes.html', '/pharmacy.html', '/production.html', '/quality.html', '/admin.html', '/owner-control.html']) {
+  assert.match(liveChecklist, new RegExp(`data-live-check-path=["']${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`), `live checklist should include ${route}`);
+}
+assert.doesNotMatch(platformReviewSource, /fetch\s*\(|XMLHttpRequest|supabase|localStorage|sessionStorage/i, 'live checklist controller must remain credential-free and non-persistent');
 const platformReviewIds = [...platformReview.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(platformReviewIds).size, platformReviewIds.length, 'platform review should not contain duplicate IDs');
 const coverageManifest = read('docs/PLATFORM_COVERAGE_AND_RELEASE_GATES.md');

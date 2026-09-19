@@ -62,6 +62,8 @@ assert.equal(replies.length, 1);
 assert.equal(replies[0].type, 'text');
 assert.equal(replies[0].quickReply.items[0].action.type, 'uri');
 assert.equal(replies[0].quickReply.items[0].action.uri, 'https://liff.line.me/123-test');
+assert.match(replies[0].text, /รหัสใช้ครั้งเดียว.*เจ้าหน้าที่.*ค้นหา HN/u);
+assert.match(replies[0].text, /ไม่รับ HN ผ่านแชต/u);
 assert.doesNotMatch(JSON.stringify(replies), /CHANANYA-00000001|สมชาย|โรคทดสอบ/);
 
 let replyRequest;

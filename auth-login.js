@@ -47,6 +47,13 @@
     const url = config.url || config.supabaseUrl;
     const key = config.anonKey || config.publishableKey;
     const provider = String(config.provider || 'google').trim().toLowerCase();
+    const redirectOrigin = (() => {
+      try {
+        const candidate = new URL(String(config.redirectTo || '').trim());
+        if (candidate.protocol === 'https:' && candidate.pathname === '/' && !candidate.search && !candidate.hash) return candidate.origin;
+      } catch {}
+      return location.origin;
+    })();
     const providerLabel = provider === 'google' ? 'Google' : provider.charAt(0).toUpperCase() + provider.slice(1);
     if (!window.supabase || !url || !key) throw new Error('ไม่พบ Supabase configuration');
     button.textContent = `เข้าสู่ระบบด้วย ${providerLabel}`;
@@ -82,7 +89,7 @@
       if (error) error.textContent = '';
       const result = await client.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${location.origin}/auth-callback.html` }
+        options: { redirectTo: `${redirectOrigin}/auth-callback.html` }
       });
       if (result.error) showError(result.error, true);
     });

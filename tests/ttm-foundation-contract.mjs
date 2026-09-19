@@ -14,6 +14,7 @@ const shell = read('app-shell.js');
 const clinical = read('clinical-v3.html');
 const migration = read('supabase/migrations/202608270100_ttm_foundation_ontology.sql');
 const diagnosisHardening = read('supabase/migrations/202608270910_ttm_diagnosis_definer_hardening.sql');
+const reviewCandidate = read('supabase/manual/20260917_ttm_knowledge_review_rpc_candidate.sql');
 
 assert.doesNotThrow(() => new vm.Script(controller, { filename: 'foundation.js' }), 'foundation controller should parse');
 assert.doesNotThrow(() => new vm.Script(reasoning, { filename: 'ttm-reasoning.js' }), 'reasoning engine should parse');
@@ -59,7 +60,17 @@ assert.match(migration, /source_id uuid references public\.ttm_sources/, 'ontolo
 assert.match(migration, /review_status text not null default 'review_required'/, 'knowledge must default to review required');
 assert.match(migration, /practitioner_confirmed boolean not null default false/, 'encounter bindings must require explicit practitioner confirmation');
 
-assert.doesNotMatch(controller, /\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.rpc\s*\(/, 'foundation browser must remain read-only');
+assert.match(html, /id="ttm-suggestion-form"/, 'clinical roles must have a suggestion flow');
+assert.match(html, /id="ttm-suggestion-queue"/, 'review queue must be visible');
+assert.match(controller, /submit_ttm_knowledge_suggestion/, 'suggestion writes must use the audited RPC');
+assert.match(controller, /decide_ttm_knowledge_suggestion/, 'approval must use the audited RPC');
+assert.doesNotMatch(controller, /\.from\([^)]*\)\.(insert|update|delete)\s*\(/, 'foundation browser must not write knowledge tables directly');
+assert.match(reviewCandidate, /public\.submit_ttm_knowledge_suggestion/, 'candidate must expose the suggestion RPC');
+assert.match(reviewCandidate, /public\.decide_ttm_knowledge_suggestion/, 'candidate must expose the approval RPC');
+assert.match(reviewCandidate, /public\.is_super_admin\(\)/, 'approval must require super admin');
+assert.match(reviewCandidate, /TTM_PRODUCER_CANNOT_APPROVE/, 'producer/approver separation must be enforced');
+assert.match(reviewCandidate, /review_status='approved'/, 'approval must promote the reviewed row only through the RPC');
+assert.match(reviewCandidate, /reject_append_only_mutation/, 'suggestion evidence must be append-only');
 assert.doesNotMatch(controller, /localStorage|MutationObserver|setInterval\s*\(/, 'foundation browser must not introduce a second state engine');
 
 console.log('TTM foundation contracts passed: 5 layers + provenance + ontology schema + clinical boundary');

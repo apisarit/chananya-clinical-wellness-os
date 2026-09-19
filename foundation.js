@@ -40,9 +40,11 @@
   let db;
   let session;
   let profile;
+  let roleState = { effectiveRole: 'viewer', systemRole: 'staff' };
   let selectedLayer = 'all';
   let lastReasoning = null;
   let state = { mode: 'loading', concepts: [], sources: [], relations: [], rules: [] };
+  let suggestions = [];
 
   function toast(message) {
     const element = $('#toast');
@@ -462,6 +464,87 @@
     $('#ttm-rule-coverage').innerHTML = `<div class="foundation-coverage-head"><b>Domain</b><b>ทั้งหมด</b><b>อนุมัติ</b><b>รอทบทวน</b></div>${rows || '<div class="status">ยังไม่พบกฎ</div>'}<div class="foundation-coverage-summary"><b>Clinical finding → hypothesis</b><strong>${clinicalRules().length} approved</strong><span>${clinicalRules().length ? 'เปิดได้เฉพาะ candidate' : 'ยังไม่พร้อมใช้ระบุภาวะจากอาการ'}</span></div>`;
   }
 
+  function reviewCapabilities() {
+    const canSuggest = ['doctor', 'practitioner', 'super_admin'].includes(roleState.effectiveRole);
+    const canApprove = roleState.systemRole === 'super_admin';
+    $('#ttm-suggestion-form').hidden = !canSuggest;
+    $('#ttm-review-boundary').textContent = canSuggest
+      ? (canApprove ? 'คุณเป็น Super Admin: ส่ง suggestion ได้ แต่ต้องมีผู้ส่งคนละบัญชีก่อนจึง approve ได้' : 'คุณส่ง suggestion ได้เท่านั้น; การแก้จริงต้องรอ Super Admin ต่างบัญชีอนุมัติ')
+      : 'บัญชีนี้อ่านและเสนอแก้ไขไม่ได้; ใช้สิทธิ์แพทย์/ผู้ประกอบวิชาชีพเพื่อส่ง suggestion';
+    return { canSuggest, canApprove };
+  }
+
+  function renderSuggestionQueue() {
+    const { canApprove } = reviewCapabilities();
+    const rows = suggestions.filter(item => item.status === 'pending');
+    $('#ttm-suggestion-queue').innerHTML = rows.map(item => {
+      const actions = canApprove
+        ? `<button class="btn primary" data-ttm-suggestion-action="approve" data-id="${esc(item.id)}">Approve</button><button class="btn danger" data-ttm-suggestion-action="reject" data-id="${esc(item.id)}">Reject</button>`
+        : '';
+      return `<article class="item column"><div class="row"><b>${esc(item.suggestion_no)} • ${esc(item.target_table)} / ${esc(item.action)}</b><span class="badge">${esc(item.status)}</span></div><small>ผู้เสนอ ${esc(item.requested_by)} • ${new Date(item.requested_at).toLocaleString('th-TH')}</small><p>${esc(item.reason)}</p><small>Source: ${esc(item.source_ref)}</small><pre class="space-top-sm">${esc(JSON.stringify(item.payload, null, 2))}</pre><div class="right">${actions}</div></article>`;
+    }).join('') || '<p class="muted">ไม่มี suggestion ที่รอทบทวน</p>';
+  }
+
+  async function loadSuggestionQueue() {
+    try {
+      suggestions = await fetchAll('ttm_knowledge_suggestions', '*', query => query.eq('status', 'pending').order('requested_at', { ascending: false }));
+    } catch (error) {
+      suggestions = [];
+      $('#ttm-suggestion-queue').innerHTML = '<p class="muted">ยังไม่ได้ติดตั้ง staging review RPC/ตาราง suggestion</p>';
+      console.warn('TTM review queue unavailable', error);
+      reviewCapabilities();
+      return;
+    }
+    renderSuggestionQueue();
+  }
+
+  async function submitSuggestion(event) {
+    event.preventDefault();
+    const payloadText = $('#ttm-suggestion-payload').value.trim();
+    let payload;
+    try { payload = JSON.parse(payloadText); } catch { throw new Error('Payload ต้องเป็น JSON object ที่ถูกต้อง'); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Payload ต้องเป็น JSON object');
+    if (Object.keys(payload).some(key => ['review_status', 'active', 'status', 'requested_by', 'decided_by'].includes(key))) {
+      throw new Error('ห้ามส่งฟิลด์ควบคุมสถานะหรือผู้อนุมัติ');
+    }
+    const result = await db.rpc('submit_ttm_knowledge_suggestion', {
+      p_target_table: $('#ttm-suggestion-target').value,
+      p_target_id: $('#ttm-suggestion-target-id').value.trim() || null,
+      p_action: $('#ttm-suggestion-action').value,
+      p_payload: payload,
+      p_source_ref: $('#ttm-suggestion-source').value.trim(),
+      p_reason: $('#ttm-suggestion-reason').value.trim()
+    });
+    if (result.error) throw result.error;
+    event.target.reset();
+    await loadSuggestionQueue();
+    toast('ส่ง suggestion เข้าคิวทบทวนแล้ว');
+  }
+
+  async function decideSuggestion(id, decision) {
+    const notes = prompt(`เหตุผล ${decision === 'approve' ? 'อนุมัติ' : 'ปฏิเสธ'} (อย่างน้อย 8 ตัวอักษร)`, '') ?? '';
+    if (notes.trim().length < 8) throw new Error('ต้องระบุเหตุผลอย่างน้อย 8 ตัวอักษร');
+    const result = await db.rpc('decide_ttm_knowledge_suggestion', { p_suggestion_id: id, p_decision: decision, p_notes: notes.trim() });
+    if (result.error) throw result.error;
+    await Promise.all([loadOntology(), loadSuggestionQueue()]);
+    updateStats();
+    renderTypeOptions();
+    renderConcepts();
+    renderBodyRegistry();
+    renderRuleCoverage();
+    toast(decision === 'approve' ? 'อนุมัติและเขียนความรู้ผ่าน RPC แล้ว' : 'ปฏิเสธ suggestion แล้ว');
+  }
+
+  function bindReviewFlow() {
+    $('#ttm-suggestion-form').addEventListener('submit', event => submitSuggestion(event).catch(error => { console.error(error); toast(error.message); }));
+    $('#ttm-suggestion-queue').addEventListener('click', event => {
+      const button = event.target.closest('[data-ttm-suggestion-action]');
+      if (!button) return;
+      button.disabled = true;
+      decideSuggestion(button.dataset.id, button.dataset.ttmSuggestionAction).catch(error => { console.error(error); toast(error.message); }).finally(() => { if (button.isConnected) button.disabled = false; });
+    });
+  }
+
   async function init() {
     try {
       const runtime = window.ChananyaRuntime;
@@ -472,6 +555,7 @@
       profile = await runtime.getProfile(session.user.id);
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'knowledge_read')) throw new Error('บัญชีนี้ไม่มีสิทธิ์อ่านรากวิชา');
+      roleState = runtime.rolesOf(profile);
       window.ChananyaShell?.mount({ profile, session, active: 'foundation' });
       try {
         await loadOntology();
@@ -488,6 +572,9 @@
       renderBodyRegistry();
       renderRuleCoverage();
       renderEmptyPath();
+      reviewCapabilities();
+      bindReviewFlow();
+      await loadSuggestionQueue();
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
       window.dispatchEvent(new CustomEvent('chananya:foundation-rendered'));
