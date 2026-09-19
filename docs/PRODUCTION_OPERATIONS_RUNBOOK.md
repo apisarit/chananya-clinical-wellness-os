@@ -159,3 +159,40 @@ After the approved exact commit/tree is deployed and before real patient data is
 6. Retain the post-deploy evidence and only then complete the real-data admission decision.
 
 If any item is unverifiable, admission remains blocked.
+
+## 13. Browser and Functions configuration preflight
+
+The production deploy workflow checks Netlify site configuration before upload
+and rechecks the same non-secret bindings afterward. Run its source regression
+with `npm run check:production-runtime-binding` (also part of `npm run check`).
+The preflight is not a deploy action and cannot supply a release approval.
+
+Required runtime keys must be pinned on the intended Netlify **site**, with the
+Functions scope. A `production` value overrides an `all` value. Team/shared-only
+values are intentionally insufficient: this checker does not resolve inherited
+configuration. Unrelated variables and scopes are ignored. The browser's approved
+production config supplies the expected Supabase URL, clinic, origin, issuer and
+deployment identity; changing `netlify.toml` alone does not set Function variables.
+Service-role, patient HMAC and LINE secrets must be **Functions-only**: a credential
+also available to Builds, Runtime or Post processing is rejected.
+
+Set `BACKUP_DEPLOYMENT_ID` to the approved deployment identity and
+`CLINICAL_OS_SOURCE_COMMIT` to the exact release SHA for backup provenance.
+Owner Control, Owner Drive and backup enablement must match the operational
+release (`true`); this preflight does not enable them. LINE checks use the actual
+LIFF/login/messaging IDs and credentials, not unused `LINE_OA_ENABLED` flags.
+Never copy staging credentials to satisfy a presence check.
+
+`runtime-binding.json` records only a fixed non-secret identity/flag allowlist,
+the release SHA, and a digest of validated public identity. It contains no secret
+values or secret hashes. Null/redacted credentials cannot establish presence and
+are rejected; even a nonempty credential is **not** proof of validity. This file
+is a configuration preflight/drift record, not a deployed Function snapshot.
+
+Netlify captures Function environment values at deployment. A provider setting
+read before/after upload cannot prove the immutable deployed environment or detect
+all concurrent changes/secret rotations. The existing exact-deploy and separate
+authenticated runtime, LINE, encrypted backup/restore and post-deployment
+attestation requirements remain necessary. See [Netlify Function environment
+semantics](https://docs.netlify.com/build/functions/environment-variables/) and
+[site/shared precedence](https://docs.netlify.com/build/environment-variables/get-started/).

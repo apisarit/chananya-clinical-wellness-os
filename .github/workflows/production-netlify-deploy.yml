@@ -34,6 +34,7 @@ jobs:
       PUBLIC_DEPLOYMENT_EVIDENCE_PATH: artifacts/production-deploy/public-deployment.json
       RELEASE_GATE_EVIDENCE_DIR: artifacts/production-deploy/gate
       RELEASE_GATE_REQUIRE_DEPLOY_CONFIG: "true"
+      RELEASE_REQUIRES_LINE: "true"
     steps:
       - name: Require explicit production deployment intent
         shell: bash
@@ -99,6 +100,11 @@ jobs:
       - name: Capture current published deploy for rollback evidence
         run: node scripts/netlify-production-deploy-evidence.mjs snapshot
 
+      - name: Verify production Functions runtime binding before upload
+        run: node scripts/verify-production-runtime-binding.mjs pre-upload
+        env:
+          CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+
       - name: Set up pinned Netlify CLI runtime
         uses: actions/setup-node@v6
         with:
@@ -128,6 +134,11 @@ jobs:
 
       - name: Verify Netlify published deploy identity
         run: node scripts/netlify-production-deploy-evidence.mjs verify
+
+      - name: Verify production Functions runtime binding after upload
+        run: node scripts/verify-production-runtime-binding.mjs post-upload
+        env:
+          CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
 
       - name: Attest public commit tree headers and forbidden paths
         run: npm run verify:public-deployment

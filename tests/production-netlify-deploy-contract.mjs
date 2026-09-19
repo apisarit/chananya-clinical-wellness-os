@@ -8,6 +8,8 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const workflow = read('.github/workflows/production-netlify-deploy.yml');
 const artifactVerifier = read('scripts/verify-production-build-artifact.mjs');
 const netlifyEvidence = read('scripts/netlify-production-deploy-evidence.mjs');
+const runtimeBinding = read('scripts/verify-production-runtime-binding.mjs');
+const postDeployWorkflow = read('.github/workflows/production-post-deploy-smoke.yml');
 
 assert.match(workflow, /on:\s*\n\s*workflow_dispatch:/, 'production deployment must be manual workflow_dispatch only');
 assert.doesNotMatch(workflow, /\n\s*(?:push|pull_request|schedule|issue_comment):/, 'production deployment must not gain automatic triggers');
@@ -45,6 +47,21 @@ assert.match(workflow, /--skip-functions-cache/, 'production function bundles mu
 assert.doesNotMatch(workflow, /--prod-if-unlocked/, 'production deployment must fail rather than silently fall back to draft');
 assert.doesNotMatch(workflow, /--trigger/, 'production deployment must not trigger an unbound remote build');
 assert.match(workflow, /retention-days:\s*365/, 'production deployment evidence must be retained for 365 days');
+assert.match(runtimeBinding, /api\.netlify\.com\/api\/v1/, 'runtime binding must use the official Netlify API');
+assert.match(runtimeBinding, /accounts\/.*env\?site_id=.*scope=functions/, 'runtime binding must request site-pinned production Functions environment metadata');
+assert.match(runtimeBinding, /NETLIFY_ENV_CONTEXT_AMBIGUOUS/, 'runtime binding must reject conflicting inherited contexts');
+assert.match(runtimeBinding, /CNYOS_RUNTIME_EXPECTED_CLINIC_ID/, 'runtime binding must inspect the actual clinic binding key');
+assert.match(runtimeBinding, /BACKUP_ENVIRONMENT/, 'runtime binding must reject staging backup runtime');
+assert.match(workflow, /verify-production-runtime-binding\.mjs pre-upload/, 'runtime binding must be checked before upload');
+assert.match(workflow, /verify-production-runtime-binding\.mjs post-upload/, 'runtime binding must be checked after upload');
+assert.doesNotMatch(postDeployWorkflow, /verify-production-runtime-binding\.mjs post-deploy/, 'post-deploy workflow must not claim an immutable Functions snapshot without a pre-upload snapshot');
+assert.match(runtimeBinding, /RELEASE_REQUIRES_LINE/, 'LINE requirement must be explicit and fail closed when enabled');
+assert.doesNotMatch(runtimeBinding, /console\.(?:log|error)\([^\n]*(?:NETLIFY_AUTH_TOKEN|SUPABASE_SERVICE_ROLE_KEY|CHANNEL_SECRET|ACCESS_TOKEN)/, 'runtime binding verifier must not print secret values');
+assert.match(runtimeBinding, /redirect:\s*'error'/, 'runtime API reads must reject redirects');
+assert.match(runtimeBinding, /NETLIFY_API_REQUEST_FAILED/, 'runtime API errors must use a constant code');
+assert.match(runtimeBinding, /NETLIFY_RUNTIME_BINDING_DRIFT/, 'post-upload check must compare sanitized pre-upload bindings');
+assert.match(runtimeBinding, /NETLIFY_RUNTIME_PHASE_INVALID/, 'runtime verifier must reject unsupported phases');
+assert.doesNotMatch(runtimeBinding, /LINE_OA_ENABLED|LINE_OA_ENVIRONMENT/, 'runtime verifier must not invent LINE enablement keys');
 
 assert.match(artifactVerifier, /HEAD\^\{tree\}/, 'production artifact verifier must derive the exact Git tree');
 assert.match(artifactVerifier, /deploy\?\.source\?\.commit, expectedCommit/, 'production artifact verifier must bind the manifest commit');
