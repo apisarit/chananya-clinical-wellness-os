@@ -71,6 +71,7 @@
     patient_checkin: ['super_admin','practitioner','doctor','reception'],
     patient_identity_link: ['super_admin','practitioner','doctor','reception'],
     appointments_operate: ['super_admin','reception'],
+    appointments_clinical_status: ['super_admin','practitioner','doctor'],
     appointments_view: ['super_admin','reception','practitioner','doctor'],
     pharmacy_operate: ['super_admin','pharmacy'],
     product_master_write: ['super_admin','pharmacy','production','inventory'],

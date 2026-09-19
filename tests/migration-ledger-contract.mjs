@@ -55,18 +55,24 @@ const expectedPostBaselineMigrations = Object.freeze([
     name: 'appointment_schedule_self_service',
     file: '20260919214500_appointment_schedule_self_service.sql',
     sha256: '05229bfaecda75866c46d8846b0c8e2eac924a194a34c9b92d96329de2f91632'
+  }),
+  Object.freeze({
+    version: '20260919231610',
+    name: 'require_appointment_cancellation_reason',
+    file: '20260919231610_require_appointment_cancellation_reason.sql',
+    sha256: '7376b9435f1066c33b0f058178314a13b1ca246c344b5f8410d41618a89a79c6'
   })
 ]);
 
-assert.equal(repositoryEntries.length, 48, 'repository must contain the 48-file source chain');
+assert.equal(repositoryEntries.length, 49, 'repository must contain the 49-file source chain');
 assert.deepEqual(
   repositoryEntries,
   [...repositoryEntries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)
 );
 assert.deepEqual(
-  repositoryEntries.slice(-3),
+  repositoryEntries.slice(-4),
   expectedPostBaselineMigrations,
-  'migration ledger tail must bind treatment-service and appointment hotfix migrations'
+  'migration ledger tail must bind treatment-service and appointment hardening migrations'
 );
 const entries = loadReviewedMigrationEntries(root);
 assert.equal(entries.length, 45, 'reviewed hosted baseline must remain the exact 45-file prefix');

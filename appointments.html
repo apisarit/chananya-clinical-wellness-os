@@ -40,6 +40,13 @@
             <label>ค้นหา<input id="search" placeholder="ชื่อผู้ให้บริการ สาขา ห้อง หรือบริการ"></label>
             <button id="search-btn" class="btn primary">ค้นหา</button>
           </div>
+          <fieldset class="toolbar"><legend>ช่วงเวลาที่ต้องการ (เวลาไทย เลือกได้หลายช่วง)</legend>
+            <label><input type="checkbox" name="time-window" value="10:00-12:00">10:00–12:00</label>
+            <label><input type="checkbox" name="time-window" value="13:00-15:00">13:00–15:00</label>
+            <label><input type="checkbox" name="time-window" value="15:00-18:00">15:00–18:00</label>
+            <label><input type="checkbox" name="time-window" value="18:00-21:00">18:00–21:00</label>
+          </fieldset>
+          <p>ไม่เลือก = แสดงทุกช่วงเวลา ช่องเหล่านี้กรองตารางที่เปิดรับนัดแล้ว ไม่ได้สร้างตารางใหม่</p>
           <div id="schedule-status" class="notice space-block-md">กำลังโหลดช่วงเวลาว่าง…</div>
           <div id="schedule-list" class="schedule-grid"></div>
           <details id="schedule-setup" class="space-top-md hidden">
@@ -54,7 +61,7 @@
               <label>จำนวนที่รับ<input id="schedule-capacity" type="number" min="1" max="200" value="1" required></label>
               <label>นาทีต่อคิว<input id="schedule-slot-minutes" type="number" min="5" max="480" value="30" required></label>
               <label class="full">หมายเหตุ<input id="schedule-notes"></label>
-              <button class="btn primary full">บันทึกช่วงเวลาและเลือกเพื่อจอง</button>
+              <button id="schedule-submit" class="btn primary full">บันทึกช่วงเวลาและเลือกเพื่อจอง</button>
             </form>
             <div id="schedule-create-status" class="notice space-top-sm">กรอกวันเวลาในอนาคต แล้วบันทึกเพื่อเปิดรับนัด</div>
           </details>
@@ -66,10 +73,11 @@
             <label class="full">ช่วงเวลาที่เลือก<input id="selected-schedule-label" readonly placeholder="เลือกจากช่วงเวลาว่าง"></label>
             <input id="selected-schedule" type="hidden">
             <label class="full">ค้นหาผู้รับบริการ<input id="patient-search" placeholder="HN ชื่อ นามสกุล หรือโทรศัพท์"></label>
+            <div id="patient-search-status" class="notice full">แสดงผู้รับบริการล่าสุด กรุณาพิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นหาจากฐานข้อมูล</div>
             <label class="full">ผู้รับบริการ<select id="patient" required><option value="">เลือกผู้รับบริการ</option></select></label>
             <label class="full">อาการสำคัญ<textarea id="chief-complaint" placeholder="เหตุผลที่มารับบริการ"></textarea></label>
             <label class="full">หมายเหตุ<textarea id="notes"></textarea></label>
-            <button class="btn primary full">ยืนยันการจอง</button>
+            <button id="booking-submit" class="btn primary full">ยืนยันการจอง</button>
           </form>
           <div id="booking-status" class="notice space-top-sm">ยังไม่ได้เลือกช่วงเวลา</div>
         </section>
