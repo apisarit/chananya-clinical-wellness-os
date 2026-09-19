@@ -7,6 +7,8 @@ const js = fs.readFileSync(new URL('../appointments.js', import.meta.url), 'utf8
 const sql = fs.readFileSync(new URL('../supabase/migrations/20260919214500_appointment_schedule_self_service.sql', import.meta.url), 'utf8');
 
 assert.match(html, /id="schedule-form"/);
+assert.match(html, /id="schedule-submit"/);
+assert.match(html, /id="booking-submit"/);
 assert.match(html, /id="schedule-practitioner"[^>]*required/);
 assert.match(html, /id="schedule-start" type="datetime-local" required/);
 assert.match(html, /id="schedule-end" type="datetime-local" required/);
@@ -16,8 +18,16 @@ assert.match(js, /rpc\('list_appointment_practitioners'\)/);
 assert.match(js, /rpc\('create_practitioner_schedule'/);
 assert.match(js, /ยังไม่มีช่วงเวลาที่เปิดรับนัด/);
 assert.match(js, /selectSchedule\(result\.data\.id\)/);
-assert.match(js, /new Date\(\$\('#schedule-start'\)\.value\)/);
-assert.match(js, /new Date\(\$\('#schedule-end'\)\.value\)/);
+assert.match(js, /parseBangkokDateTime\(\$\('#schedule-start'\)\.value\)/);
+assert.match(js, /parseBangkokDateTime\(\$\('#schedule-end'\)\.value\)/);
+assert.match(js, /if \(endsAt <= startsAt\) throw new Error\('เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม'\)/);
+assert.match(js, /if \(scheduleCreateInFlight\) return/);
+assert.match(js, /if \(bookingInFlight\) return/);
+assert.match(js, /\$\('#schedule-submit'\)\.disabled = true/);
+assert.match(js, /\$\('#booking-submit'\)\.disabled = true/);
+assert.match(js, /await Promise\.all\(\[loadSchedules\(\), loadAppointments\(\)\]\);\s*\$\('#booking-status'\)\.textContent = confirmation/);
+assert.match(js, /new Date\(`\$\{day\}T00:00:00\+07:00`\)/);
+assert.match(js, /thaiTime\(item\.ends_at\)/);
 
 assert.match(sql, /create or replace function public\.is_appointment_operator\(\)/i);
 assert.match(sql, /p\.system_role in \('admin','super_admin'\)/i);
@@ -43,13 +53,35 @@ const query = {
   gte(...args) { datePredicates.push(['gte', ...args]); return this; }, lte(...args) { datePredicates.push(['lte', ...args]); return this; },
   then(resolve) { return Promise.resolve({ data: fixtureRows, error: null }).then(resolve); }
 };
-const sandbox = { document: {
+let patientFixtureRows = [];
+const patientCalls = [];
+const patientQuery = {
+  select(value) { patientCalls.push(['select', value]); return this; },
+  eq(...args) { patientCalls.push(['eq', ...args]); return this; },
+  order(...args) { patientCalls.push(['order', ...args]); return this; },
+  limit(...args) { patientCalls.push(['limit', ...args]); return this; },
+  or(...args) { patientCalls.push(['or', ...args]); return this; },
+  then(resolve) { return Promise.resolve({ data: patientFixtureRows, error: null }).then(resolve); }
+};
+const sandbox = { window: { dispatchEvent() {} }, CustomEvent: class {}, document: {
   querySelector: element,
   querySelectorAll: selector => selector.endsWith(':checked') ? selectedWindows.map(value => ({ value })) : []
 }, console };
-vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedules; globalThis.testThaiDate = thaiDate; db = globalThis.testDb;'), Object.assign(sandbox, { testDb: { from: () => query } }));
+vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedules; globalThis.testLoadPatients = loadPatients; globalThis.testThaiDate = thaiDate; globalThis.testBangkokDateTimeValue = bangkokDateTimeValue; globalThis.testParseBangkokDateTime = parseBangkokDateTime; db = globalThis.testDb;'), Object.assign(sandbox, { testDb: { from: table => table === 'patients' ? patientQuery : query } }));
 assert.equal(sandbox.testThaiDate('2026-09-19T18:00:00Z'), '2026-09-20');
-fixtureRows = ['03:00', '05:00', '06:00', '08:00', '11:00', '14:00'].map((time, i) => ({ id: String(i), title: `slot-${i}`, starts_at: `2026-09-20T${time}:00Z`, ends_at: `2026-09-20T${time}:00Z`, available_capacity: 1, max_patients: 1 }));
+assert.equal(sandbox.testBangkokDateTimeValue('2026-09-19T18:05:00Z'), '2026-09-20T01:05');
+assert.equal(sandbox.testParseBangkokDateTime('2026-09-20T10:00').toISOString(), '2026-09-20T03:00:00.000Z');
+patientFixtureRows = [{ id: 'old-patient', hn: 'HN-0001', first_name: 'ทดสอบ', last_name: 'ระบบ' }];
+await sandbox.testLoadPatients('HN-0001,()');
+assert.deepEqual(patientCalls.find(call => call[0] === 'select'), ['select', 'id,hn,prefix,first_name,last_name,phone,created_at']);
+assert.deepEqual(patientCalls.find(call => call[0] === 'eq'), ['eq', 'active', true]);
+assert.deepEqual(patientCalls.find(call => call[0] === 'limit'), ['limit', 100]);
+assert.deepEqual(patientCalls.find(call => call[0] === 'or'), ['or', 'hn.ilike.%HN-0001%,first_name.ilike.%HN-0001%,last_name.ilike.%HN-0001%,phone.ilike.%HN-0001%']);
+assert.match(element('#patient').innerHTML, /old-patient/);
+fixtureRows = ['03:00', '05:00', '06:00', '08:00', '11:00', '14:00'].map((time, i) => {
+  const startsAt = new Date(`2026-09-20T${time}:00Z`);
+  return { id: String(i), title: `slot-${i}`, starts_at: startsAt.toISOString(), ends_at: new Date(startsAt.getTime() + 30 * 60000).toISOString(), available_capacity: 1, max_patients: 1 };
+});
 for (const [selection, count] of [[[], 6], [['10:00-12:00'], 1], [['13:00-15:00'], 1], [['15:00-18:00'], 1], [['18:00-21:00'], 1], [['10:00-12:00', '18:00-21:00'], 2]]) {
   selectedWindows = selection;
   await sandbox.testLoader();
