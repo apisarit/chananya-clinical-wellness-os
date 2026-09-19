@@ -822,6 +822,48 @@ assert.deepEqual(superAdminCapabilities.rows[0], {
   billing: true
 });
 
+// The single-clinic owner can recover from an empty appointment calendar
+// without bypassing tenant membership or subscription checks.
+const appointmentPractitioners = await asUser(USER_C, `
+  select * from public.list_appointment_practitioners()
+`);
+assert.ok(
+  appointmentPractitioners.rows.some(row => row.practitioner_id === USER_ROLE_TARGET),
+  'doctor must be offered to the authorized appointment owner'
+);
+const ownerCreatedSchedule = (await asUser(USER_C, `
+  select * from public.create_practitioner_schedule(
+    '${USER_ROLE_TARGET}','Synthetic appointment recovery',
+    now()+interval '4 days',now()+interval '4 days 30 minutes',
+    'MAIN','TEST-ROOM',2,30,'synthetic regression fixture'
+  );
+`)).rows[0];
+assert.equal(ownerCreatedSchedule.clinic_id, CLINIC_A);
+assert.equal(ownerCreatedSchedule.practitioner_id, USER_ROLE_TARGET);
+const ownerBookedAppointment = (await asUser(USER_C, `
+  select * from public.book_clinic_appointment(
+    '${patientA.id}','${ownerCreatedSchedule.id}',
+    'Synthetic appointment regression',null,'staff'
+  );
+`)).rows[0];
+assert.equal(ownerBookedAppointment.patient_id, patientA.id);
+assert.equal(ownerBookedAppointment.schedule_id, ownerCreatedSchedule.id);
+
+await expectDatabaseError(
+  asUser(USER_C, `select * from public.create_practitioner_schedule(
+    '${USER_ROLE_TARGET}','Past slot',now()-interval '1 hour',now(),
+    'MAIN',null,1,30,null
+  )`),
+  'SCHEDULE_MUST_BE_IN_FUTURE'
+);
+await expectDatabaseError(
+  asUser(USER_RECEPTION, `select * from public.create_practitioner_schedule(
+    '${USER_PHARMACY}','Wrong department',now()+interval '5 days',
+    now()+interval '5 days 30 minutes','MAIN',null,1,30,null
+  )`),
+  'PRACTITIONER_NOT_AVAILABLE'
+);
+
 const doctorLegacyPolicyCompatibility = await asUser(USER_ROLE_TARGET, `
   select
     public.current_department_role() department,

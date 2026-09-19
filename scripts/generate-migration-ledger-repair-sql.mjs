@@ -185,6 +185,12 @@ export const DECLARED_POST_BASELINE_MIGRATIONS = Object.freeze([
     name: 'harden_treatment_service_invoice',
     file: '20260915073000_harden_treatment_service_invoice.sql',
     sha256: '298720cbeda2342609c9c9f0ab838274f7354e40ea5575b3101063e9f28e304c'
+  }),
+  Object.freeze({
+    version: '20260919214500',
+    name: 'appointment_schedule_self_service',
+    file: '20260919214500_appointment_schedule_self_service.sql',
+    sha256: '05229bfaecda75866c46d8846b0c8e2eac924a194a34c9b92d96329de2f91632'
   })
 ]);
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';
