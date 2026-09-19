@@ -5,6 +5,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const dateTime = value => new Date(value).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' });
   const thaiTime = value => new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Bangkok' });
+  const thaiDate = value => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' });
   const scheduleLabel = item => `${dateTime(item.starts_at)} – ${thaiTime(item.ends_at)} น. • ${item.practitioner_name || '-'} • ${item.title}`;
 
   let db;
@@ -13,6 +14,7 @@
   let canOperate = false;
   let allPatients = [];
   let allSchedules = [];
+  let scheduleRequestVersion = 0;
 
   const patientName = patient => [patient.title || patient.prefix, patient.first_name, patient.last_name].filter(Boolean).join(' ') || patient.full_name || patient.name || 'ไม่ระบุชื่อ';
   const patientLabel = patient => `${patient.hn || patient.patient_no || '-'} — ${patientName(patient)}${patient.phone ? ` • ${patient.phone}` : ''}`;
@@ -39,14 +41,28 @@
   }
 
   async function loadSchedules() {
+    const version = ++scheduleRequestVersion;
+    allSchedules = [];
+    $('#selected-schedule').value = '';
+    $('#selected-schedule-label').value = '';
+    $('#booking-status').textContent = 'กรุณาเลือกช่วงเวลาจากผลค้นหาใหม่';
+    $('#schedule-list').innerHTML = '';
     $('#schedule-status').textContent = 'กำลังค้นหาช่วงเวลาว่าง…';
     let request = db.from('available_practitioner_schedules').select('*').gt('available_capacity', 0).order('starts_at');
     const from = $('#date-from').value;
     const to = $('#date-to').value;
-    if (from) request = request.gte('starts_at', new Date(`${from}T00:00:00`).toISOString());
-    if (to) request = request.lte('starts_at', new Date(`${to}T23:59:59`).toISOString());
+    if (from && to && from > to) {
+      $('#schedule-status').textContent = 'วันที่เริ่มต้องไม่อยู่หลังวันที่สิ้นสุด';
+      return;
+    }
+    if (from) request = request.gte('starts_at', new Date(`${from}T00:00:00+07:00`).toISOString());
+    if (to) request = request.lte('starts_at', new Date(`${to}T23:59:59.999+07:00`).toISOString());
     const result = await request;
-    if (result.error) throw result.error;
+    if (version !== scheduleRequestVersion) return;
+    if (result.error) {
+      $('#schedule-status').textContent = 'โหลดช่วงเวลาไม่สำเร็จ กรุณาลองค้นหาอีกครั้ง';
+      throw result.error;
+    }
     const term = $('#search').value.trim().toLowerCase();
     const windows = Array.from(document.querySelectorAll('[name="time-window"]:checked'), input => input.value.split('-'));
     const rows = (result.data || []).filter(item => (!term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term))) && (!windows.length || windows.some(([start, end]) => thaiTime(item.starts_at) >= start && thaiTime(item.starts_at) < end)));
@@ -199,9 +215,9 @@
       $('#schedule-setup').classList.toggle('hidden', !canOperate);
       const today = new Date();
       const in14 = new Date(today); in14.setDate(in14.getDate() + 14);
-      $('#date-from').value = today.toISOString().slice(0, 10);
-      $('#date-to').value = in14.toISOString().slice(0, 10);
-      $('#appointments-date').value = today.toISOString().slice(0, 10);
+      $('#date-from').value = thaiDate(today);
+      $('#date-to').value = thaiDate(in14);
+      $('#appointments-date').value = thaiDate(today);
       await loadPatients();
       await Promise.all([loadSchedules(), loadAppointments(), loadPractitioners()]);
       $('#app').classList.remove('hidden');

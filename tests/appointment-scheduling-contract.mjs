@@ -37,16 +37,18 @@ const element = key => {
 };
 let selectedWindows = [];
 let fixtureRows = [];
+const datePredicates = [];
 const query = {
   select() { return this; }, gt() { return this; }, order() { return this; },
-  gte() { return this; }, lte() { return this; },
+  gte(...args) { datePredicates.push(['gte', ...args]); return this; }, lte(...args) { datePredicates.push(['lte', ...args]); return this; },
   then(resolve) { return Promise.resolve({ data: fixtureRows, error: null }).then(resolve); }
 };
 const sandbox = { document: {
   querySelector: element,
   querySelectorAll: selector => selector.endsWith(':checked') ? selectedWindows.map(value => ({ value })) : []
 }, console };
-vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedules; db = globalThis.testDb;'), Object.assign(sandbox, { testDb: { from: () => query } }));
+vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedules; globalThis.testThaiDate = thaiDate; db = globalThis.testDb;'), Object.assign(sandbox, { testDb: { from: () => query } }));
+assert.equal(sandbox.testThaiDate('2026-09-19T18:00:00Z'), '2026-09-20');
 fixtureRows = ['03:00', '05:00', '06:00', '08:00', '11:00', '14:00'].map((time, i) => ({ id: String(i), title: `slot-${i}`, starts_at: `2026-09-20T${time}:00Z`, ends_at: `2026-09-20T${time}:00Z`, available_capacity: 1, max_patients: 1 }));
 for (const [selection, count] of [[[], 6], [['10:00-12:00'], 1], [['13:00-15:00'], 1], [['15:00-18:00'], 1], [['18:00-21:00'], 1], [['10:00-12:00', '18:00-21:00'], 2]]) {
   selectedWindows = selection;
@@ -57,5 +59,27 @@ fixtureRows = [];
 await sandbox.testLoader();
 assert.match(element('#schedule-status').textContent, /ไม่พบตารางเปิดรับนัด/);
 for (const window of ['10:00-12:00', '13:00-15:00', '15:00-18:00', '18:00-21:00']) assert.ok(html.includes(`value="${window}"`));
+element('#date-from').value = '2026-09-20';
+element('#date-to').value = '2026-09-20';
+element('#selected-schedule').value = 'stale-selection';
+await sandbox.testLoader();
+assert.deepEqual(datePredicates.slice(-2), [['gte', 'starts_at', '2026-09-19T17:00:00.000Z'], ['lte', 'starts_at', '2026-09-20T16:59:59.999Z']]);
+assert.equal(element('#selected-schedule').value, '');
+element('#date-from').value = '2026-09-21';
+await sandbox.testLoader();
+assert.match(element('#schedule-status').textContent, /วันที่เริ่มต้องไม่อยู่หลัง/);
+element('#date-from').value = '';
+element('#date-to').value = '';
+const deferred = [];
+query.then = resolve => new Promise(done => deferred.push(result => done(resolve(result))));
+const oldSearch = sandbox.testLoader();
+await Promise.resolve();
+const newSearch = sandbox.testLoader();
+await Promise.resolve();
+deferred[1]({ data: [], error: null });
+await newSearch;
+deferred[0]({ data: [{ title: 'stale result' }], error: null });
+await oldSearch;
+assert.doesNotMatch(element('#schedule-list').innerHTML, /stale result/);
 
 console.log('Appointment scheduling contract passed: empty-state recovery, tenant-bound operator authorization, schedule creation and auto-selection are present');
