@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {
-  parseServiceAccount
-} from '../netlify/functions/_shared/database-backup.mjs';
+  validateGoogleServiceAccountDocument
+} from '../netlify/functions/_shared/google-service-account-credential.mjs';
 import {
   RESTORE_DATA_DOMAINS,
   RESTORE_FOLDER_DOMAINS,
@@ -52,7 +52,7 @@ try {
     expectedRootFolderId
   });
 
-  const serviceAccount = parseServiceAccount(
+  const serviceAccount = validateGoogleServiceAccountDocument(
     required('GOOGLE_DRIVE_RESTORE_READER_SERVICE_ACCOUNT_JSON', { max: 32768 })
   );
   const accessToken = await fetchGoogleRestoreReaderAccessToken(serviceAccount);

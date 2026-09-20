@@ -56,7 +56,7 @@ The UI remains usable for validated drafting when the deployment connection is m
 
 ## Connections that still require implementation/provisioning
 
-**Google Drive:** the existing Owner Drive endpoint remains the actual audited assignment route. To use the user's existing My Drive folders unattended, add an Owner OAuth adapter, protect refresh-token storage and implement refresh/revocation handling. Alternatively provision the existing service-account adapter against an appropriate Shared Drive. A pasted root link is an identifier, not evidence of write access, encryption or restore capability. The platform plan never changes `BACKUP_ENABLED` or `CNYOS_OWNER_DRIVE_ENABLED`.
+**Google Drive:** the existing Owner Drive endpoint remains the actual audited assignment route. My Drive may use the encrypted Owner OAuth adapter, which binds the refresh credential to the exact site, deployment, database and Google email and verifies that email before writes. Shared Drive may use the dedicated service-account adapter. A pasted root link is an identifier, not evidence of write access, encryption or restore capability. The platform plan never changes `BACKUP_ENABLED` or `CNYOS_OWNER_DRIVE_ENABLED`.
 
 **Database:** this release recognizes Supabase links. Other databases require a separately implemented and tested adapter; arbitrary JDBC/Postgres connection strings and passwords are not accepted. New database provisioning, migration-ledger reconciliation and verified user onboarding remain explicit infrastructure tasks.
 

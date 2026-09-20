@@ -83,7 +83,7 @@ async function main() {
   }
 
   if (dryRun) {
-    console.log('Google service-account credential validated and encrypted locally; no blob was written.');
+    console.log('Google Drive credential validated and encrypted locally; no blob was written.');
     return;
   }
 
@@ -120,7 +120,7 @@ async function main() {
     storeFactory: () => store
   });
   serialized = '';
-  console.log('Encrypted credential blob was created and decrypted after a strong read. Google token and folder access were not tested; keep Owner Drive and backup disabled until separate live proof succeeds.');
+  console.log('Encrypted Google Drive credential blob was created and decrypted after a strong read. Google token and folder access were not tested; keep Owner Drive and backup disabled until separate live proof succeeds.');
 }
 
 main().catch(error => {

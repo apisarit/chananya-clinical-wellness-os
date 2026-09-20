@@ -13,7 +13,8 @@ import {
 import {
   fetchGoogleAccessToken,
   parseBackupEnvironment,
-  parseEncryptionKey
+  parseEncryptionKey,
+  verifyGoogleDriveCredentialIdentity
 } from './_shared/database-backup.mjs';
 import {
   googleServiceAccountWrapKeyReused,
@@ -218,6 +219,13 @@ async function saveAssignment(request, config, owner, serviceAccount, deps = {})
   if (!config.clinicCodes.includes(input.clinicCode)) throw new Error('CNYOS_OWNER_CLINIC_NOT_ALLOWED');
 
   const accessToken = await serviceAccountAccessToken(serviceAccount, deps.fetchAccessToken);
+  if (serviceAccount.credentialType === 'authorized_user') {
+    await (deps.verifyGoogleDriveCredentialIdentity || verifyGoogleDriveCredentialIdentity)({
+      accessToken,
+      expectedEmail: serviceAccount.clientEmail,
+      fetchImpl: deps.googleFetch || fetch
+    });
+  }
   const checkedFolders = await inspectAssignedFolders(
     input,
     accessToken,

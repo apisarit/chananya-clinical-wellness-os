@@ -671,6 +671,20 @@ await fetchGoogleRestoreReaderAccessToken(reader, async (_url, options) => {
 });
 const readerClaims = JSON.parse(Buffer.from(readerAssertion.split('.')[1], 'base64url').toString('utf8'));
 assert.equal(readerClaims.scope, 'https://www.googleapis.com/auth/drive.readonly');
+let oauthReaderRequest;
+assert.equal(await fetchGoogleRestoreReaderAccessToken({
+  credentialType: 'authorized_user',
+  clientId: '123456789012-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com',
+  clientSecret: 'synthetic-client-secret-value',
+  refreshToken: 'synthetic-refresh-token-value-for-contract-tests',
+  tokenUri: 'https://oauth2.googleapis.com/token'
+}, async (url, options) => {
+  oauthReaderRequest = { url: String(url), options };
+  return new Response(JSON.stringify({ access_token: 'oauth-reader-token' }), { status: 200 });
+}), 'oauth-reader-token');
+assert.equal(oauthReaderRequest.url, 'https://oauth2.googleapis.com/token');
+assert.equal(oauthReaderRequest.options.body.get('grant_type'), 'refresh_token');
+assert.equal(oauthReaderRequest.options.body.get('refresh_token'), 'synthetic-refresh-token-value-for-contract-tests');
 
 // CI must not expose a source service-role, uploader credential or any secret
 // to npm ci/check. The historical source commit is separate from verifier SHA.

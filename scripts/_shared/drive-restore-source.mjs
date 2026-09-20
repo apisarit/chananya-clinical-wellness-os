@@ -70,11 +70,30 @@ function base64Url(value) {
 }
 
 export async function fetchGoogleRestoreReaderAccessToken(serviceAccount, fetchImpl = fetch) {
-  const issuedAt = Math.floor(Date.now() / 1000);
   const tokenUri = String(serviceAccount?.tokenUri || '');
   if (tokenUri !== 'https://oauth2.googleapis.com/token') {
     throw new Error('RESTORE_SOURCE_GOOGLE_TOKEN_URI_INVALID');
   }
+  if (serviceAccount?.credentialType === 'authorized_user') {
+    const response = await fetchImpl(tokenUri, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: serviceAccount.clientId,
+        client_secret: serviceAccount.clientSecret,
+        refresh_token: serviceAccount.refreshToken,
+        grant_type: 'refresh_token'
+      }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(8000)
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.access_token) {
+      throw new Error('RESTORE_SOURCE_GOOGLE_OAUTH_FAILED');
+    }
+    return payload.access_token;
+  }
+  const issuedAt = Math.floor(Date.now() / 1000);
   const unsigned = `${base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64Url(JSON.stringify({
     iss: serviceAccount?.clientEmail,
     scope: 'https://www.googleapis.com/auth/drive.readonly',

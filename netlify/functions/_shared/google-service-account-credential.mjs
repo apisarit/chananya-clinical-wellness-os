@@ -22,6 +22,8 @@ const DEPLOYMENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,127}$/;
 const KEY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,63}$/;
 const GCP_PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
 const SERVICE_ACCOUNT_EMAIL_PATTERN = /^[a-z0-9][a-z0-9._-]{2,98}@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$/;
+const GOOGLE_USER_EMAIL_PATTERN = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const GOOGLE_OAUTH_CLIENT_ID_PATTERN = /^[0-9]{6,32}-[A-Za-z0-9_-]{8,200}\.apps\.googleusercontent\.com$/;
 const PRIVATE_KEY_ID_PATTERN = /^[a-f0-9]{16,128}$/i;
 const CLIENT_ID_PATTERN = /^[0-9]{6,32}$/;
 const CANONICAL_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -49,6 +51,15 @@ const REQUIRED_SERVICE_ACCOUNT_KEYS = Object.freeze([
   'private_key',
   'private_key_id',
   'project_id',
+  'token_uri',
+  'type'
+].sort());
+
+const AUTHORIZED_USER_KEYS = Object.freeze([
+  'account_email',
+  'client_id',
+  'client_secret',
+  'refresh_token',
   'token_uri',
   'type'
 ].sort());
@@ -167,6 +178,33 @@ function assertGoogleCertificateUrl(value, host, pathPattern, code) {
 
 export function validateGoogleServiceAccountDocument(value) {
   const document = typeof value === 'string' || Buffer.isBuffer(value) ? parseServiceAccountJson(value) : value;
+  if (exactKeys(document, AUTHORIZED_USER_KEYS)) {
+    const clientSecret = String(document.client_secret || '');
+    const refreshToken = String(document.refresh_token || '');
+    const accountEmail = String(document.account_email || '').trim().toLowerCase();
+    if (document.type !== 'authorized_user'
+      || !GOOGLE_USER_EMAIL_PATTERN.test(accountEmail)
+      || !GOOGLE_OAUTH_CLIENT_ID_PATTERN.test(String(document.client_id || ''))
+      || clientSecret.length < 16
+      || clientSecret.length > 512
+      || refreshToken.length < 20
+      || refreshToken.length > 4096) {
+      throw new Error('GOOGLE_AUTHORIZED_USER_DOCUMENT_IDENTITY_INVALID');
+    }
+    assertGoogleUrl(
+      document.token_uri,
+      'https://oauth2.googleapis.com/token',
+      'GOOGLE_AUTHORIZED_USER_TOKEN_URI_INVALID'
+    );
+    return Object.freeze({
+      credentialType: 'authorized_user',
+      clientEmail: accountEmail,
+      clientId: String(document.client_id),
+      clientSecret,
+      refreshToken,
+      tokenUri: document.token_uri
+    });
+  }
   if (!exactKeys(document, SERVICE_ACCOUNT_KEYS, REQUIRED_SERVICE_ACCOUNT_KEYS)) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_DOCUMENT_SCHEMA_INVALID');
   }
@@ -262,7 +300,7 @@ export function googleServiceAccountWrapKeyReused(wrapKeyValue, candidateValue) 
 
 function normalizeExpectedServiceAccountEmail(value) {
   const email = String(value || '').trim().toLowerCase();
-  if (!SERVICE_ACCOUNT_EMAIL_PATTERN.test(email)) {
+  if (!GOOGLE_USER_EMAIL_PATTERN.test(email)) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_EXPECTED_EMAIL_INVALID');
   }
   return email;
@@ -313,6 +351,16 @@ export function googleServiceAccountBlobKey(wrapKeyId) {
 
 function canonicalServiceAccountPlaintext(serviceAccount, source) {
   const document = typeof source === 'string' || Buffer.isBuffer(source) ? parseServiceAccountJson(source) : source;
+  if (serviceAccount.credentialType === 'authorized_user') {
+    return Buffer.from(JSON.stringify({
+      type: 'authorized_user',
+      account_email: serviceAccount.clientEmail,
+      client_id: serviceAccount.clientId,
+      client_secret: serviceAccount.clientSecret,
+      refresh_token: serviceAccount.refreshToken,
+      token_uri: serviceAccount.tokenUri
+    }));
+  }
   return Buffer.from(JSON.stringify({
     type: 'service_account',
     project_id: serviceAccount.projectId,

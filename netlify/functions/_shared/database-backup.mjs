@@ -149,6 +149,22 @@ export function createServiceAccountAssertion(serviceAccount, now = Date.now()) 
 }
 
 export async function fetchGoogleAccessToken(serviceAccount, fetchImpl = fetch) {
+  if (serviceAccount?.credentialType === 'authorized_user') {
+    const response = await fetchImpl(serviceAccount.tokenUri, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: serviceAccount.clientId,
+        client_secret: serviceAccount.clientSecret,
+        refresh_token: serviceAccount.refreshToken,
+        grant_type: 'refresh_token'
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.access_token) throw new Error('GOOGLE_OAUTH_TOKEN_FAILED');
+    return payload.access_token;
+  }
   const assertion = createServiceAccountAssertion(serviceAccount);
   const response = await fetchImpl(serviceAccount.tokenUri, {
     method: 'POST',
@@ -162,6 +178,27 @@ export async function fetchGoogleAccessToken(serviceAccount, fetchImpl = fetch) 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.access_token) throw new Error('GOOGLE_OAUTH_TOKEN_FAILED');
   return payload.access_token;
+}
+
+export async function verifyGoogleDriveCredentialIdentity({
+  accessToken,
+  expectedEmail,
+  fetchImpl = fetch
+}) {
+  const expected = String(expectedEmail || '').trim().toLowerCase();
+  if (!accessToken || !expected) throw new Error('GOOGLE_DRIVE_IDENTITY_INPUT_INVALID');
+  const response = await fetchImpl(
+    'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(8000)
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || String(payload?.user?.emailAddress || '').trim().toLowerCase() !== expected) {
+    throw new Error('GOOGLE_DRIVE_IDENTITY_MISMATCH');
+  }
+  return Object.freeze({ email: expected });
 }
 
 function envelopeMetadata(payload, metadata) {
