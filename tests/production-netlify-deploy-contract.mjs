@@ -37,6 +37,21 @@ assert.ok(promotionIndex >= 0 && promotionIndex < buildIndex, 'promotion gate mu
 assert.ok(buildIndex < artifactIndex && artifactIndex < snapshotIndex && snapshotIndex < deployIndex, 'artifact verification and rollback snapshot must happen before deployment');
 assert.ok(deployIndex < netlifyVerifyIndex && netlifyVerifyIndex < publicVerifyIndex, 'published deploy and public surface must be attested after deployment');
 
+const productionBuildStep = workflow.slice(
+  workflow.indexOf('- name: Build restricted production artifact'),
+  workflow.indexOf('- name: Verify exact production artifact before upload')
+);
+assert.match(
+  productionBuildStep,
+  /CLINICAL_OS_TENANT_CONFIG_JSON:\s*\$\{\{ secrets\.CLINICAL_OS_PRODUCTION_CONFIG_JSON \}\}/,
+  'production build must render the browser tenant config from the protected production config'
+);
+assert.match(
+  productionBuildStep,
+  /CLINICAL_OS_PRODUCTION_CONFIG_JSON:\s*\$\{\{ secrets\.CLINICAL_OS_PRODUCTION_CONFIG_JSON \}\}/,
+  'production build guard must receive the protected production config explicitly'
+);
+
 assert.match(workflow, /netlify-cli@27\.5\.0/, 'Netlify CLI must be pinned to an exact reviewed version');
 assert.match(workflow, /--prod\s*\\/, 'deployment must explicitly publish to production');
 assert.match(workflow, /--no-build\s*\\/, 'CLI must upload the already-verified artifact rather than rebuild it');
