@@ -84,7 +84,7 @@ const browserTransitionalTuples = [
   ['service_role', 'public.set_clinic_appointment_status(uuid,text,text)']
 ];
 
-assert.equal(repositoryMigrationFiles.length, 48);
+assert.equal(repositoryMigrationFiles.length, 49);
 assert.equal(migrationFiles.length, 45);
 assert.equal((triggerSql.match(/do \$\$/g) || []).length, 1);
 for (const [label, source] of [

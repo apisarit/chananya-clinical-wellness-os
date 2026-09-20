@@ -114,6 +114,7 @@ const departmentCapabilities = [
   'clinical_write',
   'patient_registry',
   'appointments_operate',
+  'appointments_clinical_status',
   'pharmacy_operate',
   'product_master_write',
   'production_operate',
@@ -122,8 +123,8 @@ const departmentCapabilities = [
   'admin_center'
 ];
 const exactDepartmentGrants = {
-  practitioner: ['clinical_write', 'patient_registry'],
-  doctor: ['clinical_write', 'patient_registry'],
+  practitioner: ['clinical_write', 'patient_registry', 'appointments_clinical_status'],
+  doctor: ['clinical_write', 'patient_registry', 'appointments_clinical_status'],
   reception: ['patient_registry', 'appointments_operate'],
   pharmacy: ['pharmacy_operate', 'product_master_write'],
   production: ['product_master_write', 'production_operate'],
