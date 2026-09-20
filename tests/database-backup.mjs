@@ -13,10 +13,12 @@ import {
   decryptBackup,
   downloadDriveFile,
   encryptBackup,
+  fetchGoogleAccessToken,
   parseBackupEnvironment,
   parseEncryptionKey,
   parseServiceAccount,
-  upsertDriveFile
+  upsertDriveFile,
+  verifyGoogleDriveCredentialIdentity
 } from '../netlify/functions/_shared/database-backup.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -93,6 +95,40 @@ assert.equal(claims.iss, 'backup@example.iam.gserviceaccount.com');
 assert.equal(claims.aud, 'https://oauth2.googleapis.com/token');
 assert.equal(claims.exp - claims.iat, 3600);
 assert.match(claims.scope, /drive\.file/);
+
+let authorizedUserTokenRequest;
+const authorizedUserToken = await fetchGoogleAccessToken({
+  credentialType: 'authorized_user',
+  clientId: '123456789012-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com',
+  clientSecret: 'synthetic-client-secret-value',
+  refreshToken: 'synthetic-refresh-token-value-for-contract-tests',
+  tokenUri: 'https://oauth2.googleapis.com/token'
+}, async (url, options) => {
+  authorizedUserTokenRequest = { url: String(url), options };
+  return new Response(JSON.stringify({ access_token: 'oauth-user-access-token' }), { status: 200 });
+});
+assert.equal(authorizedUserToken, 'oauth-user-access-token');
+assert.equal(authorizedUserTokenRequest.url, 'https://oauth2.googleapis.com/token');
+assert.equal(authorizedUserTokenRequest.options.method, 'POST');
+assert.equal(authorizedUserTokenRequest.options.body.get('grant_type'), 'refresh_token');
+assert.equal(authorizedUserTokenRequest.options.body.get('refresh_token'), 'synthetic-refresh-token-value-for-contract-tests');
+assert.deepEqual(await verifyGoogleDriveCredentialIdentity({
+  accessToken: authorizedUserToken,
+  expectedEmail: 'owner@example.com',
+  fetchImpl: async (url, options) => {
+    assert.equal(String(url), 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)');
+    assert.equal(options.headers.Authorization, `Bearer ${authorizedUserToken}`);
+    return new Response(JSON.stringify({ user: { emailAddress: 'OWNER@example.com' } }), { status: 200 });
+  }
+}), { email: 'owner@example.com' });
+await assert.rejects(
+  verifyGoogleDriveCredentialIdentity({
+    accessToken: authorizedUserToken,
+    expectedEmail: 'owner@example.com',
+    fetchImpl: async () => new Response(JSON.stringify({ user: { emailAddress: 'other@example.com' } }), { status: 200 })
+  }),
+  /GOOGLE_DRIVE_IDENTITY_MISMATCH/
+);
 
 const createdCalls = [];
 const createFetch = async (url, options = {}) => {

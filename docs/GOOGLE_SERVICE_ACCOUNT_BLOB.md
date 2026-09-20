@@ -1,6 +1,8 @@
-# Encrypted Google service-account credential Blob
+# Encrypted Google Drive credential Blob
 
 Staging and production do not place `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` in Netlify environment variables. The document is encrypted locally and stored in the site-scoped `cnyos-functions-secrets` Netlify Blob store with strong-consistency reads. Only a 32-byte wrapping key and its immutable key ID remain as Functions-only environment variables.
+
+The encrypted document may be either a dedicated Google service account for a Shared Drive, or a Google `authorized_user` refresh credential for a single-clinic My Drive deployment. The latter is bound to an exact owner email and the runtime verifies `Drive about.user.emailAddress` before every assignment or backup write. A raw refresh token is never stored in Netlify environment variables or returned to the browser. Shared Drive plus a dedicated service account remains the preferred scale-out configuration.
 
 The AES-256-GCM envelope authenticates the exact Netlify site ID and canonical site origin, Supabase project ref, operator-defined logical deployment ID, data environment, expected service-account client email, wrap-key ID and creation timestamp. `BACKUP_DEPLOYMENT_ID` is a stable logical identity for this site/environment, not Netlify's per-deploy ID; rotate it only as an intentional credential-binding change. A credential copied to another site, tenant, Google identity, deployment identity, environment or key ID fails before Google access. The resolver also rejects oversized or malformed envelopes, unknown service-account fields, non-RSA private keys, mismatched Google project/email values and non-Google token or certificate endpoints.
 
@@ -8,7 +10,7 @@ The AES-256-GCM envelope authenticates the exact Netlify site ID and canonical s
 
 ## One-time provisioning
 
-Keep Owner Drive and backup disabled throughout this procedure. Use a dedicated service-account JSON file outside the repository, make it readable only by its owner, and never pass JSON or keys as command-line arguments.
+Keep Owner Drive and backup disabled throughout this procedure. Use a dedicated service-account or `authorized_user` JSON file outside the repository, make it readable only by its owner, and never pass JSON or keys as command-line arguments.
 
 ```bash
 chmod 600 /absolute/protected/path/google-service-account.json

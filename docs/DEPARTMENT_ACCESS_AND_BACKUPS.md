@@ -72,15 +72,15 @@ If the next `20:00 UTC` boundary has already passed, do not rewrite the historic
 
 ## Production configuration
 
-1. Create a dedicated Google Cloud service account and enable the Google Drive API.
-2. Share only the five destination folders inside the intended environment tree with the service-account email as Editor. Do not share the other environment and do not grant domain-wide Drive access.
+1. Prefer a dedicated Google Cloud service account with Drive API access to a Shared Drive. For a single-clinic My Drive rollout, a reviewed `authorized_user` refresh credential for the clinic owner is also supported.
+2. Give the selected identity access only to the five destination folders inside the intended environment tree. Do not share the other environment and do not grant domain-wide Drive access. The owner OAuth variant creates and accesses only app-authorized folders through the `drive.file` scope.
 3. Generate a 32-byte backup key outside the repository, for example `openssl rand -base64 32`. Store a separately controlled recovery copy; never put the key in Drive.
 4. Provision the encrypted service-account Blob by following [GOOGLE_SERVICE_ACCOUNT_BLOB.md](./GOOGLE_SERVICE_ACCOUNT_BLOB.md), then set these Netlify environment variables only for the production Functions runtime:
    - `CNYOS_OWNER_DRIVE_ENABLED=false` initially
    - `BACKUP_ENABLED=false` initially
    - `GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_ID`
    - `GOOGLE_DRIVE_SERVICE_ACCOUNT_WRAP_KEY_BASE64` (distinct from the next key and dispatch secret)
-   - `GOOGLE_DRIVE_EXPECTED_SERVICE_ACCOUNT_EMAIL` (exact dedicated identity; authenticated into the encrypted binding)
+   - `GOOGLE_DRIVE_EXPECTED_SERVICE_ACCOUNT_EMAIL` (exact dedicated service-account or owner OAuth email authenticated into the encrypted binding)
    - `BACKUP_ENCRYPTION_KEY_BASE64`
    - `GOOGLE_DRIVE_EXPECTED_ROOT_FOLDER_ID`
    - `BACKUP_ENVIRONMENT=production`

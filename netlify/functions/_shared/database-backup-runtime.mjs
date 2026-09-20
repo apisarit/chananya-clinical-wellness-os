@@ -14,7 +14,8 @@ import {
   parseBackupEnvironment,
   parseEncryptionKey,
   supabaseRpc,
-  upsertDriveFile
+  upsertDriveFile,
+  verifyGoogleDriveCredentialIdentity
 } from './database-backup.mjs';
 import {
   googleServiceAccountWrapKeyReused,
@@ -344,7 +345,10 @@ export async function validateCredentialMaterial(config, runtime, deps = {}) {
   try { tokenUrl = new URL(serviceAccount.tokenUri); }
   catch { throw new Error('GOOGLE_SERVICE_ACCOUNT_TOKEN_URI_INVALID'); }
   if (tokenUrl.href !== 'https://oauth2.googleapis.com/token'
-    || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com$/.test(serviceAccount.clientEmail)) {
+    || (!serviceAccount.credentialType
+      && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com$/.test(serviceAccount.clientEmail))
+    || (serviceAccount.credentialType
+      && serviceAccount.credentialType !== 'authorized_user')) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_IDENTITY_INVALID');
   }
   return Object.freeze({
@@ -710,6 +714,13 @@ export async function runBackupClinicJob({
       credentials.serviceAccount,
       networkFetch
     );
+    if (credentials.serviceAccount.credentialType === 'authorized_user') {
+      await (deps.verifyGoogleDriveCredentialIdentity || verifyGoogleDriveCredentialIdentity)({
+        accessToken,
+        expectedEmail: credentials.serviceAccount.clientEmail,
+        fetchImpl: networkFetch
+      });
+    }
     await Promise.all(Object.values(folderIds).map(folderId => (
       (deps.inspectDriveFolder || inspectDriveFolder)({
         accessToken,

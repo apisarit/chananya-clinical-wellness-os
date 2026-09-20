@@ -58,6 +58,31 @@ assert.deepEqual(validateGoogleServiceAccountDocument(source), {
   projectId,
   privateKeyId: serviceAccountDocument.private_key_id
 });
+const authorizedUserEmail = 'owner@example.com';
+const authorizedUserDocument = Object.freeze({
+  type: 'authorized_user',
+  account_email: authorizedUserEmail,
+  client_id: '123456789012-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com',
+  client_secret: 'synthetic-client-secret-value',
+  refresh_token: 'synthetic-refresh-token-value-for-contract-tests',
+  token_uri: 'https://oauth2.googleapis.com/token'
+});
+assert.deepEqual(validateGoogleServiceAccountDocument(JSON.stringify(authorizedUserDocument)), {
+  credentialType: 'authorized_user',
+  clientEmail: authorizedUserEmail,
+  clientId: authorizedUserDocument.client_id,
+  clientSecret: authorizedUserDocument.client_secret,
+  refreshToken: authorizedUserDocument.refresh_token,
+  tokenUri: authorizedUserDocument.token_uri
+});
+assert.throws(
+  () => validateGoogleServiceAccountDocument(JSON.stringify({ ...authorizedUserDocument, unexpected: 'rejected' })),
+  /DOCUMENT_SCHEMA_INVALID/
+);
+assert.throws(
+  () => validateGoogleServiceAccountDocument(JSON.stringify({ ...authorizedUserDocument, token_uri: 'https://attacker.example/token' })),
+  /TOKEN_URI_INVALID/
+);
 assert.throws(
   () => validateGoogleServiceAccountDocument(JSON.stringify({ ...serviceAccountDocument, unexpected: 'rejected' })),
   /DOCUMENT_SCHEMA_INVALID/
@@ -147,6 +172,25 @@ const productionEnvelope = encryptGoogleServiceAccountCredential(source, wrapKey
 assert.equal(decryptGoogleServiceAccountCredential(
   JSON.stringify(productionEnvelope), wrapKey, productionBinding
 ).clientEmail, clientEmail, 'credential encryption and decryption must support the canonical domain');
+const authorizedUserBinding = createGoogleServiceAccountBinding({
+  ...productionBindingInput,
+  expectedServiceAccountEmail: authorizedUserEmail,
+  wrapKeyId: 'cnyos-production-oauth-user-v1'
+});
+const authorizedUserEnvelope = encryptGoogleServiceAccountCredential(
+  JSON.stringify(authorizedUserDocument), wrapKey, authorizedUserBinding
+);
+assert.deepEqual(
+  decryptGoogleServiceAccountCredential(JSON.stringify(authorizedUserEnvelope), wrapKey, authorizedUserBinding),
+  {
+    credentialType: 'authorized_user',
+    clientEmail: authorizedUserEmail,
+    clientId: authorizedUserDocument.client_id,
+    clientSecret: authorizedUserDocument.client_secret,
+    refreshToken: authorizedUserDocument.refresh_token,
+    tokenUri: authorizedUserDocument.token_uri
+  }
+);
 for (const siteOrigin of ['http://cnyos.cloud', 'https://www.cnyos.cloud',
   'https://evil.cnyos.cloud', 'https://cnyos.cloud:8443', 'https://user@cnyos.cloud',
   'https://cnyos.cloud/path', 'https://cnyos.cloud/?q=1', 'https://cnyos.cloud/#x']) {
