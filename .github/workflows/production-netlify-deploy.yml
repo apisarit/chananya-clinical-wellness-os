@@ -127,7 +127,6 @@ jobs:
             --no-build \
             --dir=dist \
             --functions=netlify/functions \
-            --context=production \
             --skip-functions-cache \
             --message="CNYOS production ${GITHUB_SHA}" \
             --json \
