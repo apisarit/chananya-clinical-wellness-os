@@ -197,6 +197,12 @@ export const DECLARED_POST_BASELINE_MIGRATIONS = Object.freeze([
     name: 'require_appointment_cancellation_reason',
     file: '20260919231610_require_appointment_cancellation_reason.sql',
     sha256: '7376b9435f1066c33b0f058178314a13b1ca246c344b5f8410d41618a89a79c6'
+  }),
+  Object.freeze({
+    version: '20260921015219',
+    name: 'appointment_provider_dual_role',
+    file: '20260921015219_appointment_provider_dual_role.sql',
+    sha256: 'cf64389f54132ff120d93b699aa8f72809e11d94b3d811ac0b7c8e4c59400549'
   })
 ]);
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';

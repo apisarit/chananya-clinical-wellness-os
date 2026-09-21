@@ -61,16 +61,22 @@ const expectedPostBaselineMigrations = Object.freeze([
     name: 'require_appointment_cancellation_reason',
     file: '20260919231610_require_appointment_cancellation_reason.sql',
     sha256: '7376b9435f1066c33b0f058178314a13b1ca246c344b5f8410d41618a89a79c6'
+  }),
+  Object.freeze({
+    version: '20260921015219',
+    name: 'appointment_provider_dual_role',
+    file: '20260921015219_appointment_provider_dual_role.sql',
+    sha256: 'cf64389f54132ff120d93b699aa8f72809e11d94b3d811ac0b7c8e4c59400549'
   })
 ]);
 
-assert.equal(repositoryEntries.length, 49, 'repository must contain the 49-file source chain');
+assert.equal(repositoryEntries.length, 50, 'repository must contain the 50-file source chain');
 assert.deepEqual(
   repositoryEntries,
   [...repositoryEntries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)
 );
 assert.deepEqual(
-  repositoryEntries.slice(-4),
+  repositoryEntries.slice(-5),
   expectedPostBaselineMigrations,
   'migration ledger tail must bind treatment-service and appointment hardening migrations'
 );

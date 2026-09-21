@@ -18,6 +18,7 @@ const USER_RECEPTION = 'cccccccc-3333-4333-a333-333333333333';
 const USER_ADMIN = 'dddddddd-4444-4444-a444-444444444444';
 const USER_ROLE_TARGET = 'eeeeeeee-5555-4555-a555-555555555555';
 const USER_BILLING = 'f0f0f0f0-6666-4666-a666-666666666666';
+const USER_DUAL_PROVIDER = '12121212-7777-4777-a777-777777777777';
 const CLINIC_A = '00000000-0000-0000-0000-000000000001';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
 const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
@@ -688,7 +689,8 @@ await execAsDatabaseOwnerWithServiceClaim(`
     ('${USER_RECEPTION}','reception@example.test','{"full_name":"Reception"}'),
     ('${USER_ADMIN}','admin@example.test','{"full_name":"Governance Admin"}'),
     ('${USER_ROLE_TARGET}','role-target@example.test','{"full_name":"Role Target"}'),
-    ('${USER_BILLING}','billing@example.test','{"full_name":"Billing"}');
+    ('${USER_BILLING}','billing@example.test','{"full_name":"Billing"}'),
+    ('${USER_DUAL_PROVIDER}','dual-provider@example.test','{"full_name":"Dual-role Provider"}');
   update public.profiles set role='pharmacy',system_role='staff' where id='${USER_PHARMACY}';
   update public.profiles set role='production',system_role='staff' where id='${USER_PRODUCTION}';
   update public.profiles set role='quality',system_role='staff' where id='${USER_QUALITY}';
@@ -696,6 +698,7 @@ await execAsDatabaseOwnerWithServiceClaim(`
   update public.profiles set role='viewer',system_role='admin' where id='${USER_ADMIN}';
   update public.profiles set role='doctor',system_role='staff' where id='${USER_ROLE_TARGET}';
   update public.profiles set role='billing',system_role='staff' where id='${USER_BILLING}';
+  update public.profiles set role='practitioner',system_role='admin' where id='${USER_DUAL_PROVIDER}';
   insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary) values
     ('00000000-0000-0000-0000-000000000001','${USER_PHARMACY}','pharmacy',true),
     ('00000000-0000-0000-0000-000000000001','${USER_PRODUCTION}','production',true),
@@ -703,7 +706,8 @@ await execAsDatabaseOwnerWithServiceClaim(`
     ('00000000-0000-0000-0000-000000000001','${USER_RECEPTION}','reception',true),
     ('00000000-0000-0000-0000-000000000001','${USER_ADMIN}','viewer',true),
     ('00000000-0000-0000-0000-000000000001','${USER_ROLE_TARGET}','doctor',true),
-    ('00000000-0000-0000-0000-000000000001','${USER_BILLING}','billing',true);
+    ('00000000-0000-0000-0000-000000000001','${USER_BILLING}','billing',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_DUAL_PROVIDER}','admin',true);
 `);
 
 const governanceCapabilities = await asUser(USER_ADMIN, `
@@ -831,6 +835,10 @@ assert.ok(
   appointmentPractitioners.rows.some(row => row.practitioner_id === USER_ROLE_TARGET),
   'doctor must be offered to the authorized appointment owner'
 );
+assert.ok(
+  appointmentPractitioners.rows.some(row => row.practitioner_id === USER_DUAL_PROVIDER && row.clinic_role === 'practitioner'),
+  'an active clinic admin with practitioner capability must remain schedulable without losing admin access'
+);
 const ownerCreatedSchedule = (await asUser(USER_C, `
   select * from public.create_practitioner_schedule(
     '${USER_ROLE_TARGET}','Synthetic appointment recovery',
@@ -840,6 +848,15 @@ const ownerCreatedSchedule = (await asUser(USER_C, `
 `)).rows[0];
 assert.equal(ownerCreatedSchedule.clinic_id, CLINIC_A);
 assert.equal(ownerCreatedSchedule.practitioner_id, USER_ROLE_TARGET);
+const dualRoleSchedule = (await asUser(USER_C, `
+  select * from public.create_practitioner_schedule(
+    '${USER_DUAL_PROVIDER}','Synthetic dual-role provider',
+    now()+interval '6 days',now()+interval '6 days 2 hours',
+    'MAIN','TEST-ROOM-2',2,30,'dual-role provider regression fixture'
+  );
+`)).rows[0];
+assert.equal(dualRoleSchedule.clinic_id, CLINIC_A);
+assert.equal(dualRoleSchedule.practitioner_id, USER_DUAL_PROVIDER);
 const ownerBookedAppointment = (await asUser(USER_C, `
   select * from public.book_clinic_appointment(
     '${patientA.id}','${ownerCreatedSchedule.id}',
