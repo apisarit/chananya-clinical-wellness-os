@@ -57,7 +57,11 @@ assert.match(workflow, /--prod\s*\\/, 'deployment must explicitly publish to pro
 assert.match(workflow, /--no-build\s*\\/, 'CLI must upload the already-verified artifact rather than rebuild it');
 assert.match(workflow, /--dir=dist/, 'deployment must upload only the restricted dist surface');
 assert.match(workflow, /--functions=netlify\/functions/, 'production functions must be bundled from the explicit function directory');
-assert.match(workflow, /--context=production/, 'Netlify deployment must use production context');
+assert.doesNotMatch(
+  workflow,
+  /--no-build[\s\S]*?--context(?:=|\s+)production/,
+  'Netlify CLI rejects --context with --no-build; --prod and the verified production bindings select the production target'
+);
 assert.match(workflow, /--skip-functions-cache/, 'production function bundles must not reuse a stale function cache');
 assert.doesNotMatch(workflow, /--prod-if-unlocked/, 'production deployment must fail rather than silently fall back to draft');
 assert.doesNotMatch(workflow, /--trigger/, 'production deployment must not trigger an unbound remote build');
