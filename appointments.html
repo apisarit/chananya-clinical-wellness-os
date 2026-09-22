@@ -70,6 +70,14 @@
         <section class="card" id="booking-section">
           <div class="section-heading"><span class="section-number">2</span><div><h2>จองนัดหมาย</h2><p>เลือกช่วงเวลาและผู้รับบริการ แล้วบันทึกอาการสำคัญสำหรับส่งต่อทีมคลินิก</p></div></div>
           <form id="booking-form" class="form">
+            <fieldset class="form full" id="booking-selection" aria-describedby="booking-selection-help">
+              <legend>เลือกผู้ให้บริการและช่วงเวลานัด</legend>
+              <p id="booking-selection-help">เลือกตามลำดับ ผู้ให้บริการ → วันที่ → เวลา → สาขาและห้อง ระบบจะผูกการจองกับช่วงเวลาที่ตรงกันเท่านั้น</p>
+              <label>ผู้ให้บริการ<select id="booking-practitioner" required><option value="">เลือกผู้ให้บริการก่อน</option></select></label>
+              <label>วันที่<select id="booking-date" required disabled><option value="">เลือกผู้ให้บริการก่อน</option></select></label>
+              <label>เวลา<select id="booking-time" required disabled><option value="">เลือกวันที่ก่อน</option></select></label>
+              <label>สาขาและห้อง<select id="booking-room" required disabled><option value="">เลือกเวลาก่อน</option></select></label>
+            </fieldset>
             <label class="full">ช่วงเวลาที่เลือก<input id="selected-schedule-label" readonly placeholder="เลือกจากช่วงเวลาว่าง"></label>
             <input id="selected-schedule" type="hidden">
             <label class="full">ค้นหาผู้รับบริการ<input id="patient-search" placeholder="HN ชื่อ นามสกุล หรือโทรศัพท์"></label>
