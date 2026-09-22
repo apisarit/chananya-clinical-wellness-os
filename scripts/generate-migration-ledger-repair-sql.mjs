@@ -203,6 +203,18 @@ export const DECLARED_POST_BASELINE_MIGRATIONS = Object.freeze([
     name: 'appointment_provider_dual_role',
     file: '20260921015219_appointment_provider_dual_role.sql',
     sha256: 'cf64389f54132ff120d93b699aa8f72809e11d94b3d811ac0b7c8e4c59400549'
+  }),
+  Object.freeze({
+    version: '20260922101632',
+    name: 'appointment_practitioner_rpc_transaction_mode',
+    file: '20260922101632_appointment_practitioner_rpc_transaction_mode.sql',
+    sha256: 'a82877e3233c3d090309f288ce090af7279b937fd36f740e5b82d91d0317bd74'
+  }),
+  Object.freeze({
+    version: '20260922102422',
+    name: 'appointment_availability_optional_profile',
+    file: '20260922102422_appointment_availability_optional_profile.sql',
+    sha256: '681831d22ee3d4a2b5913a4250835f413f8db21526010892a655ff446859a125'
   })
 ]);
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';

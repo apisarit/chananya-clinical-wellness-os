@@ -20,6 +20,7 @@
   let canClinicalStatus = false;
   let allPatients = [];
   let allSchedules = [];
+  const practitionerNames = new Map();
   let scheduleRequestVersion = 0;
   let appointmentRequestVersion = 0;
   let patientRequestVersion = 0;
@@ -48,7 +49,7 @@
 
   async function loadPatients(rawTerm = '') {
     const version = ++patientRequestVersion;
-    const term = rawTerm.replace(/[^\p{L}\p{N}\s+\-]/gu, '').trim();
+    const term = rawTerm.normalize('NFC').replace(/[^\p{L}\p{M}\p{N}\s+\-]/gu, '').trim();
     $('#patient-search-status').textContent = term ? 'กำลังค้นหาผู้รับบริการ…' : 'กำลังโหลดผู้รับบริการล่าสุด…';
     let request = db.from('patients').select('id,hn,prefix,first_name,last_name,phone,created_at').eq('active', true).order('created_at', { ascending: false }).limit(100);
     if (term.length >= 2) request = request.or(`hn.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,phone.ilike.%${term}%`);
@@ -86,6 +87,9 @@
       throw result.error;
     }
     const term = $('#search').value.trim().toLowerCase();
+    for (const item of result.data || []) {
+      item.practitioner_name ||= practitionerNames.get(item.practitioner_id) || '';
+    }
     const windows = Array.from(document.querySelectorAll('[name="time-window"]:checked'), input => input.value.split('-'));
     const rows = (result.data || []).filter(item => (!term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term))) && (!windows.length || windows.some(([start, end]) => thaiTime(item.starts_at) < end && thaiTime(item.ends_at) > start)));
     allSchedules = rows;
@@ -106,6 +110,7 @@
     const result = await db.rpc('list_appointment_practitioners');
     if (result.error) throw result.error;
     const rows = result.data || [];
+    rows.forEach(item => practitionerNames.set(item.practitioner_id, item.display_name));
     $('#schedule-practitioner').innerHTML = '<option value="">เลือกผู้ให้บริการ</option>' + rows.map(item => `<option value="${item.practitioner_id}">${esc(item.display_name)} • ${esc(item.clinic_role)}</option>`).join('');
     $('#schedule-setup').classList.remove('hidden');
     const start = new Date();
@@ -273,7 +278,8 @@
       $('#date-to').value = thaiDate(in14);
       $('#appointments-date').value = thaiDate(today);
       await loadPatients();
-      await Promise.all([loadSchedules(), loadAppointments(), loadPractitioners()]);
+      await loadPractitioners();
+      await Promise.all([loadSchedules(), loadAppointments()]);
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
     } catch (error) {
