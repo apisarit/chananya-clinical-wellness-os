@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
+import { DECLARED_POST_BASELINE_MIGRATIONS } from '../scripts/generate-migration-ledger-repair-sql.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = path.join(root, 'supabase', 'migrations');
@@ -84,7 +85,12 @@ const browserTransitionalTuples = [
   ['service_role', 'public.set_clinic_appointment_status(uuid,text,text)']
 ];
 
-assert.equal(repositoryMigrationFiles.length, 50);
+assert.equal(repositoryMigrationFiles.length, 45 + DECLARED_POST_BASELINE_MIGRATIONS.length);
+assert.deepEqual(repositoryMigrationFiles.slice(45), DECLARED_POST_BASELINE_MIGRATIONS.map(entry => entry.file));
+for (const entry of DECLARED_POST_BASELINE_MIGRATIONS) {
+  const source = await fs.readFile(path.join(migrationsDir, entry.file));
+  assert.equal(createHash('sha256').update(source).digest('hex'), entry.sha256, entry.file);
+}
 assert.equal(migrationFiles.length, 45);
 assert.equal((triggerSql.match(/do \$\$/g) || []).length, 1);
 for (const [label, source] of [
