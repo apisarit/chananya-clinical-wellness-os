@@ -11,6 +11,7 @@
   let scanFrame = null;
   let lastDetectionAt = 0;
   let selected = null;
+  let appointmentContext = null;
   const qrIssuer = String(window.CLINICAL_OS_CONFIG?.identity?.qrIssuer || 'CHANANYA').trim().toUpperCase();
   const qrPrefix = `${qrIssuer}:PT1:`;
 
@@ -27,7 +28,10 @@
       QR_INVALID_EXPIRED_OR_USED: 'QR หรือรหัสหมดอายุ ถูกใช้แล้ว หรือไม่ตรงกับคลินิกนี้',
       PATIENT_CONFIRMATION_REQUIRED: 'กรุณาตรวจสอบและยืนยันตัวตนกับผู้รับบริการก่อน',
       GUARDIAN_NOTE_REQUIRED: 'กรุณาระบุชื่อและความสัมพันธ์ของผู้ดูแล',
-      SEARCH_QUERY_LENGTH_INVALID: 'กรุณากรอกคำค้น 2–80 ตัวอักษร'
+      SEARCH_QUERY_LENGTH_INVALID: 'กรุณากรอกคำค้น 2–80 ตัวอักษร',
+      APPOINTMENT_PATIENT_MISMATCH: 'ผู้รับบริการที่ยืนยันไม่ตรงกับนัดหมาย',
+      APPOINTMENT_ACCESS_DENIED: 'บัญชีนี้ไม่มีสิทธิ์เปิดเวชระเบียนของนัดนี้',
+      APPOINTMENT_NOT_READY_FOR_CHECKIN: 'นัดหมายนี้ไม่อยู่ในสถานะที่เปิดรับบริการได้'
     };
     alert(map[error?.message] || error?.message || String(error));
   }
@@ -137,14 +141,54 @@
     }
   }
 
+  async function loadAppointmentContext() {
+    const appointmentId = new URL(location.href).searchParams.get('appointment');
+    if (!appointmentId) return;
+    const result = await db.from('clinic_appointments')
+      .select('id,appointment_no,patient_id,practitioner_id,status,encounter_id,scheduled_start,chief_complaint,patient:patients!clinic_appointments_patient_clinic_fkey(id,hn,prefix,first_name,last_name,date_of_birth,phone)')
+      .eq('id', appointmentId)
+      .maybeSingle();
+    if (result.error) throw result.error;
+    if (!result.data) throw new Error('ไม่พบนัดหมายนี้ในคลินิกของบัญชีปัจจุบัน');
+    appointmentContext = result.data;
+    const patient = appointmentContext.patient;
+    if (!patient) throw new Error('นัดหมายนี้ไม่มีข้อมูลผู้รับบริการที่อ่านได้');
+    const displayName = [patient.prefix, patient.first_name, patient.last_name].filter(Boolean).join(' ');
+    const phoneDigits = String(patient.phone || '').replace(/\D/g, '');
+    $('#appointment-context-title').textContent = `${appointmentContext.appointment_no} • ${patient.hn} • ${displayName}`;
+    $('#appointment-context-detail').textContent = `${new Date(appointmentContext.scheduled_start).toLocaleString('th-TH')} • สถานะ ${appointmentContext.status}${appointmentContext.encounter_id ? ' • มี Encounter แล้ว' : ''}`;
+    $('#appointment-context').classList.remove('hidden');
+    $('#checkin-chief').value = appointmentContext.chief_complaint || '';
+    const identityResult = await db.rpc('search_patients_for_checkin', { p_query: patient.hn });
+    if (identityResult.error) throw identityResult.error;
+    const verifiedPatient = (identityResult.data || []).find(row => row.patient_id === patient.id);
+    if (!verifiedPatient) throw new Error('ไม่พบข้อมูลผู้รับบริการของนัดนี้ในคลินิกปัจจุบัน');
+    showConfirmation({
+      ...verifiedPatient,
+      display_name: verifiedPatient.display_name || displayName,
+      phone_last4: verifiedPatient.phone_last4 || (phoneDigits ? phoneDigits.slice(-4) : null)
+    }, 'appointment');
+  }
+
   async function confirmEncounter(event) {
     event.preventDefault();
     if (!selected) throw new Error('กรุณาเลือกผู้รับบริการ');
     if (!$('#patient-present').checked) throw new Error('PATIENT_CONFIRMATION_REQUIRED');
     setBusy(true);
     try {
-      const request = selected.source === 'qr'
-        ? db.rpc('confirm_patient_qr', {
+      const request = appointmentContext
+        ? db.rpc('check_in_clinic_appointment', {
+          p_appointment_id: appointmentContext.id,
+          p_patient_id: selected.source === 'qr' ? null : selected.patient_id,
+          p_qr_session_id: selected.source === 'qr' ? selected.qr_session_id : null,
+          p_verification_method: selected.source === 'qr' ? 'line_qr' : $('#verification-method').value,
+          p_patient_present_confirmed: true,
+          p_verification_note: selected.source === 'qr' ? null : ($('#verification-note').value.trim() || null),
+          p_chief_complaint: $('#checkin-chief').value.trim() || null,
+          p_intake: {}
+        })
+        : selected.source === 'qr'
+          ? db.rpc('confirm_patient_qr', {
           p_qr_session_id: selected.qr_session_id,
           p_patient_present_confirmed: true,
           p_chief_complaint: $('#checkin-chief').value.trim() || null,
@@ -251,6 +295,7 @@
       }
 
       await prepareScanner();
+      await loadAppointmentContext();
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
     } catch (error) {

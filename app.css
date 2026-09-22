@@ -611,6 +611,19 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
   .encounter-rail { position: static; }
   .clinical-stage { display: block !important; break-inside: avoid; }
   .card { box-shadow: none; break-inside: avoid; }
+  body.receipt-printing > :not(#receipt-dialog) { display: none !important; }
+  body.receipt-printing #receipt-dialog {
+    position: static;
+    display: block;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  body.receipt-printing #receipt-dialog .identity-dialog-head,
+  body.receipt-printing #receipt-print { display: none !important; }
 }
 
 /* TTM Foundation v0.2 reasoning workbench */

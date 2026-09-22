@@ -221,6 +221,12 @@ export const DECLARED_POST_BASELINE_MIGRATIONS = Object.freeze([
     name: 'appointment_operator_read_consistency',
     file: '20260922133838_appointment_operator_read_consistency.sql',
     sha256: '05dd165ded32177b387a8e2c8d3625cf1957e0056eb000b3217d9f42a7a9d174'
+  }),
+  Object.freeze({
+    version: '20260922163445',
+    name: 'link_appointment_encounter_idempotently',
+    file: '20260922163445_link_appointment_encounter_idempotently.sql',
+    sha256: '7717bd4b1d276688f53cd62c1010c16e93fc893bfa091b79ffc31ac4854a587c'
   })
 ]);
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';
