@@ -98,6 +98,27 @@ vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedu
 assert.equal(sandbox.testThaiDate('2026-09-19T18:00:00Z'), '2026-09-20');
 assert.equal(sandbox.testBangkokDateTimeValue('2026-09-19T18:05:00Z'), '2026-09-20T01:05');
 assert.equal(sandbox.testParseBangkokDateTime('2026-09-20T10:00').toISOString(), '2026-09-20T03:00:00.000Z');
+// Exercise the actual card renderer, including honest missing-data states.
+const cards = { document: sandbox.document, console };
+vm.runInNewContext(js.replace('  init();', '  globalThis.renderCard = scheduleCard; globalThis.label = scheduleLabel;'), cards);
+const slot = { id: 'synthetic-slot', title: 'ตรวจและรับบริการ', starts_at: '2026-09-23T03:00:00Z', ends_at: '2026-09-23T05:00:00Z', available_capacity: 1, max_patients: 2, branch_code: 'MAIN', room_code: 'ROOM-2' };
+for (const missing of [null, '', '   ', '-']) {
+  const card = cards.renderCard({ ...slot, practitioner_name: missing, specialty_name_th: missing }, true);
+  assert.match(card, /ผู้ให้บริการ: ยังไม่พบชื่อผู้ให้บริการ/);
+  assert.match(card, /กรุณาตรวจสอบผู้ให้บริการ/);
+  assert.doesNotMatch(card, /<span>-<\/span>|ความเชี่ยวชาญ:/);
+  assert.match(card, /เหลือ 1 ที่ จาก 2 ที่/);
+  assert.doesNotMatch(cards.label({ ...slot, practitioner_name: missing }), /• - •/);
+}
+const named = cards.renderCard({ ...slot, practitioner_name: 'แพทย์ทดสอบ', specialty_name_th: 'แพทย์แผนไทย' }, true);
+assert.match(named, /ผู้ให้บริการ: แพทย์ทดสอบ/);
+assert.match(named, /จองกับ แพทย์ทดสอบ/);
+assert.match(named, /ความเชี่ยวชาญ: แพทย์แผนไทย/);
+assert.doesNotMatch(named, /กรุณาตรวจสอบผู้ให้บริการ/);
+assert.doesNotMatch(cards.renderCard(slot, false), /data-book=/);
+const escaped = cards.renderCard({ ...slot, practitioner_name: '<img src=x onerror=alert(1)>', specialty_name_en: '<script>bad</script>', id: 'x" onclick="bad' }, true);
+assert.doesNotMatch(escaped, /<img|<script|data-book="x" onclick=/);
+assert.match(escaped, /&lt;img/);
 patientFixtureRows = [{ id: 'old-patient', hn: 'HN-0001', first_name: 'ทดสอบ', last_name: 'ระบบ' }];
 await sandbox.testLoadPatients('HN-0001,()');
 assert.deepEqual(patientCalls.find(call => call[0] === 'select'), ['select', 'id,hn,prefix,first_name,last_name,phone,created_at']);
