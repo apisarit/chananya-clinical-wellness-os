@@ -94,7 +94,7 @@ const sandbox = { window: { dispatchEvent() {} }, CustomEvent: class {}, documen
   querySelector: element,
   querySelectorAll: selector => selector.endsWith(':checked') ? selectedWindows.map(value => ({ value })) : []
 }, console };
-vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedules; globalThis.testLoadPatients = loadPatients; globalThis.testThaiDate = thaiDate; globalThis.testBangkokDateTimeValue = bangkokDateTimeValue; globalThis.testParseBangkokDateTime = parseBangkokDateTime; db = globalThis.testDb;'), Object.assign(sandbox, { testDb: { from: table => table === 'patients' ? patientQuery : query } }));
+vm.runInNewContext(js.replace('  init();', '  globalThis.testLoader = loadSchedules; globalThis.testLoadPatients = loadPatients; globalThis.testThaiDate = thaiDate; globalThis.testBangkokDateTimeValue = bangkokDateTimeValue; globalThis.testParseBangkokDateTime = parseBangkokDateTime; globalThis.testRenderBookingDates = renderBookingDates; globalThis.testRenderBookingTimes = renderBookingTimes; globalThis.testRenderBookingRooms = renderBookingRooms; globalThis.testResolveBookingRoom = resolveBookingRoom; db = globalThis.testDb;'), Object.assign(sandbox, { testDb: { from: table => table === 'patients' ? patientQuery : query } }));
 assert.equal(sandbox.testThaiDate('2026-09-19T18:00:00Z'), '2026-09-20');
 assert.equal(sandbox.testBangkokDateTimeValue('2026-09-19T18:05:00Z'), '2026-09-20T01:05');
 assert.equal(sandbox.testParseBangkokDateTime('2026-09-20T10:00').toISOString(), '2026-09-20T03:00:00.000Z');
@@ -150,6 +150,31 @@ await sandbox.testLoader();
 assert.match(element('#schedule-status').textContent, /วันที่เริ่มต้องไม่อยู่หลัง/);
 element('#date-from').value = '';
 element('#date-to').value = '';
+// Practitioner-first chain: same time is not resolved until branch/room is chosen.
+const sharedStart = new Date('2026-09-23T03:00:00Z').toISOString();
+const sharedEnd = new Date('2026-09-23T04:00:00Z').toISOString();
+fixtureRows = [
+  { id: 'room-a', practitioner_id: 'prac-a', practitioner_name: 'ผู้ให้บริการ A', title: 'ช่วงเช้า', starts_at: sharedStart, ends_at: sharedEnd, available_capacity: 1, max_patients: 1, branch_code: 'MAIN', room_code: 'A' },
+  { id: 'room-b', practitioner_id: 'prac-a', practitioner_name: 'ผู้ให้บริการ A', title: 'ช่วงเช้า', starts_at: sharedStart, ends_at: sharedEnd, available_capacity: 1, max_patients: 1, branch_code: 'NORTH', room_code: 'B' }
+];
+await sandbox.testLoader();
+element('#booking-practitioner').value = 'prac-a';
+sandbox.testRenderBookingDates();
+element('#booking-date').value = '2026-09-23';
+sandbox.testRenderBookingTimes();
+element('#booking-time').value = `${sharedStart}|${sharedEnd}`;
+sandbox.testRenderBookingRooms();
+assert.match(element('#booking-room').innerHTML, /MAIN/);
+assert.match(element('#booking-room').innerHTML, /NORTH/);
+assert.equal(sandbox.testResolveBookingRoom(), false);
+assert.equal(element('#selected-schedule').value, '');
+element('#booking-room').value = 'MAIN\u001fA';
+assert.equal(sandbox.testResolveBookingRoom(), true);
+assert.equal(element('#selected-schedule').value, 'room-a');
+element('#booking-practitioner').value = '';
+sandbox.testRenderBookingDates();
+assert.equal(element('#selected-schedule').value, '');
+assert.equal(element('#booking-room').disabled, true);
 const deferred = [];
 query.then = resolve => new Promise(done => deferred.push(result => done(resolve(result))));
 const oldSearch = sandbox.testLoader();

@@ -17,6 +17,10 @@
   };
   const providerLabel = item => displayText(item.practitioner_name) || 'ยังไม่พบชื่อผู้ให้บริการ';
   const scheduleLabel = item => `${dateTime(item.starts_at)} – ${thaiTime(item.ends_at)} น. • ผู้ให้บริการ: ${providerLabel(item)} • ${item.title}`;
+  const rowDate = item => thaiDate(item.starts_at);
+  const rowTimeKey = item => `${item.starts_at}|${item.ends_at}`;
+  const rowRoomKey = item => `${displayText(item.branch_code)}\u001f${displayText(item.room_code)}`;
+  const roomLabel = item => `${displayText(item.branch_code) ? `สาขา ${displayText(item.branch_code)}` : 'ยังไม่ระบุสาขา'} • ${displayText(item.room_code) ? `ห้อง ${displayText(item.room_code)}` : 'ยังไม่ระบุห้อง'}`;
 
   function scheduleCard(item, allowBooking) {
     const name = displayText(item.practitioner_name);
@@ -59,6 +63,86 @@
   function renderPatients(rows) {
     $('#patient').innerHTML = '<option value="">เลือกผู้รับบริการ</option>' + rows.map(patient => `<option value="${patient.id}">${esc(patientLabel(patient))}</option>`).join('');
     window.dispatchEvent(new CustomEvent('chananya:appointments-rendered'));
+  }
+
+  function clearResolvedSchedule(message = 'กรุณาเลือกผู้ให้บริการ วันที่ เวลา และสาขา/ห้องให้ครบ') {
+    $('#selected-schedule').value = '';
+    $('#selected-schedule-label').value = '';
+    $('#booking-status').textContent = message;
+  }
+
+  function setOptions(selector, placeholder, options, disabled = false) {
+    const element = $(selector);
+    element.innerHTML = `<option value="">${esc(placeholder)}</option>` + options.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('');
+    element.disabled = disabled;
+  }
+
+  function renderBookingPractitioners(rows = allSchedules) {
+    const seen = new Map();
+    practitionerNames.forEach((name, id) => { if (id) seen.set(id, displayText(name) || 'ยังไม่พบชื่อผู้ให้บริการ'); });
+    rows.forEach(item => {
+      const id = displayText(item.practitioner_id);
+      if (id && !seen.has(id)) seen.set(id, providerLabel(item));
+    });
+    setOptions('#booking-practitioner', seen.size ? 'เลือกผู้ให้บริการก่อน' : 'ยังไม่มีผู้ให้บริการในช่วงเวลาที่ค้นพบ', Array.from(seen, ([value, label]) => ({ value, label })), !seen.size);
+    setOptions('#booking-date', 'เลือกผู้ให้บริการก่อน', [], true);
+    setOptions('#booking-time', 'เลือกวันที่ก่อน', [], true);
+    setOptions('#booking-room', 'เลือกเวลาก่อน', [], true);
+    clearResolvedSchedule('กรุณาเลือกผู้ให้บริการก่อน');
+  }
+
+  function renderBookingDates() {
+    const practitioner = $('#booking-practitioner').value;
+    const dates = [...new Set(allSchedules.filter(item => item.practitioner_id === practitioner).map(rowDate))].sort();
+    setOptions('#booking-date', dates.length ? 'เลือกวันที่' : 'ไม่พบวันที่ว่าง', dates.map(value => ({ value, label: value })), !practitioner || !dates.length);
+    setOptions('#booking-time', 'เลือกวันที่ก่อน', [], true);
+    setOptions('#booking-room', 'เลือกเวลาก่อน', [], true);
+    clearResolvedSchedule(!practitioner ? 'กรุณาเลือกผู้ให้บริการก่อน' : dates.length ? 'กรุณาเลือกวันที่' : 'ผู้ให้บริการนี้ยังไม่มีช่วงเวลารับนัดที่ตรงกับตัวกรอง กรุณาเปลี่ยนช่วงวันที่หรือเพิ่มตารางรับนัด');
+  }
+
+  function renderBookingTimes() {
+    const practitioner = $('#booking-practitioner').value;
+    const day = $('#booking-date').value;
+    const rows = allSchedules.filter(item => item.practitioner_id === practitioner && rowDate(item) === day);
+    const seen = new Map();
+    rows.forEach(item => { if (!seen.has(rowTimeKey(item))) seen.set(rowTimeKey(item), `${thaiTime(item.starts_at)}–${thaiTime(item.ends_at)} น.`); });
+    setOptions('#booking-time', seen.size ? 'เลือกเวลา' : 'ไม่พบเวลาว่าง', Array.from(seen, ([value, label]) => ({ value, label })), !day || !seen.size);
+    setOptions('#booking-room', 'เลือกเวลาก่อน', [], true);
+    clearResolvedSchedule(day ? 'กรุณาเลือกเวลา' : 'กรุณาเลือกวันที่');
+  }
+
+  function renderBookingRooms() {
+    const practitioner = $('#booking-practitioner').value;
+    const day = $('#booking-date').value;
+    const time = $('#booking-time').value;
+    const rows = allSchedules.filter(item => item.practitioner_id === practitioner && rowDate(item) === day && rowTimeKey(item) === time);
+    const seen = new Map();
+    rows.forEach(item => { if (!seen.has(rowRoomKey(item))) seen.set(rowRoomKey(item), roomLabel(item)); });
+    setOptions('#booking-room', seen.size ? 'เลือกสาขาและห้อง' : 'ไม่พบห้องว่าง', Array.from(seen, ([value, label]) => ({ value, label })), !time || !seen.size);
+    clearResolvedSchedule(time ? 'กรุณาเลือกสาขาและห้อง' : 'กรุณาเลือกเวลา');
+  }
+
+  function resolveBookingRoom() {
+    const practitioner = $('#booking-practitioner').value;
+    const day = $('#booking-date').value;
+    const time = $('#booking-time').value;
+    const room = $('#booking-room').value;
+    const matches = allSchedules.filter(item => item.practitioner_id === practitioner && rowDate(item) === day && rowTimeKey(item) === time && rowRoomKey(item) === room);
+    if (matches.length !== 1) {
+      clearResolvedSchedule(matches.length ? 'พบหลายช่วงเวลาที่ตรงกัน กรุณาเลือกจากรายการช่วงเวลาว่าง' : 'ไม่พบช่วงเวลาที่ตรงกัน กรุณาค้นหาใหม่');
+      return false;
+    }
+    selectSchedule(matches[0].id, false);
+    return true;
+  }
+
+  function selectedScheduleMatchesBooking() {
+    const selected = allSchedules.find(item => item.id === $('#selected-schedule').value);
+    if (!selected) return false;
+    return selected.practitioner_id === $('#booking-practitioner').value
+      && rowDate(selected) === $('#booking-date').value
+      && rowTimeKey(selected) === $('#booking-time').value
+      && rowRoomKey(selected) === $('#booking-room').value;
   }
 
   async function loadPatients(rawTerm = '') {
@@ -107,13 +191,12 @@
     const windows = Array.from(document.querySelectorAll('[name="time-window"]:checked'), input => input.value.split('-'));
     const rows = (result.data || []).filter(item => (!term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term))) && (!windows.length || windows.some(([start, end]) => thaiTime(item.starts_at) < end && thaiTime(item.ends_at) > start)));
     allSchedules = rows;
+    renderBookingPractitioners(rows);
     $('#schedule-status').textContent = rows.length ? `พบ ${rows.length} ช่วงเวลาที่ว่าง` : 'ไม่พบตารางเปิดรับนัดตามวันและเวลาที่เลือก — ลองเปลี่ยนตัวกรอง หรือเพิ่มช่วงเวลารับนัด';
     $('#schedule-list').innerHTML = rows.map(item => scheduleCard(item, canOperate)).join('') || `<div class="notice warning"><b>ยังไม่มีช่วงเวลาที่เปิดรับนัด</b><br>${canOperate ? 'กด “เพิ่มช่วงเวลารับนัด” เพื่อสร้างช่วงเวลาแรก แล้วจึงเลือกผู้รับบริการ' : 'กรุณาให้ Admin หรือ Reception เพิ่มตารางรับนัด'}</div>`;
     document.querySelectorAll('[data-book]').forEach(button => {
       button.onclick = () => {
-        $('#selected-schedule').value = button.dataset.book;
-        $('#selected-schedule-label').value = scheduleLabel(allSchedules.find(item => item.id === button.dataset.book));
-        $('#booking-status').textContent = 'เลือกช่วงเวลาแล้ว กรุณาเลือกผู้รับบริการ';
+        if (!selectSchedule(button.dataset.book)) return;
         $('#booking-section').scrollIntoView({ behavior: 'smooth' });
       };
     });
@@ -138,9 +221,18 @@
     }
   }
 
-  function selectSchedule(scheduleId) {
+  function selectSchedule(scheduleId, syncSelectors = true) {
     const item = allSchedules.find(row => row.id === scheduleId);
     if (!item) return false;
+    if (syncSelectors && item.practitioner_id) {
+      $('#booking-practitioner').value = item.practitioner_id;
+      renderBookingDates();
+      $('#booking-date').value = rowDate(item);
+      renderBookingTimes();
+      $('#booking-time').value = rowTimeKey(item);
+      renderBookingRooms();
+      $('#booking-room').value = rowRoomKey(item);
+    }
     $('#selected-schedule').value = item.id;
     $('#selected-schedule-label').value = scheduleLabel(item);
     $('#booking-status').textContent = 'เลือกช่วงเวลาแล้ว กรุณาเลือกผู้รับบริการ';
@@ -194,6 +286,7 @@
     const scheduleId = $('#selected-schedule').value;
     const patientId = $('#patient').value;
     if (!scheduleId) throw new Error('กรุณาเลือกช่วงเวลาว่าง');
+    if (!selectedScheduleMatchesBooking()) throw new Error('ช่วงเวลาที่เลือกไม่ตรงกับผู้ให้บริการ วันที่ เวลา หรือห้อง กรุณาเลือกใหม่');
     if (!patientId) throw new Error('กรุณาเลือกผู้รับบริการ');
     bookingInFlight = true;
     $('#booking-submit').disabled = true;
@@ -309,6 +402,10 @@
       fail(error);
     }), 250);
   });
+  $('#booking-practitioner').addEventListener('change', () => renderBookingDates());
+  $('#booking-date').addEventListener('change', () => renderBookingTimes());
+  $('#booking-time').addEventListener('change', () => renderBookingRooms());
+  $('#booking-room').addEventListener('change', () => resolveBookingRoom());
   $('#search-btn').addEventListener('click', () => loadSchedules().catch(fail));
   document.querySelectorAll('[name="time-window"]').forEach(input => input.addEventListener('change', () => loadSchedules().catch(fail)));
   $('#schedule-form').addEventListener('submit', event => createSchedule(event).catch(error => { $('#schedule-create-status').textContent = error.message; $('#schedule-create-status').classList.add('danger'); fail(error); }));
