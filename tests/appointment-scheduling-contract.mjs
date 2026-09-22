@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import './appointment-availability-regression.mjs';
 
 const html = fs.readFileSync(new URL('../appointments.html', import.meta.url), 'utf8');
 const js = fs.readFileSync(new URL('../appointments.js', import.meta.url), 'utf8');
