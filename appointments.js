@@ -11,7 +11,21 @@
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   };
   const parseBangkokDateTime = value => new Date(`${value}:00+07:00`);
-  const scheduleLabel = item => `${dateTime(item.starts_at)} – ${thaiTime(item.ends_at)} น. • ${item.practitioner_name || '-'} • ${item.title}`;
+  const displayText = value => {
+    const text = String(value ?? '').trim();
+    return text === '-' ? '' : text;
+  };
+  const providerLabel = item => displayText(item.practitioner_name) || 'ยังไม่พบชื่อผู้ให้บริการ';
+  const scheduleLabel = item => `${dateTime(item.starts_at)} – ${thaiTime(item.ends_at)} น. • ผู้ให้บริการ: ${providerLabel(item)} • ${item.title}`;
+
+  function scheduleCard(item, allowBooking) {
+    const name = displayText(item.practitioner_name);
+    const specialty = displayText(item.specialty_name_th) || displayText(item.specialty_name_en);
+    const branch = displayText(item.branch_code);
+    const room = displayText(item.room_code);
+    const location = [branch ? `สาขา ${branch}` : 'ยังไม่ระบุสาขา', room ? `ห้อง ${room}` : 'ยังไม่ระบุห้อง'].join(' • ');
+    return `<article class="schedule-card"><h3>${esc(item.title)}</h3><div class="meta"><span>ผู้ให้บริการ: ${esc(providerLabel(item))}</span>${!name ? '<span>กรุณาตรวจสอบผู้ให้บริการในตารางรับนัดก่อนยืนยันการจอง</span>' : ''}${specialty ? `<span>ความเชี่ยวชาญ: ${esc(specialty)}</span>` : ''}<span>${esc(dateTime(item.starts_at))} – ${esc(thaiTime(item.ends_at))} น.</span><span>${esc(location)}</span></div><p><span class="capacity">เหลือ ${esc(item.available_capacity)} ที่ จาก ${esc(item.max_patients)} ที่</span></p>${allowBooking ? `<button class="btn primary" data-book="${esc(item.id)}" data-label="${esc(scheduleLabel(item))}">${name ? `จองกับ ${esc(name)}` : 'เลือกช่วงเวลานี้'}</button>` : ''}</article>`;
+  }
 
   let db;
   let session;
@@ -88,13 +102,13 @@
     }
     const term = $('#search').value.trim().toLowerCase();
     for (const item of result.data || []) {
-      item.practitioner_name ||= practitionerNames.get(item.practitioner_id) || '';
+      item.practitioner_name = displayText(item.practitioner_name) || displayText(practitionerNames.get(item.practitioner_id));
     }
     const windows = Array.from(document.querySelectorAll('[name="time-window"]:checked'), input => input.value.split('-'));
     const rows = (result.data || []).filter(item => (!term || [item.practitioner_name, item.specialty_name_th, item.specialty_name_en, item.title, item.room_code, item.branch_code].some(value => String(value || '').toLowerCase().includes(term))) && (!windows.length || windows.some(([start, end]) => thaiTime(item.starts_at) < end && thaiTime(item.ends_at) > start)));
     allSchedules = rows;
     $('#schedule-status').textContent = rows.length ? `พบ ${rows.length} ช่วงเวลาที่ว่าง` : 'ไม่พบตารางเปิดรับนัดตามวันและเวลาที่เลือก — ลองเปลี่ยนตัวกรอง หรือเพิ่มช่วงเวลารับนัด';
-    $('#schedule-list').innerHTML = rows.map(item => `<article class="schedule-card"><h3>${esc(item.title)}</h3><div class="meta"><span>${esc(item.practitioner_name || '-')}</span><span>${esc(item.specialty_name_th || item.specialty_name_en || '-')}</span><span>${esc(dateTime(item.starts_at))} – ${esc(thaiTime(item.ends_at))} น.</span><span>สาขา ${esc(item.branch_code || '-')} • ห้อง ${esc(item.room_code || '-')}</span></div><p><span class="capacity">ว่าง ${item.available_capacity}/${item.max_patients}</span></p>${canOperate ? `<button class="btn primary" data-book="${item.id}" data-label="${esc(item.title)} • ${esc(dateTime(item.starts_at))} • ${esc(item.practitioner_name || '-')}">เลือกช่วงเวลานี้</button>` : ''}</article>`).join('') || `<div class="notice warning"><b>ยังไม่มีช่วงเวลาที่เปิดรับนัด</b><br>${canOperate ? 'กด “เพิ่มช่วงเวลารับนัด” เพื่อสร้างช่วงเวลาแรก แล้วจึงเลือกผู้รับบริการ' : 'กรุณาให้ Admin หรือ Reception เพิ่มตารางรับนัด'}</div>`;
+    $('#schedule-list').innerHTML = rows.map(item => scheduleCard(item, canOperate)).join('') || `<div class="notice warning"><b>ยังไม่มีช่วงเวลาที่เปิดรับนัด</b><br>${canOperate ? 'กด “เพิ่มช่วงเวลารับนัด” เพื่อสร้างช่วงเวลาแรก แล้วจึงเลือกผู้รับบริการ' : 'กรุณาให้ Admin หรือ Reception เพิ่มตารางรับนัด'}</div>`;
     document.querySelectorAll('[data-book]').forEach(button => {
       button.onclick = () => {
         $('#selected-schedule').value = button.dataset.book;
