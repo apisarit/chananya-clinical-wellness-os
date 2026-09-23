@@ -50,6 +50,7 @@
   const patientName = patient => [patient.title || patient.prefix, patient.first_name, patient.last_name].filter(Boolean).join(' ') || patient.full_name || patient.name || 'ไม่ระบุชื่อ';
   const patientLabel = patient => `${patient.hn || patient.patient_no || '-'} — ${patientName(patient)}${patient.phone ? ` • ${patient.phone}` : ''}`;
   const appointmentStatusLabel = status => ({ booked: 'จองแล้ว', confirmed: 'ยืนยันแล้ว', checked_in: 'เช็กอินแล้ว', in_service: 'กำลังรับบริการ', completed: 'เสร็จสิ้น', cancelled: 'ยกเลิก', no_show: 'ไม่มาตามนัด', rescheduled: 'เลื่อนนัด' }[status] || status || '-');
+  const practitionerStatus = status => ['in_service', 'completed'].includes(status);
 
   function toast(message) {
     const element = $('#toast');
@@ -320,7 +321,10 @@
     $('#appointment-list').innerHTML = (result.data || []).map(item => {
       const patient = item.patient || {};
       const mayProvideCare = canClinicalStatus && item.practitioner_id === session.user.id;
-      const actions = (canOperate || mayProvideCare) ? `${canOperate && item.status === 'booked' ? `<button class="btn ghost" data-status="confirmed" data-id="${item.id}">ยืนยัน</button>` : ''}${canOperate && ['booked', 'confirmed'].includes(item.status) ? `<button class="btn ghost" data-status="checked_in" data-id="${item.id}">Check-in</button>` : ''}${(canOperate || mayProvideCare) && item.status === 'checked_in' ? `<button class="btn ghost" data-status="in_service" data-id="${item.id}">เริ่มบริการ</button>` : ''}${(canOperate || mayProvideCare) && item.status === 'in_service' ? `<button class="btn ghost" data-status="completed" data-id="${item.id}">เสร็จสิ้น</button>` : ''}${canOperate && ['booked', 'confirmed'].includes(item.status) ? `<button class="btn danger" data-cancel="${item.id}">ยกเลิก</button>` : ''}` : '';
+      const recordLink = item.encounter_id
+        ? `<a class="btn ghost" href="/clinical-v3.html?encounter=${encodeURIComponent(item.encounter_id)}&step=history">เปิดเวชระเบียน</a>`
+        : '';
+      const actions = (canOperate || mayProvideCare) ? `${canOperate && item.status === 'booked' ? `<button class="btn ghost" data-status="confirmed" data-id="${item.id}">ยืนยัน</button>` : ''}${(canOperate || mayProvideCare) && ['booked', 'confirmed'].includes(item.status) ? `<a class="btn ghost" href="/check-in.html?appointment=${encodeURIComponent(item.id)}">Check-in และเปิดเวชระเบียน</a>` : ''}${(canOperate || mayProvideCare) && item.status === 'checked_in' && !item.encounter_id ? `<a class="btn ghost" href="/check-in.html?appointment=${encodeURIComponent(item.id)}">ยืนยันผู้รับบริการและเปิดเวชระเบียน</a>` : ''}${(canOperate || mayProvideCare) && item.status === 'checked_in' ? `<button class="btn ghost" data-status="in_service" data-id="${item.id}">เริ่มบริการ</button>` : ''}${(canOperate || mayProvideCare) && item.status === 'in_service' ? `<button class="btn ghost" data-status="completed" data-id="${item.id}">เสร็จสิ้น</button>` : ''}${recordLink}${canOperate && ['booked', 'confirmed'].includes(item.status) ? `<button class="btn danger" data-cancel="${item.id}">ยกเลิก</button>` : ''}` : '';
       return `<article class="appt-row"><div><b>${esc(item.appointment_no)} • คิว ${item.queue_number}</b><small>${esc(patientLabel(patient))}</small><small>${esc(dateTime(item.scheduled_start))} • ${esc(appointmentStatusLabel(item.status))}</small><small>${esc(item.chief_complaint || '')}</small></div><div class="actions">${actions}</div></article>`;
     }).join('') || '<p class="muted">ไม่มีรายการนัดหมาย</p>';
     document.querySelectorAll('[data-status]').forEach(button => { button.onclick = () => setStatus(button.dataset.id, button.dataset.status).catch(fail); });
@@ -328,7 +332,9 @@
   }
 
   async function setStatus(id, status) {
-    if (!canOperate) throw new Error('บัญชีนี้มีสิทธิ์ดูเท่านั้น');
+    if (!canOperate && !(canClinicalStatus && practitionerStatus(status))) {
+      throw new Error('บัญชีนี้ไม่มีสิทธิ์เปลี่ยนสถานะนี้');
+    }
     if (appointmentActionsInFlight.has(id)) return;
     appointmentActionsInFlight.add(id);
     document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = true; });

@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'app.css'), 'utf8');
+
+assert.match(app, /list_billable_treatment_encounters/);
+assert.match(app, /issue_atomic_treatment_invoice/);
+assert.match(app, /async function createServiceInvoice\(encounterId\)/);
+assert.doesNotMatch(app.match(/async function createServiceInvoice\(encounterId\)[\s\S]*?\n  \}/)?.[0] || '', /requireAtomicHandoffs/);
+assert.match(app, /p_request_key:\s*requestKey/);
+assert.match(app, /serviceInvoiceRequestKeys\.set\(encounterId, requestKey\)/);
+assert.match(app, /serviceInvoiceRequestKeys\.delete\(encounterId\)/);
+assert.match(app, /data-treatment-description/);
+assert.match(app, /data-treatment-amount/);
+assert.match(app, /data-action="receipt"/);
+assert.match(app, /payment_reference/);
+assert.match(app, /payment\.paid_at \|\| payment\.created_at/);
+assert.match(app, /window\.print\(\)/);
+assert.match(app, /document\.body\.classList\.add\('receipt-printing'\)/);
+assert.match(app, /afterprint/);
+assert.match(css, /body\.receipt-printing > :not\(#receipt-dialog\)/);
+assert.match(css, /body\.receipt-printing #receipt-dialog \.identity-dialog-head/);
+assert.match(app, /esc\(payment\.payment_reference\)/);
+assert.match(app, /esc\(invoice\.invoice_number\)/);
+assert.match(app, /esc\(patientName\(invoice\.patient_id\)\)/);
+assert.match(html, /id="treatment-billing-queue"/);
+assert.match(html, /id="receipt-dialog"/);
+assert.match(html, /id="receipt-body"/);
+assert.doesNotMatch(app, /KBank|2C2P|gateway_callback/i);
+console.log('Post-booking billing UI contract passed: service-only RPC wiring, sticky request keys, escaped receipt readback, no gateway claim');

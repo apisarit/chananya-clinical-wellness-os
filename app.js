@@ -23,9 +23,11 @@
   let identityLinkPatientId = null;
   let latestIdentityLinkCode = '';
   let identityLinks = [];
+  const serviceInvoiceRequestKeys = new Map();
   const data = {
     patients: [], allergies: [], appointments: [], encounters: [], prescriptions: [],
-    dispensing: [], dispensingItems: [], rxItems: [], products: [], invoices: [], payments: [], audit: []
+    dispensing: [], dispensingItems: [], rxItems: [], products: [], invoices: [], payments: [], audit: [],
+    billableTreatmentEncounters: [], billableTreatmentError: ''
   };
 
   const viewPermissions = {
@@ -101,6 +103,18 @@
     ]);
     [data.patients, data.allergies, data.appointments, data.encounters, data.prescriptions, data.dispensing,
       data.dispensingItems, data.rxItems, data.products, data.invoices, data.payments, data.audit] = rows;
+    data.billableTreatmentEncounters = [];
+    data.billableTreatmentError = '';
+    if (billingAccess) {
+      try {
+        const result = await db.rpc('list_billable_treatment_encounters');
+        if (result.error) throw result.error;
+        data.billableTreatmentEncounters = result.data || [];
+      } catch (error) {
+        data.billableTreatmentError = 'ยังโหลดรายการค่าบริการรักษาไม่ได้ กรุณาตรวจสอบ migration ที่เกี่ยวข้อง';
+        console.warn('Optional treatment billing RPC unavailable', error);
+      }
+    }
     render();
   }
 
@@ -199,7 +213,13 @@
       return `<article class="item column"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(patientName(prescription?.patient_id))}</b><small>${esc(encounter?.encounter_no || '-')} • ค่ายาที่จ่ายจริง ฿${money(medicine)}</small></div><span class="badge">พร้อมออก Invoice</span></div><div class="form"><label>ค่าบริการจริง<input data-service-fee="${order.id}" type="number" min="0" step=".01" value="0"></label><label>ส่วนลด<input data-discount="${order.id}" type="number" min="0" step=".01" value="0"></label><button class="btn primary full" data-action="invoice" data-id="${order.id}">สร้าง Invoice</button></div></article>`;
     }).join('') || '<p class="muted">ไม่มีรายการรอออก Invoice</p>';
 
-    $('#invoice-list').innerHTML = data.invoices.map(invoice => `<article class="item"><div><b>${esc(invoice.invoice_number)} • ${esc(patientName(invoice.patient_id))}</b><small>รวม ฿${money(invoice.grand_total)} • ชำระ ฿${money(invoice.paid_amount)} • คงเหลือ ฿${money(invoice.balance_due)}</small></div><span class="badge">${esc(invoice.status)}</span></article>`).join('') || '<p class="muted">ยังไม่มี Invoice</p>';
+    const treatmentNotice = data.billableTreatmentError ? `<p class="notice">${esc(data.billableTreatmentError)}</p>` : '';
+    $('#treatment-billing-queue').innerHTML = treatmentNotice + (data.billableTreatmentEncounters.map(item => `<article class="item column"><div><b>${esc(item.encounter_no || item.encounter_id || '-')} • ${esc(patientName(item.patient_id))}</b><small>บริการรักษาแบบไม่มีรายการยา</small></div><div class="form"><label>รายละเอียดบริการ<input data-treatment-description="${esc(item.encounter_id)}" maxlength="500" value="${esc(item.treatment_description || 'ค่าตรวจและบริการรักษา')}"></label><label>จำนวนเงิน<input data-treatment-amount="${esc(item.encounter_id)}" type="number" min="0.01" step=".01" required></label><button class="btn primary full" data-action="service-invoice" data-id="${esc(item.encounter_id)}">สร้าง Invoice ค่าบริการ</button></div></article>`).join('') || '<p class="muted">ไม่มี Encounter ที่พร้อมออก Invoice ค่าบริการ</p>');
+    $('#invoice-list').innerHTML = data.invoices.map(invoice => {
+      const payments = data.payments.filter(payment => payment.invoice_id === invoice.id);
+      const receiptButtons = payments.map(payment => `<button class="btn ghost" data-action="receipt" data-id="${esc(payment.id)}">ใบรับเงิน ${esc(payment.payment_reference)}</button>`).join('');
+      return `<article class="item"><div><b>${esc(invoice.invoice_number)} • ${esc(patientName(invoice.patient_id))}</b><small>รวม ฿${money(invoice.grand_total)} • ชำระ ฿${money(invoice.paid_amount)} • คงเหลือ ฿${money(invoice.balance_due)}</small></div><div class="actions"><span class="badge">${esc(invoice.status)}</span>${receiptButtons}</div></article>`;
+    }).join('') || '<p class="muted">ยังไม่มี Invoice</p>';
   }
 
   function renderDashboard() {
@@ -229,7 +249,38 @@
 
   function bindActions() {
     $$('[data-action="invoice"]').forEach(button => { button.onclick = () => createInvoice(button.dataset.id).catch(fail); });
+    $$('[data-action="service-invoice"]').forEach(button => { button.onclick = () => createServiceInvoice(button.dataset.id).catch(fail); });
+    $$('[data-action="receipt"]').forEach(button => { button.onclick = () => showReceipt(button.dataset.id); });
     $$('[data-go-view]').forEach(button => { button.onclick = () => show(button.dataset.goView); });
+  }
+
+  async function createServiceInvoice(encounterId) {
+    const amount = num(document.querySelector(`[data-treatment-amount="${CSS.escape(encounterId)}"]`)?.value);
+    const description = document.querySelector(`[data-treatment-description="${CSS.escape(encounterId)}"]`)?.value.trim();
+    if (!(amount > 0) || !description) throw new Error('กรุณาระบุรายละเอียดและจำนวนเงินค่าบริการ');
+    const requestKey = serviceInvoiceRequestKeys.get(encounterId) || crypto.randomUUID();
+    serviceInvoiceRequestKeys.set(encounterId, requestKey);
+    const result = await db.rpc('issue_atomic_treatment_invoice', {
+      p_request_key: requestKey, p_encounter_id: encounterId, p_amount: amount, p_description: description
+    });
+    if (result.error) throw result.error;
+    serviceInvoiceRequestKeys.delete(encounterId);
+    await loadAll();
+    toast('สร้าง Invoice ค่าบริการแล้ว');
+  }
+
+  function showReceipt(paymentId) {
+    const payment = data.payments.find(item => item.id === paymentId);
+    const invoice = data.invoices.find(item => item.id === payment?.invoice_id);
+    if (!payment || !invoice) throw new Error('ไม่พบข้อมูลใบรับเงิน');
+    const dialog = $('#receipt-dialog');
+    $('#receipt-body').innerHTML = `<h2>ใบรับเงิน</h2><p><b>เลขที่รับเงิน:</b> ${esc(payment.payment_reference)}</p><p><b>Invoice:</b> ${esc(invoice.invoice_number)}</p><p><b>ผู้รับบริการ:</b> ${esc(patientName(invoice.patient_id))}</p><p><b>จำนวนเงิน:</b> ฿${money(payment.amount)}</p><p><b>ช่องทาง:</b> ${esc(payment.channel)}</p><p><b>เวลารับเงิน:</b> ${esc(payment.paid_at || payment.created_at || '-')}</p><button class="btn primary" type="button" id="receipt-print">พิมพ์</button>`;
+    $('#receipt-print').onclick = () => {
+      document.body.classList.add('receipt-printing');
+      window.addEventListener('afterprint', () => document.body.classList.remove('receipt-printing'), { once: true });
+      window.print();
+    };
+    dialog.showModal();
   }
 
   function resetPatientForm() {

@@ -857,6 +857,12 @@ const dualRoleSchedule = (await asUser(USER_C, `
 `)).rows[0];
 assert.equal(dualRoleSchedule.clinic_id, CLINIC_A);
 assert.equal(dualRoleSchedule.practitioner_id, USER_DUAL_PROVIDER);
+const dualRoleAppointment = (await asUser(USER_C, `
+  select * from public.book_clinic_appointment(
+    '${patientA.id}','${dualRoleSchedule.id}',
+    'Synthetic dual-role QR retry',null,'staff'
+  );
+`)).rows[0];
 const ownerBookedAppointment = (await asUser(USER_C, `
   select * from public.book_clinic_appointment(
     '${patientA.id}','${ownerCreatedSchedule.id}',
@@ -865,6 +871,232 @@ const ownerBookedAppointment = (await asUser(USER_C, `
 `)).rows[0];
 assert.equal(ownerBookedAppointment.patient_id, patientA.id);
 assert.equal(ownerBookedAppointment.schedule_id, ownerCreatedSchedule.id);
+
+// A consumed QR may be retried only when it is already bound to this same
+// appointment Encounter and actor. This covers a lost response without
+// reopening a replay path against another appointment.
+const dualRoleQrSession = randomUUID();
+await db.query(`
+  insert into public.patient_qr_sessions(
+    id,clinic_id,patient_id,identity_link_id,token_hash,display_code_hash,
+    expires_at,resolved_at,resolved_by
+  )
+  select
+    '${dualRoleQrSession}','${CLINIC_A}','${patientA.id}',l.id,
+    repeat('d',64),repeat('e',64),now()+interval '1 hour',now(),'${USER_RECEPTION}'
+  from public.patient_identity_links l
+  where l.patient_id='${patientA.id}' and l.clinic_id='${CLINIC_A}'
+  order by l.created_at desc
+  limit 1
+`);
+const dualRoleCheckedIn = (await asUser(USER_RECEPTION, `
+  select * from public.check_in_clinic_appointment(
+    '${dualRoleAppointment.id}',null,'${dualRoleQrSession}','line_qr',true,
+    null,null,'{}'::jsonb
+  )
+`)).rows[0];
+assert.equal(dualRoleCheckedIn.practitioner_id, USER_DUAL_PROVIDER);
+assert.equal(dualRoleCheckedIn.reused, false);
+const dualRoleQrRetry = (await asUser(USER_RECEPTION, `
+  select * from public.check_in_clinic_appointment(
+    '${dualRoleAppointment.id}',null,'${dualRoleQrSession}','line_qr',true,
+    null,null,'{}'::jsonb
+  )
+`)).rows[0];
+assert.equal(dualRoleQrRetry.encounter_id, dualRoleCheckedIn.encounter_id);
+assert.equal(dualRoleQrRetry.reused, true);
+await asUser(USER_DUAL_PROVIDER, `
+  select * from public.set_clinic_appointment_status(
+    '${dualRoleAppointment.id}','in_service',null
+  )
+`);
+const dualRoleTreatment = await asUser(USER_DUAL_PROVIDER, `
+  select (public.create_clinical_treatment_session(
+    '${dualRoleCheckedIn.encounter_id}',array['manual_therapy'],
+    'Synthetic dual-role own appointment',false,null::text,null::text,
+    null::smallint,null::smallint,null::text,null::text
+  )).practitioner_id
+`);
+assert.equal(dualRoleTreatment.rows[0].practitioner_id, USER_DUAL_PROVIDER);
+
+// Appointment -> verified check-in -> assigned doctor -> OPD/treatment ->
+// service-only invoice -> partial/final payment is one tenant-bound chain.
+const checkedInAppointment = (await asUser(USER_RECEPTION, `
+  select * from public.check_in_clinic_appointment(
+    '${ownerBookedAppointment.id}','${patientA.id}',null,'manual_hn',true,
+    'Synthetic appointment identity confirmation',null,'{}'::jsonb
+  )
+`)).rows[0];
+assert.equal(checkedInAppointment.patient_id, patientA.id);
+assert.equal(checkedInAppointment.practitioner_id, USER_ROLE_TARGET);
+assert.equal(checkedInAppointment.appointment_status, 'checked_in');
+assert.equal(checkedInAppointment.reused, false);
+const checkedInRetry = (await asUser(USER_RECEPTION, `
+  select * from public.check_in_clinic_appointment(
+    '${ownerBookedAppointment.id}','${patientA.id}',null,'manual_hn',true,
+    'Synthetic appointment identity confirmation',null,'{}'::jsonb
+  )
+`)).rows[0];
+assert.equal(checkedInRetry.encounter_id, checkedInAppointment.encounter_id);
+assert.equal(checkedInRetry.reused, true);
+const appointmentEncounterCounts = await db.query(`
+  select
+    (select count(*)::int from public.encounters where id='${checkedInAppointment.encounter_id}') encounters,
+    (select count(*)::int from public.clinic_appointments where id='${ownerBookedAppointment.id}' and encounter_id='${checkedInAppointment.encounter_id}') links,
+    (select count(*)::int from public.encounter_identity_verifications where encounter_id='${checkedInAppointment.encounter_id}') verifications
+`);
+assert.deepEqual(appointmentEncounterCounts.rows[0], { encounters: 1, links: 1, verifications: 1 });
+await expectDatabaseError(
+  asUser(USER_RECEPTION, `select * from public.check_in_clinic_appointment(
+    '${ownerBookedAppointment.id}','${createdManual.rows[0].id}',null,'manual_hn',true,
+    null,null,'{}'::jsonb
+  )`),
+  'APPOINTMENT_PATIENT_MISMATCH'
+);
+
+const doctorStarted = (await asUser(USER_ROLE_TARGET, `
+  select * from public.set_clinic_appointment_status(
+    '${ownerBookedAppointment.id}','in_service',null
+  )
+`)).rows[0];
+assert.equal(doctorStarted.status, 'in_service');
+await expectDatabaseError(
+  asUser(USER_A, `select public.create_clinical_treatment_session(
+    '${checkedInAppointment.encounter_id}',array['manual_therapy'],
+    'Cross-practitioner attempt',false,null::text,null::text,
+    null::smallint,null::smallint,null::text,null::text
+  )`),
+  'ENCOUNTER_PRACTITIONER_MISMATCH'
+);
+await expectDatabaseError(
+  asUser(USER_A, `insert into public.clinical_treatment_sessions(
+    encounter_id,session_no,treatment_detail,practitioner_id
+  ) values (
+    '${checkedInAppointment.encounter_id}',99,'Direct DML bypass','${USER_A}'
+  )`),
+  'permission denied'
+);
+await asUser(USER_ROLE_TARGET, `
+  insert into public.clinical_examination_findings(
+    encounter_id,sequence_no,body_region,side,tenderness,range_of_motion,
+    identified_problem,severity,created_by
+  ) values (
+    '${checkedInAppointment.encounter_id}',1,'shoulder','right',true,'limited',
+    'Synthetic restricted movement',3,'${USER_ROLE_TARGET}'
+  )
+`);
+await asUser(USER_ROLE_TARGET, `
+  insert into public.ttm_opd_histories(
+    encounter_id,accident_history,physical_exam_narrative,created_by,updated_by
+  ) values (
+    '${checkedInAppointment.encounter_id}','Synthetic none',
+    'Synthetic initial examination','${USER_ROLE_TARGET}','${USER_ROLE_TARGET}'
+  )
+`);
+await asUser(USER_ROLE_TARGET, `
+  update public.ttm_opd_histories
+  set physical_exam_narrative='Synthetic amended examination',updated_by='${USER_ROLE_TARGET}'
+  where encounter_id='${checkedInAppointment.encounter_id}'
+`);
+const doctorReadback = await asUser(USER_ROLE_TARGET, `
+  select h.physical_exam_narrative,
+    (select count(*)::int from public.clinical_examination_findings f
+      where f.encounter_id=h.encounter_id) finding_count
+  from public.ttm_opd_histories h
+  where h.encounter_id='${checkedInAppointment.encounter_id}'
+`);
+assert.deepEqual(doctorReadback.rows[0], {
+  physical_exam_narrative: 'Synthetic amended examination',
+  finding_count: 1
+});
+await asUser(USER_ROLE_TARGET, `
+  select public.save_ttm_diagnosis_atomic(
+    p_encounter_id => '${checkedInAppointment.encounter_id}',
+    p_analysis_summary => 'Synthetic appointment diagnosis',
+    p_thai_diagnosis => 'Synthetic diagnosis',
+    p_practitioner_confirmed => true,
+    p_knowledge_version => 'SYNTHETIC-APPOINTMENT-v1'
+  )
+`);
+await asUser(USER_ROLE_TARGET, `
+  select public.create_clinical_treatment_session(
+    '${checkedInAppointment.encounter_id}',array['manual_therapy'],
+    'Synthetic treatment only',false,null::text,null::text,3::smallint,1::smallint,
+    'Synthetic improved','Synthetic follow-up'
+  )
+`);
+await asUser(USER_ROLE_TARGET, `
+  select public.sign_clinical_record_complete(
+    '${checkedInAppointment.encounter_id}','Synthetic Doctor','TEST-LICENSE',
+    'Synthetic complete record'
+  )
+`);
+const doctorCompleted = (await asUser(USER_ROLE_TARGET, `
+  select * from public.set_clinic_appointment_status(
+    '${ownerBookedAppointment.id}','completed',null
+  )
+`)).rows[0];
+assert.equal(doctorCompleted.status, 'completed');
+
+const billableTreatments = await asUser(USER_BILLING, `
+  select * from public.list_billable_treatment_encounters()
+  where encounter_id='${checkedInAppointment.encounter_id}'
+`);
+assert.equal(billableTreatments.rows.length, 1);
+assert.equal(billableTreatments.rows[0].treatment_description, 'Synthetic treatment only');
+const treatmentInvoiceRequest = randomUUID();
+const treatmentInvoice = (await asUser(USER_BILLING, `
+  select * from public.issue_atomic_treatment_invoice(
+    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',500,
+    'ค่าตรวจและหัตถการสังเคราะห์'
+  )
+`)).rows[0];
+assert.equal(Number(treatmentInvoice.grand_total), 500);
+const treatmentInvoiceRetry = (await asUser(USER_BILLING, `
+  select * from public.issue_atomic_treatment_invoice(
+    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',500,
+    'ค่าตรวจและหัตถการสังเคราะห์'
+  )
+`)).rows[0];
+assert.equal(treatmentInvoiceRetry.invoice_id, treatmentInvoice.invoice_id);
+await expectDatabaseError(
+  asUser(USER_BILLING, `select * from public.issue_atomic_treatment_invoice(
+    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',501,
+    'ค่าตรวจและหัตถการสังเคราะห์'
+  )`),
+  'INVOICE_REQUEST_CONFLICT'
+);
+const treatmentPartialKey = randomUUID();
+const treatmentFinalKey = randomUUID();
+const treatmentPartial = (await asUser(USER_BILLING, `
+  select * from public.record_atomic_invoice_payment(
+    '${treatmentPartialKey}','${treatmentInvoice.invoice_id}',200,'cash','SYNTHETIC-PARTIAL'
+  )
+`)).rows[0];
+assert.equal(treatmentPartial.invoice_status, 'partially_paid');
+assert.equal(Number(treatmentPartial.balance_due), 300);
+const treatmentPartialRetry = (await asUser(USER_BILLING, `
+  select * from public.record_atomic_invoice_payment(
+    '${treatmentPartialKey}','${treatmentInvoice.invoice_id}',200,'cash','SYNTHETIC-PARTIAL'
+  )
+`)).rows[0];
+assert.equal(treatmentPartialRetry.payment_id, treatmentPartial.payment_id);
+const treatmentFinal = (await asUser(USER_BILLING, `
+  select * from public.record_atomic_invoice_payment(
+    '${treatmentFinalKey}','${treatmentInvoice.invoice_id}',300,'qr','SYNTHETIC-FINAL'
+  )
+`)).rows[0];
+assert.equal(treatmentFinal.invoice_status, 'paid');
+assert.equal(treatmentFinal.encounter_closed, true);
+const treatmentReceiptReadback = await asUser(USER_BILLING, `
+  select payment_reference,amount,status
+  from public.payments
+  where invoice_id='${treatmentInvoice.invoice_id}'
+  order by paid_at
+`);
+assert.equal(treatmentReceiptReadback.rows.length, 2);
+assert.equal(Number(treatmentReceiptReadback.rows[0].amount), 200);
+assert.equal(Number(treatmentReceiptReadback.rows[1].amount), 300);
 
 await expectDatabaseError(
   asUser(USER_C, `select * from public.create_practitioner_schedule(

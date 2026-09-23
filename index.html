@@ -121,6 +121,9 @@
             <section class="card">
               <div class="section-heading"><span class="section-number">฿</span><div><h2>รายการรอออก Invoice</h2><p>สร้างจากรายการที่ห้องยาจ่ายจริงแล้วเท่านั้น</p></div></div>
               <div id="billing-queue" class="list"></div>
+              <hr>
+              <div class="section-heading"><span class="section-number">S</span><div><h2>ค่าบริการรักษา</h2><p>เฉพาะ Encounter ที่ลงนามและไม่มีใบสั่งยา</p></div></div>
+              <div id="treatment-billing-queue" class="list"></div>
             </section>
             <section class="card">
               <div class="section-heading"><span class="section-number">02</span><div><h2>รับชำระ</h2><p>บันทึกการรับชำระแบบ manual พร้อมเลขอ้างอิง</p></div></div>
@@ -179,6 +182,10 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
+  <dialog id="receipt-dialog" class="identity-dialog" aria-labelledby="receipt-title">
+    <form method="dialog" class="identity-dialog-head"><h2 id="receipt-title">ใบรับเงิน</h2><button class="btn ghost" value="cancel" aria-label="ปิด">ปิด</button></form>
+    <section id="receipt-body"></section>
+  </dialog>
   <script src="selected-export-browser.js?v=selected-export1"></script>
 </body>
 </html>
