@@ -28,7 +28,7 @@ export const BACKUP_BINDING_KEYS = Object.freeze([
   'BACKUP_EXPECTED_NETLIFY_SITE_ID', 'BACKUP_EXPECTED_SITE_ORIGIN', 'BACKUP_ENVIRONMENT'
 ]);
 export const REQUIRED_FLAG_KEYS = Object.freeze(['CNYOS_OWNER_CONTROL_ENABLED', 'CNYOS_OWNER_DRIVE_ENABLED', 'BACKUP_ENABLED', 'BACKUP_DEPLOYMENT_ID', 'CLINICAL_OS_SOURCE_COMMIT']);
-export const PHASES = Object.freeze(['pre-upload', 'post-upload']);
+export const PHASES = Object.freeze(['pre-upload', 'pre-publish', 'post-upload', 'rollback']);
 const ALLOWED_KEYS = new Set([...REQUIRED_BINDING_KEYS, ...REQUIRED_SECRET_KEYS, ...LINE_KEYS, ...BACKUP_BINDING_KEYS, ...REQUIRED_FLAG_KEYS]);
 const SNAPSHOT_KEYS = [...REQUIRED_BINDING_KEYS, ...BACKUP_BINDING_KEYS, ...REQUIRED_FLAG_KEYS];
 const LINE_PUBLIC_KEYS = ['LINE_LIFF_ID', 'LINE_LOGIN_CHANNEL_ID', 'LINE_MESSAGING_CHANNEL_ID'];
@@ -61,7 +61,7 @@ function valuesForEntry(entry) {
   const selected = selectedCandidates[0];
   const present = typeof selected.value === 'string' && selected.value.trim().length > 0;
   if (!present) throw new Error('NETLIFY_ENV_METADATA_INVALID');
-  return { value: selected.value, present, secret: entry.is_secret === true, scopes: entry.scopes };
+  return { value: selected.value, present, secret: entry.is_secret === true, scopes: entry.scopes, context: selected.context };
 }
 
 export function normalizeProductionEnvironment(metadata) {
@@ -121,7 +121,7 @@ export function expectedProductionBindings({ config, siteId, siteOrigin }) {
   });
 }
 
-export function assertProductionRuntimeBinding({ metadata, config, siteId, siteOrigin, requireLine = false, releaseCommit } = {}) {
+export function assertProductionRuntimeBinding({ metadata, config, siteId, siteOrigin, requireLine = false, releaseCommit, sourceCommitPolicy = 'exact' } = {}) {
   const expected = expectedProductionBindings({ config, siteId, siteOrigin });
   const map = normalizeProductionEnvironment(metadata);
   for (const key of REQUIRED_BINDING_KEYS) {
@@ -136,9 +136,14 @@ export function assertProductionRuntimeBinding({ metadata, config, siteId, siteO
   for (const key of ['SUPABASE_URL', 'CNYOS_OWNER_EXPECTED_SITE_ORIGIN']) if (origin(value(map, key), 'NETLIFY_RUNTIME_ORIGIN_INVALID') !== origin(expected[key], 'PRODUCTION_ORIGIN_INVALID')) throw new Error(`NETLIFY_RUNTIME_${key}_MISMATCH`);
   for (const key of REQUIRED_SECRET_KEYS) requirePresent(map, key, { secret: true });
   if (!/^[0-9a-f]{40}$/.test(releaseCommit || '')) throw new Error('EXPECTED_RELEASE_COMMIT_INVALID');
+  if (!['exact', 'valid'].includes(sourceCommitPolicy)) throw new Error('NETLIFY_RUNTIME_SOURCE_COMMIT_POLICY_INVALID');
   for (const key of REQUIRED_FLAG_KEYS) {
     requirePresent(map, key);
-    if (value(map, key) !== (key === 'CLINICAL_OS_SOURCE_COMMIT' ? releaseCommit : expected[key])) throw new Error(`NETLIFY_RUNTIME_${key}_MISMATCH`);
+    if (key === 'CLINICAL_OS_SOURCE_COMMIT') {
+      if (!/^[0-9a-f]{40}$/.test(value(map, key)) || (sourceCommitPolicy === 'exact' && value(map, key) !== releaseCommit)) {
+        throw new Error(`NETLIFY_RUNTIME_${key}_MISMATCH`);
+      }
+    } else if (value(map, key) !== expected[key]) throw new Error(`NETLIFY_RUNTIME_${key}_MISMATCH`);
   }
   for (const key of BACKUP_BINDING_KEYS) { requirePresent(map, key); if (key.includes('URL') || key.includes('ORIGIN')) { if (origin(value(map, key), 'NETLIFY_RUNTIME_BACKUP_ORIGIN_INVALID') !== origin(expected[key], 'PRODUCTION_ORIGIN_INVALID')) throw new Error(`NETLIFY_RUNTIME_${key}_MISMATCH`); } else if (value(map, key).toLowerCase() !== clean(expected[key]).toLowerCase()) throw new Error(`NETLIFY_RUNTIME_${key}_MISMATCH`); }
   if (requireLine) {
@@ -149,7 +154,30 @@ export function assertProductionRuntimeBinding({ metadata, config, siteId, siteO
     }
   }
   const publicKeys = requireLine ? [...SNAPSHOT_KEYS, ...LINE_PUBLIC_KEYS] : SNAPSHOT_KEYS;
-  return Object.freeze({ siteId: clean(siteId).toLowerCase(), origin: origin(siteOrigin || expected.CNYOS_OWNER_EXPECTED_SITE_ORIGIN, 'PRODUCTION_ORIGIN_INVALID'), context: 'production', functionsScopeVerified: true, lineRequired: Boolean(requireLine), bindingSnapshot: Object.freeze(Object.fromEntries(publicKeys.map(key => [key, value(map, key)]))) });
+  const source = map.get('CLINICAL_OS_SOURCE_COMMIT');
+  return Object.freeze({
+    siteId: clean(siteId).toLowerCase(),
+    origin: origin(siteOrigin || expected.CNYOS_OWNER_EXPECTED_SITE_ORIGIN, 'PRODUCTION_ORIGIN_INVALID'),
+    context: 'production',
+    functionsScopeVerified: true,
+    lineRequired: Boolean(requireLine),
+    sourceCommitBinding: Object.freeze({ value: value(map, 'CLINICAL_OS_SOURCE_COMMIT'), context: source.context }),
+    bindingSnapshot: Object.freeze(Object.fromEntries(publicKeys.map(key => [key, value(map, key)])))
+  });
+}
+
+function withoutSourceCommit(bindings) {
+  return Object.fromEntries(Object.entries(bindings || {}).filter(([key]) => key !== 'CLINICAL_OS_SOURCE_COMMIT'));
+}
+
+function assertStableTransition(previous, current, expectedSourceCommit) {
+  const { bindingSnapshot: previousBindings, previousSourceBinding: _previousSource, ...previousEnvelope } = previous;
+  const { bindingSnapshot: currentBindings, previousSourceBinding: _currentSource, ...currentEnvelope } = current;
+  try {
+    assert.deepEqual(previousEnvelope, currentEnvelope);
+    assert.deepEqual(withoutSourceCommit(previousBindings), withoutSourceCommit(currentBindings));
+    assert.equal(currentBindings?.CLINICAL_OS_SOURCE_COMMIT, expectedSourceCommit);
+  } catch { throw new Error('NETLIFY_RUNTIME_BINDING_DRIFT'); }
 }
 
 async function netlify(pathname, token, fetchImpl = fetch) {
@@ -181,22 +209,49 @@ export async function verifyProductionRuntime({ env = process.env, phase = 'post
   const accountId = clean(site.account_id || site.account?.id);
   if (!accountId) throw new Error('NETLIFY_SITE_ACCOUNT_ID_UNAVAILABLE');
   const metadata = await netlify(`/accounts/${encodeURIComponent(accountId)}/env?site_id=${encodeURIComponent(siteId)}&scope=functions`, token, fetchImpl);
-  const evidence = assertProductionRuntimeBinding({ metadata, config, siteId, siteOrigin, releaseCommit, requireLine: env.RELEASE_REQUIRES_LINE === 'true' });
+  const expectedSourceCommit = phase === 'rollback'
+    ? required('EXPECTED_PREVIOUS_SOURCE_COMMIT', env).toLowerCase()
+    : releaseCommit;
+  if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit)) throw new Error('EXPECTED_RUNTIME_SOURCE_COMMIT_INVALID');
+  const evidence = assertProductionRuntimeBinding({
+    metadata,
+    config,
+    siteId,
+    siteOrigin,
+    releaseCommit: expectedSourceCommit,
+    sourceCommitPolicy: phase === 'pre-upload' ? 'valid' : 'exact',
+    requireLine: env.RELEASE_REQUIRES_LINE === 'true'
+  });
   const snapshotPath = path.resolve(env.NETLIFY_RUNTIME_BINDING_SNAPSHOT_PATH || 'artifacts/production-deploy/runtime-binding.json');
   // Hash only validated browser-public identity, never arbitrary config extras.
   const configDigest = crypto.createHash('sha256').update(JSON.stringify(expectedProductionBindings({ config, siteId, siteOrigin }))).digest('hex');
-  const snapshot = { schemaVersion: 2, evidenceType: 'site_configuration_preflight_only', context: 'production', releaseCommit, siteId: evidence.siteId, origin: evidence.origin, configDigest, lineRequired: evidence.lineRequired, bindingSnapshot: evidence.bindingSnapshot };
+  const snapshot = {
+    schemaVersion: 3,
+    evidenceType: 'site_configuration_preflight_only',
+    context: 'production',
+    releaseCommit,
+    siteId: evidence.siteId,
+    origin: evidence.origin,
+    configDigest,
+    lineRequired: evidence.lineRequired,
+    previousSourceBinding: evidence.sourceCommitBinding,
+    bindingSnapshot: evidence.bindingSnapshot
+  };
   if (phase === 'pre-upload') {
     try {
       await fs.mkdir(path.dirname(snapshotPath), { recursive: true, mode: 0o700 });
       await fs.writeFile(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o600 });
     } catch { throw new Error('NETLIFY_RUNTIME_SNAPSHOT_WRITE_FAILED'); }
-  } else if (phase === 'post-upload') {
+    if (env.GITHUB_OUTPUT) {
+      try {
+        await fs.appendFile(env.GITHUB_OUTPUT, `previous_source_commit=${evidence.sourceCommitBinding.value}\nprevious_source_context=${evidence.sourceCommitBinding.context}\n`);
+      } catch { throw new Error('NETLIFY_RUNTIME_OUTPUT_WRITE_FAILED'); }
+    }
+  } else {
     let previous;
     try { previous = JSON.parse(await fs.readFile(snapshotPath, 'utf8')); }
     catch { throw new Error('NETLIFY_RUNTIME_PRE_SNAPSHOT_MISSING'); }
-    try { assert.deepEqual(previous, snapshot); }
-    catch { throw new Error('NETLIFY_RUNTIME_BINDING_DRIFT'); }
+    assertStableTransition(previous, snapshot, expectedSourceCommit);
   }
   process.stdout.write(`Production Functions runtime binding metadata checked (${phase}) for ${evidence.origin}; this does not prove immutable deployed snapshot or secret validity\n`);
   return evidence;
