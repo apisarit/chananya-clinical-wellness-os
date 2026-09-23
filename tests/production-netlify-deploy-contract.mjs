@@ -56,6 +56,11 @@ assert.match(
 );
 
 assert.match(workflow, /netlify-cli@27\.5\.0/, 'Netlify CLI must be pinned to an exact reviewed version');
+assert.doesNotMatch(
+  workflow,
+  /netlify env:set[\s\S]{0,240}--scope functions/,
+  'updating an existing Netlify environment value must preserve its verified Functions scope instead of changing scope and context in one command'
+);
 assert.match(workflow, /--prod\s*\\/, 'deployment must explicitly publish to production');
 assert.match(workflow, /--no-build\s*\\/, 'CLI must upload the already-verified artifact rather than rebuild it');
 assert.match(workflow, /--dir=dist/, 'deployment must upload only the restricted dist surface');
