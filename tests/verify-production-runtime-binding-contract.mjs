@@ -84,12 +84,18 @@ const env = {
 };
 const site = { id: siteId, account_id: 'acct-synthetic', ssl_url: 'https://cnyos.cloud', published_deploy: { context: 'production' } };
 const response = body => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
-const fetchMock = async (url) => url.includes('/sites/') ? response(site) : response(metadata());
+let runtimeSourceCommit = 'b'.repeat(40);
+const runtimeMetadata = () => metadata({ CLINICAL_OS_SOURCE_COMMIT: runtimeSourceCommit });
+const fetchMock = async (url) => url.includes('/sites/') ? response(site) : response(runtimeMetadata());
 try {
 await verifyProductionRuntime({ env, phase: 'pre-upload', fetchImpl: fetchMock });
 const snapshotText = await fs.readFile(snapshotPath, 'utf8');
 assert.ok(!snapshotText.includes('synthetic-secret') && !snapshotText.includes('synthetic-token'));
 for (const secret of [...REQUIRED_SECRET_KEYS, 'LINE_MESSAGING_CHANNEL_SECRET', 'LINE_MESSAGING_CHANNEL_ACCESS_TOKEN']) assert.ok(!snapshotText.includes(secret));
+assert.equal(JSON.parse(snapshotText).previousSourceBinding.value, 'b'.repeat(40));
+await assert.rejects(verifyProductionRuntime({ env, phase: 'pre-publish', fetchImpl: fetchMock }), /CLINICAL_OS_SOURCE_COMMIT_MISMATCH/);
+runtimeSourceCommit = env.EXPECTED_RELEASE_COMMIT;
+await verifyProductionRuntime({ env, phase: 'pre-publish', fetchImpl: fetchMock });
 await verifyProductionRuntime({ env, phase: 'post-upload', fetchImpl: fetchMock });
 await fs.writeFile(snapshotPath, (await fs.readFile(snapshotPath, 'utf8')).replace(env.EXPECTED_RELEASE_COMMIT, 'b'.repeat(40)));
 await assert.rejects(verifyProductionRuntime({ env, phase: 'post-upload', fetchImpl: fetchMock }), /NETLIFY_RUNTIME_BINDING_DRIFT/);
@@ -112,6 +118,15 @@ await verifyProductionRuntime({ env, phase: 'pre-upload', fetchImpl: async (url,
 } });
 assert.equal(calls.length, 2);
 assert.equal(calls[1], `https://api.netlify.com/api/v1/accounts/acct-synthetic/env?site_id=${siteId}&scope=functions`);
+runtimeSourceCommit = 'b'.repeat(40);
+await verifyProductionRuntime({ env, phase: 'pre-upload', fetchImpl: fetchMock });
+runtimeSourceCommit = env.EXPECTED_RELEASE_COMMIT;
+await verifyProductionRuntime({ env, phase: 'pre-publish', fetchImpl: fetchMock });
+runtimeSourceCommit = 'b'.repeat(40);
+await verifyProductionRuntime({ env: { ...env, EXPECTED_PREVIOUS_SOURCE_COMMIT: 'b'.repeat(40) }, phase: 'rollback', fetchImpl: fetchMock });
+runtimeSourceCommit = 'not-a-commit';
+await assert.rejects(verifyProductionRuntime({ env, phase: 'pre-upload', fetchImpl: fetchMock }), /CLINICAL_OS_SOURCE_COMMIT_MISMATCH/);
+runtimeSourceCommit = env.EXPECTED_RELEASE_COMMIT;
 for (const failResponse of [new Response('SECRET_PROVIDER_PAYLOAD', {status:403}), new Response('not-json SECRET_PROVIDER_PAYLOAD', {status:200})]) {
   await assert.rejects(verifyProductionRuntime({ env, phase: 'pre-upload', fetchImpl: async () => failResponse }), e => e.message === 'NETLIFY_API_REQUEST_FAILED');
 }

@@ -102,6 +102,7 @@ jobs:
         run: node scripts/netlify-production-deploy-evidence.mjs snapshot
 
       - name: Verify production Functions runtime binding before upload
+        id: runtime_preflight
         run: node scripts/verify-production-runtime-binding.mjs pre-upload
         env:
           CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
@@ -118,7 +119,24 @@ jobs:
           VERSION="$(npm exec --yes --package=netlify-cli@27.5.0 -- netlify --version | tr -d '\r')"
           echo "$VERSION" | grep -Eq '(^|[^0-9])27\.5\.0([^0-9]|$)'
 
+      - name: Atomically bind production Functions to selected release
+        id: bind_runtime_source
+        shell: bash
+        run: |
+          npm exec --yes --package=netlify-cli@27.5.0 -- netlify env:set \
+            CLINICAL_OS_SOURCE_COMMIT "$GITHUB_SHA" \
+            --scope functions \
+            --context production \
+            --site "$NETLIFY_SITE_ID" \
+            --force
+
+      - name: Verify selected Functions binding before publication
+        run: node scripts/verify-production-runtime-binding.mjs pre-publish
+        env:
+          CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+
       - name: Publish the already-verified artifact to the fixed production site
+        id: publish_production
         shell: bash
         run: |
           mkdir -p "$(dirname "$NETLIFY_DEPLOY_OUTPUT_PATH")"
@@ -139,6 +157,38 @@ jobs:
         run: node scripts/verify-production-runtime-binding.mjs post-upload
         env:
           CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+
+      - name: Restore prior Functions source binding when publication did not complete
+        if: failure() && steps.bind_runtime_source.outcome == 'success' && steps.publish_production.outcome != 'success'
+        shell: bash
+        env:
+          PREVIOUS_SOURCE_COMMIT: ${{ steps.runtime_preflight.outputs.previous_source_commit }}
+          PREVIOUS_SOURCE_CONTEXT: ${{ steps.runtime_preflight.outputs.previous_source_context }}
+          EXPECTED_PREVIOUS_SOURCE_COMMIT: ${{ steps.runtime_preflight.outputs.previous_source_commit }}
+          CLINICAL_OS_PRODUCTION_CONFIG_JSON: ${{ secrets.CLINICAL_OS_PRODUCTION_CONFIG_JSON }}
+        run: |
+          case "$PREVIOUS_SOURCE_CONTEXT" in
+            production)
+              npm exec --yes --package=netlify-cli@27.5.0 -- netlify env:set \
+                CLINICAL_OS_SOURCE_COMMIT "$PREVIOUS_SOURCE_COMMIT" \
+                --scope functions \
+                --context production \
+                --site "$NETLIFY_SITE_ID" \
+                --force
+              ;;
+            all)
+              npm exec --yes --package=netlify-cli@27.5.0 -- netlify env:unset \
+                CLINICAL_OS_SOURCE_COMMIT \
+                --context production \
+                --site "$NETLIFY_SITE_ID" \
+                --force
+              ;;
+            *)
+              echo 'Unsupported previous CLINICAL_OS_SOURCE_COMMIT context.' >&2
+              exit 1
+              ;;
+          esac
+          node scripts/verify-production-runtime-binding.mjs rollback
 
       - name: Attest public commit tree headers and forbidden paths
         run: npm run verify:public-deployment
