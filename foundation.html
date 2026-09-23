@@ -14,7 +14,8 @@
   <script src="app-shell.js?v=clinical-os-foundation1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
   <script defer src="ttm-reasoning.js?v=ttm-foundation-v2"></script>
-  <script defer src="foundation.js?v=ttm-foundation-v2"></script>
+  <script defer src="foundation-live.js?v=foundation-live1"></script>
+  <script defer src="foundation.js?v=foundation-live1"></script>
 </head>
 <body data-page="foundation">
   <div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด TTM Foundation v0.2</h2><p id="boot-error">กำลังตรวจสอบกฎ ความสัมพันธ์ และหลักฐาน</p></div></div>
@@ -48,6 +49,10 @@
           <div class="foundation-mode-row"><span class="badge" id="foundation-mode">กำลังตรวจฐานความรู้</span><a class="btn ghost" href="/clinical-v3.html?step=diagnosis">ไปยืนยันในเวชระเบียน</a><a class="btn ghost" href="/evidence.html">ค้นงานวิจัยและฉลากยา</a><a class="btn ghost" href="/luopan.html">U Synthesize · วงล้อองค์ความรู้</a></div>
         </section>
 
+        <div class="actions">
+          <span id="foundation-live-status" role="status" aria-live="polite">กำลังเชื่อมต่อการอัปเดต</span>
+          <button type="button" class="btn ghost" id="foundation-refresh">อัปเดตข้อมูล</button>
+        </div>
         <div class="stats foundation-stats foundation-stats-v2">
           <div class="stat">กฎบริบท<strong id="foundation-rule-count">0</strong><small>แยกตามเลนส์</small></div>
           <div class="stat">กฎคลินิกที่อนุมัติ<strong id="foundation-clinical-rule-count">0</strong><small>finding → hypothesis</small></div>

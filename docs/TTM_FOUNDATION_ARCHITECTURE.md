@@ -48,6 +48,40 @@ Patient-specific use of a foundation concept. It records the usage role, asserti
 
 ## Migration and fallback
 
+### Realtime knowledge updates
+
+`20260923033743_foundation_realtime.sql` adds only `ttm_sources`, `ttm_concepts`,
+`ttm_concept_relations`, and `ttm_diagnostic_knowledge` to the existing
+`supabase_realtime` publication. It preserves existing members and fails if a
+required table is missing RLS or authenticated SELECT. No grants or review
+decisions are changed. Apply this migration in the intended environment before
+deploying the matching `foundation.html`, `foundation.js`, and `foundation-live.js`.
+
+The signed-in page subscribes to all change types on those four tables and
+refetches through the existing RLS-protected queries. Event payloads are never
+rendered directly. Bursts are coalesced and graph reads are serialized. Rejoining,
+returning to the tab, and reconnecting the browser trigger reconciliation. A
+failed subscription falls back to reads every 30 seconds while the tab is visible.
+An unavailable read retains the last complete graph and displays a stale status.
+An explicit refresh button is always available.
+
+Search, layer, type, selected details, and unsaved case/suggestion fields survive
+updates. If the graph changes after a case analysis, the derived results are
+cleared and the user is prompted to analyze again; entered case data remains.
+Legacy mode subscribes to the diagnostic rule table only. Suggestion queue
+refreshes accompany graph reads; this change does not publish suggestion or
+patient tables. Drive workbook edits still need a separate reviewed import.
+
+Verify publication membership using `pg_publication_tables` and test an
+authorized knowledge edit from a second signed-in session. Roll back the UI via
+the previous frontend release. To reverse publication membership, remove only
+tables added by this migration that were absent from the recorded pre-change
+membership; do not drop the shared publication. Frontend rollback and database
+rollback are separate operations.
+
+Tests: `npm run check:foundation-live` and `npm run check:foundation-live-browser`
+(set `FOUNDATION_TEST_BROWSER_CHANNEL=chrome` to use installed Chrome).
+
 `supabase/migrations/202608270100_ttm_foundation_ontology.sql` is additive and preserves all current data. It also imports the existing flat `ttm_diagnostic_knowledge` rows as legacy concepts so they remain visible during curation.
 
 If the migration is not installed, `foundation.js` falls back read-only to `ttm_diagnostic_knowledge` and `sen_line_master`. The UI labels this state `Legacy bridge`; it must not imply that the full ontology is complete.
