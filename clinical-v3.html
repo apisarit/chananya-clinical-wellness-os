@@ -13,7 +13,7 @@
   <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="clinical-v3.js?v=clinical-os-department1"></script>
+  <script defer src="clinical-v3.js?v=clinical-os-prescription-handoff1"></script>
   <script defer src="clinical-context-guard.js?v=clinical-os-ia1"></script>
   <script defer src="body-pain-map.js?v=clinical-os-department1"></script>
   <script defer src="ttm-diagnosis-assistant.js?v=clinical-os-ia1"></script>
@@ -177,6 +177,7 @@
                   <button class="btn primary full">บันทึก Diagnosis และสมุฏฐาน</button>
                 </form>
                 <div id="diagnosis-status" class="status space-top-sm">ยังไม่มีข้อมูล</div>
+                <div class="actions space-top-sm"><button class="btn ghost" type="button" data-go-treatment>ไปขั้นตอน Treatment</button></div>
               </section>
 
               <section class="clinical-stage" data-stage="treatment">
@@ -193,6 +194,7 @@
                     <button class="btn primary full">บันทึก Treatment Plan</button>
                   </form>
                   <div id="plan-status" class="status space-top-sm">ยังไม่มีแผนการรักษา</div>
+                  <div class="actions space-top-sm"><button class="btn ghost" type="button" data-go-prescription>ไปขั้นตอนใบสั่งยา</button></div>
                 </section>
 
                 <section class="card" id="opd-session-section">
@@ -231,6 +233,7 @@
                 <section class="card">
                   <div class="section-heading"><span class="section-number">6B</span><div><h2>ตรวจและส่งใบสั่งยา</h2><p>ใบสั่งยาจะเข้าสู่ Pharmacy Queue เมื่อยืนยันส่ง</p></div></div>
                   <div id="rx-cart" class="list"><p class="muted">ยังไม่มีรายการยา</p></div>
+                  <div id="rx-handoff-receipt" class="status space-top-sm" role="status" aria-live="polite" hidden></div>
                   <form id="prescription-form" class="form space-top-md">
                     <label class="full">Encounter<select id="rx-encounter" required></select></label>
                     <label class="full">Clinical notes<textarea id="rx-clinical-notes"></textarea></label>
