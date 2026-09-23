@@ -91,16 +91,22 @@ const expectedPostBaselineMigrations = Object.freeze([
     name: 'link_appointment_encounter_idempotently',
     file: '20260922163445_link_appointment_encounter_idempotently.sql',
     sha256: '7717bd4b1d276688f53cd62c1010c16e93fc893bfa091b79ffc31ac4854a587c'
+  }),
+  Object.freeze({
+    version: '20260923084317',
+    name: 'fix_checkin_search_digest',
+    file: '20260923084317_fix_checkin_search_digest.sql',
+    sha256: 'edc76135755bca10c6b28d389fcbde31244988942b11b6c47440e73c4abdcae8'
   })
 ]);
 
-assert.equal(repositoryEntries.length, 54, 'repository must contain the 54-file source chain');
+assert.equal(repositoryEntries.length, 55, 'repository must contain the 55-file source chain');
 assert.deepEqual(
   repositoryEntries,
   [...repositoryEntries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)
 );
 assert.deepEqual(
-  repositoryEntries.slice(-9),
+  repositoryEntries.slice(-10),
   expectedPostBaselineMigrations,
   'migration ledger tail must bind treatment-service and appointment hardening migrations'
 );
