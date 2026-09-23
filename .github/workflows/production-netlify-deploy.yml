@@ -125,7 +125,6 @@ jobs:
         run: |
           npm exec --yes --package=netlify-cli@27.5.0 -- netlify env:set \
             CLINICAL_OS_SOURCE_COMMIT "$GITHUB_SHA" \
-            --scope functions \
             --context production \
             --site "$NETLIFY_SITE_ID" \
             --force
@@ -171,7 +170,6 @@ jobs:
             production)
               npm exec --yes --package=netlify-cli@27.5.0 -- netlify env:set \
                 CLINICAL_OS_SOURCE_COMMIT "$PREVIOUS_SOURCE_COMMIT" \
-                --scope functions \
                 --context production \
                 --site "$NETLIFY_SITE_ID" \
                 --force
