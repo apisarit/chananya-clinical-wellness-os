@@ -31,10 +31,13 @@ const buildIndex = workflow.indexOf('npm run build');
 const artifactIndex = workflow.indexOf('npm run verify:production-artifact');
 const snapshotIndex = workflow.indexOf('netlify-production-deploy-evidence.mjs snapshot');
 const deployIndex = workflow.indexOf('netlify deploy');
+const sourceBindingIndex = workflow.indexOf('netlify env:set');
+const prePublishBindingIndex = workflow.indexOf('verify-production-runtime-binding.mjs pre-publish');
 const netlifyVerifyIndex = workflow.indexOf('netlify-production-deploy-evidence.mjs verify');
 const publicVerifyIndex = workflow.indexOf('npm run verify:public-deployment');
 assert.ok(promotionIndex >= 0 && promotionIndex < buildIndex, 'promotion gate must pass before production build');
 assert.ok(buildIndex < artifactIndex && artifactIndex < snapshotIndex && snapshotIndex < deployIndex, 'artifact verification and rollback snapshot must happen before deployment');
+assert.ok(snapshotIndex < sourceBindingIndex && sourceBindingIndex < prePublishBindingIndex && prePublishBindingIndex < deployIndex, 'Functions source commit must transition atomically after preflight and before publication');
 assert.ok(deployIndex < netlifyVerifyIndex && netlifyVerifyIndex < publicVerifyIndex, 'published deploy and public surface must be attested after deployment');
 
 const productionBuildStep = workflow.slice(
@@ -53,12 +56,21 @@ assert.match(
 );
 
 assert.match(workflow, /netlify-cli@27\.5\.0/, 'Netlify CLI must be pinned to an exact reviewed version');
+assert.doesNotMatch(
+  workflow,
+  /netlify env:set[\s\S]{0,240}--scope functions/,
+  'updating an existing Netlify environment value must preserve its verified Functions scope instead of changing scope and context in one command'
+);
 assert.match(workflow, /--prod\s*\\/, 'deployment must explicitly publish to production');
 assert.match(workflow, /--no-build\s*\\/, 'CLI must upload the already-verified artifact rather than rebuild it');
 assert.match(workflow, /--dir=dist/, 'deployment must upload only the restricted dist surface');
 assert.match(workflow, /--functions=netlify\/functions/, 'production functions must be bundled from the explicit function directory');
+const productionPublishStep = workflow.slice(
+  workflow.indexOf('- name: Publish the already-verified artifact to the fixed production site'),
+  workflow.indexOf('- name: Verify Netlify published deploy identity')
+);
 assert.doesNotMatch(
-  workflow,
+  productionPublishStep,
   /--no-build[\s\S]*?--context(?:=|\s+)production/,
   'Netlify CLI rejects --context with --no-build; --prod and the verified production bindings select the production target'
 );
@@ -72,7 +84,11 @@ assert.match(runtimeBinding, /NETLIFY_ENV_CONTEXT_AMBIGUOUS/, 'runtime binding m
 assert.match(runtimeBinding, /CNYOS_RUNTIME_EXPECTED_CLINIC_ID/, 'runtime binding must inspect the actual clinic binding key');
 assert.match(runtimeBinding, /BACKUP_ENVIRONMENT/, 'runtime binding must reject staging backup runtime');
 assert.match(workflow, /verify-production-runtime-binding\.mjs pre-upload/, 'runtime binding must be checked before upload');
+assert.match(workflow, /verify-production-runtime-binding\.mjs pre-publish/, 'updated runtime source binding must be checked before publication');
 assert.match(workflow, /verify-production-runtime-binding\.mjs post-upload/, 'runtime binding must be checked after upload');
+assert.match(workflow, /verify-production-runtime-binding\.mjs rollback/, 'failed pre-publication transition must verify restoration of the prior source binding');
+assert.match(workflow, /steps\.publish_production\.outcome != 'success'/, 'source binding rollback must be limited to failures before publication completes');
+assert.match(workflow, /previous_source_context/, 'source binding rollback must preserve whether the prior value was production-specific or inherited');
 assert.doesNotMatch(postDeployWorkflow, /verify-production-runtime-binding\.mjs post-deploy/, 'post-deploy workflow must not claim an immutable Functions snapshot without a pre-upload snapshot');
 assert.match(runtimeBinding, /RELEASE_REQUIRES_LINE/, 'LINE requirement must be explicit and fail closed when enabled');
 assert.doesNotMatch(runtimeBinding, /console\.(?:log|error)\([^\n]*(?:NETLIFY_AUTH_TOKEN|SUPABASE_SERVICE_ROLE_KEY|CHANNEL_SECRET|ACCESS_TOKEN)/, 'runtime binding verifier must not print secret values');

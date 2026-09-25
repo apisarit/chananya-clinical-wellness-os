@@ -19,6 +19,8 @@
   let persistenceReady = false;
   let productionRequestKey = null;
   let productionRequestAttempted = false;
+  let loadPromise = null;
+  let queueRefreshTimer = null;
   const data = {
     products: [], sales: [], items: [], patients: [], prescriptions: [], dispensing: [],
     prescriptionItems: [], dispensingItems: [], productionRequests: []
@@ -79,25 +81,51 @@
   }
 
   async function load() {
-    const [
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
+      const [
       products, sales, items, patients, prescriptions, dispensing,
       prescriptionItems, dispensingItems, productionRequests
-    ] = await Promise.all([
-      query('products', '*', 'updated_at'),
-      query('pharmacy_counter_sales', '*', 'created_at'),
-      query('pharmacy_counter_sale_items'),
-      query('patients'),
-      query('prescriptions', '*', 'prescribed_at'),
-      query('dispensing_orders', '*', 'created_at'),
-      query('prescription_items'),
-      query('dispensing_items'),
-      query('production_requests', '*', 'requested_at')
-    ]);
-    Object.assign(data, {
-      products, sales, items, patients, prescriptions, dispensing,
-      prescriptionItems, dispensingItems, productionRequests
-    });
-    render();
+      ] = await Promise.all([
+        query('products', '*', 'updated_at'),
+        query('pharmacy_counter_sales', '*', 'created_at'),
+        query('pharmacy_counter_sale_items'),
+        query('patients'),
+        query('prescriptions', '*', 'prescribed_at'),
+        query('dispensing_orders', '*', 'created_at'),
+        query('prescription_items'),
+        query('dispensing_items'),
+        query('production_requests', '*', 'requested_at')
+      ]);
+      Object.assign(data, {
+        products, sales, items, patients, prescriptions, dispensing,
+        prescriptionItems, dispensingItems, productionRequests
+      });
+      render();
+      const status = $('#rx-refresh-status');
+      if (status) status.textContent = `อัปเดต ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
+    })().finally(() => { loadPromise = null; });
+    return loadPromise;
+  }
+
+  function startQueueRefresh() {
+    if (queueRefreshTimer || document.visibilityState !== 'visible') return;
+    queueRefreshTimer = setTimeout(async () => {
+      queueRefreshTimer = null;
+      try {
+        await load();
+      } catch (error) {
+        fail(error);
+      } finally {
+        startQueueRefresh();
+      }
+    }, 30000);
+  }
+
+  function stopQueueRefresh() {
+    if (!queueRefreshTimer) return;
+    clearTimeout(queueRefreshTimer);
+    queueRefreshTimer = null;
   }
 
   function product(id) { return data.products.find(item => item.id === id); }
@@ -120,7 +148,24 @@
     if ($('#item-unit')) $('#item-unit').value = selected?.dispense_unit || '';
   }
 
+  function capturePrescriptionPriceDrafts() {
+    const active = document.activeElement;
+    return {
+      focusedItemId: active?.dataset?.rxPrice || null,
+      values: new Map($$('[data-rx-price]').map(input => [input.dataset.rxPrice, input.value]))
+    };
+  }
+
+  function restorePrescriptionPriceDrafts(drafts) {
+    if (!drafts?.values) return;
+    $$('[data-rx-price]').forEach(input => {
+      if (drafts.values.has(input.dataset.rxPrice)) input.value = drafts.values.get(input.dataset.rxPrice);
+      if (drafts.focusedItemId === input.dataset.rxPrice) input.focus({ preventScroll: true });
+    });
+  }
+
   function render() {
+    const prescriptionPriceDrafts = capturePrescriptionPriceDrafts();
     const selectedSale = $('#item-sale')?.value || '';
     const selectedProduct = $('#item-product')?.value || '';
     const selectedPatient = $('#sale-patient')?.value || '';
@@ -143,7 +188,7 @@
     );
 
     syncItemProduct();
-    renderPrescriptionQueue();
+    renderPrescriptionQueue(prescriptionPriceDrafts);
     renderProductionRequests();
     renderWalkin();
     renderProducts();
@@ -151,7 +196,7 @@
     window.dispatchEvent(new CustomEvent('chananya:pharmacy-rendered'));
   }
 
-  function renderPrescriptionQueue() {
+  function renderPrescriptionQueue(priceDrafts = null) {
     const rows = data.dispensing.map(order => {
       const prescription = data.prescriptions.find(item => item.id === order.prescription_id);
       const linkedPatient = patient(prescription?.patient_id);
@@ -184,6 +229,7 @@
       return `<article class="item column" data-dispensing-order-id="${esc(order.id)}"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(label)}</b><small>${esc(prescription?.prescription_no || '-')}</small></div><span class="badge">${esc(order.status)}</span></div>${itemRows}<div class="right">${buttons.join('')}</div></article>`;
     }).join('');
     $('#rx-list').innerHTML = rows || '<p class="muted">ไม่มีคิวใบสั่งยาจากผู้รักษา</p>';
+    restorePrescriptionPriceDrafts(priceDrafts);
   }
 
   function prescription(id) {
@@ -546,6 +592,7 @@
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
       await load();
+      startQueueRefresh();
     } catch (error) {
       console.error(error);
       $('#boot-error').textContent = error.message;
@@ -577,6 +624,15 @@
   $('#production-item')?.addEventListener('change', () => {
     $('#production-qty').value = '';
     syncProductionRequestProduct();
+  });
+  $('#refresh-rx-queue')?.addEventListener('click', () => load().catch(fail));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      load().catch(fail);
+      startQueueRefresh();
+    } else {
+      stopQueueRefresh();
+    }
   });
   $('#product-master-search')?.addEventListener('input', renderProducts);
   $('#show-inactive-products')?.addEventListener('change', renderProducts);
