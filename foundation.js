@@ -45,6 +45,8 @@
   let lastReasoning = null;
   let state = { mode: 'loading', concepts: [], sources: [], relations: [], rules: [] };
   let suggestions = [];
+  let live = null;
+  let selectedConceptId = null;
 
   function toast(message) {
     const element = $('#toast');
@@ -176,8 +178,10 @@
   }
 
   function renderTypeOptions() {
+    const selected = $('#foundation-type').value;
     const types = [...new Set(state.concepts.map(concept => concept.concept_type).filter(Boolean))].sort();
     $('#foundation-type').innerHTML = '<option value="">ทุกชนิด</option>' + types.map(type => `<option value="${esc(type)}">${esc(TYPE_LABELS[type] || type)}</option>`).join('');
+    if (types.includes(selected)) $('#foundation-type').value = selected;
   }
 
   function visibleConcepts() {
@@ -234,6 +238,7 @@
   function showDetail(conceptId) {
     const concept = conceptById(conceptId);
     if (!concept) return;
+    selectedConceptId = concept.id;
     const source = sourceOf(concept);
     const relationRows = state.relations.flatMap(relation => {
       if (String(relation.subject_concept_id) === String(concept.id)) return [{ relation, direction: 'out' }];
@@ -423,6 +428,10 @@
 
   function clearCase() {
     $('#ttm-case-form').reset();
+    resetReasoning();
+  }
+
+  function resetReasoning() {
     lastReasoning = null;
     $('#ttm-case-status').textContent = 'กรอกข้อมูลหรือโหลดเคสตัวอย่างเพื่อเริ่ม';
     $('#ttm-clinical-gate').className = 'foundation-clinical-gate blocked';
@@ -526,12 +535,7 @@
     if (notes.trim().length < 8) throw new Error('ต้องระบุเหตุผลอย่างน้อย 8 ตัวอักษร');
     const result = await db.rpc('decide_ttm_knowledge_suggestion', { p_suggestion_id: id, p_decision: decision, p_notes: notes.trim() });
     if (result.error) throw result.error;
-    await Promise.all([loadOntology(), loadSuggestionQueue()]);
-    updateStats();
-    renderTypeOptions();
-    renderConcepts();
-    renderBodyRegistry();
-    renderRuleCoverage();
+    live.request();
     toast(decision === 'approve' ? 'อนุมัติและเขียนความรู้ผ่าน RPC แล้ว' : 'ปฏิเสธ suggestion แล้ว');
   }
 
@@ -543,6 +547,52 @@
       button.disabled = true;
       decideSuggestion(button.dataset.id, button.dataset.ttmSuggestionAction).catch(error => { console.error(error); toast(error.message); }).finally(() => { if (button.isConnected) button.disabled = false; });
     });
+  }
+
+  async function refreshKnowledge() {
+    const previous = JSON.stringify(state);
+    // A failed refresh retains the last complete graph; it cannot switch modes silently.
+    if (state.mode === 'legacy') await loadLegacy();
+    else await loadOntology();
+    if (JSON.stringify(state) !== previous) {
+      updateStats();
+      renderTypeOptions();
+      renderConcepts();
+      renderBodyRegistry();
+      renderRuleCoverage();
+      if (selectedConceptId !== null) {
+        if (conceptById(selectedConceptId)) showDetail(selectedConceptId);
+        else {
+          selectedConceptId = null;
+          $('#foundation-detail-content').textContent = 'รายการนี้ถูกลบหรือไม่เปิดใช้งานแล้ว';
+        }
+      }
+      if (lastReasoning) {
+        resetReasoning();
+        $('#ttm-case-status').textContent = 'ฐานความรู้เปลี่ยนแล้ว ข้อมูลที่กรอกยังอยู่ กรุณากดวิเคราะห์อีกครั้ง';
+      }
+    }
+    await loadSuggestionQueue();
+  }
+
+  function startLiveUpdates() {
+    live = window.ChananyaFoundationLive.create({
+      db, refresh: refreshKnowledge,
+      ...(state.mode === 'legacy' ? { tables: ['ttm_diagnostic_knowledge'] } : {}),
+      onStatus(value) {
+        const labels = {
+          connecting: 'กำลังเชื่อมต่อการอัปเดต', refreshing: 'กำลังอัปเดตข้อมูล…',
+          live: 'เชื่อมต่อแล้ว • อัปเดตอัตโนมัติ',
+          fallback: 'การเชื่อมต่อสดขัดข้อง • ตรวจข้อมูลซ้ำทุก 30 วินาที',
+          stale: 'อัปเดตไม่สำเร็จ • กำลังแสดงข้อมูลเดิมและจะลองใหม่'
+        };
+        $('#foundation-live-status').textContent = labels[value];
+      }
+    });
+    $('#foundation-refresh').addEventListener('click', () => live.request());
+    window.addEventListener('pagehide', () => live.stop());
+    window.addEventListener('pageshow', event => { if (event.persisted) live.start(); });
+    live.start();
   }
 
   async function init() {
@@ -575,6 +625,7 @@
       reviewCapabilities();
       bindReviewFlow();
       await loadSuggestionQueue();
+      startLiveUpdates();
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
       window.dispatchEvent(new CustomEvent('chananya:foundation-rendered'));
@@ -584,6 +635,6 @@
     }
   }
 
-  $('#logout').addEventListener('click', async () => { await db.auth.signOut(); location.replace('/login.html'); });
+  $('#logout').addEventListener('click', async () => { live?.stop(); await db.auth.signOut(); location.replace('/login.html'); });
   init();
 })();
