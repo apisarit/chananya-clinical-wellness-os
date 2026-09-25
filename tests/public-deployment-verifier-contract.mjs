@@ -6,6 +6,8 @@ import { assertSameOriginFramePolicy } from '../scripts/netlify-frame-policy.mjs
 import {
   assertProductionManifestClassification,
   forbiddenPublicPaths,
+  publicDeploymentRequestPolicy,
+  requestPublicDeployment,
   validateProductionOrigin
 } from '../scripts/verify-public-deployment.mjs';
 
@@ -20,6 +22,83 @@ assert.throws(() => validateProductionOrigin('http://cnyos.netlify.app', 'cnyos.
 assert.throws(() => validateProductionOrigin('https://cnyos.netlify.app/path', 'cnyos.netlify.app'), /PRODUCTION_SITE_URL_MUST_BE_ORIGIN/);
 assert.throws(() => validateProductionOrigin('https://evil.example', 'cnyos.netlify.app'), /PRODUCTION_SITE_HOST_MISMATCH/);
 assert.throws(() => validateProductionOrigin('https://localhost', 'localhost'), /PRODUCTION_SITE_HOST_INVALID/);
+
+assert.deepEqual(
+  publicDeploymentRequestPolicy,
+  { maxAttempts: 3, timeoutMs: 45_000, initialDelayMs: 1_000 },
+  'public deployment verification must use a bounded three-attempt retry policy'
+);
+
+{
+  let calls = 0;
+  const delays = [];
+  const messages = [];
+  const result = await requestPublicDeployment('https://cnyos.cloud', '/', {
+    expectedStatus: 200,
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls < 3) throw new Error('synthetic timeout');
+      return new Response('ready', { status: 200 });
+    },
+    sleepImpl: async delay => { delays.push(delay); },
+    logImpl: message => { messages.push(message); }
+  });
+  assert.equal(result.body, 'ready');
+  assert.equal(calls, 3, 'transient network failures must retry at most three times');
+  assert.deepEqual(delays, [1_000, 2_000], 'retry backoff must remain bounded and deterministic');
+  assert.equal(messages.length, 2, 'each retry must be visible in workflow logs');
+}
+
+{
+  let calls = 0;
+  await assert.rejects(
+    requestPublicDeployment('https://cnyos.cloud', '/', {
+      expectedStatus: 200,
+      fetchImpl: async () => {
+        calls += 1;
+        throw new Error('synthetic timeout');
+      },
+      sleepImpl: async () => {},
+      logImpl: () => {}
+    }),
+    /PUBLIC_DEPLOYMENT_REQUEST_FAILED \/ after 3 attempts: synthetic timeout/
+  );
+  assert.equal(calls, 3, 'persistent network failures must fail closed after three attempts');
+}
+
+{
+  let calls = 0;
+  await assert.rejects(
+    requestPublicDeployment('https://cnyos.cloud', '/', {
+      expectedStatus: 200,
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response('not found', { status: 404 });
+      },
+      sleepImpl: async () => {},
+      logImpl: () => {}
+    }),
+    /PUBLIC_DEPLOYMENT_STATUS_MISMATCH \/: expected 200, received 404/
+  );
+  assert.equal(calls, 1, 'non-transient status mismatches must not be retried');
+}
+
+{
+  let calls = 0;
+  const result = await requestPublicDeployment('https://cnyos.cloud', '/', {
+    expectedStatus: 200,
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('unavailable', { status: 503 })
+        : new Response('ready', { status: 200 });
+    },
+    sleepImpl: async () => {},
+    logImpl: () => {}
+  });
+  assert.equal(result.body, 'ready');
+  assert.equal(calls, 2, 'transient HTTP status failures must be retried');
+}
 
 const productionManifestClassification = {
   deploymentId: 'chananya-clinical-production',
