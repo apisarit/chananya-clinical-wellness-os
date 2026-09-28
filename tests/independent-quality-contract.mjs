@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,4 +52,91 @@ assert.doesNotMatch(production, /rpc\('(?:release_production_order|reject_produc
 assert.doesNotMatch(productionHtml, /id="release-dialog"|id="reject-dialog"/);
 assert.match(productionHtml, /ไม่มีสิทธิ์ปล่อยผ่าน Batch ของตนเอง/);
 
-console.log('Independent Quality contracts passed: dedicated role, database-enforced producer/approver separation, RPC-only release, least-privilege data visibility and auditable decisions');
+const reportSource = quality.slice(quality.indexOf('  function qualityReport('), quality.indexOf('  async function downloadQualityReport('));
+const guardContext = {num: value => Number(value || 0),session:null,errors:{
+  QC_INDEPENDENCE_REQUIRED:'independent reviewer required',
+  PRODUCTION_OPERATOR_EVIDENCE_REQUIRED:'missing production evidence',
+  PRODUCTION_ORDER_NOT_AWAITING_QC:'not awaiting QC'
+}};
+vm.runInNewContext(quality.slice(quality.indexOf('  function reviewBlockReason('), quality.indexOf('  function render()'))
+  + '; this.reason = reviewBlockReason;', guardContext);
+const pending = {status:'awaiting_qc',produced_by:'producer',actual_quantity:10};
+assert.equal(guardContext.reason(pending,'producer'),'independent reviewer required');
+assert.equal(guardContext.reason(pending,'reviewer'),'');
+assert.equal(guardContext.reason({...pending,produced_by:null},'reviewer'),'missing production evidence');
+assert.equal(guardContext.reason({...pending,actual_quantity:0},'reviewer'),'missing production evidence');
+assert.equal(guardContext.reason({...pending,status:'released'},'reviewer'),'not awaiting QC');
+assert.match(guardContext.reason(pending),/เข้าสู่ระบบ/);
+assert.match(quality,/const blockedReason = reviewBlockReason\(selected\)/);
+const decisionNodes = new Map();
+const decisionButtons = [{disabled:false},{disabled:false}];
+const decisionContext = {decisionPending:false,activeOrderId:'synthetic',order:()=>pending,
+  session:{user:{id:'synthetic-reviewer'}},profile:{clinic_id:'synthetic-clinic'},
+  reviewBlockReason:()=>'',toast(){},load:async()=>{throw new Error('synthetic refresh failed');},
+  $$:()=>decisionButtons,$:selector=>{
+    if(!decisionNodes.has(selector)) decisionNodes.set(selector,{textContent:'',close(){this.closed=true;}});
+    return decisionNodes.get(selector);
+  }};
+vm.runInNewContext(quality.slice(quality.indexOf('  async function saveDecision('),quality.indexOf('  async function release('))
+  + '; this.save = saveDecision;',decisionContext);
+let finishWrite, writeCount=0;
+const writing=decisionContext.save('#release-dialog',()=>{writeCount++;return new Promise(resolve=>{finishWrite=resolve;});},'บันทึกสำเร็จ');
+assert.equal(decisionContext.decisionPending,true);
+assert.ok(decisionButtons.every(button=>button.disabled));
+await decisionContext.save('#release-dialog',async()=>{writeCount++;},'duplicate');
+assert.equal(writeCount,1);
+finishWrite(); await writing;
+assert.equal(decisionContext.decisionPending,false);
+assert.ok(decisionButtons.every(button=>!button.disabled));
+assert.equal(decisionNodes.get('#release-dialog').closed,true);
+assert.match(decisionNodes.get('#quality-action-status').textContent,/บันทึกสำเร็จ.*โหลดรายการล่าสุดไม่สำเร็จ/);
+await assert.rejects(decisionContext.save('#reject-dialog',async()=>{throw new Error('write rejected');},'success'),/write rejected/);
+assert.match(decisionNodes.get('#quality-action-status').textContent,/ยังยืนยันผลการบันทึกไม่ได้/);
+assert.equal(decisionContext.decisionPending,false);
+assert.match(qualityHtml,/id="quality-action-status"[^>]*role="status"/);
+for (const identity of ['session', 'profile']) {
+  for (const outcome of ['success', 'failure', 'refresh']) {
+    let settle;
+    let closes = 0, notices = 0, loads = 0;
+    decisionContext.toast = () => { notices++; };
+    decisionContext.load = async () => {
+      loads++;
+      if (outcome === 'refresh') await new Promise(resolve => { settle = resolve; });
+    };
+    decisionNodes.set('#release-dialog', {close(){ closes++; }});
+    const operation = decisionContext.save('#release-dialog', async () => {
+      if (outcome !== 'refresh') await new Promise((resolve,reject) => {
+        settle = outcome === 'failure' ? () => reject(new Error('old identity failure')) : resolve;
+      });
+    }, 'old identity success');
+    await new Promise(resolve => setImmediate(resolve));
+    decisionContext[identity] = {};
+    decisionNodes.get('#quality-action-status').textContent = 'new identity status';
+    settle(); await operation;
+    assert.equal(decisionNodes.get('#quality-action-status').textContent, 'new identity status');
+    assert.equal(notices, 0);
+    assert.equal(closes, outcome === 'refresh' ? 1 : 0);
+    assert.equal(loads, outcome === 'refresh' ? 1 : 0);
+    assert.equal(decisionContext.decisionPending, false);
+  }
+}
+assert.equal((qualityHtml.match(/type="submit"/g)||[]).length,2,'both QC submit controls must participate in pending guard');
+const reportContext = { esc: value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) };
+vm.runInNewContext(`${reportSource}; this.report = qualityReport;`, reportContext);
+const sampleOrder = {id:'order',clinic_id:'clinic-a',status:'released',batch_number:'<script>alert(1)</script>',actual_quantity:0};
+const sampleQc = {id:'qc',production_order_id:'order',clinic_id:'clinic-a',status:'passed',result_summary:'Synthetic',moisture_result:0};
+const report = reportContext.report(sampleOrder, sampleQc);
+assert.match(report, /ไม่ใช่ COA ที่รับรองภายนอก/);
+assert.match(report, /ไม่มีค่าบันทึก/);
+assert.match(report, /<td>0<\/td>/, 'zero is recorded data, not missing');
+assert.doesNotMatch(report, /<script>/);
+assert.match(report, /&lt;script&gt;/);
+assert.throws(() => reportContext.report(sampleOrder, null), /ยังออกเอกสารไม่ได้/);
+assert.throws(() => reportContext.report(sampleOrder, {...sampleQc,clinic_id:'clinic-b'}), /ยังออกเอกสารไม่ได้/);
+assert.throws(() => reportContext.report(sampleOrder, {...sampleQc,production_order_id:'other'}), /ยังออกเอกสารไม่ได้/);
+assert.throws(() => reportContext.report(sampleOrder, {...sampleQc,status:'rejected'}), /ยังออกเอกสารไม่ได้/);
+assert.throws(() => reportContext.report({...sampleOrder,status:'awaiting_qc'}, sampleQc), /ยังออกเอกสารไม่ได้/);
+assert.match(reportContext.report({...sampleOrder,status:'rejected'}, {...sampleQc,status:'rejected',rejection_reason:'Synthetic rejection'}), /Synthetic rejection/);
+assert.match(quality, /await load\(\);[^\n]*\n\s*const documentHtml = qualityReport/);
+
+console.log('Independent Quality contracts passed: dedicated role, producer/approver separation, RPC-only release, and escaped tenant-matched internal QC report (not external COA)');

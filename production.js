@@ -10,11 +10,28 @@
   const num = value => Number(value || 0);
   const optionalNumber = value => value === '' || value === null ? null : Number(value);
 
+  function lowMaterialCount(products, lots, today = new Date()) {
+    // Advisory display only. The authoritative FEFO RPC rechecks DB date,
+    // availability and locks; never authorize dispensing from this estimate.
+    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return products.filter(item => item.active !== false
+      && ['raw_material', 'material', 'herb', 'packaging'].includes(String(item.category || '').toLowerCase()))
+      .filter(item => {
+        const quantity = lots.filter(lot => lot.product_id === item.id
+          && lot.status === 'active' && Number(lot.current_quantity) > 0
+          && (lot.expiry_date == null || (/^\d{4}-\d{2}-\d{2}$/.test(lot.expiry_date) && lot.expiry_date >= day)))
+          .reduce((total, lot) => total + Number(lot.current_quantity), 0);
+        return quantity <= num(item.reorder_level);
+      }).length;
+  }
+
   let db;
   let session;
   let profile;
   let persistenceReady = false;
   let activeOrderId = null;
+  let loadVersion = 0;
+  const pendingForms = new Set();
   let preview = { batchId: null, type: null, rows: [], valid: [] };
 
   const data = {
@@ -31,6 +48,7 @@
     PRODUCTION_MATERIAL_INSUFFICIENT: 'วัตถุดิบที่ยังไม่หมดอายุมีไม่เพียงพอ ระบบยกเลิกการเบิกทั้งหมดแล้ว',
     PRODUCTION_UNIT_CONVERSION_REQUIRED: 'หน่วยวัตถุดิบไม่ตรงกับ Product Master ต้องกำหนด conversion ก่อน',
     PRODUCTION_LOT_UNIT_MISMATCH: 'หน่วยของ Lot ไม่ตรงกับสูตร ระบบไม่ได้ตัด Stock',
+    PRODUCTION_OUTPUT_VALUE_INVALID: 'กรอกจำนวนผลผลิตเป็นตัวเลขมากกว่า 0 และจำนวนสูญเสีย/ของเสียเป็นตัวเลขตั้งแต่ 0 ขึ้นไปให้ครบทุกช่อง',
     IMPORT_BATCH_NOT_VALIDATED: 'ชุด Import นี้ยังไม่ผ่านการตรวจสอบ',
     IMPORT_VALID_ROW_REQUIRED: 'ไม่มีแถวที่ถูกต้องสำหรับ Import'
   };
@@ -83,6 +101,9 @@
   }
 
   async function load() {
+    const version=++loadVersion, actor=session, actorProfile=profile;
+    const current=()=>version===loadVersion && session===actor && profile===actorProfile;
+    try {
     const rows = await Promise.all([
       query('products', 'updated_at'),
       query('inventory_lots', 'created_at'),
@@ -94,11 +115,31 @@
       query('production_qc', 'created_at'),
       query('finished_goods_receipts', 'received_at')
     ]);
+    if (!current()) throw new Error('PRODUCTION_LOAD_SUPERSEDED');
     [
       'products', 'lots', 'formulas', 'components', 'requests',
       'orders', 'issues', 'qc', 'receipts'
     ].forEach((key, index) => { data[key] = rows[index]; });
     render();
+    } catch (error) {
+      if (current()) {
+        for (const key of Object.keys(data)) data[key]=[];
+        activeOrderId=null;
+        $('#complete-dialog')?.close();
+        for (const id of ['request-list','order-list','formula-list','component-list','material-list']) {
+          const element=$('#'+id);
+          if (element) element.textContent='ยังอ่านข้อมูลการผลิตล่าสุดไม่ได้ กรุณาโหลดหน้าใหม่ก่อนทำรายการต่อ';
+        }
+        for (const id of ['f-product','c-formula','c-material']) {
+          const element=$('#'+id);if(element)element.innerHTML='';
+        }
+        for (const id of ['f-unit','c-unit']) {const element=$('#'+id);if(element)element.value='';}
+        for (const id of ['stat-requests','stat-orders','stat-qc','stat-released','stat-low']) {
+          const element=$('#'+id);if(element)element.textContent='—';
+        }
+      }
+      throw error;
+    }
   }
 
   function options(rows, label, selected = '') {
@@ -153,12 +194,7 @@
     ].includes(item.status)).length;
     $('#stat-qc').textContent = data.orders.filter(item => item.status === 'awaiting_qc').length;
     $('#stat-released').textContent = data.orders.filter(item => item.status === 'released').length;
-    $('#stat-low').textContent = data.products.filter(item => {
-      const quantity = data.lots
-        .filter(lot => lot.product_id === item.id && lot.status === 'active')
-        .reduce((total, lot) => total + num(lot.current_quantity), 0);
-      return quantity <= num(item.reorder_level);
-    }).length;
+    $('#stat-low').textContent = lowMaterialCount(data.products, data.lots);
 
     renderRequests();
     renderOrders();
@@ -264,22 +300,50 @@
     $('#complete-dialog').showModal();
   }
 
+  async function submitProductionForm(form, work, afterSave, successMessage) {
+    if (pendingForms.has(form)) return;
+    pendingForms.add(form);
+    const actor=session, actorProfile=profile;
+    const current=()=>session===actor && profile===actorProfile;
+    const controls=[...form.querySelectorAll('button, input, select, textarea')];
+    const disabled=controls.map(control=>control.disabled);
+    try {
+      controls.forEach(control=>{control.disabled=true;});
+      await work();
+      if (!current()) return;
+      afterSave();
+      try { await load(); }
+      catch (_) {
+        if (current()) toast(successMessage+' แต่โหลดรายการล่าสุดไม่สำเร็จ กรุณาโหลดใหม่เพื่อตรวจผลก่อนทำรายการต่อ');
+        return;
+      }
+      if (current()) toast(successMessage);
+    } finally {
+      pendingForms.delete(form);
+      controls.forEach((control,index)=>{control.disabled=disabled[index];});
+    }
+  }
+
   async function saveCompletedOrder(event) {
     event.preventDefault();
-    await rpc('complete_production_order', {
+    const raw = ['actual', 'loss', 'waste'].map(name => String($(`#complete-${name}`).value).trim());
+    const [actual, loss, waste] = raw.map(Number);
+    if (raw.some(value => value === '') || ![actual, loss, waste].every(Number.isFinite)
+        || actual <= 0 || loss < 0 || waste < 0) {
+      throw new Error('PRODUCTION_OUTPUT_VALUE_INVALID');
+    }
+    return submitProductionForm(event.currentTarget,()=>rpc('complete_production_order', {
       p_production_order_id: activeOrderId,
-      p_actual_quantity: num($('#complete-actual').value),
-      p_loss_quantity: num($('#complete-loss').value),
-      p_waste_quantity: num($('#complete-waste').value)
-    });
-    $('#complete-dialog').close();
-    await load();
-    toast('บันทึกผลผลิตและส่ง QC พร้อม Audit แล้ว');
+      p_actual_quantity: actual,
+      p_loss_quantity: loss,
+      p_waste_quantity: waste
+    }),()=>$('#complete-dialog').close(),'บันทึกผลผลิตและส่ง QC พร้อม Audit แล้ว');
   }
 
   async function saveFormula(event) {
     event.preventDefault();
-    await rpc('upsert_production_formula', {
+    const form=event.currentTarget;
+    return submitProductionForm(form,()=>rpc('upsert_production_formula', {
       p_formula_id: null,
       p_formula_code: $('#f-code').value.trim(),
       p_revision: $('#f-rev').value.trim(),
@@ -291,17 +355,17 @@
       p_shelf_life_days: optionalNumber($('#f-shelf').value),
       p_manufacturing_instructions: $('#f-instructions').value.trim() || null,
       p_status: $('#f-status').value
-    });
-    event.target.reset();
+    }),()=>{
+    form.reset();
     $('#f-rev').value = '00';
     $('#f-yield').value = '100';
-    await load();
-    toast('บันทึก Formula และ Audit แล้ว');
+    },'บันทึก Formula และ Audit แล้ว');
   }
 
   async function saveComponent(event) {
     event.preventDefault();
-    await rpc('upsert_production_formula_component', {
+    const form=event.currentTarget;
+    return submitProductionForm(form,()=>rpc('upsert_production_formula_component', {
       p_component_id: null,
       p_formula_id: $('#c-formula').value,
       p_material_product_id: $('#c-material').value,
@@ -310,11 +374,10 @@
       p_unit: $('#c-unit').value,
       p_process_stage: $('#c-stage').value.trim() || null,
       p_notes: null
-    });
-    event.target.reset();
+    }),()=>{
+    form.reset();
     $('#c-seq').value = '1';
-    await load();
-    toast('เพิ่ม BOM Component และ Audit แล้ว');
+    },'เพิ่ม BOM Component และ Audit แล้ว');
   }
 
   const aliases = {

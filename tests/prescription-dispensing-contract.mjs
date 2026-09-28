@@ -36,7 +36,9 @@ assert.match(pharmacy, /rpc\('transition_atomic_prescription_dispensing'/);
 for (const action of ['review', 'dispense', 'submit_billing']) {
   assert.match(pharmacy, new RegExp(`p_action:\\s*'${action}'`));
 }
-assert.match(pharmacy, /data-rx-price=/, 'Pharmacy must capture a visible sale price');
+assert.match(pharmacy, /ราคากลาง/, 'Pharmacy must display the authoritative sale price');
+assert.doesNotMatch(pharmacy, /<input[^>]*data-rx-price=/, 'Pharmacy cannot enter arbitrary prices');
+assert.match(pharmacy, /CnyosPriceMaster\.checkedPrice/, 'Missing or wrong-unit prices must block dispensing');
 assert.match(pharmacyHtml, /Review → Prepare → Dispense FEFO → Print label → Submit Billing/);
 assert.doesNotMatch(
   pharmacy,

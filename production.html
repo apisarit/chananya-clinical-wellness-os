@@ -27,7 +27,8 @@
 <main>
 <section class="view active" id="queue">
 <div class="hero"><h2>Request → Produce → Independent Quality → Finished Goods</h2><p>Production เห็นเฉพาะคำขอและข้อมูลการผลิตที่จำเป็น ไม่เห็นข้อมูลผู้รับบริการ และไม่มีสิทธิ์ปล่อยผ่าน Batch ของตนเอง</p></div>
-<div class="stats"><div class="stat">คำขอผลิต<strong id="stat-requests">0</strong></div><div class="stat">กำลังผลิต<strong id="stat-orders">0</strong></div><div class="stat">รอ QC<strong id="stat-qc">0</strong></div><div class="stat">Released<strong id="stat-released">0</strong></div><div class="stat">Raw material ต่ำ<strong id="stat-low">0</strong></div></div>
+<div class="stats"><div class="stat">คำขอผลิต<strong id="stat-requests">0</strong></div><div class="stat">กำลังผลิต<strong id="stat-orders">0</strong></div><div class="stat">รอ QC<strong id="stat-qc">0</strong></div><div class="stat">Released<strong id="stat-released">0</strong></div><div class="stat">วัตถุดิบต่ำ (ประมาณการ)<strong id="stat-low">0</strong></div></div>
+<p class="muted">ยอดวัตถุดิบต่ำไม่นับล็อตหมดอายุหรือล็อตที่ไม่พร้อมใช้ โดยเทียบวันที่บนอุปกรณ์ ฐานข้อมูลจะตรวจยอดและวันหมดอายุอีกครั้งเมื่อเบิกจริง</p>
 <div class="card"><div class="section-heading"><span class="section-number">1</span><div><h2>Production requests</h2><p>คำขอที่ Pharmacy ส่งมาโดยไม่เปิดเผยชื่อ HN หรือข้อมูลการรักษา</p></div></div><div id="request-list" class="list"></div></div>
 <div class="card"><h3>Production orders / Batch</h3><div id="order-list" class="list"></div></div>
 </section>

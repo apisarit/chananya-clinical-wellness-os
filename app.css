@@ -1,3 +1,11 @@
+.clarification-history {
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: 85vh;
+  overflow: auto;
+}
+.clarification-history p { overflow-wrap: anywhere; white-space: pre-wrap; }
+.clarification-history::backdrop { background: rgb(13 45 36 / 50%); }
+
 :root {
   --forest-950: #0d2d24;
   --forest-900: #123b2e;
@@ -793,3 +801,15 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 
 .knowledge-links { display:flex; flex:0 0 auto; flex-wrap:wrap; gap:0.4rem; padding:0.65rem; }
 .knowledge-links .btn { white-space:normal; text-align:left; }
+
+#ttm-suggestion-queue pre,
+#ttm-review-history pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.booking-calendar-month { max-width: 32rem; margin-block: 1rem; }
+.booking-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .3rem; text-align: center; align-items: center; }
+.booking-calendar-grid .btn { min-width: 0; min-height: 44px; padding: .4rem; }
+.booking-calendar-grid [aria-pressed="true"] { outline: 3px solid currentColor; outline-offset: -3px; font-weight: 800; }
+.calendar-unavailable { color: #68756f; padding: .4rem; }

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+const source=await fs.readFile(new URL('../replacement-recovery.js',import.meta.url),'utf8');
+function fixture(restore) {
+  const children=[];
+  const sandbox={window:{CnyosReplacementAction:{restore}},document:{createElement:tag=>({tag,setAttribute(){}})}};
+  vm.runInNewContext(source,sandbox);
+  let disposed=false;
+  sandbox.window.CnyosReplacementRecovery.mount({db:{},actorId:'doctor',ticketId:'ticket',orderId:'old',parent:{append:el=>children.push(el)},isDisposed:()=>disposed});
+  return {children,dispose:()=>{disposed=true;}};
+}
+assert.equal(fixture(()=>null).children.length,0);
+assert.match(fixture(()=>{throw Error('invalid journal');}).children[0].textContent,/อ่านรหัส/);
+let reads=0,release;
+const f=fixture(options=>{
+  assert.equal(options.oldOrderId,'old');
+  assert.equal(options.actorId,'doctor');
+  return {recover:()=>{reads++;return new Promise(resolve=>{release=resolve;});},submit:()=>{throw Error('must never write');}};
+});
+const button=f.children.find(el=>el.tag==='button');
+const pending=button.onclick();
+await button.onclick();
+assert.equal(reads,1);
+release({old_order_id:'old',new_order_id:'new'});
+await pending;
+assert.equal(button.disabled,true);
+assert.match(f.children[0].textContent,/พบใบสั่งยาทดแทน/);
+await button.onclick();
+assert.equal(reads,1);
+const failure=fixture(()=>({recover:async()=>{throw Error('unavailable');}}));
+await failure.children[1].onclick();
+assert.equal(failure.children[1].disabled,false);
+assert.match(failure.children[0].textContent,/ไม่ได้ส่งใบใหม่/);
+const late=fixture(()=>({recover:()=>new Promise(resolve=>{release=resolve;})}));
+const latePending=late.children[1].onclick();
+late.dispose();
+const before=late.children[0].textContent;
+release({old_order_id:'old',new_order_id:'new'});
+await latePending;
+assert.equal(late.children[0].textContent,before);
+console.log('Replacement recovery UI passed: order-bound restore, read-only action, duplicate click lock, retry on failure and disposed response suppression.');

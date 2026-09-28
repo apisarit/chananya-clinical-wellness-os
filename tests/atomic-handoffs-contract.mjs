@@ -44,7 +44,7 @@ assert.match(migration, /revoke insert, update, delete on public\.audit_logs fro
 assert.match(migration, /revoke all on public\.clinic_state from authenticated/i);
 
 assert.match(clinical, /rpc\('create_atomic_prescription_handoff'/);
-assert.match(app, /rpc\('issue_atomic_dispensing_invoice'/);
+assert.match(app, /rpc\('issue_atomic_encounter_invoice'/);
 assert.match(app, /rpc\('record_atomic_invoice_payment'/);
 assert.match(clinical, /rpc\('clinical_financial_handoffs_healthcheck'/);
 assert.match(app, /rpc\('clinical_financial_handoffs_healthcheck'/);

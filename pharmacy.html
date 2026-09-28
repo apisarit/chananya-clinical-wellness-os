@@ -13,7 +13,11 @@
   <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
   <script defer src="searchable-select.js?v=clinical-os-production-atomic1"></script>
-  <script defer src="pharmacy.js?v=clinical-os-prescription-handoff1"></script>
+  <script defer src="price-master-client.js?v=price-master1"></script>
+  <script defer src="clarification-action.js?v=clarification1"></script>
+  <script defer src="replacement-history.js?v=replacement1"></script>
+  <script defer src="clarification-history.js?v=clarification1"></script>
+  <script defer src="pharmacy.js?v=price-master1"></script>
   <script defer src="pharmacy-sale-selector-fix.js?v=clinical-os-ia1"></script>
   <script defer src="pharmacy-labels.js?v=clinical-os-ia1"></script>
   <script defer src="pharmacy-v33-tools.js?v=clinical-os-ia1"></script>
@@ -75,7 +79,7 @@
                 <label class="full">รายการขาย<select id="item-sale" required></select></label><div id="selected-sale-banner" class="full badge" hidden></div>
                 <label class="full">ยา/ผลิตภัณฑ์<select id="item-product" required></select></label>
                 <label>จำนวน<input id="item-qty" type="number" min="0.0001" step="0.0001" required></label><label>หน่วยจาก Product Master<input id="item-unit" readonly></label>
-                <label>ราคาต่อหน่วย<input id="item-price" type="number" min="0" step="0.01" required></label><label>ขนาด/วิธีใช้<input id="item-dose"></label>
+                <label>ราคากลางต่อหน่วย<input id="item-price" readonly placeholder="เลือกผลิตภัณฑ์ที่ตั้งราคาแล้ว"></label><label>ขนาด/วิธีใช้<input id="item-dose"></label>
                 <label>ความถี่<input id="item-frequency"></label><label>ระยะเวลา<input id="item-duration"></label>
                 <label class="full">คำเตือน/วิธีใช้<textarea id="item-instructions"></textarea></label><button class="btn primary full">เพิ่มรายการยา</button>
               </form>

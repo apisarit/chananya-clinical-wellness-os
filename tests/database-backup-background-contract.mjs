@@ -1177,3 +1177,4 @@ assert.match(terminalRunGuardMigration, /v_run\.request_id is not distinct from 
 assert.match(terminalRunGuardMigration, /BACKUP_REQUEST_ID_INVALID/);
 
 console.log('Netlify backup split checks passed: protected scheduled-event shape, missing/stale-only dispatch, signed one-clinic background work, immutable terminal evidence, exact runtime binding and bounded deadlines');
+await import('./backup-worker-v2-roundtrip.mjs');

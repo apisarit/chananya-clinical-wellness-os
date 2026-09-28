@@ -10,7 +10,7 @@ import {
 export const BACKUP_DOMAINS = Object.freeze(['patients', 'products', 'pharmacy', 'transactions']);
 export const BACKUP_ENVIRONMENTS = Object.freeze(['staging', 'production', 'restore-test']);
 export const BACKUP_FORMAT = 'chananya-encrypted-backup/v1';
-export const BACKUP_SCHEMA_VERSION = '2026-09-01.1';
+export const BACKUP_SCHEMA_VERSION = '2026-09-26.1';
 export const RESTORE_SET_FORMAT = 'chananya-restore-set-evidence/v1';
 export const BACKUP_REQUIRED_TABLES = Object.freeze({
   patients: Object.freeze([
@@ -85,7 +85,28 @@ export const BACKUP_REQUIRED_TABLES = Object.freeze({
     'line_oa_notification_outbox',
     'line_oa_delivery_events',
     'clinic_subscription_control_events',
-    'clinic_drive_destination_events'
+    'clinic_drive_destination_events',
+    'price_master_audit',
+    'cnyos_billing_internal.invoice_orders',
+    'cnyos_billing_internal.invoice_source_charges',
+    'cnyos_billing_internal.invoice_request_receipts',
+    'cnyos_treatment_internal.session_request_receipts'
+  ])
+});
+
+// PostgreSQL canonical JSONB hashes, generated in the same statement snapshot
+// as the exported rows. Reconcile these against the isolated database, not just
+// row counts: equal counts do not prove that immutable financial content survived.
+export const BACKUP_HASHED_TABLES = Object.freeze({
+  patients: Object.freeze([]),
+  products: Object.freeze(['services', 'price_lists', 'price_list_items']),
+  pharmacy: Object.freeze([]),
+  transactions: Object.freeze([
+    'price_master_audit',
+    'cnyos_billing_internal.invoice_orders',
+    'cnyos_billing_internal.invoice_source_charges',
+    'cnyos_billing_internal.invoice_request_receipts',
+    'cnyos_treatment_internal.session_request_receipts'
   ])
 });
 
@@ -94,6 +115,22 @@ const toBase64Url = value => Buffer.from(value)
   .replace(/=/g, '')
   .replace(/\+/g, '-')
   .replace(/\//g, '_');
+
+export function backupSchemaContract(version = BACKUP_SCHEMA_VERSION) {
+  if (version === BACKUP_SCHEMA_VERSION) return { required: BACKUP_REQUIRED_TABLES, hashed: BACKUP_HASHED_TABLES };
+  if (!['2026-09-26.2','2026-09-27.1','2026-09-27.2','2026-09-27.3'].includes(version)) throw new Error('RESTORE_SET_SCHEMA_VERSION_INVALID');
+  const extra = ['cnyos_clarification_internal.tickets', 'cnyos_clarification_internal.clearances'];
+  if (version !== '2026-09-26.2') extra.push('cnyos_clarification_internal.replacements');
+  const amendment = ['2026-09-27.2','2026-09-27.3'].includes(version);
+  if (amendment) extra.push('cnyos_amendment_internal.receipts');
+  if (version === '2026-09-27.3') extra.push('cnyos_export_internal.permissions', 'cnyos_export_internal.permission_events', 'cnyos_export_internal.preparation_events');
+  return {
+    required: { ...BACKUP_REQUIRED_TABLES, transactions: [...BACKUP_REQUIRED_TABLES.transactions, ...extra] },
+    hashed: { ...BACKUP_HASHED_TABLES,
+      patients: amendment ? ['clinical_record_signoffs'] : BACKUP_HASHED_TABLES.patients,
+      transactions: [...BACKUP_HASHED_TABLES.transactions, ...extra, ...(amendment ? ['clinical_record_audit_events'] : [])] }
+  };
+}
 
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 
@@ -283,16 +320,28 @@ function assertRestoreSet(condition, code) {
   if (!condition) throw new Error(code);
 }
 
-function validateDomainPayload(payload, metadata, domain) {
+export function assertBackupTableHashes(payload, domain, schemaVersion = BACKUP_SCHEMA_VERSION) {
+  const expectedTables = backupSchemaContract(schemaVersion).hashed;
+  const hashes = payload.table_sha256 || {};
+  assertRestoreSet(hashes && typeof hashes === 'object' && !Array.isArray(hashes),
+    'RESTORE_SET_TABLE_HASHES_INVALID');
+  assertRestoreSet(expectedTables[domain] && JSON.stringify(Object.keys(hashes).sort()) === JSON.stringify([...expectedTables[domain]].sort()),
+    'RESTORE_SET_TABLE_HASHES_MISSING_OR_UNEXPECTED');
+  for (const hash of Object.values(hashes)) {
+    assertRestoreSet(typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash), 'RESTORE_SET_TABLE_HASH_INVALID');
+  }
+}
+
+function validateDomainPayload(payload, metadata, domain, schemaVersion) {
   assertRestoreSet(payload?.format === 'chananya-domain-export/v1', 'RESTORE_SET_SOURCE_FORMAT_INVALID');
-  assertRestoreSet(payload?.schema_version === BACKUP_SCHEMA_VERSION, 'RESTORE_SET_SCHEMA_VERSION_INVALID');
+  assertRestoreSet(payload?.schema_version === schemaVersion, 'RESTORE_SET_SCHEMA_VERSION_INVALID');
   assertRestoreSet(payload?.clinic_id === metadata.clinic_id, 'RESTORE_SET_PAYLOAD_CLINIC_MISMATCH');
   assertRestoreSet(payload?.domain === domain, 'RESTORE_SET_PAYLOAD_DOMAIN_MISMATCH');
   assertRestoreSet(payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data), 'RESTORE_SET_DATA_INVALID');
 
   const dataTables = sortedValues(Object.keys(payload.data));
   const includedTables = sortedValues(Array.isArray(payload.included_tables) ? payload.included_tables : []);
-  const requiredTables = [...BACKUP_REQUIRED_TABLES[domain]].sort();
+  const requiredTables = [...backupSchemaContract(schemaVersion).required[domain]].sort();
   for (const table of requiredTables) {
     assertRestoreSet(Object.hasOwn(payload.data, table), `RESTORE_SET_REQUIRED_TABLE_MISSING_${table.toUpperCase()}`);
     assertRestoreSet(Array.isArray(payload.data[table]), `RESTORE_SET_TABLE_NOT_ARRAY_${table.toUpperCase()}`);
@@ -302,9 +351,11 @@ function validateDomainPayload(payload, metadata, domain) {
       && JSON.stringify(includedTables) === JSON.stringify(requiredTables),
     'RESTORE_SET_INCLUDED_TABLES_MISMATCH'
   );
+  assertBackupTableHashes(payload, domain, schemaVersion);
 }
 
-export function verifyBackupSet(envelopes, key) {
+export function verifyBackupSet(envelopes, key, { schemaVersion = BACKUP_SCHEMA_VERSION } = {}) {
+  backupSchemaContract(schemaVersion); // Explicit expected version; never infer a downgrade from a file.
   assertRestoreSet(Array.isArray(envelopes), 'RESTORE_SET_INPUT_INVALID');
   assertRestoreSet(envelopes.length === BACKUP_DOMAINS.length, 'RESTORE_SET_DOMAIN_COUNT_INVALID');
 
@@ -315,7 +366,7 @@ export function verifyBackupSet(envelopes, key) {
     assertRestoreSet(BACKUP_DOMAINS.includes(domain), 'RESTORE_SET_DOMAIN_INVALID');
     assertRestoreSet(!byDomain.has(domain), 'RESTORE_SET_DUPLICATE_DOMAIN');
     const payload = decryptBackup(envelope, key);
-    validateDomainPayload(payload, envelope.metadata, domain);
+    validateDomainPayload(payload, envelope.metadata, domain, schemaVersion);
     byDomain.set(domain, envelope);
     decrypted.set(domain, payload);
   }
@@ -344,6 +395,7 @@ export function verifyBackupSet(envelopes, key) {
       ciphertext_sha256: envelope.ciphertext_sha256,
       exported_at: payload.exported_at,
       row_counts: rowCounts,
+      table_sha256: payload.table_sha256 || {},
       filtered_tables: payload.filtered_tables || {},
       excluded_tables: Array.isArray(payload.excluded_tables) ? payload.excluded_tables : []
     };
@@ -360,7 +412,8 @@ export function verifyBackupSet(envelopes, key) {
     key_id: reference.key_id,
     domains: Object.fromEntries(BACKUP_DOMAINS.map(domain => [domain, {
       plaintext_sha256: domains[domain].plaintext_sha256,
-      row_counts: domains[domain].row_counts
+      row_counts: domains[domain].row_counts,
+      table_sha256: domains[domain].table_sha256
     }]))
   };
 

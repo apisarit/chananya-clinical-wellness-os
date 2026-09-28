@@ -13,6 +13,8 @@
   let session;
   let profile;
   let activeOrderId = null;
+  let decisionPending = false;
+  let loadVersion = 0;
   let data = { products: [], formulas: [], orders: [], qc: [] };
 
   const errors = {
@@ -66,10 +68,57 @@
     return `${item.production_order_no} • Batch ${item.batch_number}`;
   }
 
+  function qualityReport(item, qc) {
+    if (!item?.id || !item.clinic_id || !qc?.id || qc.production_order_id !== item.id
+      || qc.clinic_id !== item.clinic_id
+      || !((item.status === 'released' && qc.status === 'passed')
+        || (item.status === 'rejected' && qc.status === 'rejected'))) {
+      throw new Error('ข้อมูล Batch และผลตรวจไม่ครบหรือตรงกัน จึงยังออกเอกสารไม่ได้');
+    }
+    const rows = [
+      ['คลินิก (รหัส)', item.clinic_id], ['ใบสั่งผลิต', item.production_order_no],
+      ['Batch', item.batch_number], ['ผลิตภัณฑ์ (รหัส)', item.finished_product_id],
+      ['สูตร (รหัสอ้างอิง)', item.formula_id], ['ปริมาณผลิตจริง', item.actual_quantity],
+      ['หน่วย', item.planned_unit], ['ผู้ผลิต (รหัส)', item.produced_by],
+      ['ผลตัดสิน', qc.status], ['สรุปผลตรวจ', qc.result_summary],
+      ['ตัวอย่างอ้างอิง', qc.sample_reference], ['ลักษณะภายนอก', qc.appearance_result],
+      ['ความชื้น (ค่าที่บันทึก)', qc.moisture_result], ['Water activity (ค่าที่บันทึก)', qc.water_activity_result],
+      ['น้ำหนัก (ค่าที่บันทึก)', qc.weight_result], ['ผู้ตรวจ (รหัส)', qc.tested_by],
+      ['เวลาตรวจ', qc.tested_at], ['ผู้อนุมัติ (รหัส)', qc.approved_by],
+      ['เวลาอนุมัติ', qc.approved_at], ['เหตุผลไม่ผ่าน', qc.rejection_reason], ['QC record ID', qc.id]
+    ];
+    return `<!doctype html><html lang="th"><meta charset="utf-8"><title>บันทึกผลตรวจคุณภาพภายใน</title>
+      <style>body{font-family:system-ui,sans-serif;margin:32px;color:#172b26}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left;overflow-wrap:anywhere}th{width:35%}p{line-height:1.6}@media print{body{margin:12mm}}</style>
+      <h1>บันทึกผลตรวจคุณภาพภายใน</h1><p>สำเนาข้อมูลที่อ่านจากระบบ ไม่ใช่ COA ที่รับรองภายนอก ไม่ใช่ลายมือชื่อดิจิทัล และไม่อนุมัติการเผยแพร่ Marketplace การแสดงว่าผ่านเป็นสถานะที่บันทึก ไม่ใช่การตรวจซ้ำหรือรับรองมาตรฐานใหม่</p>
+      <table>${rows.map(([label,value]) => `<tr><th>${esc(label)}</th><td>${esc(value === null || value === undefined || value === '' ? 'ไม่มีค่าบันทึก' : value)}</td></tr>`).join('')}</table>
+      <p>เอกสารนี้ไม่แสดงเกณฑ์มาตรฐาน วิธีทดสอบ หรือหน่วยที่ไม่ได้บันทึก กรุณาตรวจหลักฐานต้นฉบับก่อนนำไปใช้ภายนอก</p></html>`;
+  }
+
+  async function downloadQualityReport(id) {
+    await load(); // Do not export stale rows after a failed refresh.
+    const documentHtml = qualityReport(order(id), qcFor(id));
+    const url = URL.createObjectURL(new Blob([documentHtml], { type: 'text/html;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `quality-record-${String(id).replace(/[^a-zA-Z0-9-]/g, '')}.html`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function reviewBlockReason(item, reviewerId = session?.user?.id) {
+    if (!reviewerId) return 'ไม่พบผู้ตรวจที่เข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่';
+    if (!item || item.status !== 'awaiting_qc') return errors.PRODUCTION_ORDER_NOT_AWAITING_QC;
+    if (!item.produced_by || !(num(item.actual_quantity) > 0)) return errors.PRODUCTION_OPERATOR_EVIDENCE_REQUIRED;
+    if (item.produced_by === reviewerId) return errors.QC_INDEPENDENCE_REQUIRED;
+    return '';
+  }
+
   function render() {
     const awaiting = data.orders.filter(item => item.status === 'awaiting_qc');
     const history = data.orders.filter(item => ['released', 'rejected'].includes(item.status));
-    const blocked = awaiting.filter(item => !item.produced_by || num(item.actual_quantity) <= 0);
+    const blocked = awaiting.filter(item => reviewBlockReason(item));
     $('#stat-awaiting').textContent = awaiting.length;
     $('#stat-passed').textContent = data.qc.filter(item => item.status === 'passed' && isToday(item.approved_at)).length;
     $('#stat-rejected').textContent = data.qc.filter(item => item.status === 'rejected' && isToday(item.tested_at)).length;
@@ -78,30 +127,48 @@
     $('#quality-queue').innerHTML = awaiting.map(item => {
       const finished = product(item.finished_product_id);
       const linkedFormula = formula(item.formula_id);
-      const evidenceReady = Boolean(item.produced_by && num(item.actual_quantity) > 0);
-      return `<article class="item column"><div class="row"><div><b>${esc(orderLabel(item))}</b><small>${esc(finished?.name_th || '-')} • Actual ${num(item.actual_quantity)} ${esc(item.planned_unit)} • Yield ${num(item.yield_percent)}%</small><small>Formula ${esc(linkedFormula?.formula_code || '-')} Rev.${esc(linkedFormula?.revision || '-')} • Producer evidence ${evidenceReady ? 'พร้อม' : 'ไม่ครบ'}</small></div><span class="badge">${evidenceReady ? 'awaiting_qc' : 'blocked'}</span></div><div class="right"><button class="btn primary" data-quality-act="release" data-id="${esc(item.id)}"${evidenceReady ? '' : ' disabled'}>QC Pass &amp; Release</button><button class="btn danger" data-quality-act="reject" data-id="${esc(item.id)}"${evidenceReady ? '' : ' disabled'}>QC Reject</button></div></article>`;
+      const blockedReason = reviewBlockReason(item);
+      const evidenceReady = !blockedReason;
+      return `<article class="item column"><div class="row"><div><b>${esc(orderLabel(item))}</b><small>${esc(finished?.name_th || '-')} • Actual ${num(item.actual_quantity)} ${esc(item.planned_unit)} • Yield ${num(item.yield_percent)}%</small><small>Formula ${esc(linkedFormula?.formula_code || '-')} Rev.${esc(linkedFormula?.revision || '-')}</small>${blockedReason ? `<p class="muted">${esc(blockedReason)}</p>` : '<small>พร้อมให้ผู้ตรวจอิสระพิจารณา</small>'}</div><span class="badge">${evidenceReady ? 'awaiting_qc' : 'blocked'}</span></div><div class="right"><button class="btn primary" data-quality-act="release" data-id="${esc(item.id)}"${evidenceReady ? '' : ' disabled'}>QC Pass &amp; Release</button><button class="btn danger" data-quality-act="reject" data-id="${esc(item.id)}"${evidenceReady ? '' : ' disabled'}>QC Reject</button></div></article>`;
     }).join('') || '<p class="muted">ไม่มี Batch รอ Quality</p>';
 
     $('#quality-history').innerHTML = history.map(item => {
       const qc = qcFor(item.id);
-      return `<article class="item"><div><b>${esc(orderLabel(item))} • ${esc(item.status)}</b><small>${esc(product(item.finished_product_id)?.name_th || '-')} • ${esc(qc?.result_summary || 'ไม่มีผลสรุป')}</small><small>${qc?.tested_at ? new Date(qc.tested_at).toLocaleString('th-TH') : '-'} • Quality evidence ${qc?.tested_by ? 'recorded' : 'missing'}</small></div><span class="badge">${esc(qc?.status || item.status)}</span></article>`;
+      return `<article class="item"><div><b>${esc(orderLabel(item))} • ${esc(item.status)}</b><small>${esc(product(item.finished_product_id)?.name_th || '-')} • ${esc(qc?.result_summary || 'ไม่มีผลสรุป')}</small><small>${qc?.tested_at ? new Date(qc.tested_at).toLocaleString('th-TH') : '-'} • Quality evidence ${qc?.tested_by ? 'recorded' : 'missing'}</small><button class="btn ghost" data-quality-report="${esc(item.id)}">ดาวน์โหลดบันทึกผลตรวจภายใน</button></div><span class="badge">${esc(qc?.status || item.status)}</span></article>`;
     }).join('') || '<p class="muted">ยังไม่มีประวัติ Quality</p>';
   }
 
   async function load() {
+    const version=++loadVersion, actor=session, actorProfile=profile;
+    const current=()=>version===loadVersion && session===actor && profile===actorProfile;
+    try {
     const [products, formulas, orders, qc] = await Promise.all([
       query('products', 'created_at'),
       query('formulas', 'created_at'),
       query('production_orders', 'created_at'),
       query('production_qc', 'created_at')
     ]);
+    if (!current()) throw new Error('QUALITY_LOAD_SUPERSEDED');
     data = { products, formulas, orders, qc };
     render();
+    } catch (error) {
+      if (current()) {
+        data = {products:[],formulas:[],orders:[],qc:[]};
+        activeOrderId=null;
+        $('#quality-queue').textContent='ยังอ่านคิว Quality ล่าสุดไม่ได้ กรุณาโหลดใหม่ก่อนตัดสินผล ไม่ใช่การยืนยันว่าไม่มี Batch';
+        $('#quality-history').textContent='ยังอ่านหลักฐานล่าสุดไม่ได้ จึงยังดาวน์โหลดรายงานไม่ได้';
+        for (const id of ['stat-awaiting','stat-passed','stat-rejected','stat-blocked']) $('#'+id).textContent='—';
+      }
+      throw error;
+    }
   }
 
   function openDialog(action, id) {
+    if (decisionPending) return;
     const selected = order(id);
     if (!selected) return;
+    const blockedReason = reviewBlockReason(selected);
+    if (blockedReason) { alert(blockedReason); return; }
     activeOrderId = id;
     if (action === 'release') {
       $('#release-form').reset();
@@ -115,9 +182,41 @@
     }
   }
 
+  async function saveDecision(dialogId, work, successMessage) {
+    if (decisionPending) return;
+    const blockedReason = reviewBlockReason(order(activeOrderId));
+    if (blockedReason) throw new Error(blockedReason);
+    const decisionSession = session;
+    const decisionProfile = profile;
+    const isCurrent = () => session === decisionSession && profile === decisionProfile;
+    decisionPending = true;
+    const buttons = $$('#release-form button[type="submit"], #reject-form button[type="submit"]');
+    buttons.forEach(button => { button.disabled = true; });
+    const status = $('#quality-action-status');
+    if (status) status.textContent = 'กำลังบันทึกคำตัดสิน Quality…';
+    try {
+      await work();
+      if (!isCurrent()) return;
+      $(dialogId).close();
+      let message = successMessage;
+      try { await load(); }
+      catch (_) { message += ' แต่โหลดรายการล่าสุดไม่สำเร็จ กรุณาโหลดหน้าใหม่เพื่อตรวจสถานะก่อนทำรายการต่อ'; }
+      if (!isCurrent()) return;
+      if (status) status.textContent = message;
+      toast(message);
+    } catch (error) {
+      if (!isCurrent()) return;
+      if (status) status.textContent = 'ยังยืนยันผลการบันทึกไม่ได้ กรุณาตรวจสถานะล่าสุดก่อนลองใหม่';
+      throw error;
+    } finally {
+      decisionPending = false;
+      buttons.forEach(button => { button.disabled = false; });
+    }
+  }
+
   async function release(event) {
     event.preventDefault();
-    await rpc('quality_release_production_order', {
+    await saveDecision('#release-dialog', () => rpc('quality_release_production_order', {
       p_production_order_id: activeOrderId,
       p_result_summary: $('#qc-summary').value.trim(),
       p_sample_reference: $('#qc-sample').value.trim() || null,
@@ -125,22 +224,16 @@
       p_moisture_result: optionalNumber($('#qc-moisture').value),
       p_water_activity_result: optionalNumber($('#qc-water-activity').value),
       p_weight_result: optionalNumber($('#qc-weight').value)
-    });
-    $('#release-dialog').close();
-    await load();
-    toast('Quality Release, Finished Goods receipt และ Audit สำเร็จใน transaction เดียว');
+    }), 'Quality Release, Finished Goods receipt และ Audit สำเร็จใน transaction เดียว');
   }
 
   async function reject(event) {
     event.preventDefault();
-    await rpc('quality_reject_production_order', {
+    await saveDecision('#reject-dialog', () => rpc('quality_reject_production_order', {
       p_production_order_id: activeOrderId,
       p_rejection_reason: $('#reject-reason').value.trim(),
       p_result_summary: $('#reject-summary').value.trim()
-    });
-    $('#reject-dialog').close();
-    await load();
-    toast('บันทึก Quality Reject และ Audit แล้ว');
+    }), 'บันทึก Quality Reject และ Audit แล้ว');
   }
 
   async function detectQualityBoundary() {
@@ -177,6 +270,14 @@
   $('#quality-queue').addEventListener('click', event => {
     const button = event.target.closest('[data-quality-act]');
     if (button && !button.disabled) openDialog(button.dataset.qualityAct, button.dataset.id);
+  });
+  $('#quality-history').addEventListener('click', async event => {
+    const button = event.target.closest('[data-quality-report]');
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    try { await downloadQualityReport(button.dataset.qualityReport); }
+    catch (error) { fail(error); }
+    finally { button.disabled = false; }
   });
   $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => button.closest('dialog')?.close()));
   $$('dialog').forEach(dialog => dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); }));

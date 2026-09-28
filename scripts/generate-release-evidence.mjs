@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -20,7 +20,14 @@ function exactCommit() {
   return head;
 }
 
-const status = git('status', '--porcelain', '--untracked-files=no');
+const directory = path.resolve(process.env.RELEASE_EVIDENCE_DIR || path.join(root, 'artifacts', 'release-evidence'));
+const destination = path.join(directory, 'exact-commit.json');
+try {
+  await fs.rename(destination, `${destination}.${randomUUID()}.superseded`);
+} catch (error) {
+  if (error.code !== 'ENOENT') throw new Error('RELEASE_PRIOR_EVIDENCE_RETIRE_FAILED');
+}
+const status = git('status', '--porcelain', '--untracked-files=all');
 if (status && process.env.RELEASE_EVIDENCE_ALLOW_DIRTY !== 'true') {
   throw new Error('RELEASE_EVIDENCE_WORKTREE_DIRTY');
 }
@@ -55,8 +62,6 @@ const evidence = {
   releaseChannel: JSON.parse(await fs.readFile(path.join(root, 'release-readiness.json'), 'utf8')).releaseChannel
 };
 
-const directory = path.resolve(process.env.RELEASE_EVIDENCE_DIR || path.join(root, 'artifacts', 'release-evidence'));
 await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-const destination = path.join(directory, 'exact-commit.json');
-await fs.writeFile(destination, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
+await fs.writeFile(destination, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 process.stdout.write(`Exact-commit evidence generated for ${commit}; ${tracked.length} tracked files, ${migrations.length} migrations: ${destination}\n`);

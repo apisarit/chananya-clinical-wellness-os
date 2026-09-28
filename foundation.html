@@ -175,9 +175,14 @@
               <label class="full">แหล่งอ้างอิง / citation<input id="ttm-suggestion-source" required minlength="3" maxlength="500"></label>
               <label class="full">เหตุผลและสิ่งที่ตรวจสอบแล้ว<textarea id="ttm-suggestion-reason" rows="3" required minlength="8" maxlength="2000"></textarea></label>
               <button class="btn primary full" id="ttm-suggestion-submit" type="submit">ส่ง suggestion เข้าคิวทบทวน</button>
+              <button class="btn" id="ttm-suggestion-recover" type="button">ตรวจผลคำขอเดิมก่อนส่งใหม่</button>
+              <small>หากคำตอบขาดหาย ให้ตรวจผลก่อนส่งใหม่ ระบบเก็บเฉพาะรหัสและลายนิ้วมือคำขอในแท็บนี้ ไม่เก็บเนื้อหา เมื่อพบรายการเดิมจะล้างแบบฟอร์ม หากยังไม่พบให้กรอกเนื้อหาเดิมแล้วลองส่งอีกครั้ง</small>
             </form>
             <div class="section-heading space-top-md"><span class="section-number">Q</span><div><h3>คิวทบทวน</h3><p>Super Admin เห็นคิวของคลินิกและ approve/reject พร้อมเหตุผล</p></div></div>
             <div id="ttm-suggestion-queue" class="list"><p class="muted">กำลังตรวจสิทธิ์และคิวทบทวน</p></div>
+            <div class="section-heading space-top-md"><div><h3>ประวัติการทบทวน</h3><p>50 เหตุการณ์ล่าสุดที่บัญชีนี้มีสิทธิ์อ่าน ไม่ใช่หลักฐานรับรอง release ของระบบ</p></div></div>
+            <button type="button" class="btn" id="ttm-history-refresh">โหลดประวัติใหม่</button>
+            <div id="ttm-review-history" class="list" aria-live="polite"><p>ยังไม่ได้โหลดประวัติ</p></div>
           </section>
           <section class="card foundation-commercial-gate">
             <div class="section-heading"><span class="section-number">G</span><div><h2>Commercial readiness gate</h2><p>มีข้อมูลจำนวนมากไม่ได้แปลว่าพร้อมใช้วินิจฉัย</p></div></div>
