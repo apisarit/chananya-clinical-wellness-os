@@ -5,7 +5,7 @@
     'id', 'clinic_id', 'hn', 'prefix', 'first_name', 'last_name', 'gender',
     'date_of_birth', 'phone', 'email', 'active', 'created_at', 'updated_at'
   ]);
-  const FORMULA_PREFIX = /^[=+\-@]/;
+  const FORMULA_PREFIX = /^(?:[\t\r\n]|\s*[=+\-@＝＋－＠])/u;
 
   function valueOf(value) {
     if (value === null || value === undefined) return '';

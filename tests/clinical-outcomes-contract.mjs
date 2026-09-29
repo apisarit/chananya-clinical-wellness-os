@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import './outcomes-missing-measurements.mjs';
+import './outcomes-refresh-ordering.mjs';
+import './outcomes-lot-trace-ui.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');

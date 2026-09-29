@@ -188,4 +188,51 @@ try {
   globalThis.Netlify = previousNetlify;
 }
 
-console.log('Patient identity function tests passed: crypto, LINE verification, RPC isolation, origin, input limits and safe errors');
+// Exercise the actual catch/log boundary. Upstream exception messages are not
+// guaranteed to be codes: fetch, QR libraries or database errors can contain
+// identifiers or credentials. These markers are synthetic, never real PHI.
+const originalConsoleError = console.error;
+const logRecords = [];
+globalThis.Netlify = { env: { get(name) {
+  return {
+    LINE_LIFF_ID: 'synthetic-liff', LINE_LOGIN_CHANNEL_ID: 'synthetic-channel',
+    PATIENT_IDENTITY_HMAC_SECRET: secret, PATIENT_QR_ISSUER: 'TEST',
+    SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service-key',
+    CNYOS_RUNTIME_EXPECTED_CLINIC_ID: '00000000-0000-0000-0000-000000000001'
+  }[name] || '';
+} } };
+console.error = (...args) => logRecords.push(args);
+try {
+  const { default: handler } = await import('../netlify/functions/patient-identity.mts?log-privacy-contract');
+  for (const mode of ['network', 'database', 'known']) {
+    globalThis.fetch = async () => {
+      if (mode === 'network') {
+        const error = new Error('SYNTHETIC_PATIENT_DETAIL bearer=SYNTHETIC_TOKEN_VALUE');
+        error.cause = { body: 'SYNTHETIC_REQUEST_BODY' };
+        throw error;
+      }
+      return new Response(JSON.stringify({
+        message: mode === 'known' ? 'RATE_LIMITED' : 'SYNTHETIC_PATIENT_HN_123456',
+        code: 'SYNTHETIC_PROVIDER_SECRET'
+      }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    };
+    logRecords.length = 0;
+    const response = await handler(new Request('https://patient.example/api/patient-identity', {
+      method: 'POST', headers: { origin: 'https://patient.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'status', idToken: 'synthetic-request-token' })
+    }), { ip: '127.0.0.1', requestId: `privacy-contract-${mode}` });
+    const code = mode === 'known' ? 'RATE_LIMITED' : 'PATIENT_IDENTITY_REQUEST_FAILED';
+    assert.equal(response.status, mode === 'known' ? 429 : 500);
+    assert.deepEqual(await response.json(), { ok: false, code });
+    assert.deepEqual(logRecords, [['patient-identity request failed', {
+      requestId: `privacy-contract-${mode}`, code
+    }]], 'logs must contain only provider request ID and allowlisted public code');
+    assert.doesNotMatch(JSON.stringify(logRecords), /SYNTHETIC_PATIENT|SYNTHETIC_TOKEN|SYNTHETIC_REQUEST|SYNTHETIC_PROVIDER/);
+  }
+} finally {
+  console.error = originalConsoleError;
+  globalThis.fetch = previousFetch;
+  globalThis.Netlify = previousNetlify;
+}
+
+console.log('Patient identity function tests passed: crypto, LINE verification, RPC isolation, origin, input limits, safe responses and redacted operational errors');

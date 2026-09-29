@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BACKUP_REQUIRED_TABLES, BACKUP_HASHED_TABLES, BACKUP_SCHEMA_VERSION, backupSchemaContract } from '../netlify/functions/_shared/database-backup.mjs';
+import { assertBackupDatabaseContract } from '../netlify/functions/_shared/database-backup-runtime.mjs';
 import {
   assertBackupExportPayload,
   configuration,
@@ -36,6 +38,39 @@ function configWith(overrides = {}) {
 }
 
 const noEnvFallback = configWith();
+assert.equal(noEnvFallback.schemaVersion, BACKUP_SCHEMA_VERSION);
+const v2 = '2026-09-26.2';
+assert.equal(configWith({ BACKUP_EXPECTED_SCHEMA_VERSION: v2 }).schemaVersion, v2);
+assert.throws(() => configWith({ BACKUP_EXPECTED_SCHEMA_VERSION: 'unknown' }), /SCHEMA_VERSION_INVALID/);
+const profile = backupSchemaContract(v2);
+const v2Health = { ready: true, schema_version: v2, domain_count: 4,
+  patient_table_count: profile.required.patients.length,
+  product_table_count: profile.required.products.length,
+  pharmacy_table_count: profile.required.pharmacy.length,
+  transaction_table_count: profile.required.transactions.length };
+assert.equal(assertBackupDatabaseContract(v2Health, v2), v2Health);
+assert.throws(() => assertBackupDatabaseContract(v2Health), /CONTRACT_MISMATCH/);
+assert.throws(() => assertBackupDatabaseContract({ ...v2Health, schema_version: BACKUP_SCHEMA_VERSION }, v2), /CONTRACT_MISMATCH/);
+for (const domain of Object.keys(profile.required)) {
+  const payload = { format: 'chananya-domain-export/v1', schema_version: v2,
+    clinic_id: 'synthetic-clinic', domain,
+    included_tables: [...profile.required[domain]],
+    data: Object.fromEntries(profile.required[domain].map(table => [table, []])),
+    table_sha256: Object.fromEntries((profile.hashed[domain] || []).map(table => [table, 'a'.repeat(64)])) };
+  const clinic = { clinic_id: payload.clinic_id };
+  assert.equal(assertBackupExportPayload(payload, clinic, domain, v2), payload);
+  assert.throws(() => assertBackupExportPayload(payload, clinic, domain), /CONTRACT_MISMATCH/);
+  if (domain === 'transactions') {
+    for (const table of ['cnyos_clarification_internal.tickets', 'cnyos_clarification_internal.clearances']) {
+      const missing = structuredClone(payload);
+      delete missing.data[table];
+      assert.throws(() => assertBackupExportPayload(missing, clinic, domain, v2), /REQUIRED_TABLE_MISSING/);
+      const noHash = structuredClone(payload);
+      delete noHash.table_sha256[table];
+      assert.throws(() => assertBackupExportPayload(noHash, clinic, domain, v2), /TABLE_HASHES_INVALID/);
+    }
+  }
+}
 assert.equal(noEnvFallback.hasCompleteEnvFolderIds, false, 'DB assignments must allow folder env vars to be omitted');
 assert.equal(configWith({ BACKUP_EXPECTED_SITE_ORIGIN: 'https://cnyos.cloud' }).expectedSiteOrigin,
   'https://cnyos.cloud', 'production backup must accept the configured canonical domain');
@@ -72,7 +107,7 @@ assert.throws(() => configWith({
 
 const exactExportData = {
   format: 'chananya-domain-export/v1',
-  schema_version: '2026-09-01.1',
+  schema_version: '2026-09-26.1',
   clinic_id: '00000000-0000-4000-8000-000000000001',
   domain: 'pharmacy',
   data: Object.fromEntries([
@@ -81,6 +116,17 @@ const exactExportData = {
   ].map(table => [table, []]))
 };
 exactExportData.included_tables = Object.keys(exactExportData.data).sort();
+for (const domain of ['products', 'transactions']) {
+  const payload = {
+    ...exactExportData, domain, schema_version: BACKUP_SCHEMA_VERSION,
+    data: Object.fromEntries(BACKUP_REQUIRED_TABLES[domain].map(table => [table, []])),
+    included_tables: [...BACKUP_REQUIRED_TABLES[domain]].sort(),
+    table_sha256: Object.fromEntries(BACKUP_HASHED_TABLES[domain].map(table => [table, 'a'.repeat(64)]))
+  };
+  assert.equal(assertBackupExportPayload(payload, { clinic_id: payload.clinic_id }, domain), payload);
+  assert.throws(() => assertBackupExportPayload({ ...payload, table_sha256: {} },
+    { clinic_id: payload.clinic_id }, domain), /TABLE_HASHES_INVALID/);
+}
 assert.equal(assertBackupExportPayload(exactExportData, {
   clinic_id: exactExportData.clinic_id
 }, 'pharmacy'), exactExportData);

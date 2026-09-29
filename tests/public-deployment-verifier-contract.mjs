@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,16 +9,62 @@ import {
   forbiddenPublicPaths,
   publicDeploymentRequestPolicy,
   requestPublicDeployment,
+  verifyServedCode,
+  assertRuntimeCodeInventory,
   validateProductionOrigin
 } from '../scripts/verify-public-deployment.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+{
+  const bodies = { 'app.js': Buffer.from('const title="ทดสอบ";'), 'app.css': Buffer.from('body{}'), 'tenant-config.js': Buffer.from('config={}'), 'brand-config.js': Buffer.from('brand="custom"'), 'evidence-page.mjs': Buffer.from('export const x=1;'), 'index.html': Buffer.from('<html>') };
+  const files = Object.keys(bodies);
+  const manifest = {fileCount: files.length, files, integrity: files.map(path => ({path,size:bodies[path].length,sha256:createHash('sha256').update(bodies[path]).digest('hex')}))};
+  const seen=[];
+  const request=async(origin,path,options)=>{
+    assert.equal(origin,'https://synthetic.example');
+    assert.equal(options.binary,true);
+    seen.push(path);
+    return {body:bodies[path.slice(1)]};
+  };
+  const readCommitted=name=>{ assert.ok(!['tenant-config.js','brand-config.js'].includes(name)); return bodies[name]; };
+  const evidence=await verifyServedCode('https://synthetic.example',manifest,{request,readCommitted});
+  assert.equal(evidence.length,5);
+  assert.deepEqual(seen,['/app.js','/app.css','/tenant-config.js','/brand-config.js','/evidence-page.mjs']);
+  assert.equal(evidence.find(x=>x.path==='tenant-config.js').sourceBound,false);
+  assert.equal(evidence.find(x=>x.path==='brand-config.js').sourceBound,false);
+  assert.equal(evidence.find(x=>x.path==='evidence-page.mjs').sourceBound,true);
+  const sources=new Map(Object.entries(bodies).filter(([name])=>!['tenant-config.js','brand-config.js'].includes(name)));
+  assertRuntimeCodeInventory(manifest,sources);
+  assert.throws(()=>assertRuntimeCodeInventory({...manifest,files:files.filter(name=>name!=='evidence-page.mjs')},sources),/runtime code inventory/);
+  assert.throws(()=>assertRuntimeCodeInventory({...manifest,files:[...files,'unexpected.js']},sources),/runtime code inventory/);
+  await assert.rejects(verifyServedCode('https://synthetic.example',manifest,{request:async()=>({body:Buffer.from('old')}),readCommitted}),/served asset size mismatch/);
+  await assert.rejects(verifyServedCode('https://synthetic.example',manifest,{request:async()=>({body:Buffer.alloc(bodies['app.js'].length)}),readCommitted}),/served asset digest mismatch/);
+  await assert.rejects(verifyServedCode('https://synthetic.example',manifest,{request,readCommitted:()=>Buffer.from('different commit')}),/served asset source mismatch/);
+  for(const mutate of [
+    m=>{m.fileCount++;},
+    m=>{m.files[1]=m.files[0];},
+    m=>{m.integrity[0].path='wrong.js';},
+    m=>{m.integrity[0].sha256='bad';},
+    m=>{m.integrity[0].size=-1;},
+    ...['../app.js','https://evil.example/x.js','//evil.example/x.js','app.js?x','%2e%2e.js'].map(path=>m=>{m.files[0]=path;m.integrity[0].path=path;})
+  ]) {
+    const altered=structuredClone(manifest);mutate(altered);
+    let calls=0;
+    await assert.rejects(verifyServedCode('https://synthetic.example',altered,{request:async()=>{calls++;throw new Error('unexpected request');},readCommitted}));
+    assert.equal(calls,0,'invalid inventory must fail before network access');
+  }
+  const binary=await requestPublicDeployment('https://synthetic.example','/app.js',{binary:true,expectedStatus:200,fetchImpl:async()=>new Response(bodies['app.js'])});
+  assert.deepEqual(binary.body,bodies['app.js']);
+}
 const source = fs.readFileSync(path.join(root, 'scripts', 'verify-public-deployment.mjs'), 'utf8');
 const framePolicySource = fs.readFileSync(path.join(root, 'scripts', 'netlify-frame-policy.mjs'), 'utf8');
 const staticHeadersSource = fs.readFileSync(path.join(root, '_headers'), 'utf8');
 const netlifyConfigSource = fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8');
 
 assert.equal(validateProductionOrigin('https://cnyos.netlify.app', 'cnyos.netlify.app'), 'https://cnyos.netlify.app');
+assert.equal(validateProductionOrigin('https://cnyos.cloud:443', 'cnyos.cloud'), 'https://cnyos.cloud');
+assert.throws(() => validateProductionOrigin('https://cnyos.cloud:8443', 'cnyos.cloud'), /PRODUCTION_SITE_URL_INVALID/);
+assert.throws(() => validateProductionOrigin('https://[::1]', '[::1]'), /PRODUCTION_SITE_HOST_INVALID/);
 assert.throws(() => validateProductionOrigin('http://cnyos.netlify.app', 'cnyos.netlify.app'), /PRODUCTION_SITE_URL_INVALID/);
 assert.throws(() => validateProductionOrigin('https://cnyos.netlify.app/path', 'cnyos.netlify.app'), /PRODUCTION_SITE_URL_MUST_BE_ORIGIN/);
 assert.throws(() => validateProductionOrigin('https://evil.example', 'cnyos.netlify.app'), /PRODUCTION_SITE_HOST_MISMATCH/);

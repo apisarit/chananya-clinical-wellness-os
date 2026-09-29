@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './line-oa-error-privacy.mjs';
 import { createHmac } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

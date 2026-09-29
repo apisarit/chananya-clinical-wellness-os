@@ -9,6 +9,29 @@
   let db;
   let session;
   let profile;
+  let outcomeRequestVersion = 0;
+  let accountBlocked = false;
+  let visibleEncounters = [];
+
+  function clearResults(label) {
+    visibleEncounters = [];
+    $('#outcomes-list').innerHTML = '';
+    for (const key of ['total', 'measured', 'before', 'after', 'rate', 'followup']) {
+      $(`#outcomes-${key}`).textContent = label;
+    }
+  }
+
+  function blockAccount() {
+    accountBlocked = true;
+    ++outcomeRequestVersion;
+    clearResults('');
+    $('#outcomes-query').value = '';
+    $('#outcomes-meta').textContent = '';
+    $('#app').inert = true;
+    $('#app').classList.add('hidden');
+    $('#boot').classList.remove('hidden');
+    $('#boot-error').textContent = 'บัญชีเปลี่ยนหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่';
+  }
 
   const dateLabel = value => value
     ? new Date(value).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
@@ -45,24 +68,38 @@
   }
 
   function renderSummary(row) {
+    // The legacy RPC returns zero-valued aggregates when its measured set is empty.
+    const hasMeasurements = Number.isSafeInteger(Number(row.measured_sessions))
+      && Number(row.measured_sessions) > 0;
+    const measurement = (value, digits, suffix = '') => {
+      if (value === null || value === undefined || typeof value === 'boolean'
+        || (typeof value === 'string' && !value.trim()) || !Number.isFinite(Number(value)))
+        return 'ยังไม่มีข้อมูล';
+      return `${Number(value).toLocaleString('th-TH', { maximumFractionDigits: digits })}${suffix}`;
+    };
     $('#outcomes-total').textContent = Number(row.total_sessions || 0).toLocaleString('th-TH');
     $('#outcomes-measured').textContent = Number(row.measured_sessions || 0).toLocaleString('th-TH');
-    $('#outcomes-before').textContent = Number(row.average_pain_before || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
-    $('#outcomes-after').textContent = Number(row.average_pain_after || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
-    $('#outcomes-rate').textContent = `${Number(row.improvement_rate || 0).toLocaleString('th-TH', { maximumFractionDigits: 1 })}%`;
+    $('#outcomes-before').textContent = measurement(hasMeasurements ? row.average_pain_before : null, 2);
+    $('#outcomes-after').textContent = measurement(hasMeasurements ? row.average_pain_after : null, 2);
+    $('#outcomes-rate').textContent = measurement(hasMeasurements ? row.improvement_rate : null, 1, '%');
     $('#outcomes-followup').textContent = Number(row.followup_encounters || 0).toLocaleString('th-TH');
   }
 
   function renderRows(rows) {
+    visibleEncounters = rows.map(row => row.encounter_id);
     $('#outcomes-meta').textContent = `พบ ${rows.length.toLocaleString('th-TH')} treatment sessions ตามสิทธิ์และช่วงเวลาที่เลือก`;
-    $('#outcomes-list').innerHTML = rows.map(row => {
+    $('#outcomes-list').innerHTML = rows.map((row, index) => {
       const change = row.pain_change;
       const changeClass = change > 0 ? 'improved' : change < 0 ? 'worse' : 'neutral';
       const changeLabel = change === null || change === undefined
         ? 'ยังไม่มีคะแนนครบ'
         : change > 0 ? `ดีขึ้น ${change}` : change < 0 ? `เพิ่มขึ้น ${Math.abs(change)}` : 'คงเดิม';
       const modalities = (row.treatment_modalities || []).map(item => `<span>${esc(item)}</span>`);
-      const lots = (row.herbal_lots || []).map(item => `<span>Lot ${esc(item)}</span>`);
+      // Legacy search includes pending allocations: these chips are not dispensing proof.
+      const lots = (row.herbal_lots || []).map(item => `<span>Lot ที่เชื่อมไว้ (ยังไม่ยืนยันการจ่าย): ${esc(item)}</span>`);
+      if (typeof row.encounter_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.encounter_id)) {
+        lots.push(`<div><button type="button" data-outcome-trace="${index}">ตรวจหลักฐานล็อตยาของ Encounter</button><div data-trace-result role="status" aria-live="polite"></div></div>`);
+      }
       const followup = row.next_followup_at
         ? `<p class="outcome-followup"><b>นัดติดตาม:</b> ${esc(dateLabel(row.next_followup_at))}${row.followup_status ? ` • ${esc(row.followup_status)}` : ''}</p>`
         : row.latest_followup_date
@@ -73,6 +110,10 @@
   }
 
   async function loadOutcomes() {
+    if (accountBlocked) return;
+    const version = ++outcomeRequestVersion;
+    clearResults('รอข้อมูล');
+    try {
     const range = rangeArgs();
     const query = $('#outcomes-query').value.trim();
     $('#outcomes-meta').textContent = 'กำลังอ่านข้อมูลผลลัพธ์…';
@@ -85,10 +126,91 @@
         p_offset: 0
       })
     ]);
+    if (version !== outcomeRequestVersion) return;
     if (summaryResult.error) throw summaryResult.error;
     if (searchResult.error) throw searchResult.error;
     renderSummary(summaryRow(summaryResult.data));
     renderRows(searchResult.data || []);
+    } catch (error) {
+      if (version === outcomeRequestVersion) fail(error);
+    }
+  }
+
+  async function loadLotTrace(button) {
+    if (accountBlocked || button.disabled || !$('#outcomes-list').contains(button)) return;
+    const index = Number(button.dataset.outcomeTrace);
+    const encounter = visibleEncounters[index];
+    if (!Number.isInteger(index) || !encounter) return;
+    const target = button.parentElement.querySelector('[data-trace-result]');
+    if (!target) return;
+    const version = outcomeRequestVersion;
+    const current = () => !accountBlocked && version === outcomeRequestVersion
+      && visibleEncounters[index] === encounter && $('#outcomes-list').contains(button);
+    button.disabled = true;
+    target.textContent = 'กำลังตรวจหลักฐาน…';
+    try {
+      const { data, error } = await db.rpc('clinical_outcome_lot_trace', { p_encounter_id: encounter });
+      if (!current()) return;
+      if (error?.message === 'OUTCOME_TRACE_RESULT_LIMIT_EXCEEDED') throw new Error('OUTCOME_TRACE_RESULT_LIMIT_EXCEEDED');
+      if (error || !data || data.encounter_id !== encounter || data.scope !== 'encounter'
+        || !Array.isArray(data.entries) || data.entries.length > 1000
+        || !Number.isSafeInteger(data.link_conflict_count) || data.link_conflict_count < 0
+        || data.entries.some(entry => !entry || typeof entry !== 'object'
+          || ['state', 'stock_state', 'production_state', 'prescription_quantity_state', 'receipt_quantity_state']
+            .some(key => typeof entry[key] !== 'string'))) throw new Error('TRACE_UNAVAILABLE');
+      const labels = {
+        recorded_dispense: 'มีบันทึกการจ่าย', not_dispensed: 'ยังไม่ยืนยันการจ่าย',
+        awaiting_pharmacy: 'รอห้องยา', quantity_missing: 'ไม่พบจำนวนที่จ่าย',
+        patient_link_conflict: 'ใบสั่งยาเชื่อมผู้รับบริการไม่ตรงกับ Encounter',
+        prescription_items_missing: 'ไม่พบรายการยาในใบสั่งที่ยังใช้งาน',
+        dispensing_item_missing: 'ไม่พบรายการจ่ายยาที่เชื่อมไว้',
+        prescription_item_conflict: 'รายการจ่ายยาเชื่อมใบสั่งยาไม่ตรง',
+        product_conflict: 'ผลิตภัณฑ์ในล็อตไม่ตรงกับใบสั่งยา',
+        unit_conflict: 'หน่วยยาในใบสั่งและล็อตไม่ตรงกัน',
+        prescribed_quantity_invalid: 'จำนวนยาในใบสั่งหรือยอดจ่ายไม่ถูกต้อง',
+        dispensed_quantity_invalid: 'จำนวนจ่ายยาเป็นตัวเลขที่ไม่ถูกต้อง',
+        stock_quantity_invalid: 'ยอดรายการสต็อกเป็นตัวเลขที่ไม่ถูกต้อง',
+        lot_missing_or_out_of_scope: 'ไม่พบล็อตที่ตรวจได้ตามสิทธิ์',
+        movement_missing: 'ไม่พบรายการตัดสต็อก', quantity_mismatch: 'ยอดสต็อกไม่ตรง',
+        movement_type_conflict: 'ประเภทหรือทิศทางรายการสต็อกไม่ตรงกับการจ่ายยา',
+        matched_order_lot_quantity: 'ยอดตัดสต็อกตรงกับใบจ่ายและล็อตนี้',
+        internal_qc_recorded: 'มีบันทึก QC ภายใน (ไม่ใช่ COA)',
+        production_source_unavailable: 'ไม่พบหลักฐานการผลิตที่เชื่อมไว้',
+        production_order_missing_or_out_of_scope: 'ไม่พบใบผลิตที่ตรวจได้ตามสิทธิ์',
+        production_product_conflict: 'ผลิตภัณฑ์ในใบผลิตไม่ตรงกับล็อต',
+        production_unit_conflict: 'หน่วยในใบผลิตหรือใบรับสินค้าไม่ตรงกับล็อต',
+        formula_missing_or_out_of_scope: 'ไม่พบสูตรที่ตรวจได้ตามสิทธิ์',
+        formula_product_conflict: 'ผลิตภัณฑ์ในสูตรไม่ตรงกับล็อต',
+        production_not_released: 'ใบผลิตยังไม่อยู่ในสถานะปล่อยผ่าน',
+        qc_missing: 'ไม่พบผลตรวจ QC',
+        qc_not_passed: 'ผลตรวจ QC ยังไม่ผ่าน',
+        qc_approval_missing: 'ขาดผู้อนุมัติหรือเวลาที่อนุมัติ QC',
+        receipt_context_conflict: 'ผลิตภัณฑ์หรือหน่วยรับสินค้าไม่ตรงกับล็อต',
+        actual_production_quantity_missing: 'ไม่พบยอดผลิตจริงที่ถูกต้อง',
+        receipt_quantity_invalid: 'ยอดรับสินค้าหรือยอดรับล็อตไม่ถูกต้อง',
+        production_receipt_quantity_mismatch: 'ยอดรับสินค้าไม่ตรงกับยอดผลิตจริง',
+        lot_receipt_quantity_mismatch: 'ยอดรับล็อตไม่ตรงกับใบรับสินค้า',
+        matched_production_receipt_quantity: 'ยอดผลิตจริง ใบรับสินค้า และยอดรับล็อตตรงกัน',
+        matched_prescribed_quantity: 'จำนวนตรงใบสั่งยา',
+        under_prescribed_quantity: 'จ่ายน้อยกว่าจำนวนที่สั่ง',
+        over_prescribed_quantity: 'จ่ายเกินจำนวนที่สั่ง',
+        not_evaluable: 'ยังประเมินไม่ได้'
+      };
+      const label = state => esc(Object.hasOwn(labels, state) ? labels[state] : `ต้องตรวจสอบ: ${state}`);
+      target.innerHTML = `<p>หลักฐานบางส่วนเท่านั้น — ไม่ใช่การรับรองครบถ้วนหรือยืนยันผลจากยา</p>
+        <p>ความขัดแย้งในการเชื่อมรายการ: ${data.link_conflict_count}</p>`
+        + (data.entries.length ? `<ul>${data.entries.map(entry => `<li>${label(entry.state)}
+          • ล็อต: ${esc(entry.lot_number || 'ยังไม่มีหลักฐานล็อตที่ยืนยัน')}
+          • ${label(entry.prescription_quantity_state)} • ${label(entry.stock_state)}
+          • ${label(entry.production_state)} • ${label(entry.receipt_quantity_state)}</li>`).join('')}</ul>` : '<p>ไม่พบเส้นทางใบสั่งยาในผลตรวจนี้ ไม่ได้ยืนยันว่าหลักฐานครบ</p>')
+        + '<p>สูตรเป็นข้อมูลปัจจุบัน ไม่ใช่สำเนารุ่นตอนผลิต; ยังไม่ตรวจ COA ภายนอกและไม่สรุปเหตุของผลการรักษา</p>';
+    } catch (error) {
+      if (current()) target.textContent = error?.message === 'OUTCOME_TRACE_RESULT_LIMIT_EXCEEDED'
+        ? 'ยังตรวจไม่ได้ — รายการเชื่อมโยงเกินขอบเขต 1,000 รายการ กรุณาให้ผู้ดูแลตรวจด้วยรายงานแยก ระบบไม่ได้แสดงผลบางส่วนหรือรับรองว่าหลักฐานครบ'
+        : 'ยังตรวจไม่ได้ — ตัวตรวจอาจยังไม่เปิดใช้ ไม่มีสิทธิ์ หรือโหลดไม่สำเร็จ ไม่ถือว่าหลักฐานผ่าน';
+    } finally {
+      if (current()) button.disabled = false;
+    }
   }
 
   function fail(error) {
@@ -103,7 +225,12 @@
       db = runtime.getDb();
       session = await runtime.getSession();
       if (!session) { location.replace('/login.html'); return; }
+      const actor = session.user.id;
+      db.auth.onAuthStateChange((event, next) => {
+        if (event === 'SIGNED_OUT' || !next?.user || next.user.id !== actor) blockAccount();
+      });
       profile = await runtime.getProfile(session.user.id);
+      if (accountBlocked) return;
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'clinical_read')) {
         throw new Error('บัญชีนี้ไม่มีสิทธิ์อ่านผลลัพธ์ทางคลินิก — ข้อมูลผู้รับบริการเปิดเฉพาะผู้รักษาและ Super Admin');
@@ -123,11 +250,16 @@
     event.preventDefault();
     loadOutcomes().catch(fail);
   });
+  $('#outcomes-list').addEventListener('click', event => {
+    const button = event.target.closest?.('[data-outcome-trace]');
+    if (button) void loadLotTrace(button);
+  });
   $('#outcomes-reset').addEventListener('click', () => {
     setDefaultRange();
     loadOutcomes().catch(fail);
   });
   $('#logout').addEventListener('click', async () => {
+    blockAccount();
     if (db) await db.auth.signOut();
     location.replace('/login.html');
   });

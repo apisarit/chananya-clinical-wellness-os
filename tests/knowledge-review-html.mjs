@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { captureKnowledgeSourceCandidate } from '../scripts/knowledge-source-candidate.mjs';
+import { renderKnowledgeReview } from '../scripts/render-knowledge-review.mjs';
+const packet = await captureKnowledgeSourceCandidate();
+const html = renderKnowledgeReview(packet);
+assert.equal((html.match(/class="knowledge-row"/g) || []).length, 113);
+assert.ok(html.includes(packet.candidateId));
+assert.ok(html.includes('ยังไม่อนุมัติให้เผยแพร่หรือใช้ทางคลินิก'));
+assert.ok(html.includes('ยังไม่ได้เทียบกับ workbook ต้นฉบับ'));
+assert.ok(html.includes('content="default-src'));
+assert.doesNotMatch(html, /<script\b|<form\b|<iframe\b|<img\b|\bonclick=/i);
+assert.doesNotMatch(html, /(?:src|href)=["']https?:/i);
+assert.match(html, /<html lang="th">/);
+assert.match(html, /aria-label="หมวดข้อมูล"/);
+assert.equal((html.match(/class="file"/g) || []).length, 8);
+const modified = structuredClone(packet);
+modified.files[0].sha256 = '0'.repeat(64);
+assert.throws(() => renderKnowledgeReview(modified), /CONTENT_MISMATCH/);
+assert.throws(() => renderKnowledgeReview({ publicationAuthorized: true }), /INVALID_SHAPE/,
+  'renderer must not trust a pre-written report or approval object');
+console.log('Knowledge review HTML passed: verified source only, all rows represented, explicit non-approval, offline no-script/no-form surface.');
