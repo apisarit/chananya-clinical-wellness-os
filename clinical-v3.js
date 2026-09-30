@@ -24,44 +24,10 @@
   let prescriptionCartVersion = 0;
   let prescriptionSubmitting = false;
   let encounterLoadVersion = 0;
-  let referenceLoadVersion = 0;
   let hybridIdentityReady = false;
   let atomicHandoffsReady = false;
-  let accountBlocked = false;
-
-  function blockClinicalAccess() {
-    if (accountBlocked) return;
-    accountBlocked = true;
-    referenceLoadVersion += 1;
-    encounterLoadVersion += 1;
-    currentEncounter = null;
-    patients = []; products = []; encounters = []; prescriptionCart = [];
-    const app = $('#app');
-    app.classList.add('hidden');
-    app.inert = true;
-    $$('#app input, #app textarea, #app select').forEach(control => { control.value = ''; control.disabled = true; });
-    $$('#app select').forEach(control => { control.textContent = ''; });
-    ['#exam-list','#diagnosis-status','#plan-status','#opd-session-list','#rx-cart','#rx-handoff-receipt'].forEach(selector => {
-      const element = $(selector); if (element) element.textContent = '';
-    });
-    $$('dialog[open]').forEach(dialog => { dialog.close(); dialog.textContent = ''; });
-    $('#boot').classList.remove('hidden');
-    $('#boot-error').textContent = 'บัญชีหรือ session เปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่ ก่อนทำรายการต่อ';
-  }
-
-  function watchClinicalSession() {
-    const originalActor = session.user.id;
-    return db.auth.onAuthStateChange((event, nextSession) => {
-      if (event === 'SIGNED_OUT' || !nextSession?.user?.id || nextSession.user.id !== originalActor) blockClinicalAccess();
-    });
-  }
-
-  function requireClinicalSession() {
-    if (accountBlocked) throw new Error('บัญชีเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่');
-  }
 
   function toast(message) {
-    if (accountBlocked) return;
     const element = $('#toast');
     element.textContent = message;
     element.classList.add('show');
@@ -69,7 +35,6 @@
   }
 
   function fail(error) {
-    if (accountBlocked) return;
     console.error(error);
     alert(error?.message || String(error));
   }
@@ -95,7 +60,6 @@
   }
 
   function syncPrescriptionControls() {
-    if (accountBlocked) return;
     const form = $('#prescription-form');
     const retryLocked = Boolean(form?.dataset.requestKey);
     ['#encounter', '#rx-encounter'].forEach(selector => {
@@ -138,39 +102,15 @@
   }
 
   async function loadReferences(preferredEncounter) {
-    if (accountBlocked) return;
-    const version = ++referenceLoadVersion;
-    const actorSession = session, actorProfile = profile;
-    const actorId = session?.user?.id, clinicId = profile?.clinic_id;
-    const isCurrent = () => !accountBlocked && version === referenceLoadVersion && session === actorSession && profile === actorProfile
-      && session?.user?.id === actorId && profile?.clinic_id === clinicId;
     const [patientResult, productResult, encounterResult] = await Promise.all([
-      db.from('patients').select('id,hn,prefix,first_name,last_name').order('created_at', { ascending: false }).limit(500),
+      db.from('patients').select('*').order('created_at', { ascending: false }).limit(500),
       db.from('products').select('*').eq('active', true).order('name_th'),
       db.from('encounters').select('id,encounter_no,patient_id,chief_complaint,thai_diagnosis,started_at,status').order('started_at', { ascending: false }).limit(250)
     ]);
-    if (!isCurrent()) return;
     [patientResult, productResult, encounterResult].forEach(result => { if (result.error) throw result.error; });
-    const referenceEncounters = [...(encounterResult.data || [])];
-    if (preferredEncounter && !referenceEncounters.some(item => item.id === preferredEncounter)) {
-      const linkedEncounter = await db.from('encounters').select('id,encounter_no,patient_id,chief_complaint,thai_diagnosis,started_at,status').eq('id', preferredEncounter).maybeSingle();
-      if (!isCurrent()) return;
-      if (linkedEncounter.error) throw linkedEncounter.error;
-      if (!linkedEncounter.data || linkedEncounter.data.id !== preferredEncounter) throw new Error('ไม่พบ Encounter ที่ร้องขอ หรือบัญชีนี้ไม่มีสิทธิ์อ่าน');
-      referenceEncounters.unshift(linkedEncounter.data);
-    }
-    const referencePatients = patientResult.data || [];
-    const knownPatientIds = new Set(referencePatients.map(item => item.id));
-    const missingPatientIds = [...new Set(referenceEncounters.map(item => item.patient_id).filter(id => id && !knownPatientIds.has(id)))];
-    if (missingPatientIds.length) {
-      const linkedPatients = await db.from('patients').select('id,hn,prefix,first_name,last_name').in('id', missingPatientIds);
-      if (!isCurrent()) return;
-      if (linkedPatients.error) throw linkedPatients.error;
-      referencePatients.push(...(linkedPatients.data || []));
-    }
-    patients = referencePatients;
+    patients = patientResult.data || [];
     products = productResult.data || [];
-    encounters = referenceEncounters;
+    encounters = encounterResult.data || [];
 
     $('#enc-patient').innerHTML = optionRows(patients, item => `${item.hn || '-'} — ${patientName(item.id)}`);
     $('#encounter').innerHTML = '<option value="">เลือก Encounter</option>' + encounters.map(item => `<option value="${item.id}">${esc(item.encounter_no || '-')} — ${esc(patientName(item.patient_id))} — ${esc(item.chief_complaint || '-')}</option>`).join('');
@@ -183,11 +123,10 @@
       $('#rx-encounter').value = preferredEncounter;
       await selectEncounter(preferredEncounter);
     }
-    if (isCurrent()) window.dispatchEvent(new CustomEvent('chananya:clinical-references-rendered'));
+    window.dispatchEvent(new CustomEvent('chananya:clinical-references-rendered'));
   }
 
   async function selectEncounter(encounterId) {
-    requireClinicalSession();
     const nextEncounter = encounterId || null;
     if (nextEncounter !== currentEncounter && prescriptionSubmitting) {
       $('#encounter').value = currentEncounter || '';
@@ -227,39 +166,26 @@
   }
 
   async function loadEncounter() {
-    if (accountBlocked) return;
     const loadVersion = ++encounterLoadVersion;
     const encounterId = currentEncounter;
     renderPrescriptionReceipt(null);
-    const queryResults = await Promise.all([
+    const [examResult, diagnosisResult, planResult, painResult, historyResult, sessionResult, prescriptionResult, signoffResult] = await Promise.all([
       db.from('clinical_examination_findings').select('*').eq('encounter_id', encounterId).order('sequence_no'),
       db.from('ttm_structured_diagnoses').select('*').eq('encounter_id', encounterId).maybeSingle(),
       db.from('clinical_treatment_plans').select('*').eq('encounter_id', encounterId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       db.from('body_pain_points').select('*').eq('encounter_id', encounterId).order('recorded_at', { ascending: false }),
       db.from('ttm_opd_histories').select('id').eq('encounter_id', encounterId).maybeSingle(),
       db.from('clinical_treatment_sessions').select('id').eq('encounter_id', encounterId),
-      db.from('prescriptions').select('id,prescription_no,prescribed_at,status,clinical_notes,sent_to_pharmacy_at').eq('encounter_id', encounterId).order('prescribed_at', { ascending: false }),
+      db.from('prescriptions').select('id,prescription_no,prescribed_at,status,clinical_notes,sent_to_pharmacy_at').eq('encounter_id', encounterId).order('prescribed_at', { ascending: false }).limit(1),
       db.from('clinical_record_signoffs').select('id,lock_record').eq('encounter_id', encounterId).eq('record_section', 'complete_record').maybeSingle()
     ]);
-    if (loadVersion !== encounterLoadVersion || encounterId !== currentEncounter) return;
-    const [examResult, diagnosisResult, planResult, painResult, historyResult, sessionResult, prescriptionResult, signoffResult] = queryResults;
-    if (prescriptionResult.error) {
-      renderPrescriptionReceipt([], [], prescriptionResult.error);
-      throw prescriptionResult.error;
-    }
     [examResult, diagnosisResult, planResult, painResult, historyResult, sessionResult, prescriptionResult, signoffResult].forEach(result => { if (result.error) throw result.error; });
-    const prescriptions = prescriptionResult.data || [];
-    let orders = [];
-    if (prescriptions.length) {
-      const orderResult = await db.from('dispensing_orders').select('id,prescription_id,queue_number,status,created_at').in('prescription_id', prescriptions.map(item => item.id)).order('created_at', { ascending: false });
-      if (orderResult.error) {
-        if (loadVersion === encounterLoadVersion && encounterId === currentEncounter) {
-          renderPrescriptionReceipt([], [], orderResult.error);
-        }
-        if (loadVersion !== encounterLoadVersion || encounterId !== currentEncounter) return;
-        throw orderResult.error;
-      }
-      orders = orderResult.data || [];
+    const prescription = prescriptionResult.data?.[0] || null;
+    let order = null;
+    if (prescription) {
+      const orderResult = await db.from('dispensing_orders').select('id,queue_number,status,created_at').eq('prescription_id', prescription.id).order('created_at', { ascending: false }).limit(1);
+      if (orderResult.error) throw orderResult.error;
+      order = orderResult.data?.[0] || null;
     }
     if (loadVersion !== encounterLoadVersion || encounterId !== currentEncounter) return;
     renderExam(examResult.data || []);
@@ -269,9 +195,9 @@
     markStep('exam', (examResult.data || []).length > 0 || (painResult.data || []).length > 0);
     markStep('diagnosis', Boolean(diagnosisResult.data));
     markStep('treatment', Boolean(planResult.data) || (sessionResult.data || []).length > 0);
-    markStep('prescription', prescriptions.length > 0);
+    markStep('prescription', Boolean(prescription));
     markStep('signoff', Boolean(signoffResult.data?.lock_record));
-    renderPrescriptionReceipt(prescriptions, orders);
+    renderPrescriptionReceipt(prescription, order);
   }
 
   function renderExam(rows) {
@@ -287,139 +213,23 @@
     $('#plan-status').innerHTML = row ? `<b>${esc(row.goal_1)}</b><br>ความถี่ ${esc(row.frequency_per_week || '-')} ครั้ง/สัปดาห์ • ${esc(row.planned_sessions || '-')} ครั้ง<br><small>${esc((row.treatment_modalities || []).join(', '))}</small>` : 'ยังไม่มีแผนการรักษา';
   }
 
-  function renderPrescriptionReceipt(prescription, order = null, error = null) {
+  function renderPrescriptionReceipt(prescription, order = null) {
     const receipt = $('#rx-handoff-receipt');
     if (!receipt) return;
-    if (!prescription && !error) {
+    if (!prescription) {
       receipt.hidden = true;
       receipt.innerHTML = '';
       return;
     }
     receipt.hidden = false;
-    if (error) {
-      receipt.innerHTML = `<b>โหลดประวัติใบสั่งยา/คิวห้องยาไม่สำเร็จ</b><br><small>${esc(error.message || 'กรุณาลองใหม่และตรวจสอบสิทธิ์ของ Encounter')}</small>`;
-      return;
-    }
-    if (Array.isArray(prescription)) {
-      const prescriptions = prescription;
-      const orders = Array.isArray(order) ? order : [];
-      if (!prescriptions.length) {
-        receipt.innerHTML = '<span class="muted">ยังไม่มีใบสั่งยาใน Encounter นี้</span>';
-        return;
-      }
-      const ordersByPrescription = new Map();
-      orders.forEach(item => {
-        const list = ordersByPrescription.get(item.prescription_id) || [];
-        list.push(item);
-        ordersByPrescription.set(item.prescription_id, list);
-      });
-      receipt.innerHTML = prescriptions.flatMap(item => {
-        const linkedOrders = ordersByPrescription.get(item.id) || [];
-        if (!linkedOrders.length) return [`<article class="handoff-receipt"><b>บันทึกใบสั่งยาแล้ว แต่ไม่พบคิวห้องยา</b><br>เลขที่ใบสั่งยา: <strong>${esc(item.prescription_no || '-')}</strong><br><small>สถานะใบสั่งยา ${esc(item.status || '-')} · หยุดขั้นตอนและให้ผู้ดูแลตรวจสอบ atomic handoff</small></article>`];
-        return linkedOrders.map(currentOrder => `<article class="handoff-receipt"><b>ส่งห้องยาแล้ว</b><br>เลขที่ใบสั่งยา: <strong>${esc(item.prescription_no || '-')}</strong> · คิวห้องยา: <strong>${esc(currentOrder.queue_number || '-')}</strong><br><small>สถานะใบสั่งยา ${esc(item.status || '-')} · สถานะคิว ${esc(currentOrder.status || '-')}</small></article>`);
-      }).join('<hr>');
-      appendClarificationButtons(receipt, orders);
-      return;
-    }
     if (!order) {
       receipt.innerHTML = `<b>ใบสั่งยาถูกบันทึก แต่ไม่พบคิวห้องยา</b><br>เลขที่ใบสั่งยา: <strong>${esc(prescription.prescription_no || '-')}</strong><br><small>หยุดขั้นตอนและให้ผู้ดูแลตรวจสอบ atomic handoff ก่อนดำเนินการต่อ</small>`;
       return;
     }
     receipt.innerHTML = `<b>ส่งห้องยาแล้ว</b><br>เลขที่ใบสั่งยา: <strong>${esc(prescription.prescription_no || '-')}</strong> · คิวห้องยา: <strong>${esc(order.queue_number || '-')}</strong><br><small>สถานะใบสั่งยา ${esc(prescription.status || '-')} · สถานะคิว ${esc(order.status || '-')}</small>`;
-    appendClarificationButtons(receipt, [order]);
-  }
-
-  function appendClarificationButtons(receipt, orders) {
-    orders.forEach(order => {
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'btn';
-      button.textContent = `ประวัติคำถามห้องยา ${order.queue_number || ''}`;
-      const encounterId=currentEncounter;
-      button.onclick = () => window.CnyosClarificationHistory.open({ db, orderId: order.id, actorId: session?.user?.id, mode: 'prescriber', label: `คิวห้องยา ${order.queue_number || ''}`,
-        onReplace: selection=>openReplacementDraft({...selection,encounterId}).catch(fail) });
-      receipt.append(button);
-    });
-  }
-
-  async function openReplacementDraft({ticketId,orderId,encounterId}) {
-    requireAtomicHandoffs();
-    if(prescriptionSubmitting||!prescriptionCart.length||currentEncounter!==encounterId
-      ||prescriptionCartEncounterId!==encounterId||$('#rx-encounter').value!==encounterId) {
-      throw new Error('กรุณาเตรียมรายการยาทดแทนใน Encounter เดิมก่อน แล้วเปิดประวัติคำถามห้องยาอีกครั้ง');
-    }
-    if($('#prescription-form').dataset.requestKey)throw new Error('ต้องตรวจผลส่งใบสั่งยาเดิมก่อนออกใบทดแทน');
-    const actorId=session?.user?.id;
-    const version=prescriptionCartVersion;
-    const items=prescriptionCart.map(({product_name,status,...item})=>({...item}));
-    const notes=$('#rx-clinical-notes').value.trim()||null;
-    const dialog=document.createElement('dialog');dialog.className='card';
-    dialog.setAttribute('aria-label','ตรวจรายการใบสั่งยาทดแทน');
-    const add=(tag,text)=>{const el=document.createElement(tag);el.textContent=text;dialog.append(el);return el;};
-    add('h2','ตรวจรายการใบสั่งยาทดแทน');
-    add('p','ใบเดิมจะถูกยกเลิกเมื่อบันทึกสำเร็จ ห้องยาต้องยืนยันและตรวจทานใบใหม่ก่อนจ่ายยา');
-    for(const item of prescriptionCart)add('p',`${item.product_name} • ${item.quantity_prescribed} ${item.unit} • ${item.dose||''} • ${item.frequency||''} • ${item.route||''} • ${item.duration||''} • ${item.instructions||''}`);
-    add('p',`หมายเหตุ: ${notes||'ไม่มี'}`);
-    const label=add('label','เหตุผลการออกใบทดแทน');
-    const reason=document.createElement('textarea');reason.maxLength=2000;label.append(reason);
-    const message=add('p','ยังไม่ได้ส่งข้อมูล');message.setAttribute('role','status');
-    const submit=add('button','ยืนยันออกใบทดแทน');submit.type='button';submit.className='btn';
-    const recover=add('button','ตรวจผลคำขอเดิม');recover.type='button';recover.className='btn';recover.hidden=true;
-    const revise=add('button','กลับไปแก้รายการที่ถูกปฏิเสธ');revise.type='button';revise.className='btn';revise.hidden=true;
-    const close=add('button','ปิด');close.type='button';
-    let busy=false,done=false,decision=null,disposed=false;
-    const validContext=()=>currentEncounter===encounterId&&prescriptionCartEncounterId===encounterId
-      &&prescriptionCartVersion===version&&session?.user?.id===actorId&&$('#rx-encounter').value===encounterId;
-    const run=async readOnly=>{
-      if(busy||done||disposed)return;
-      busy=true;submit.disabled=true;recover.disabled=true;reason.disabled=true;
-      try {
-        if(!validContext())throw new Error('บริบท Encounter หรือรายการยาเปลี่ยนแล้ว หยุดส่งคำขอ');
-        setPrescriptionSubmitting(true);
-        if(!decision)decision=await window.CnyosReplacementAction.prepare({db,actorId,ticketId,oldOrderId:orderId,reason:reason.value,notes,items});
-        if(!validContext())throw new Error('บริบทเปลี่ยนระหว่างเตรียมคำขอ ตรวจผลก่อนดำเนินการต่อ');
-        setPrescriptionSubmitting(true);
-        const receipt=await (readOnly?decision.recover():decision.submit());
-        done=true;
-        if(validContext()) {
-          clearPrescriptionDraft();
-          if(!disposed)message.textContent=`บันทึกและอ่านกลับแล้ว • คิว ${receipt.new_order_id} • ห้องยายังต้องตรวจทาน`;
-          await loadEncounter();
-        } else if(!disposed) {
-          message.textContent='บริบทเปลี่ยนแล้ว ไม่อัปเดตหน้าปัจจุบัน กรุณาเปิดประวัติคำขอในบัญชีและ Encounter เดิมเพื่อตรวจผล';
-        }
-      } catch(error) {
-        if(!disposed){
-          if(decision&&!validContext()) {
-            message.textContent='บริบทเปลี่ยนแล้ว ไม่อัปเดตหน้าปัจจุบัน กรุณาเปิดประวัติคำขอในบัญชีและ Encounter เดิมเพื่อตรวจผล';
-            revise.hidden=true;recover.hidden=true;
-          } else {
-            message.textContent=`ยังปิดงานไม่ได้: ${error.message}`;
-            revise.hidden=!decision?.canDiscard?.();
-            recover.hidden=!decision||!revise.hidden;
-          }
-        }
-      } finally {
-        busy=false;setPrescriptionSubmitting(false);
-        if(!disposed){submit.disabled=done||!validContext();recover.disabled=done||!validContext();reason.disabled=Boolean(decision)||!validContext();}
-      }
-    };
-    submit.onclick=()=>run(false);recover.onclick=()=>run(true);
-    const dispose=()=>{if(busy)return;disposed=true;dialog.remove();};
-    revise.onclick=()=>{
-      if(busy||disposed||!decision?.canDiscard?.())return;
-      if(!validContext()) {
-        message.textContent='บริบทเปลี่ยนแล้ว ห้ามล้างคำขอเดิม กรุณากลับไปตรวจในบัญชีและ Encounter เดิม';
-        return;
-      }
-      try {decision.discard();dispose();}
-      catch {message.textContent='ยังล้างคำขอที่ถูกปฏิเสธไม่ได้ หยุดสร้างรายการใหม่และตรวจผลเดิม';}
-    };
-    close.onclick=dispose;dialog.addEventListener('cancel',event=>{event.preventDefault();dispose();});
-    document.body.append(dialog);dialog.showModal();reason.focus();
   }
 
   async function removeRow(table, id) {
-    requireClinicalSession();
     if (!confirm('ยืนยันลบรายการนี้?')) return;
     const result = await db.from(table).delete().eq('id', id);
     if (result.error) throw result.error;
@@ -438,7 +248,6 @@
   }
 
   async function saveEncounter(event) {
-    requireClinicalSession();
     event.preventDefault();
     if (!hybridIdentityReady) {
       throw new Error('ฐานข้อมูลยังไม่เปิดใช้ Hybrid Patient Identity จึงหยุดการเปิด Encounter เพื่อป้องกันข้อมูลคัดกรองครึ่งชุด');
@@ -480,11 +289,9 @@
   }
 
   async function saveExam(event) {
-    requireClinicalSession();
     event.preventDefault();
     if (!currentEncounter) throw new Error('กรุณาเลือก Encounter');
     const countResult = await db.from('clinical_examination_findings').select('id', { count: 'exact', head: true }).eq('encounter_id', currentEncounter);
-    requireClinicalSession();
     if (countResult.error) throw countResult.error;
     const result = await db.from('clinical_examination_findings').insert({
       encounter_id: currentEncounter, sequence_no: (countResult.count || 0) + 1,
@@ -503,7 +310,6 @@
   }
 
   async function savePlan(event) {
-    requireClinicalSession();
     event.preventDefault();
     if (!currentEncounter) throw new Error('กรุณาเลือก Encounter');
     const result = await db.from('clinical_treatment_plans').insert({
@@ -536,7 +342,6 @@
   }
 
   function addPrescriptionItem(event) {
-    requireClinicalSession();
     event.preventDefault();
     const encounterId = $('#rx-encounter').value;
     if (!encounterId || encounterId !== currentEncounter) throw new Error('กรุณาเลือก Encounter ที่กำลังเปิดก่อนเพิ่มรายการยา');
@@ -564,12 +369,8 @@
   }
 
   async function sendPrescription(event) {
-    requireClinicalSession();
     event.preventDefault();
     requireAtomicHandoffs();
-    if(window.CnyosReplacementAction?.hasPending({actorId:session?.user?.id})) {
-      throw new Error('มีคำขอใบทดแทนที่ยังยืนยันผลไม่ได้ในแท็บนี้ กรุณาเปิดประวัติคำถามห้องยาและตรวจผลเดิมก่อนออกใบใหม่');
-    }
     const encounterId = $('#rx-encounter').value;
     const encounter = encounters.find(item => item.id === encounterId);
     if (!encounter) throw new Error('กรุณาเลือก Encounter');
@@ -591,7 +392,6 @@
           p_clinical_notes: $('#rx-clinical-notes').value.trim() || null,
           p_items: itemSnapshot
         });
-        requireClinicalSession();
         if (result.error) throw result.error;
         const receipt = Array.isArray(result.data) ? result.data[0] : result.data;
         if (!receipt?.prescription_no || !receipt?.queue_number) throw new Error('ระบบส่งใบสั่งยาแล้วแต่ไม่พบเลขที่ใบสั่งยา/เลขคิว จึงหยุดการยืนยันผล');
@@ -599,7 +399,6 @@
           db.from('prescriptions').select('id,prescription_no,status').eq('id', receipt.prescription_id).maybeSingle(),
           db.from('dispensing_orders').select('id,queue_number,status').eq('id', receipt.dispensing_order_id).maybeSingle()
         ]);
-        requireClinicalSession();
         if (prescriptionResult.error) throw prescriptionResult.error;
         if (orderResult.error) throw orderResult.error;
         if (!prescriptionResult.data || !orderResult.data
@@ -614,9 +413,6 @@
         }
         verifiedReadback = { prescription: prescriptionResult.data, order: orderResult.data };
       } catch (error) {
-        if (String(error.message).includes('PRESCRIPTION_ENCOUNTER_ALREADY_BILLED')) {
-          throw new Error('Encounter นี้ออกบิลแล้ว ไม่สามารถเพิ่มใบสั่งยาใหม่ได้ กรุณาประสานฝ่ายการเงินก่อนแก้รายการ หรือเปิด Encounter ใหม่สำหรับบริการครั้งใหม่ รายการที่กรอกยังอยู่');
-        }
         throw new Error(`ยังปิดงานส่งใบสั่งยาไม่ได้ ระบบเก็บรายการเดิมและ request key ไว้ให้ลองซ้ำอย่างปลอดภัย (${error.message})`);
       }
       delete event.currentTarget.dataset.requestKey;
@@ -634,8 +430,9 @@
         toast(`ส่งใบสั่งยาสำเร็จ • คิว ${verifiedReadback.order.queue_number} • รีเฟรชข้อมูลล่าสุดไม่สำเร็จ`);
         return;
       }
-      // A successful refresh renders the complete encounter history. Do not
-      // replace it with the single latest receipt that was returned by the RPC.
+      if (currentEncounter === encounterId) {
+        renderPrescriptionReceipt(verifiedReadback.prescription, verifiedReadback.order);
+      }
       toast(`ส่งใบสั่งยาไป Pharmacy แล้ว • คิว ${verifiedReadback.order.queue_number}`);
     } finally {
       setPrescriptionSubmitting(false);
@@ -649,9 +446,7 @@
       db = runtime.getDb();
       session = await runtime.getSession();
       if (!session) { location.replace('/login.html'); return; }
-      watchClinicalSession();
       profile = await runtime.getProfile(session.user.id);
-      if (accountBlocked) return;
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'clinical_write')) throw new Error('บัญชีนี้ไม่มีสิทธิ์บันทึกเวชระเบียน');
       window.ChananyaShell?.mount({ profile, session, active: 'clinical' });
@@ -663,7 +458,6 @@
       $('#prescription-form button').disabled = !atomicHandoffsReady;
       const requested = new URL(location.href).searchParams.get('encounter');
       await loadReferences(requested);
-      if (accountBlocked) return;
       renderPrescriptionCart();
       const requestedStep = new URL(location.href).searchParams.get('step');
       if (requestedStep) setStep(requestedStep);
@@ -693,16 +487,6 @@
     if (currentEncounter && (!event.detail?.encounterId || event.detail.encounterId === currentEncounter)) loadEncounter().catch(fail);
   });
   window.addEventListener('chananya:signoff-changed', event => { markStep('signoff', Boolean(event.detail?.locked)); });
-  // Never restore a previously authorized clinical workspace from browser history.
-  window.addEventListener('pagehide', event => {
-    if (event.persisted) blockClinicalAccess();
-  });
-  window.addEventListener('pageshow', event => {
-    if (event.persisted) {
-      blockClinicalAccess();
-      location.reload();
-    }
-  });
   renderPrescriptionCart();
   init();
 })();

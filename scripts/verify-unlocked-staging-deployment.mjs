@@ -73,9 +73,9 @@ const luopanCsp = Object.freeze({
 });
 
 export const CNYOS_UNLOCKED_STAGING_IDENTITY = Object.freeze({
-  origin: 'https://cnyos.netlify.app',
-  hostname: 'cnyos.netlify.app',
-  siteId: '7da5e39e-580d-44f1-8623-605313e2fb2b',
+  origin: 'https://cnyos-clinical-staging.netlify.app',
+  hostname: 'cnyos-clinical-staging.netlify.app',
+  siteId: '887e058b-6e13-461f-b3c7-ae096b7046fe',
   deploymentId: 'chananya-clinical-staging',
   projectRef: 'hsmnjwxurlmsizndjlun',
   clinicId: '00000000-0000-4000-8000-00000000a001',

@@ -1,5 +1,3 @@
-import './restore-count-comparison.mjs';
-import './restore-set-cli.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,10 +5,8 @@ import { fileURLToPath } from 'node:url';
 import {
   BACKUP_DOMAINS,
   BACKUP_REQUIRED_TABLES,
-  BACKUP_HASHED_TABLES,
   BACKUP_SCHEMA_VERSION,
   encryptBackup,
-  decryptBackup,
   verifyBackupSet
 } from '../netlify/functions/_shared/database-backup.mjs';
 
@@ -34,8 +30,7 @@ function payload(domain, mutate = value => value) {
     filtered_tables: {},
     excluded_tables: [],
     recovery_model: { full_database_restore: 'managed database backup or PITR required' },
-    data,
-    table_sha256: Object.fromEntries(BACKUP_HASHED_TABLES[domain].map(table => [table, 'a'.repeat(64)]))
+    data
   });
 }
 
@@ -63,55 +58,6 @@ assert.equal(verified.total_rows, 1);
 assert.equal(verified.domains.patients.row_counts.patients, 1);
 assert.match(verified.restore_set_sha256, /^[0-9a-f]{64}$/);
 assert.equal(verified.requires_managed_database_restore, true);
-assert.equal(verified.domains.transactions.table_sha256.price_master_audit, 'a'.repeat(64));
-
-const clarificationTables=['cnyos_clarification_internal.tickets','cnyos_clarification_internal.clearances'];
-const v2 = BACKUP_DOMAINS.map((domain,index)=>envelope(domain,index+40,value=>{
-  value.schema_version='2026-09-26.2';
-  if(domain==='transactions') for(const table of clarificationTables) {
-    value.data[table]=[];
-    value.included_tables.push(table);
-    value.table_sha256[table]='b'.repeat(64);
-  }
-  return value;
-}));
-assert.throws(()=>verifyBackupSet(v2,key),/SCHEMA_VERSION_INVALID/);
-assert.equal(verifyBackupSet(v2,key,{schemaVersion:'2026-09-26.2'}).valid,true);
-assert.throws(()=>verifyBackupSet(envelopes,key,{schemaVersion:'2026-09-26.2'}),/SCHEMA_VERSION_INVALID/);
-for(const missing of clarificationTables) {
-  const candidate=[...v2];
-  const decoded=decryptBackup(candidate[3],key);
-  delete decoded.data[missing];
-  candidate[3]=envelope('transactions',60,value=>({...decoded}));
-  assert.throws(()=>verifyBackupSet(candidate,key,{schemaVersion:'2026-09-26.2'}),/REQUIRED_TABLE_MISSING/);
-  const hashMissing=decryptBackup(v2[3],key);
-  delete hashMissing.table_sha256[missing];
-  candidate[3]=envelope('transactions',61,value=>({...hashMissing}));
-  assert.throws(()=>verifyBackupSet(candidate,key,{schemaVersion:'2026-09-26.2'}),/TABLE_HASHES_MISSING/);
-}
-
-for (const [domain, tables] of Object.entries(BACKUP_HASHED_TABLES)) {
-  for (const table of tables) {
-    const index = BACKUP_DOMAINS.indexOf(domain);
-    const missingHash = envelope(domain, 14, value => {
-      delete value.table_sha256[table];
-      return value;
-    });
-    const candidate = [...envelopes];
-    candidate[index] = missingHash;
-    assert.throws(() => verifyBackupSet(candidate, key), /TABLE_HASHES_MISSING/);
-    candidate[index] = envelope(domain, 15, value => {
-      value.table_sha256[table] = 'not-a-hash';
-      return value;
-    });
-    assert.throws(() => verifyBackupSet(candidate, key), /TABLE_HASH_INVALID/);
-  }
-}
-const legacySchema = envelope('patients', 16, value => ({ ...value, schema_version: '2026-09-01.1' }));
-assert.equal(decryptBackup(legacySchema, key).schema_version, '2026-09-01.1',
-  'schema upgrade must not make historical encrypted envelopes unreadable');
-assert.throws(() => verifyBackupSet([legacySchema, ...envelopes.slice(1)], key), /SCHEMA_VERSION_INVALID/,
-  'legacy envelopes must not authorize a candidate restore lacking new financial provenance');
 
 assert.throws(() => verifyBackupSet(envelopes.slice(0, 3), key), /DOMAIN_COUNT_INVALID/);
 assert.throws(() => verifyBackupSet([...envelopes.slice(0, 3), envelopes[0]], key), /DUPLICATE_DOMAIN/);
@@ -144,8 +90,7 @@ const migration = [
   'supabase/migrations/202608282000_complete_clinical_backup_and_restore_evidence.sql',
   'supabase/migrations/202608291800_line_oa_operational_messaging.sql',
   'supabase/migrations/202608311800_owner_subscription_control.sql',
-  'supabase/migrations/202609010600_owner_drive_backup_evidence.sql',
-  'supabase/migrations/20260926114320_financial_backup_provenance.sql'
+  'supabase/migrations/202609010600_owner_drive_backup_evidence.sql'
 ].map(read).join('\n');
 for (const tables of Object.values(BACKUP_REQUIRED_TABLES)) {
   for (const table of tables) assert.match(migration, new RegExp(`'${table}'`), `${table} missing from backup migration`);

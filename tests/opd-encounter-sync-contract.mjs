@@ -38,7 +38,6 @@ const document = {
 const pending = [];
 const alerts = [];
 const db = {
-  auth: { onAuthStateChange() {} },
   failEncounters: new Set(),
   from(table) {
     const query = { table, encounter: null, mode: null, payload: null };
@@ -210,7 +209,6 @@ lateElements['#opd-session-form'].reset = () => {};
 const lateWindow = { listeners: {}, addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }, dispatchEvent(event) { for (const listener of this.listeners[event.type] || []) listener(event); } };
 const lateDocument = { readyState: 'complete', querySelector(selector) { return lateElements[selector] || null; }, querySelectorAll() { return []; }, addEventListener() {} };
 const lateDb = { from(table) { const chain = { select() { return this; }, eq() { return this; }, maybeSingle() { return Promise.resolve({ data: table === 'ttm_opd_histories' ? { accident_history: 'late-A' } : null, error: null }); }, order() { return Promise.resolve({ data: [], error: null }); }, upsert() { return Promise.resolve({ error: null }); } }; return chain; }, async rpc() { return { error: null }; } };
-lateDb.auth = { onAuthStateChange() {} };
 lateWindow.ChananyaRuntime = { getDb: () => lateDb, getSession: async () => ({ user: { id: 'late-user' } }) };
 vm.runInNewContext(source, { window: lateWindow, document: lateDocument, CustomEvent, console: { error() {}, log() {} }, alert() {} }, { filename: 'opd-workflow-empty-init.js' });
 await flush();

@@ -45,40 +45,10 @@
   let lastReasoning = null;
   let state = { mode: 'loading', concepts: [], sources: [], relations: [], rules: [] };
   let suggestions = [];
-  let queueRequest = 0;
-  let historyRequest = 0;
   let live = null;
   let selectedConceptId = null;
-  let accountBlocked = false;
-
-  function blockChangedAccount() {
-    if (accountBlocked) return;
-    accountBlocked = true;
-    session = null;
-    profile = null;
-    queueRequest++;
-    historyRequest++;
-    suggestions = [];
-    roleState = { effectiveRole: 'viewer', systemRole: 'staff' };
-    $('#app').inert = true;
-    $('#app').classList.add('hidden');
-    $('#ttm-suggestion-queue').replaceChildren();
-    $('#ttm-review-history').replaceChildren();
-    $('#boot').classList.remove('hidden');
-    $('#boot-error').textContent = 'บัญชีเปลี่ยนแล้ว กรุณาโหลดหน้าใหม่เพื่อตรวจสิทธิ์ หากส่งคำขอไปแล้วให้บัญชีเดิมตรวจผลก่อนส่งซ้ำ';
-    // Keep pending request metadata. Do not call provider APIs under its auth lock.
-    setTimeout(() => live?.stop(), 0);
-  }
-
-  function watchAccount() {
-    db.auth.onAuthStateChange((event, nextSession) => {
-      if (accountBlocked) return;
-      if (event === 'SIGNED_OUT' || !nextSession?.user?.id || nextSession.user.id !== session?.user?.id) blockChangedAccount();
-    });
-  }
 
   function toast(message) {
-    if (accountBlocked) return;
     const element = $('#toast');
     element.textContent = message;
     element.classList.add('show');
@@ -162,8 +132,7 @@
     for (const line of lines) concepts.push({
       id: `sen:${line.code}`, concept_code: `sen.${line.code}`, concept_type: 'sen_line', preferred_term_th: line.name_th,
       preferred_term_en: line.name_en, foundation_layer: 5, definition: line.description || line.clinical_notes,
-      // The legacy projection contains no review decision: a descriptive name is not approval evidence.
-      review_status: 'review_required', version: 'legacy-sen-line',
+      review_status: line.name_th?.startsWith('แนวเส้น S.') ? 'review_required' : 'approved', version: 'legacy-sen-line',
       source_code: 'legacy:sen-line-master', metadata: { code: line.code }
     });
     state = { mode: 'legacy', concepts, sources: [...sourceMap.values()], relations: [], rules };
@@ -518,33 +487,19 @@
     const { canApprove } = reviewCapabilities();
     const rows = suggestions.filter(item => item.status === 'pending');
     $('#ttm-suggestion-queue').innerHTML = rows.map(item => {
-      const own = item.requested_by === session?.user?.id;
-      const missingSnapshot = item.action === 'update' && !item.target_snapshot;
-      const warning = own ? 'ผู้เสนอไม่สามารถตัดสินข้อเสนอของตนเองได้'
-        : missingSnapshot ? 'ไม่มีข้อมูลเดิม ณ วันที่เสนอ ต้องปฏิเสธและส่งข้อเสนอใหม่ก่อนอนุมัติ' : '';
-      const baseline = item.action === 'update'
-        ? `<details><summary>ข้อมูลเดิม ณ วันที่เสนอ (ไม่ใช่ข้อมูลล่าสุด)</summary><pre>${esc(JSON.stringify(item.target_snapshot ?? null, null, 2))}</pre></details>`
-        : '<p class="muted">ข้อเสนอสร้างรายการใหม่</p>';
       const actions = canApprove
-        ? `<button class="btn primary" data-ttm-suggestion-action="approve" data-id="${esc(item.id)}"${own || missingSnapshot ? ' disabled' : ''}>Approve</button><button class="btn danger" data-ttm-suggestion-action="reject" data-id="${esc(item.id)}"${own ? ' disabled' : ''}>Reject</button>`
+        ? `<button class="btn primary" data-ttm-suggestion-action="approve" data-id="${esc(item.id)}">Approve</button><button class="btn danger" data-ttm-suggestion-action="reject" data-id="${esc(item.id)}">Reject</button>`
         : '';
-      return `<article class="item column"><div class="row"><b>${esc(item.suggestion_no)} • ${esc(item.target_table)} / ${esc(item.action)}</b><span class="badge">${esc(item.status)}</span></div><small>ผู้เสนอ ${esc(item.requested_by)} • ${new Date(item.requested_at).toLocaleString('th-TH')}</small><p>${esc(item.reason)}</p><small>Source: ${esc(item.source_ref)}</small>${baseline}<b>ข้อเสนอแก้ไข (ยังไม่ใช่ข้อมูลที่เผยแพร่)</b><pre class="space-top-sm">${esc(JSON.stringify(item.payload, null, 2))}</pre>${warning ? `<p class="status">${esc(warning)}</p>` : ''}<div class="right">${actions}</div></article>`;
+      return `<article class="item column"><div class="row"><b>${esc(item.suggestion_no)} • ${esc(item.target_table)} / ${esc(item.action)}</b><span class="badge">${esc(item.status)}</span></div><small>ผู้เสนอ ${esc(item.requested_by)} • ${new Date(item.requested_at).toLocaleString('th-TH')}</small><p>${esc(item.reason)}</p><small>Source: ${esc(item.source_ref)}</small><pre class="space-top-sm">${esc(JSON.stringify(item.payload, null, 2))}</pre><div class="right">${actions}</div></article>`;
     }).join('') || '<p class="muted">ไม่มี suggestion ที่รอทบทวน</p>';
   }
 
   async function loadSuggestionQueue() {
-    const request = ++queueRequest;
-    const actorSession = session;
-    const actorProfile = profile;
-    const isCurrent = () => request === queueRequest && session === actorSession && profile === actorProfile;
     try {
-      const rows = await fetchAll('ttm_knowledge_suggestions', '*', query => query.eq('status', 'pending').order('requested_at', { ascending: false }));
-      if (!isCurrent()) return;
-      suggestions = rows;
+      suggestions = await fetchAll('ttm_knowledge_suggestions', '*', query => query.eq('status', 'pending').order('requested_at', { ascending: false }));
     } catch (error) {
-      if (!isCurrent()) return;
       suggestions = [];
-      $('#ttm-suggestion-queue').innerHTML = '<p role="alert">โหลดคิวทบทวนไม่สำเร็จ ยังยืนยันไม่ได้ว่ามีรายการรอหรือไม่ กรุณาลองโหลดใหม่หรือติดต่อผู้ดูแล</p>';
+      $('#ttm-suggestion-queue').innerHTML = '<p class="muted">ยังไม่ได้ติดตั้ง staging review RPC/ตาราง suggestion</p>';
       console.warn('TTM review queue unavailable', error);
       reviewCapabilities();
       return;
@@ -552,82 +507,8 @@
     renderSuggestionQueue();
   }
 
-  async function loadReviewHistory() {
-    const request = ++historyRequest;
-    const actorSession = session;
-    const actorProfile = profile;
-    const isCurrent = () => request === historyRequest && session === actorSession && profile === actorProfile;
-    const target = $('#ttm-review-history');
-    target.textContent = 'กำลังโหลดประวัติ…';
-    try {
-      const result = await db.from('ttm_knowledge_suggestion_events')
-        .select('id,suggestion_id,event,to_status,reason,actor_id,created_at,target_table,target_id,before_snapshot,after_snapshot')
-        .order('created_at', { ascending: false }).order('id', { ascending: false }).range(0, 50);
-      if (result.error) throw result.error;
-      if (!isCurrent()) return;
-      const events = result.data || [];
-      const labels = { submitted: 'ส่งข้อเสนอ', approve: 'อนุมัติ', reject: 'ปฏิเสธ', knowledge_applied: 'บันทึกเนื้อหาที่อนุมัติ' };
-      target.innerHTML = events.slice(0, 50).map(item => `<article class="item column"><b>${esc(labels[item.event] || item.event)}</b><small>${esc(item.created_at)} • ผู้ดำเนินการ ${esc(item.actor_id)}</small><small>ข้อเสนอ ${esc(item.suggestion_id)} • สถานะ ${esc(item.to_status)}</small><p>${esc(item.reason || '')}</p>${item.after_snapshot ? `<small>${esc(item.target_table)} • ${esc(item.target_id)}</small><details><summary>เนื้อหาก่อน–หลัง ณ เหตุการณ์นี้</summary><b>ก่อน</b><pre>${esc(JSON.stringify(item.before_snapshot, null, 2))}</pre><b>หลัง</b><pre>${esc(JSON.stringify(item.after_snapshot, null, 2))}</pre></details>` : '<small>เหตุการณ์นี้ไม่มี snapshot เนื้อหา</small>'}</article>`).join('') || '<p>ไม่พบประวัติที่บัญชีนี้มีสิทธิ์อ่าน</p>';
-      if (events.length > 50) target.innerHTML += '<p>แสดงเฉพาะ 50 เหตุการณ์ล่าสุด ยังมีประวัติเก่ากว่านี้</p>';
-    } catch {
-      if (isCurrent()) target.innerHTML = '<p role="alert">โหลดประวัติไม่สำเร็จ ไม่สามารถยืนยันประวัติการอนุมัติได้ กรุณาลองใหม่หรือติดต่อผู้ดูแล</p>';
-    }
-  }
-
-  let suggestionSubmitting = false;
-  function suggestionDraftSnapshot() {
-    return JSON.stringify(['target', 'target-id', 'action', 'payload', 'source', 'reason']
-      .map(field => $(`#ttm-suggestion-${field}`).value));
-  }
-  function suggestionRequestKey() {
-    if (!session?.user?.id || !profile?.clinic_id) throw new Error('ไม่พบบัญชีหรือคลินิก กรุณาเข้าสู่ระบบใหม่');
-    return `cnyos:knowledge-request:${session.user.id}:${profile.clinic_id}`;
-  }
-  function suggestionRequestRead(key) {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const saved = JSON.parse(raw);
-    if (!/^[0-9a-f-]{36}$/i.test(saved.requestId) || !/^[0-9a-f]{64}$/.test(saved.fingerprint)) {
-      throw new Error('รหัสคำขอค้างไม่สมบูรณ์ กรุณาติดต่อผู้ดูแลก่อนส่งซ้ำ');
-    }
-    return saved;
-  }
-  function canonicalSuggestion(value) {
-    if (Array.isArray(value)) return value.map(canonicalSuggestion);
-    if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalSuggestion(value[key])]));
-    return value;
-  }
-  async function suggestionFingerprint(params) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonicalSuggestion(params))));
-    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-  }
-  async function recoverSuggestionRequest() {
-    if (suggestionSubmitting) return;
-    suggestionSubmitting = true;
-    try {
-      const key = suggestionRequestKey();
-      const saved = suggestionRequestRead(key);
-      if (!saved) return toast('ไม่มีรหัสคำขอค้างในแท็บนี้');
-      const originalDraft = suggestionDraftSnapshot();
-      const result = await db.from('ttm_knowledge_suggestions').select('id,suggestion_no,status')
-        .eq('clinic_id', profile.clinic_id).eq('requested_by', session.user.id)
-        .eq('client_request_id', saved.requestId).maybeSingle();
-      if (result.error) throw result.error;
-      if (!result.data?.id) return toast('ยังไม่พบผลยืนยัน ให้ส่งเนื้อหาเดิมด้วยรหัสเดิมอีกครั้ง อย่าเริ่มรายการใหม่');
-      if (suggestionRequestKey() !== key) return;
-      sessionStorage.removeItem(key);
-      const draftChanged = suggestionDraftSnapshot() !== originalDraft;
-      if (!draftChanged) $('#ttm-suggestion-form').reset();
-      toast(`พบข้อเสนอเดิม ${result.data.suggestion_no} (${result.data.status}) ไม่ได้สร้างรายการใหม่${draftChanged ? ' • เก็บร่างที่แก้ระหว่างรอไว้ ร่างนี้ยังไม่ได้ส่ง' : ''}`);
-      await loadSuggestionQueue();
-      await loadReviewHistory();
-    } finally {
-      suggestionSubmitting = false;
-    }
-  }
   async function submitSuggestion(event) {
     event.preventDefault();
-    if (suggestionSubmitting) return;
     const payloadText = $('#ttm-suggestion-payload').value.trim();
     let payload;
     try { payload = JSON.parse(payloadText); } catch { throw new Error('Payload ต้องเป็น JSON object ที่ถูกต้อง'); }
@@ -635,72 +516,30 @@
     if (Object.keys(payload).some(key => ['review_status', 'active', 'status', 'requested_by', 'decided_by'].includes(key))) {
       throw new Error('ห้ามส่งฟิลด์ควบคุมสถานะหรือผู้อนุมัติ');
     }
-    suggestionSubmitting = true;
-    const form = event.target;
-    const submitButton = form.querySelector('[type="submit"]');
-    const wasDisabled = submitButton?.disabled;
-    if (submitButton) submitButton.disabled = true;
-    try {
-      const params = {
-        p_target_table: $('#ttm-suggestion-target').value,
-        p_target_id: $('#ttm-suggestion-target-id').value.trim() || null,
-        p_action: $('#ttm-suggestion-action').value,
-        p_payload: payload,
-        p_source_ref: $('#ttm-suggestion-source').value.trim(),
-        p_reason: $('#ttm-suggestion-reason').value.trim()
-      };
-      const originalDraft = suggestionDraftSnapshot();
-      const key = suggestionRequestKey();
-      const fingerprint = await suggestionFingerprint(params);
-      if (suggestionRequestKey() !== key) return;
-      let saved = suggestionRequestRead(key);
-      const newRequest = !saved;
-      if (saved && saved.fingerprint !== fingerprint) throw new Error('ยังมีคำขอเดิมที่ไม่ทราบผล กรุณากดตรวจผลคำขอเดิม หรือส่งเนื้อหาเดิมก่อน');
-      if (!saved) {
-        saved = { requestId: crypto.randomUUID(), fingerprint };
-        sessionStorage.setItem(key, JSON.stringify(saved));
-        if (suggestionRequestRead(key)?.requestId !== saved.requestId) throw new Error('เก็บรหัสคำขอไม่สำเร็จ ยังไม่ได้ส่ง');
-      }
-      const result = await db.rpc('submit_ttm_knowledge_suggestion_once', { ...params, p_request_id: saved.requestId });
-      if (suggestionRequestKey() !== key) return;
-      if (result.error) {
-        // Only the first attempt's definite rollback can discard its identity.
-        // A retry error cannot prove an earlier uncertain attempt did not commit.
-        if (newRequest && ['P0001','22P02','23514','42501'].includes(result.error.code)
-            && !String(result.error.message).includes('TTM_REQUEST_CONTENT_CONFLICT')) sessionStorage.removeItem(key);
-        throw result.error;
-      }
-      const row = Array.isArray(result.data) ? result.data[0] : result.data;
-      if (!row?.id || row.client_request_id !== saved.requestId) throw new Error('ยังยืนยันผลคำขอไม่ได้ กรุณาตรวจผลคำขอเดิมก่อนส่งใหม่');
-      if (suggestionRequestKey() !== key) return;
-      sessionStorage.removeItem(key);
-      const draftChanged = suggestionDraftSnapshot() !== originalDraft;
-      if (!draftChanged) form.reset();
-      toast(`ส่ง suggestion เข้าคิวทบทวนแล้ว${draftChanged ? ' • เก็บร่างที่แก้ระหว่างรอไว้ ร่างนี้ยังไม่ได้ส่ง' : ''}`);
-      await loadSuggestionQueue();
-    } finally {
-      suggestionSubmitting = false;
-      if (submitButton) submitButton.disabled = wasDisabled;
-    }
+    const result = await db.rpc('submit_ttm_knowledge_suggestion', {
+      p_target_table: $('#ttm-suggestion-target').value,
+      p_target_id: $('#ttm-suggestion-target-id').value.trim() || null,
+      p_action: $('#ttm-suggestion-action').value,
+      p_payload: payload,
+      p_source_ref: $('#ttm-suggestion-source').value.trim(),
+      p_reason: $('#ttm-suggestion-reason').value.trim()
+    });
+    if (result.error) throw result.error;
+    event.target.reset();
+    await loadSuggestionQueue();
+    toast('ส่ง suggestion เข้าคิวทบทวนแล้ว');
   }
 
   async function decideSuggestion(id, decision) {
-    if (accountBlocked || !session?.user?.id || !profile) throw new Error('กรุณาโหลดหน้าใหม่เพื่อตรวจสิทธิ์');
-    const actorSession = session;
-    const actorProfile = profile;
     const notes = prompt(`เหตุผล ${decision === 'approve' ? 'อนุมัติ' : 'ปฏิเสธ'} (อย่างน้อย 8 ตัวอักษร)`, '') ?? '';
     if (notes.trim().length < 8) throw new Error('ต้องระบุเหตุผลอย่างน้อย 8 ตัวอักษร');
-    if (accountBlocked || session !== actorSession || profile !== actorProfile) return;
     const result = await db.rpc('decide_ttm_knowledge_suggestion', { p_suggestion_id: id, p_decision: decision, p_notes: notes.trim() });
-    if (accountBlocked || session !== actorSession || profile !== actorProfile) return;
     if (result.error) throw result.error;
     live.request();
     toast(decision === 'approve' ? 'อนุมัติและเขียนความรู้ผ่าน RPC แล้ว' : 'ปฏิเสธ suggestion แล้ว');
   }
 
   function bindReviewFlow() {
-    $('#ttm-history-refresh').addEventListener('click', loadReviewHistory);
-    $('#ttm-suggestion-recover').addEventListener('click', () => recoverSuggestionRequest().catch(error => toast(error.message)));
     $('#ttm-suggestion-form').addEventListener('submit', event => submitSuggestion(event).catch(error => { console.error(error); toast(error.message); }));
     $('#ttm-suggestion-queue').addEventListener('click', event => {
       const button = event.target.closest('[data-ttm-suggestion-action]');
@@ -711,12 +550,10 @@
   }
 
   async function refreshKnowledge() {
-    if (accountBlocked) return;
     const previous = JSON.stringify(state);
     // A failed refresh retains the last complete graph; it cannot switch modes silently.
     if (state.mode === 'legacy') await loadLegacy();
     else await loadOntology();
-    if (accountBlocked) return;
     if (JSON.stringify(state) !== previous) {
       updateStats();
       renderTypeOptions();
@@ -736,7 +573,6 @@
       }
     }
     await loadSuggestionQueue();
-    await loadReviewHistory();
   }
 
   function startLiveUpdates() {
@@ -755,7 +591,7 @@
     });
     $('#foundation-refresh').addEventListener('click', () => live.request());
     window.addEventListener('pagehide', () => live.stop());
-    window.addEventListener('pageshow', event => { if (event.persisted) { blockChangedAccount(); location.reload(); } });
+    window.addEventListener('pageshow', event => { if (event.persisted) live.start(); });
     live.start();
   }
 
@@ -766,11 +602,7 @@
       db = runtime.getDb();
       session = await runtime.getSession();
       if (!session) { location.replace('/login.html'); return; }
-      const actorSession = session;
-      watchAccount();
-      const loadedProfile = await runtime.getProfile(actorSession.user.id);
-      if (accountBlocked || session !== actorSession) return;
-      profile = loadedProfile;
+      profile = await runtime.getProfile(session.user.id);
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'knowledge_read')) throw new Error('บัญชีนี้ไม่มีสิทธิ์อ่านรากวิชา');
       roleState = runtime.rolesOf(profile);
@@ -778,11 +610,9 @@
       try {
         await loadOntology();
       } catch (ontologyError) {
-        if (accountBlocked) return;
         console.warn('Foundation graph is not installed; using legacy bridge', ontologyError);
         await loadLegacy();
       }
-      if (accountBlocked) return;
       updateStats();
       renderTypeOptions();
       bindTabs();
@@ -795,14 +625,11 @@
       reviewCapabilities();
       bindReviewFlow();
       await loadSuggestionQueue();
-      await loadReviewHistory();
-      if (accountBlocked) return;
       startLiveUpdates();
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
       window.dispatchEvent(new CustomEvent('chananya:foundation-rendered'));
     } catch (error) {
-      if (accountBlocked) return;
       console.error(error);
       $('#boot-error').textContent = error.message;
     }

@@ -2,10 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import {
   assertRuntimeWorktreeMatchesGit,
-  assertRuntimeScriptDependencies,
   applyProductionDomainRedirect,
   buildNetlifyPublish,
   isPublicRuntimeRootFile,
@@ -16,60 +15,6 @@ import { GENERATED_CONFIG_DIRECTORY } from '../scripts/generate-tenant-config.mj
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const netlifyToml = fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-
-const scriptsFixture = new Map([
-  ['index.html', Buffer.from('<script src="./helper.js?v=1"></script><script src="/tenant-config.js"></script><script src="https://cdn.example.test/lib.js"></script><!-- <script src="ignored.js"></script> -->')],
-  ['helper.js', Buffer.from('/* synthetic */')]
-]);
-assert.doesNotThrow(() => assertRuntimeScriptDependencies(scriptsFixture));
-assert.throws(() => assertRuntimeScriptDependencies(new Map([['index.html', Buffer.from('<script src="missing.js">')]])), /index.html -> missing.js/);
-for (const attributes of ['', 'type="module"', "TYPE='module' data-label='a > b'", 'type="text/javascript" data-src="unrelated.js"']) {
-  const fixture = new Map([['index.html', Buffer.from(`<script ${attributes}>import('./inline-child.js')</script>`)]]);
-  assert.throws(() => assertRuntimeScriptDependencies(fixture), /index.html -> inline-child.js/);
-  fixture.set('inline-child.js', Buffer.from('export const ok=true;'));
-  assert.doesNotThrow(() => assertRuntimeScriptDependencies(fixture));
-}
-assert.throws(() => assertRuntimeScriptDependencies(new Map([['index.html', Buffer.from('<script type="module">import(name)</script>')]])), /COMPUTED_IMPORT_UNSUPPORTED/);
-assert.doesNotThrow(() => assertRuntimeScriptDependencies(new Map([['index.html', Buffer.from('<script type="application/ld+json">{"example":"import(unknown)"}</script>')]])));
-for (const [html, error] of [['<script type="importmap">{}</script>', /IMPORT_MAP_UNSUPPORTED/], ['<base href="/other/">', /BASE_URL_UNSUPPORTED/]]) {
-  assert.throws(() => assertRuntimeScriptDependencies(new Map([['index.html', Buffer.from(html)]])), error);
-}
-for (const code of ["import './child.js';", "export { x } from './child.js';", "export * from './child.js';", "import /* comment */ ('./child.js?version=2');"]) {
-  assert.throws(() => assertRuntimeScriptDependencies(new Map([
-    ['entry.js', Buffer.from("import './middle.mjs';")], ['middle.mjs', Buffer.from(code)]
-  ])), /middle.mjs -> child.js/);
-  assert.doesNotThrow(() => assertRuntimeScriptDependencies(new Map([
-    ['entry.js', Buffer.from("import './middle.mjs';")], ['middle.mjs', Buffer.from(code)],
-    ['child.js', Buffer.from("export const x=1; import './entry.js';")]
-  ])));
-}
-assert.doesNotThrow(() => assertRuntimeScriptDependencies(new Map([
-  ['entry.js', Buffer.from(`// import './missing.js';
-    const text="import('./missing.js')";
-    const expression=/import\\('missing'\\)/;
-    console.log(import.meta.url);
-    import 'https://cdn.example.test/module.js';`)]
-])));
-for (const code of ['import(path)', 'import(`./${name}.js`)']) {
-  assert.throws(() => assertRuntimeScriptDependencies(new Map([['entry.js', Buffer.from(code)]])), /COMPUTED_IMPORT_UNSUPPORTED/);
-}
-assert.throws(() => assertRuntimeScriptDependencies(new Map([['entry.js', Buffer.from("import 'unbundled-package';")]])), /MODULE_SPECIFIER_UNSUPPORTED/);
-assert.throws(() => assertRuntimeScriptDependencies(new Map([
-  ['evidence.html', Buffer.from('<script type="module" src="evidence-page.mjs"></script>')],
-  ['evidence-page.mjs', Buffer.from("import { sources } from './evidence-view.mjs';")]
-])), /evidence-page.mjs -> evidence-view.mjs/);
-assert.doesNotThrow(() => assertRuntimeScriptDependencies(new Map([
-  ['evidence-page.mjs', fs.readFileSync(path.join(root, 'evidence-page.mjs'))],
-  ['evidence-view.mjs', fs.readFileSync(path.join(root, 'evidence-view.mjs'))]
-])));
-for (const reference of ['helper.js?v=2', '/helper.js', './helper.js#v', 'helper%2Ejs']) {
-  assert.throws(() => assertRuntimeScriptDependencies(new Map([
-    ['clinical-v3.html', Buffer.from(`<script defer src='${reference}'></script>`)]
-  ])), /NETLIFY_PUBLISH_SCRIPT_DEPENDENCY_MISSING: clinical-v3.html -> helper.js/);
-}
-assert.throws(() => assertRuntimeScriptDependencies(new Map([
-  ['pharmacy.html', Buffer.from('<script src=replacement-history.js></script>')]
-])), /pharmacy.html -> replacement-history.js/);
 
 assert.match(netlifyToml, /publish\s*=\s*"dist"/, 'Netlify must publish only the generated dist directory');
 assert.doesNotMatch(netlifyToml, /publish\s*=\s*"\."/, 'repository root must never be the Netlify publish directory');
@@ -82,8 +27,6 @@ for (const file of [
   'app.js',
   'app.css',
   'bodymap-figures.svg',
-  'evidence-page.mjs',
-  'evidence-view.mjs',
   'tenant-config.js',
   'brand-config.js',
   'deploy-manifest.json',
@@ -101,7 +44,6 @@ for (const file of [
   'release-readiness.json',
   'Chananya_Clinical_Wellness_OS_MVP_singlefile.zip',
   'scripts/tool.mjs',
-  'internal-tool.mjs',
   'docs/runbook.html',
   'tests/example.js',
   'config/tenant.json'
@@ -140,14 +82,6 @@ try {
     }
   }
   fs.writeFileSync(path.join(fixture, '_headers'), 'fixture headers');
-  for (const [name, content] of [
-    ['evidence.html', '<script type="module" src="evidence-page.mjs"></script>'],
-    ['evidence-page.mjs', fs.readFileSync(path.join(root, 'evidence-page.mjs'), 'utf8')],
-    ['evidence-view.mjs', fs.readFileSync(path.join(root, 'evidence-view.mjs'), 'utf8')]
-  ]) {
-    fs.writeFileSync(path.join(fixture, name), content);
-    sourceFiles.set(name, Buffer.from(content));
-  }
   sourceFiles.set('_headers', Buffer.from('fixture headers'));
   fs.writeFileSync(path.join(fixture, '_redirects'), '/  /index.html  200\n');
   sourceFiles.set('_redirects', Buffer.from('/  /index.html  200\n'));
@@ -160,17 +94,6 @@ try {
 
   const manifest = await buildNetlifyPublish({ cwd: fixture, sourceFiles });
   const published = new Set(fs.readdirSync(path.join(fixture, 'dist')));
-  for (const name of ['evidence.html', 'evidence-page.mjs', 'evidence-view.mjs']) {
-    assert.equal(published.has(name), true, `${name} required for Evidence browser module`);
-    assert.deepEqual(fs.readFileSync(path.join(fixture, 'dist', name)), sourceFiles.get(name));
-  }
-  // Execute the real published module graph, not a stand-in fixture. This
-  // proves module resolution/parsing in Node, not browser authentication/UI.
-  const evidencePage = await import(pathToFileURL(path.join(fixture, 'dist', 'evidence-page.mjs')).href);
-  const evidenceView = await import(pathToFileURL(path.join(fixture, 'dist', 'evidence-view.mjs')).href);
-  assert.equal(typeof evidencePage.createEvidenceController, 'function');
-  assert.equal(evidenceView.referenceUrl('pubmed', '123'), 'https://pubmed.ncbi.nlm.nih.gov/123/');
-  assert.equal(evidenceView.referenceUrl('pubmed', '../private'), null);
   for (const name of required) assert.equal(published.has(name), true, `${name} missing from dist fixture`);
   assert.equal(published.has('_headers'), true);
   assert.equal(published.has('.env.example'), false);

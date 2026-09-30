@@ -90,34 +90,6 @@
     setOptions('#booking-time', 'เลือกวันที่ก่อน', [], true);
     setOptions('#booking-room', 'เลือกเวลาก่อน', [], true);
     clearResolvedSchedule('กรุณาเลือกผู้ให้บริการก่อน');
-    renderBookingCalendar();
-  }
-
-  function renderBookingCalendar() {
-    const host = $('#booking-calendar');
-    if (!host) return;
-    const practitioner = $('#booking-practitioner').value;
-    const selected = $('#booking-date').value;
-    const dates = new Set(allSchedules.filter(item => item.practitioner_id === practitioner && Number(item.available_capacity) > 0).map(rowDate));
-    if (!practitioner || !dates.size) {
-      host.textContent = practitioner ? 'ไม่มีวันว่างตามตัวกรอง กรุณาขยายช่วงวันที่ค้นหา' : 'เลือกผู้ให้บริการเพื่อแสดงปฏิทินวันว่าง';
-      return;
-    }
-    const months = [...new Set([...dates].map(day => day.slice(0, 7)))].sort();
-    host.innerHTML = '<p>วันว่างตามช่วงวันที่ค้นหา • จำนวนคิวจะตรวจอีกครั้งเมื่อยืนยันการจอง</p>' + months.map(month => {
-      const [year, number] = month.split('-').map(Number);
-      const first = new Date(Date.UTC(year, number - 1, 1));
-      const length = new Date(Date.UTC(year, number, 0)).getUTCDate();
-      const title = first.toLocaleDateString('th-TH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-      const cells = Array.from({ length: first.getUTCDay() }, () => '<span aria-hidden="true"></span>');
-      for (let day = 1; day <= length; day++) {
-        const value = `${month}-${String(day).padStart(2, '0')}`;
-        cells.push(dates.has(value)
-          ? `<button type="button" class="btn" data-calendar-day="${esc(value)}" aria-label="${esc(value)} วันว่าง" aria-pressed="${selected === value}">${day}</button>`
-          : `<span class="calendar-unavailable" aria-label="${esc(value)} ไม่มีเวลาว่างในผลค้นหา">${day}</span>`);
-      }
-      return `<section class="booking-calendar-month"><h3>${esc(title)}</h3><div class="booking-calendar-grid">${['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'].map(day => `<span>${day}</span>`).join('')}${cells.join('')}</div></section>`;
-    }).join('');
   }
 
   function renderBookingDates() {
@@ -127,11 +99,9 @@
     setOptions('#booking-time', 'เลือกวันที่ก่อน', [], true);
     setOptions('#booking-room', 'เลือกเวลาก่อน', [], true);
     clearResolvedSchedule(!practitioner ? 'กรุณาเลือกผู้ให้บริการก่อน' : dates.length ? 'กรุณาเลือกวันที่' : 'ผู้ให้บริการนี้ยังไม่มีช่วงเวลารับนัดที่ตรงกับตัวกรอง กรุณาเปลี่ยนช่วงวันที่หรือเพิ่มตารางรับนัด');
-    renderBookingCalendar();
   }
 
   function renderBookingTimes() {
-    renderBookingCalendar();
     const practitioner = $('#booking-practitioner').value;
     const day = $('#booking-date').value;
     const rows = allSchedules.filter(item => item.practitioner_id === practitioner && rowDate(item) === day);
@@ -195,7 +165,6 @@
   async function loadSchedules() {
     const version = ++scheduleRequestVersion;
     allSchedules = [];
-    renderBookingPractitioners([]);
     $('#selected-schedule').value = '';
     $('#selected-schedule-label').value = '';
     $('#booking-status').textContent = 'กรุณาเลือกช่วงเวลาจากผลค้นหาใหม่';
@@ -457,15 +426,6 @@
     }), 250);
   });
   $('#booking-practitioner').addEventListener('change', () => renderBookingDates());
-  $('#booking-calendar').addEventListener('click', event => {
-    const button = event.target.closest('[data-calendar-day]');
-    if (!button || !$('#booking-calendar').contains(button)) return;
-    const day = button.dataset.calendarDay;
-    if (![...$('#booking-date').options].some(option => option.value === day)) return;
-    $('#booking-date').value = day;
-    renderBookingTimes();
-    $('#booking-time').focus();
-  });
   $('#booking-date').addEventListener('change', () => renderBookingTimes());
   $('#booking-time').addEventListener('change', () => renderBookingRooms());
   $('#booking-room').addEventListener('change', () => resolveBookingRoom());

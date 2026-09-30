@@ -19,7 +19,6 @@ const USER_ADMIN = 'dddddddd-4444-4444-a444-444444444444';
 const USER_ROLE_TARGET = 'eeeeeeee-5555-4555-a555-555555555555';
 const USER_BILLING = 'f0f0f0f0-6666-4666-a666-666666666666';
 const USER_DUAL_PROVIDER = '12121212-7777-4777-a777-777777777777';
-const USER_OWNER = 'abababab-8888-4888-a888-888888888888';
 const CLINIC_A = '00000000-0000-0000-0000-000000000001';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
 const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
@@ -90,17 +89,13 @@ for (const file of migrationFiles) {
       insert into auth.users(id,email,raw_user_meta_data) values
         ('${USER_A}','a@example.test','{"full_name":"Practitioner A"}'),
         ('${USER_B}','b@example.test','{"full_name":"Practitioner B"}'),
-        ('${USER_C}','c@example.test','{"full_name":"Platform Support"}'),
-        ('${USER_OWNER}','owner@example.test','{"full_name":"Clinic Owner"}');
+        ('${USER_C}','c@example.test','{"full_name":"Platform Support"}');
       update public.profiles
       set role='practitioner', system_role='staff'
       where id in ('${USER_A}','${USER_B}');
       update public.profiles
       set role='viewer', system_role='super_admin'
       where id='${USER_C}';
-      update public.profiles
-      set role='viewer', system_role='staff'
-      where id='${USER_OWNER}';
       insert into public.patients(
         hn,prefix,first_name,last_name,created_by
       ) values (
@@ -113,26 +108,7 @@ for (const file of migrationFiles) {
     /create extension if not exists pgcrypto\s*;/gi,
     ''
   );
-  const qualityReadMigration = file.endsWith('_quality_evidence_read.sql');
-  const policySnapshot = async () => (await db.query(`
-    select * from pg_policies where schemaname='public'
-      and policyname <> 'quality_evidence_read' order by tablename,policyname
-  `)).rows;
-  const grantSnapshot = async () => (await db.query(`
-    select c.relname,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity
-    from pg_class c join pg_namespace n on n.oid=c.relnamespace
-    where n.nspname='public' order by c.relname
-  `)).rows;
-  const before = qualityReadMigration ? [await policySnapshot(), await grantSnapshot()] : null;
   await db.exec(compatibleSource);
-  if (qualityReadMigration) {
-    assert.deepEqual(await policySnapshot(), before[0], 'Quality read must preserve all existing policies');
-    assert.deepEqual(await grantSnapshot(), before[1], 'Quality read must not change grants or RLS flags');
-    const added = (await db.query(`select tablename,cmd,permissive,roles from pg_policies
-      where schemaname='public' and policyname='quality_evidence_read' order by tablename`)).rows;
-    assert.deepEqual(added.map(row=>row.tablename), ['finished_goods_receipts','formula_components','formulas','production_material_issues','production_orders','production_qc','products']);
-    assert.ok(added.every(row=>row.cmd==='SELECT' && row.permissive==='PERMISSIVE' && row.roles.length===1 && row.roles[0]==='authenticated'));
-  }
 }
 
 async function asUser(userId, sql) {
@@ -165,21 +141,21 @@ async function asService(sql) {
   }
 }
 
-async function execAsDatabaseOwnerWithServiceClaim(sql, userId = '') {
+async function execAsDatabaseOwnerWithServiceClaim(sql) {
   await db.exec(`
     reset role;
     select
-      set_config('request.jwt.claim.sub','${userId}',false),
+      set_config('request.jwt.claim.sub','',false),
       set_config('request.jwt.claim.role','service_role',false);
   `);
   return db.exec(sql);
 }
 
-async function queryAsDatabaseOwnerWithServiceClaim(sql, userId = '') {
+async function queryAsDatabaseOwnerWithServiceClaim(sql) {
   await db.exec(`
     reset role;
     select
-      set_config('request.jwt.claim.sub','${userId}',false),
+      set_config('request.jwt.claim.sub','',false),
       set_config('request.jwt.claim.role','service_role',false);
   `);
   return db.query(sql);
@@ -194,41 +170,18 @@ function sqlQuote(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-async function registerOnePatient(userId, sql) {
-  const before = (await db.query('select count(*)::int count from public.patients')).rows[0].count;
-  const result = await asUser(userId, sql);
-  assert.equal(result.rows.length, 1);
-  const after = (await db.query('select count(*)::int count from public.patients')).rows[0].count;
-  assert.equal(after, before + 1, 'synthetic registration must create one patient, not one per projected field');
-  const stored = (await db.query('select * from public.patients where id=$1', [result.rows[0].id])).rows;
-  assert.deepEqual(result.rows, stored, 'all registration fields must belong to the same stored patient');
-  return result;
-}
-
-await execAsDatabaseOwnerWithServiceClaim(`
-  insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary,active)
-  values ('${CLINIC_A}','${USER_OWNER}','owner',true,true)
-  on conflict (clinic_id,profile_id) do update
-    set clinic_role='owner',is_primary=true,active=true;
-`, USER_OWNER);
-
 await expectDatabaseError(
   asUser(USER_A, `select * from public.issue_patient_line_link_code(null,'self',null,false)`),
   'CONSENT_REQUIRED'
 );
 
-const patientCountBefore = (await db.query('select count(*)::int count from public.patients')).rows[0].count;
 const createdA = await asUser(USER_A, `
-  select * from public.upsert_patient_registration(
+  select (public.upsert_patient_registration(
     null,'นาง','ทดสอบ','หนึ่ง',null,'female','1990-01-02',
     '0812345678',null,null,null,'penicillin'
-  );
+  )).*;
 `);
 const patientA = createdA.rows[0];
-assert.equal((await db.query('select count(*)::int count from public.patients')).rows[0].count,
-  patientCountBefore + 1, 'one registration call must create exactly one patient');
-assert.equal((await db.query(`select hn from public.patients where id='${patientA.id}'`)).rows[0].hn,
-  patientA.hn, 'registration result must refer to one stored composite row');
 assert.match(patientA.hn, /^CHANANYA-\d{8,}$/);
 assert.ok(Number(patientA.hn.split('-').at(-1)) > 9999);
 await expectDatabaseError(
@@ -269,27 +222,6 @@ const hashes = await db.query(`
     encode(digest('123456','sha256'),'hex') code_hash
 `);
 const { token_hash: tokenHash, code_hash: codeHash } = hashes.rows[0];
-let lineReadAuditObservation;
-if (process.argv.includes('--inspect-line-read-audit')) {
-  const counts = async () => (await db.query(`select
-    (select count(*)::int from public.patient_identity_events) identity_events,
-    (select count(*)::int from public.audit_logs) audit_events`)).rows[0];
-  const before = await counts();
-  const linked = await asService(`select * from public.list_line_linked_patients_for_clinic(
-    '${CLINIC_A}','${subjectHash}')`);
-  assert.equal(linked.rows.length, 1);
-  assert.equal(linked.rows[0].patient_id, patientA.id);
-  assert.equal(linked.rows[0].hn, patientA.hn);
-  assert.ok(linked.rows[0].display_name);
-  const after = await counts();
-  lineReadAuditObservation = {
-    authorization: false, environment: 'disposable-pglite',
-    operation: 'list_line_linked_patients_for_clinic',
-    returnedRecords: linked.rows.length,
-    identityEventDelta: after.identity_events - before.identity_events,
-    auditLogDelta: after.audit_events - before.audit_events
-  };
-}
 const qrIssued = await asService(`
   select * from public.issue_patient_qr_for_subject_in_clinic(
     '${CLINIC_A}','${subjectHash}','${patientA.id}','${tokenHash}','${codeHash}',
@@ -297,17 +229,6 @@ const qrIssued = await asService(`
   )
 `);
 assert.equal(qrIssued.rows[0].patient_id, patientA.id);
-if (lineReadAuditObservation) {
-  const qrEvents = (await db.query(`select count(*)::int count from public.patient_identity_events
-    where patient_id='${patientA.id}' and event_type='PATIENT_QR_ISSUED'`)).rows[0].count;
-  assert.equal(qrEvents, 1, 'QR issuance evidence is separate from the list read');
-  console.log(JSON.stringify({ ...lineReadAuditObservation, qrIssuedEvents: qrEvents,
-    readAuditAcceptance: 'not-established',
-    limitation: 'Counts inspect two application event tables, not provider logs or all possible audit stores.' }));
-  await db.close();
-  console.error('LINE_READ_AUDIT_ACCEPTANCE_NOT_ESTABLISHED: classify and implement the approved read receipt boundary; QR issuance does not prove list-read auditing.');
-  process.exit(1);
-}
 
 const lineOaChannelHash = 'b'.repeat(64);
 const lineOaEventHash = 'c'.repeat(64);
@@ -500,11 +421,11 @@ await expectDatabaseError(
   'RATE_LIMITED'
 );
 
-const createdManual = await registerOnePatient(USER_A, `
-  select * from public.upsert_patient_registration(
+const createdManual = await asUser(USER_A, `
+  select (public.upsert_patient_registration(
     null,'นาย','ไม่มี','มือถือ',null,'male','1960-02-03',
     null,null,null,null,null
-  );
+  )).*;
 `);
 const manualEncounter = await asUser(USER_A, `
   select * from public.start_manual_patient_encounter(
@@ -518,24 +439,11 @@ assert.equal(manualEncounter.rows[0].patient_id, createdManual.rows[0].id);
 const productId = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 await execAsDatabaseOwnerWithServiceClaim(`
   insert into public.products(
-    id,sku,name_th,category,stock_unit,dispense_unit,clinic_id
+    id,sku,name_th,category,stock_unit,dispense_unit
   ) values (
-    '${productId}','TTM-TEST-001','ยาทดสอบ','medicine','ขวด','ขวด','${CLINIC_A}'
+    '${productId}','TTM-TEST-001','ยาทดสอบ','medicine','ขวด','ขวด'
   );
-`, USER_OWNER);
-const smokePriceSetup = (await asUser(USER_OWNER, `
-  select * from public.setup_price_master_default()
-`)).rows[0];
-await asUser(USER_OWNER, `
-  select * from public.set_price_master_item(
-    '${smokePriceSetup.price_list_id}','product','${productId}',null,
-    'ขวด',120,0,'Synthetic smoke product price'
-  )
 `);
-const smokeFixtureContext = await queryAsDatabaseOwnerWithServiceClaim(`
-  select auth.uid() actor, public.current_clinic_id() clinic
-`, USER_OWNER);
-assert.deepEqual(smokeFixtureContext.rows[0], { actor: USER_OWNER, clinic: CLINIC_A });
 const prescription = await asUser(USER_A, `
   select * from public.create_atomic_prescription_handoff(
     '${RX_REQUEST}',
@@ -555,11 +463,6 @@ const prescriptionRetry = await asUser(USER_A, `
   )
 `);
 assert.equal(prescriptionRetry.rows[0].prescription_id, prescription.rows[0].prescription_id);
-const smokePrescriptionItem = await db.query(`
-  select product_id,unit from public.prescription_items
-  where prescription_id='${prescription.rows[0].prescription_id}'
-`);
-assert.deepEqual(smokePrescriptionItem.rows, [{ product_id: productId, unit: 'ขวด' }]);
 const handoffCounts = await db.query(`
   select
     (select count(*)::int from public.prescriptions where id='${prescription.rows[0].prescription_id}') prescriptions,
@@ -618,26 +521,26 @@ await execAsDatabaseOwnerWithServiceClaim(`
   update public.dispensing_orders
   set status='submitted_to_billing'
   where id='${prescription.rows[0].dispensing_order_id}';
-`, USER_OWNER);
+`);
 
 const invoice = await asUser(USER_C, `
   select * from public.issue_atomic_dispensing_invoice(
-    '${prescription.rows[0].dispensing_order_id}',0,0
+    '${prescription.rows[0].dispensing_order_id}',300,50
   )
 `);
 assert.match(invoice.rows[0].invoice_number, /^INV-CHANANYA-\d{8}-\d{8}$/);
-assert.equal(Number(invoice.rows[0].grand_total), 240);
-assert.equal(Number(invoice.rows[0].balance_due), 240);
+assert.equal(Number(invoice.rows[0].grand_total), 490);
+assert.equal(Number(invoice.rows[0].balance_due), 490);
 const invoiceRetry = await asUser(USER_C, `
   select * from public.issue_atomic_dispensing_invoice(
-    '${prescription.rows[0].dispensing_order_id}',0,0
+    '${prescription.rows[0].dispensing_order_id}',300,50
   )
 `);
 assert.equal(invoiceRetry.rows[0].invoice_id, invoice.rows[0].invoice_id);
 await expectDatabaseError(
   asUser(USER_C, `
     select * from public.issue_atomic_dispensing_invoice(
-      '${prescription.rows[0].dispensing_order_id}',1,0
+      '${prescription.rows[0].dispensing_order_id}',0,50
     )
   `),
   'DISPENSING_ORDER_ALREADY_BILLED'
@@ -648,27 +551,7 @@ const invoiceEvidence = await db.query(`
     (select count(*)::int from public.invoice_items where invoice_id='${invoice.rows[0].invoice_id}') lines,
     (select status from public.dispensing_orders where id='${prescription.rows[0].dispensing_order_id}') order_status
 `);
-assert.deepEqual(invoiceEvidence.rows[0], { invoices: 1, lines: 1, order_status: 'billed' });
-
-const billedRxReplay = await asUser(USER_A, `
-  select * from public.create_atomic_prescription_handoff(
-    '${RX_REQUEST}', '${manualEncounter.rows[0].encounter_id}', 'ทดสอบ atomic handoff',
-    '[{"product_id":"${productId}","quantity_prescribed":2,"unit":"ขวด","dose":"1 ขวด"}]'::jsonb
-  )
-`);
-assert.deepEqual(billedRxReplay.rows[0], prescription.rows[0], 'billed handoff replay preserves receipt');
-await expectDatabaseError(asUser(USER_A, `
-  select * from public.create_atomic_prescription_handoff(
-    '9a000000-0000-4000-8000-000000000020', '${manualEncounter.rows[0].encounter_id}', 'New after bill',
-    '[{"product_id":"${productId}","quantity_prescribed":2,"unit":"ขวด","dose":"1 ขวด"}]'::jsonb
-  )
-`), 'PRESCRIPTION_ENCOUNTER_ALREADY_BILLED');
-await expectDatabaseError(asUser(USER_A, `
-  select * from public.create_atomic_prescription_handoff(
-    '${RX_REQUEST}', '${manualEncounter.rows[0].encounter_id}', 'Changed after bill',
-    '[{"product_id":"${productId}","quantity_prescribed":2,"unit":"ขวด","dose":"1 ขวด"}]'::jsonb
-  )
-`), 'IDEMPOTENCY_KEY_REUSED');
+assert.deepEqual(invoiceEvidence.rows[0], { invoices: 1, lines: 2, order_status: 'billed' });
 
 const partialPayment = await asUser(USER_C, `
   select * from public.record_atomic_invoice_payment(
@@ -678,7 +561,7 @@ const partialPayment = await asUser(USER_C, `
 `);
 assert.equal(partialPayment.rows[0].invoice_status, 'partially_paid');
 assert.equal(Number(partialPayment.rows[0].paid_amount), 200);
-assert.equal(Number(partialPayment.rows[0].balance_due), 40);
+assert.equal(Number(partialPayment.rows[0].balance_due), 290);
 assert.equal(partialPayment.rows[0].encounter_closed, false);
 const partialRetry = await asUser(USER_C, `
   select * from public.record_atomic_invoice_payment(
@@ -695,7 +578,7 @@ const paymentCountBeforeOverpay = await db.query(`
 await expectDatabaseError(
   asUser(USER_C, `
     select * from public.record_atomic_invoice_payment(
-      '${PAYMENT_OVER_REQUEST}','${invoice.rows[0].invoice_id}',50,
+      '${PAYMENT_OVER_REQUEST}','${invoice.rows[0].invoice_id}',300,
       'cash',null
     )
   `),
@@ -709,7 +592,7 @@ assert.equal(paymentCountAfterOverpay.rows[0].count, paymentCountBeforeOverpay.r
 
 const finalPayment = await asUser(USER_C, `
   select * from public.record_atomic_invoice_payment(
-    '${PAYMENT_FINAL_REQUEST}','${invoice.rows[0].invoice_id}',40,
+    '${PAYMENT_FINAL_REQUEST}','${invoice.rows[0].invoice_id}',290,
     'qr','receipt-test-2'
   )
 `);
@@ -736,14 +619,14 @@ const handoffAudit = await db.query(`
   select action,count(*)::int count
   from public.audit_logs
   where action in (
-    'create_prescription_handoff','issue_encounter_invoice','record_invoice_payment'
+    'create_prescription_handoff','issue_dispensing_invoice','record_invoice_payment'
   )
   group by action
   order by action
 `);
 assert.deepEqual(handoffAudit.rows, [
   { action: 'create_prescription_handoff', count: 1 },
-  { action: 'issue_encounter_invoice', count: 1 },
+  { action: 'issue_dispensing_invoice', count: 1 },
   { action: 'record_invoice_payment', count: 2 }
 ]);
 
@@ -757,11 +640,11 @@ await execAsDatabaseOwnerWithServiceClaim(`
     clinic_id,profile_id,clinic_role,is_primary
   ) values ('${CLINIC_B}','${USER_B}','practitioner',true);
 `);
-const createdB = await registerOnePatient(USER_B, `
-  select * from public.upsert_patient_registration(
+const createdB = await asUser(USER_B, `
+  select (public.upsert_patient_registration(
     null,'นาง','ต่าง','คลินิก',null,'female','1988-03-04',
     '0899999999',null,null,null,null
-  );
+  )).*;
 `);
 assert.match(createdB.rows[0].hn, /^CLINICB-\d{8}$/);
 const visibleA = await asUser(
@@ -1031,7 +914,7 @@ const dualRoleTreatment = await asUser(USER_DUAL_PROVIDER, `
   select (public.create_clinical_treatment_session(
     '${dualRoleCheckedIn.encounter_id}',array['manual_therapy'],
     'Synthetic dual-role own appointment',false,null::text,null::text,
-    null::smallint,null::smallint,null::text,null::text,30
+    null::smallint,null::smallint,null::text,null::text
   )).practitioner_id
 `);
 assert.equal(dualRoleTreatment.rows[0].practitioner_id, USER_DUAL_PROVIDER);
@@ -1081,7 +964,7 @@ await expectDatabaseError(
   asUser(USER_A, `select public.create_clinical_treatment_session(
     '${checkedInAppointment.encounter_id}',array['manual_therapy'],
     'Cross-practitioner attempt',false,null::text,null::text,
-    null::smallint,null::smallint,null::text,null::text,30
+    null::smallint,null::smallint,null::text,null::text
   )`),
   'ENCOUNTER_PRACTITIONER_MISMATCH'
 );
@@ -1139,7 +1022,7 @@ await asUser(USER_ROLE_TARGET, `
   select public.create_clinical_treatment_session(
     '${checkedInAppointment.encounter_id}',array['manual_therapy'],
     'Synthetic treatment only',false,null::text,null::text,3::smallint,1::smallint,
-    'Synthetic improved','Synthetic follow-up',30
+    'Synthetic improved','Synthetic follow-up'
   )
 `);
 await asUser(USER_ROLE_TARGET, `
@@ -1164,21 +1047,21 @@ assert.equal(billableTreatments.rows[0].treatment_description, 'Synthetic treatm
 const treatmentInvoiceRequest = randomUUID();
 const treatmentInvoice = (await asUser(USER_BILLING, `
   select * from public.issue_atomic_treatment_invoice(
-    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',325,
+    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',500,
     'ค่าตรวจและหัตถการสังเคราะห์'
   )
 `)).rows[0];
-assert.equal(Number(treatmentInvoice.grand_total), 325);
+assert.equal(Number(treatmentInvoice.grand_total), 500);
 const treatmentInvoiceRetry = (await asUser(USER_BILLING, `
   select * from public.issue_atomic_treatment_invoice(
-    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',325,
+    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',500,
     'ค่าตรวจและหัตถการสังเคราะห์'
   )
 `)).rows[0];
 assert.equal(treatmentInvoiceRetry.invoice_id, treatmentInvoice.invoice_id);
 await expectDatabaseError(
   asUser(USER_BILLING, `select * from public.issue_atomic_treatment_invoice(
-    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',326,
+    '${treatmentInvoiceRequest}','${checkedInAppointment.encounter_id}',501,
     'ค่าตรวจและหัตถการสังเคราะห์'
   )`),
   'INVOICE_REQUEST_CONFLICT'
@@ -1191,7 +1074,7 @@ const treatmentPartial = (await asUser(USER_BILLING, `
   )
 `)).rows[0];
 assert.equal(treatmentPartial.invoice_status, 'partially_paid');
-assert.equal(Number(treatmentPartial.balance_due), 125);
+assert.equal(Number(treatmentPartial.balance_due), 300);
 const treatmentPartialRetry = (await asUser(USER_BILLING, `
   select * from public.record_atomic_invoice_payment(
     '${treatmentPartialKey}','${treatmentInvoice.invoice_id}',200,'cash','SYNTHETIC-PARTIAL'
@@ -1200,7 +1083,7 @@ const treatmentPartialRetry = (await asUser(USER_BILLING, `
 assert.equal(treatmentPartialRetry.payment_id, treatmentPartial.payment_id);
 const treatmentFinal = (await asUser(USER_BILLING, `
   select * from public.record_atomic_invoice_payment(
-    '${treatmentFinalKey}','${treatmentInvoice.invoice_id}',125,'qr','SYNTHETIC-FINAL'
+    '${treatmentFinalKey}','${treatmentInvoice.invoice_id}',300,'qr','SYNTHETIC-FINAL'
   )
 `)).rows[0];
 assert.equal(treatmentFinal.invoice_status, 'paid');
@@ -1213,7 +1096,7 @@ const treatmentReceiptReadback = await asUser(USER_BILLING, `
 `);
 assert.equal(treatmentReceiptReadback.rows.length, 2);
 assert.equal(Number(treatmentReceiptReadback.rows[0].amount), 200);
-assert.equal(Number(treatmentReceiptReadback.rows[1].amount), 125);
+assert.equal(Number(treatmentReceiptReadback.rows[1].amount), 300);
 
 await expectDatabaseError(
   asUser(USER_C, `select * from public.create_practitioner_schedule(
@@ -1303,12 +1186,6 @@ const updatedByProduction = await asUser(USER_PRODUCTION, `
   )
 `);
 assert.equal(Number(updatedByProduction.rows[0].standard_cost), 2.75);
-await asUser(USER_OWNER, `
-  select * from public.set_price_master_item(
-    '${smokePriceSetup.price_list_id}','product','${departmentProduct.rows[0].id}',null,
-    'แคปซูล',2.75,0,'Synthetic department product price'
-  )
-`);
 await expectDatabaseError(
   asUser(USER_PHARMACY, `
     update public.products set name_th='DIRECT BYPASS' where id='${departmentProduct.rows[0].id}'
@@ -1316,18 +1193,18 @@ await expectDatabaseError(
   'permission denied'
 );
 
-const receptionPatient = await registerOnePatient(USER_RECEPTION, `
-  select * from public.upsert_patient_registration(
+const receptionPatient = await asUser(USER_RECEPTION, `
+  select (public.upsert_patient_registration(
     null,'นาง','ฝ่าย','ต้อนรับ',null,'female','1992-05-06',
     '0800000000',null,null,null,null
-  )
+  )).*
 `);
 assert.ok(receptionPatient.rows[0].id);
 await expectDatabaseError(
   asUser(USER_PHARMACY, `
-    select * from public.upsert_patient_registration(
+    select (public.upsert_patient_registration(
       null,'นาย','ห้าม','ลงทะเบียน',null,'male',null,null,null,null,null,null
-    )
+    )).*
   `),
   'PERMISSION_DENIED'
 );
@@ -1342,7 +1219,7 @@ assert.match(counterSale.rows[0].sale_no, /^PS-CHANANYA-\d{8}-\d{8}$/);
 const counterItem = await asUser(USER_PHARMACY, `
   select * from public.upsert_pharmacy_counter_sale_item(
     null,'${counterSale.rows[0].id}','${departmentProduct.rows[0].id}',
-    2,2.75,'ครั้งละ 1 แคปซูล','วันละ 2 ครั้ง','3 วัน','หยุดใช้เมื่อมีอาการแพ้'
+    2,15,'ครั้งละ 1 แคปซูล','วันละ 2 ครั้ง','3 วัน','หยุดใช้เมื่อมีอาการแพ้'
   )
 `);
 assert.equal(counterItem.rows[0].unit, 'แคปซูล');
@@ -1589,14 +1466,12 @@ const issueEvidenceAfterRetry = await db.query(`
 `);
 assert.deepEqual(issueEvidenceAfterRetry.rows[0], issueEvidenceBeforeRetry.rows[0]);
 
-const productionController = await import('./helpers/production-controller-database.mjs');
-const completedProduction = await productionController.completeProductionThroughController({asUser,actorId:USER_PRODUCTION,clinicId:CLINIC_A,orderId:productionOrder.rows[0].id,sql:`
+const completedProduction = await asUser(USER_PRODUCTION, `
   select * from public.complete_production_order(
     '${productionOrder.rows[0].id}',11.5,0.3,0.2
   )
-`});
+`);
 assert.equal(completedProduction.rows[0].status, 'awaiting_qc');
-await productionController.readQualityThroughController({asUser,actorId:USER_QUALITY,clinicId:CLINIC_A,orderId:productionOrder.rows[0].id,status:'awaiting_qc'});
 assert.equal(Number(completedProduction.rows[0].yield_percent), 95.83);
 const completedProductionRetry = await asUser(USER_PRODUCTION, `
   select * from public.complete_production_order(
@@ -1650,41 +1525,7 @@ const releasedProduction = await asUser(USER_QUALITY, `
   ) result
 `);
 assert.equal(releasedProduction.rows[0].result.status, 'released');
-await productionController.readQualityThroughController({asUser,actorId:USER_QUALITY,clinicId:CLINIC_A,orderId:productionOrder.rows[0].id,status:'released'});
 assert.equal(Number(releasedProduction.rows[0].result.received_quantity), 11.5);
-for (const table of ['products','formulas','formula_components','production_orders','production_material_issues','production_qc','finished_goods_receipts']) {
-  const own = await asUser(USER_QUALITY, `select * from public.${table}`);
-  assert.ok(own.rows.length > 0, `Quality evidence missing: ${table}`);
-  assert.ok(own.rows.every(row => row.clinic_id === CLINIC_A), `Quality tenant leak: ${table}`);
-  const other = await asUser(USER_B, `select * from public.${table} where clinic_id='${CLINIC_A}'`);
-  assert.equal(other.rows.length, 0, `Cross-clinic evidence leak: ${table}`);
-  const reception = await asUser(USER_RECEPTION, `select * from public.${table}`);
-  assert.equal(reception.rows.length, 0, `Reception evidence leak: ${table}`);
-  for (const command of ['INSERT','UPDATE','DELETE']) {
-    const privilege = await asUser(USER_QUALITY, `select has_table_privilege(current_user, 'public.${table}', '${command}') allowed`);
-    assert.equal(privilege.rows[0].allowed, false, `Direct ${command} grant: ${table}`);
-  }
-}
-console.log('Quality evidence: seven populated tables readable, tenant/reception denials and direct DML privilege denials passed.');
-// Move only the synthetic Quality actor inside a rolled-back fixture transaction.
-// Prove the new Quality policy itself cannot read the former clinic's evidence.
-await db.exec('begin');
-try {
-  await execAsDatabaseOwnerWithServiceClaim(`
-    update public.clinic_memberships set active=false,is_primary=false
-      where profile_id='${USER_QUALITY}';
-    insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary,active)
-      values ('${CLINIC_B}','${USER_QUALITY}','quality',true,true);
-  `);
-  const context = await asUser(USER_QUALITY, `select public.current_clinic_id() clinic, public.current_department_role() department`);
-  assert.deepEqual(context.rows[0], {clinic:CLINIC_B,department:'quality'});
-  for (const table of ['products','formulas','formula_components','production_orders','production_material_issues','production_qc','finished_goods_receipts']) {
-    const foreign = await asUser(USER_QUALITY, `select * from public.${table} where clinic_id='${CLINIC_A}'`);
-    assert.equal(foreign.rows.length,0, `Foreign Quality read: ${table}`);
-  }
-} finally {
-  await db.exec('reset role; rollback');
-}
 const releaseRetry = await asUser(USER_QUALITY, `
   select public.quality_release_production_order(
     '${productionOrder.rows[0].id}','ผ่านข้อกำหนดการทดสอบ',
@@ -1795,7 +1636,7 @@ const backupPayload = await asService(`
 assert.equal(backupPayload.rows[0].payload.format, 'chananya-domain-export/v1');
 assert.equal(backupPayload.rows[0].payload.domain, 'products');
 assert.ok(backupPayload.rows[0].payload.data.products.length >= 2);
-assert.equal(backupPayload.rows[0].payload.schema_version, '2026-09-27.1');
+assert.equal(backupPayload.rows[0].payload.schema_version, '2026-09-01.1');
 for (const table of [
   'services','price_lists','price_list_items','products','suppliers','inventory_lots',
   'stock_movements','formulas','formula_components','production_requests',
@@ -1814,14 +1655,12 @@ const transactionBackup = await asService(`
   ) payload
 `);
 assert.equal(transactionBackup.rows[0].payload.domain, 'transactions');
-assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-09-27.1');
+assert.equal(transactionBackup.rows[0].payload.schema_version, '2026-09-01.1');
 for (const table of [
   'audit_logs','clinical_record_audit_events','appointment_events',
   'patient_identity_events','invoices','invoice_items','payments',
   'line_oa_webhook_events','line_oa_notification_outbox','line_oa_delivery_events',
-  'clinic_subscription_control_events','clinic_drive_destination_events',
-  'cnyos_clarification_internal.tickets','cnyos_clarification_internal.clearances',
-  'cnyos_clarification_internal.replacements'
+  'clinic_subscription_control_events','clinic_drive_destination_events'
 ]) {
   assert.ok(Array.isArray(transactionBackup.rows[0].payload.data[table]), `${table} must be exported as an array`);
 }
@@ -1859,15 +1698,15 @@ assert.match(patientBackup.rows[0].payload.recovery_model.full_database_restore,
 
 const backupContract = await asUser(USER_C, `select * from public.backup_restore_contract_healthcheck()`);
 assert.equal(backupContract.rows[0].ready, true);
-assert.equal(backupContract.rows[0].schema_version, '2026-09-27.1');
-assert.equal(Number(backupContract.rows[0].transaction_table_count), 20);
+assert.equal(backupContract.rows[0].schema_version, '2026-09-01.1');
+assert.equal(Number(backupContract.rows[0].transaction_table_count), 12);
 const restoreTrace = await asService(`
   select public.verify_clinic_restore_trace(
     '00000000-0000-0000-0000-000000000001'
   ) trace
 `);
 assert.equal(restoreTrace.rows[0].trace.ready, true);
-assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-09-27.1');
+assert.equal(restoreTrace.rows[0].trace.schema_version, '2026-09-01.1');
 assert.equal(Number(restoreTrace.rows[0].trace.counts.clinic_drive_destination_events), 0);
 assert.equal(restoreTrace.rows[0].trace.referential_integrity_anomalies, 0);
 
@@ -1929,12 +1768,6 @@ for (const [index, demo] of demoCases.entries()) {
     )
   `);
   const productId = product.rows[0].id;
-  await asUser(USER_OWNER, `
-    select * from public.set_price_master_item(
-      '${smokePriceSetup.price_list_id}','product','${productId}',null,
-      'ขวด',${demo.price},0,${sqlQuote(`Synthetic ${demo.id} product price`)}
-    )
-  `);
   const lots = await asService(`
     insert into public.inventory_lots(
       clinic_id,product_id,lot_number,expiry_date,received_quantity,
@@ -1945,12 +1778,12 @@ for (const [index, demo] of demoCases.entries()) {
     returning id,lot_number,expiry_date,current_quantity
   `);
 
-  const patient = await registerOnePatient(USER_A, `
-    select * from public.upsert_patient_registration(
+  const patient = await asUser(USER_A, `
+    select (public.upsert_patient_registration(
       null,${sqlQuote(demo.prefix)},${sqlQuote(demo.first)},${sqlQuote(demo.last)},
       null,${sqlQuote(demo.gender)},${sqlQuote(demo.dob)},null,null,null,null,
       'ไม่มี — ข้อมูลสังเคราะห์'
-    );
+    )).*;
   `);
   const encounter = await asUser(USER_A, `
     select * from public.start_manual_patient_encounter(
@@ -2045,7 +1878,7 @@ for (const [index, demo] of demoCases.entries()) {
     await expectDatabaseError(
       asUser(USER_PHARMACY, `
         select * from public.issue_atomic_dispensing_invoice(
-          '${prescription.rows[0].dispensing_order_id}',0,0
+          '${prescription.rows[0].dispensing_order_id}',${demo.serviceFee},${demo.discount}
         )
       `),
       'PERMISSION_DENIED'
@@ -2054,11 +1887,11 @@ for (const [index, demo] of demoCases.entries()) {
 
   const invoice = await asUser(USER_BILLING, `
     select * from public.issue_atomic_dispensing_invoice(
-      '${prescription.rows[0].dispensing_order_id}',0,0
+      '${prescription.rows[0].dispensing_order_id}',${demo.serviceFee},${demo.discount}
     )
   `);
   const grandTotal = Number(invoice.rows[0].grand_total);
-  assert.equal(grandTotal, demo.qty * demo.price);
+  assert.equal(grandTotal, demo.qty * demo.price + demo.serviceFee - demo.discount);
   const payment = await asUser(USER_BILLING, `
     select * from public.record_atomic_invoice_payment(
       '${randomUUID()}','${invoice.rows[0].invoice_id}',${grandTotal},
@@ -2097,8 +1930,7 @@ for (const [index, demo] of demoCases.entries()) {
     join public.ttm_structured_diagnoses dx on dx.encounter_id=e.id
     join public.prescriptions rx on rx.encounter_id=e.id
     join public.dispensing_orders d on d.prescription_id=rx.id
-    join cnyos_billing_internal.invoice_orders ios on ios.dispensing_order_id=d.id
-    join public.invoices i on i.id=ios.invoice_id
+    join public.invoices i on i.source_dispensing_order_id=d.id
     join public.payments pay on pay.invoice_id=i.id
     where p.id='${patient.rows[0].id}'
       and e.id='${encounter.rows[0].encounter_id}'
@@ -2124,9 +1956,9 @@ for (const [index, demo] of demoCases.entries()) {
     quantity: demo.qty,
     unit: 'ขวด',
     unit_price: demo.price,
-    service_fee: 0,
-    discount: 0,
-    expected_total: demo.qty * demo.price,
+    service_fee: demo.serviceFee,
+    discount: demo.discount,
+    expected_total: demo.qty * demo.price + demo.serviceFee - demo.discount,
     practitioner_account: 'practitioner@example.test',
     pharmacy_account: 'pharmacy@example.test',
     billing_account: 'billing@example.test',
@@ -2221,10 +2053,6 @@ const smokeOff = (await asService(`
   ) result
 `)).rows[0].result;
 assert.equal(smokeOff.state,'suspended');
-for (const table of ['products','formulas','formula_components','production_orders','production_material_issues','production_qc','finished_goods_receipts']) {
-  const suspended = await asUser(USER_QUALITY, `select * from public.${table}`);
-  assert.equal(suspended.rows.length, 0, `Suspended Quality evidence leak: ${table}`);
-}
 const smokeWithdrawal = await asService(`
   select * from public.set_line_oa_notification_preference_for_subject(
     '${subjectHash}','${patientA.id}','${CLINIC_A}','staging','smoke-deploy',

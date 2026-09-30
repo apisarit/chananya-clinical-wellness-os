@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import './appointment-availability-regression.mjs';
 import './appointment-operator-read-regression.mjs';
-import './appointment-calendar-ui.mjs';
+import './appointment-practitioner-capacity-regression.mjs';
 import './appointment-booking-refresh.mjs';
 
 const html = fs.readFileSync(new URL('../appointments.html', import.meta.url), 'utf8');

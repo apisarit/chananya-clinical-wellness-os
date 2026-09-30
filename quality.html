@@ -40,7 +40,6 @@
         </div>
         <section class="card">
           <div class="section-heading"><span class="section-number">QC</span><div><h2>Batch รอ Quality decision</h2><p>ผู้ผลิต Batch เดียวกันไม่สามารถกดยืนยันผ่านหรือ Reject ด้วยบัญชีเดิมได้</p></div></div>
-          <p id="quality-action-status" class="muted" role="status" aria-live="polite"></p>
           <div id="quality-queue" class="list"></div>
         </section>
         <section class="card">
@@ -62,7 +61,7 @@
       <label>Moisture result<input id="qc-moisture" type="number" min="0" step="0.0001"></label>
       <label>Water activity<input id="qc-water-activity" type="number" min="0" step="0.0001"></label>
       <label>Weight result<input id="qc-weight" type="number" min="0" step="0.0001"></label>
-      <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn primary" type="submit">ยืนยัน Quality Release</button></div>
+      <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn primary">ยืนยัน Quality Release</button></div>
     </form>
   </dialog>
 
@@ -72,7 +71,7 @@
       <p class="notice warning full" id="reject-order-label"></p>
       <label class="full">Result summary<textarea id="reject-summary" required minlength="3">ไม่ผ่านข้อกำหนด</textarea></label>
       <label class="full">เหตุผลที่ไม่ผ่าน<textarea id="reject-reason" required minlength="5"></textarea></label>
-      <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn danger" type="submit">ยืนยัน Reject และ Audit</button></div>
+      <div class="right full"><button class="btn ghost" type="button" data-close-dialog>ยกเลิก</button><button class="btn danger">ยืนยัน Reject และ Audit</button></div>
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

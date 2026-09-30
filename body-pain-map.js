@@ -19,120 +19,6 @@
   let points = [];
   let draft = null;
   let editingId = null;
-  let encounterRevision = 0;
-  let loadRevision = 0;
-  let accountBlocked = false;
-  let mutationPending = false;
-  const pointFields = ['encounter_id','assessment_stage','body_view','x_percent','y_percent','symptom_type','pain_score','side','body_region','sen_line_code','point_label','notes','pain_pattern_code'];
-  const insertKey = target => `cnyos:bodypoint-insert:${session.user.id}:${target}`;
-
-  function requireCurrent(target, revision) {
-    if (!isCurrent(target, revision)) throw new Error('บริบทบัญชีหรือ Encounter เปลี่ยนแล้ว กรุณาเปิดรายการใหม่');
-  }
-
-  async function pointDigest(row) {
-    const values = pointFields.map(field => {
-      const value = row[field] ?? null;
-      return value !== null && ['x_percent','y_percent','pain_score'].includes(field) ? Number(value) : value;
-    });
-    return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(values))))]
-      .map(byte => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  function insertMarker(target) {
-    const raw = window.sessionStorage.getItem(insertKey(target));
-    if (raw === null) return null;
-    let marker;
-    try { marker = JSON.parse(raw); } catch { throw new Error('รหัสคำขอเดิมเสียหาย กรุณาติดต่อผู้ดูแลก่อนบันทึกซ้ำ'); }
-    if (!marker || Object.keys(marker).sort().join() !== 'digest,id,phase,version' || marker.version !== 2
-      || !['prepared','sent'].includes(marker.phase)
-      || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(marker.id) || !/^[a-f0-9]{64}$/.test(marker.digest)) {
-      throw new Error('รหัสคำขอเดิมเสียหาย กรุณาติดต่อผู้ดูแลก่อนบันทึกซ้ำ');
-    }
-    return marker;
-  }
-
-  function clearInsertMarker(target, marker) {
-    const key = insertKey(target);
-    if (window.sessionStorage.getItem(key) !== JSON.stringify(marker)) throw new Error('รหัสคำขอเปลี่ยน กรุณาตรวจผลใหม่');
-    window.sessionStorage.removeItem(key);
-    if (window.sessionStorage.getItem(key) !== null) throw new Error('ล้างสถานะคำขอไม่ได้ กรุณาตรวจผลใหม่');
-  }
-
-  async function readPendingPoint(target, revision, marker) {
-    requireCurrent(target, revision);
-    const result = await db.from('body_pain_points').select(['id','recorded_by',...pointFields].join(','))
-      .eq('id', marker.id).eq('encounter_id', target).maybeSingle();
-    requireCurrent(target, revision);
-    if (result.error) throw new Error('ยังอ่านผลบันทึกเดิมไม่ได้ กรุณาตรวจผลอีกครั้งก่อนบันทึกซ้ำ');
-    if (!result.data) return null;
-    const row = result.data;
-    if (row.id !== marker.id || row.encounter_id !== target || row.recorded_by !== session.user.id
-      || !pointFields.every(field => Object.hasOwn(row, field))
-      || await pointDigest(row) !== marker.digest) throw new Error('ข้อมูลที่อ่านกลับไม่ตรงคำขอเดิม กรุณาให้ผู้ดูแลตรวจสอบ');
-    requireCurrent(target, revision);
-    return row;
-  }
-
-  async function insertPoint(payload, target, revision) {
-    requireCurrent(target, revision);
-    const hash = await pointDigest(payload);
-    requireCurrent(target, revision);
-    let marker = insertMarker(target);
-    if (marker && marker.digest !== hash) throw new Error('คำขอเดิมยังไม่ยืนยันผล กรุณาตรวจผลบันทึกที่ค้างก่อนเปลี่ยนข้อมูล');
-    if (!marker) {
-      marker = { version: 2, id: crypto.randomUUID(), digest: hash, phase: 'prepared' };
-      window.sessionStorage.setItem(insertKey(target), JSON.stringify(marker));
-      if (window.sessionStorage.getItem(insertKey(target)) !== JSON.stringify(marker)) throw new Error('เก็บรหัสคำขอไม่ได้ จึงยังไม่ส่งการบันทึก');
-    }
-    if (!await readPendingPoint(target, revision, marker)) {
-      requireCurrent(target, revision);
-      // A missing row after dispatch could also mean a later deletion. Without
-      // a durable server receipt, never recreate that uncertain clinical point.
-      if (marker.phase === 'sent') throw new Error('คำขอถูกส่งแล้วแต่ยังไม่พบผล กรุณาให้ผู้ดูแลตรวจสอบ ไม่ส่งบันทึกซ้ำอัตโนมัติ');
-      marker = { ...marker, phase: 'sent' };
-      window.sessionStorage.setItem(insertKey(target), JSON.stringify(marker));
-      if (window.sessionStorage.getItem(insertKey(target)) !== JSON.stringify(marker)) throw new Error('เก็บสถานะส่งคำขอไม่ได้ จึงยังไม่ส่งการบันทึก');
-      const result = await db.from('body_pain_points').insert({ ...payload, id: marker.id, recorded_by: session.user.id });
-      requireCurrent(target, revision);
-      if (result.error && result.error.code !== '23505') {
-        if (['P0001','22023','23514','42501','28000','23502','23503'].includes(result.error.code)) clearInsertMarker(target, marker);
-        throw new Error('ยังยืนยันการบันทึกไม่ได้ กรุณาตรวจผลบันทึกที่ค้างก่อนลองใหม่');
-      }
-      if (!await readPendingPoint(target, revision, marker)) throw new Error('ยังไม่พบผลบันทึกเดิม กรุณาตรวจอีกครั้งก่อนลองใหม่');
-    }
-    requireCurrent(target, revision);
-    clearInsertMarker(target, marker);
-    return { error: null };
-  }
-
-  async function recoverInsert() {
-    if (mutationPending || accountBlocked) return;
-    const target = currentEncounter, revision = encounterRevision;
-    if (!target) throw new Error('กรุณาเลือก Encounter');
-    mutationPending = true;
-    try {
-      const marker = insertMarker(target);
-      if (!marker) throw new Error('ไม่มีคำขอบันทึกจุดที่ค้างในบัญชีและ Encounter นี้');
-      if (!await readPendingPoint(target, revision, marker)) throw new Error('ยังไม่พบรายการเดิม ไม่ได้สร้างจุดใหม่ กรุณาตรวจอีกครั้ง');
-      clearInsertMarker(target, marker);
-      reset();
-      await load();
-      if (isCurrent(target, revision)) $('#bm-status').textContent = 'พบและยืนยันจุดเดิมแล้ว ไม่ได้สร้างรายการซ้ำ';
-    } finally { mutationPending = false; }
-  }
-
-  function isCurrent(target, revision) {
-    return !accountBlocked && target === currentEncounter && revision === encounterRevision && target === ($('#encounter')?.value || null);
-  }
-
-  function blockAccount() {
-    if (accountBlocked) return;
-    accountBlocked = true; encounterRevision++; loadRevision++;
-    currentEncounter = null; points = []; draft = null; editingId = null;
-    const slot = $('#bodymap-slot');
-    if (slot) { slot.inert = true; slot.textContent = 'บัญชีเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่'; }
-  }
 
   function codeFor(point) {
     const sen = (point.sen_line_code || 'S.00').replace(/\s+/g, '');
@@ -162,13 +48,11 @@
       </div>
       <div id="bm-status" class="bm-status" aria-live="polite">แตะบนร่างกายเพื่อเลือกตำแหน่ง</div>
       <div class="bm-actions"><button type="button" class="btn primary" id="bm-save">บันทึกจุด</button><button type="button" class="btn ghost" id="bm-cancel">ยกเลิก</button><button type="button" class="btn ghost" id="bm-print">พิมพ์ Pain Map</button></div>
-      <button type="button" class="btn ghost" id="bm-recover">ตรวจผลบันทึกที่ค้าง</button>
       <div id="bm-list"></div>
     </div>`;
   }
 
   function emitChanged() {
-    if (accountBlocked) return;
     window.dispatchEvent(new CustomEvent('chananya:clinical-data-changed', { detail: { encounterId: currentEncounter, source: 'body-pain-map' } }));
   }
 
@@ -178,7 +62,6 @@
   }
 
   function render() {
-    if (accountBlocked) return;
     const layer = $('#bm-layer');
     if (!layer) return;
     const markers = points.map(point => {
@@ -199,7 +82,6 @@
   }
 
   function onCanvasClick(event) {
-    if (accountBlocked) return;
     if (!currentEncounter) { alert('กรุณาเลือก Encounter ก่อน'); return; }
     if (event.target.closest('.bm-marker')) return;
     const rect = $('#bm-canvas').getBoundingClientRect();
@@ -216,18 +98,14 @@
   }
 
   async function load() {
-    if (accountBlocked) return;
-    const target = currentEncounter, revision = encounterRevision, request = ++loadRevision;
     if (!currentEncounter) { points = []; render(); return; }
-    const result = await db.from('body_pain_points').select('*').eq('encounter_id', target).order('recorded_at');
-    if (!isCurrent(target, revision) || request !== loadRevision) return;
+    const result = await db.from('body_pain_points').select('*').eq('encounter_id', currentEncounter).order('recorded_at');
     if (result.error) throw result.error;
     points = result.data || [];
     render();
   }
 
   function edit(id) {
-    if (accountBlocked) return;
     const point = points.find(item => item.id === id);
     if (!point) return;
     editingId = id;
@@ -245,7 +123,6 @@
   }
 
   function reset() {
-    if (accountBlocked) return;
     editingId = null;
     draft = null;
     ['#bm-score', '#bm-region', '#bm-sen', '#bm-label', '#bm-notes', '#bm-view'].forEach(selector => { const element = $(selector); if (element) element.value = ''; });
@@ -254,13 +131,8 @@
   }
 
   async function save() {
-    if (accountBlocked) throw new Error('บัญชีเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่');
-    if (mutationPending) return;
     if (!currentEncounter) throw new Error('กรุณาเลือก Encounter');
     if (!draft) throw new Error('กรุณาแตะตำแหน่งบนร่างกาย');
-    const target = currentEncounter, revision = encounterRevision;
-    if (!isCurrent(target, revision)) throw new Error('กรุณาโหลด Encounter ปัจจุบันก่อน');
-    if (editingId && insertMarker(target)) throw new Error('กรุณาตรวจผลบันทึกที่ค้างก่อนแก้ไขจุด');
     const payload = {
       encounter_id: currentEncounter,
       assessment_stage: $('#bm-stage').value,
@@ -277,38 +149,24 @@
       updated_at: new Date().toISOString()
     };
     payload.pain_pattern_code = codeFor(payload);
-    mutationPending = true;
-    try {
     const result = editingId
-      ? await db.from('body_pain_points').update(payload).eq('id', editingId).eq('encounter_id', target)
-      : await insertPoint(payload, target, revision);
-    if (!isCurrent(target, revision)) return;
+      ? await db.from('body_pain_points').update(payload).eq('id', editingId)
+      : await db.from('body_pain_points').insert({ ...payload, recorded_by: session.user.id });
     if (result.error) throw result.error;
     reset();
     await load();
-    if (isCurrent(target, revision)) emitChanged();
-    } finally { mutationPending = false; }
+    emitChanged();
   }
 
   async function remove(id) {
-    if (accountBlocked) throw new Error('บัญชีเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่');
-    if (mutationPending) return;
-    const target = currentEncounter, revision = encounterRevision;
-    if (!isCurrent(target, revision) || !points.some(point => point.id === id)) throw new Error('กรุณาโหลดจุดของ Encounter ปัจจุบันก่อน');
-    if (insertMarker(target)) throw new Error('กรุณาตรวจผลบันทึกที่ค้างก่อนลบจุด');
     if (!confirm('ยืนยันลบจุดนี้?')) return;
-    mutationPending = true;
-    try {
-    const result = await db.from('body_pain_points').delete().eq('id', id).eq('encounter_id', target);
-    if (!isCurrent(target, revision)) return;
+    const result = await db.from('body_pain_points').delete().eq('id', id);
     if (result.error) throw result.error;
     await load();
-    if (isCurrent(target, revision)) emitChanged();
-    } finally { mutationPending = false; }
+    emitChanged();
   }
 
   function showError(error) {
-    if (accountBlocked) return;
     console.error(error);
     alert(error?.message || String(error));
   }
@@ -317,19 +175,13 @@
     db = runtime.getDb();
     session = await runtime.getSession();
     if (!session) return;
-    const originalActor = session.user.id;
-    db.auth.onAuthStateChange((event, nextSession) => {
-      if (event === 'SIGNED_OUT' || !nextSession?.user?.id || nextSession.user.id !== originalActor) blockAccount();
-    });
-    if (accountBlocked) return;
     const slot = $('#bodymap-slot');
     if (!slot) return;
     slot.innerHTML = markup();
     $('#bm-canvas').addEventListener('click', onCanvasClick);
     $('#bm-save').addEventListener('click', () => save().catch(showError));
     $('#bm-cancel').addEventListener('click', reset);
-    $('#bm-recover').addEventListener('click', () => recoverInsert().catch(showError));
-    $('#bm-print').addEventListener('click', () => { if (!accountBlocked) window.print(); });
+    $('#bm-print').addEventListener('click', () => window.print());
     $('#bm-list').addEventListener('click', event => {
       const editButton = event.target.closest('[data-edit-point]');
       const deleteButton = event.target.closest('[data-delete-point]');
@@ -338,22 +190,14 @@
     });
     const encounter = $('#encounter');
     currentEncounter = encounter?.value || null;
-    const syncEncounter = () => {
-      if (accountBlocked) return;
-      const nextEncounter = encounter?.value || null;
-      if (nextEncounter === currentEncounter) return;
-      currentEncounter = nextEncounter;
-      encounterRevision++;
-      points = [];
+    encounter?.addEventListener('change', () => {
+      currentEncounter = encounter.value || null;
       reset();
       load().catch(showError);
-    };
-    encounter?.addEventListener('change', syncEncounter);
-    window.addEventListener('chananya:encounter-changed', syncEncounter);
+    });
     await load();
   }
 
-  window.addEventListener('pagehide', event => { if (event.persisted) blockAccount(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => init().catch(showError), { once: true });
   else init().catch(showError);
 })();

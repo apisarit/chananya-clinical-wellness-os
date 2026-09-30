@@ -13,18 +13,13 @@
   <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="clarification-action.js?v=clarification1"></script>
-  <script defer src="replacement-history.js?v=replacement1"></script>
-  <script defer src="replacement-action.js?v=replacement1"></script>
-  <script defer src="replacement-recovery.js?v=replacement1"></script>
-  <script defer src="clarification-history.js?v=clarification1"></script>
-  <script defer src="clinical-v3.js?v=prescription-billed-guard1"></script>
+  <script defer src="clinical-v3.js?v=clinical-os-prescription-handoff1"></script>
   <script defer src="clinical-context-guard.js?v=clinical-os-ia1"></script>
   <script defer src="body-pain-map.js?v=clinical-os-department1"></script>
   <script defer src="ttm-diagnosis-assistant.js?v=clinical-os-ia1"></script>
   <script defer src="diagnosis-atomic-bridge.js?v=clinical-os-ia1"></script>
-  <script defer src="opd-workflow.js?v=treatment-replay1"></script>
-  <script defer src="clinical-signoff.js?v=encounter-readback1"></script>
+  <script defer src="opd-workflow.js?v=clinical-os-ia1"></script>
+  <script defer src="clinical-signoff.js?v=clinical-os-ia1"></script>
 </head>
 <body data-page="clinical">
   <div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด Clinical Workspace</h2><p id="boot-error">กำลังตรวจสอบสิทธิ์และเวชระเบียน</p></div></div>
@@ -206,7 +201,6 @@
                   <div class="section-heading"><span class="section-number">5B</span><div><h2>Treatment Session & Outcome</h2><p>บันทึกการรักษาที่เกิดขึ้นจริงและเปรียบเทียบผลก่อน–หลัง</p></div></div>
                   <form id="opd-session-form" class="opd-grid">
                     <div class="full opd-chipgrid"><label><input type="checkbox" name="opd-modality" value="นวดไทย">นวดไทย</label><label><input type="checkbox" name="opd-modality" value="ประคบสมุนไพร">ประคบสมุนไพร</label><label><input type="checkbox" name="opd-modality" value="อบสมุนไพร">อบสมุนไพร</label><label><input type="checkbox" name="opd-modality" value="ยาสมุนไพร">ยาสมุนไพร</label><label><input type="checkbox" name="opd-modality" value="หัตถการอื่น">หัตถการอื่น</label></div>
-                    <label>ระยะเวลาการรักษา (นาที)<input id="opd-duration-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" required aria-describedby="opd-duration-help"><small id="opd-duration-help" class="field-help">ระบุเวลาที่รักษาจริงเป็นจำนวนนาทีเต็ม ห้ามเว้นว่าง</small></label>
                     <label>ความปวดก่อนรักษา 0–10<input id="opd-pain-before" type="number" min="0" max="10"></label>
                     <label>ความปวดหลังรักษา 0–10<input id="opd-pain-after" type="number" min="0" max="10"></label>
                     <label class="full">วิธีการรักษา / รายละเอียด<textarea id="opd-treatment-detail" required></textarea></label>

@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { init as initModuleLexer, parse as parseModuleImports } from 'es-module-lexer';
 import { PLATFORM_FEATURES, resolvePlatformFeatures } from '../platform-config.js';
 import { GENERATED_CONFIG_DIRECTORY } from './generate-tenant-config.mjs';
 
@@ -15,9 +14,7 @@ const allowedExact = new Set([
   '_redirects',
   'tenant-config.js',
   'brand-config.js',
-  'deploy-manifest.json',
-  'evidence-page.mjs',
-  'evidence-view.mjs'
+  'deploy-manifest.json'
 ]);
 
 const generatedConfigFiles = Object.freeze([
@@ -92,52 +89,6 @@ export async function assertRuntimeWorktreeMatchesGit(cwd, sourceFiles) {
   }
 }
 
-await initModuleLexer;
-
-// Check selected HTML scripts and every selected JS/MJS module's literal imports.
-// Computed imports and bare specifiers require explicit build support, not guessing.
-// External CDN availability and runtime-created script elements are not certified.
-export function assertRuntimeScriptDependencies(sourceFiles) {
-  const available = new Set([...sourceFiles.keys(), ...generatedConfigFiles]);
-  const check = (name, reference) => {
-    const resolved = new URL(reference, `https://runtime.invalid/${name}`);
-    if (resolved.origin !== 'https://runtime.invalid') return;
-    const target = decodeURIComponent(resolved.pathname).replace(/^\//, '');
-    if (!available.has(target)) throw new Error(`NETLIFY_PUBLISH_SCRIPT_DEPENDENCY_MISSING: ${name} -> ${target}`);
-  };
-  const checkImports = (name, code) => {
-    let imports;
-    try { [imports] = parseModuleImports(code, name); }
-    catch { throw new Error(`NETLIFY_PUBLISH_MODULE_PARSE_FAILED: ${name}`); }
-    for (const item of imports) {
-      if (item.d === -2) continue; // import.meta is not a dependency.
-      if (typeof item.n !== 'string') throw new Error(`NETLIFY_PUBLISH_COMPUTED_IMPORT_UNSUPPORTED: ${name}`);
-      if (!/^(?:\.{1,2}\/|\/|https?:\/\/)/.test(item.n)) {
-        throw new Error(`NETLIFY_PUBLISH_MODULE_SPECIFIER_UNSUPPORTED: ${name}`);
-      }
-      check(name, item.n);
-    }
-  };
-  for (const [name, content] of sourceFiles) {
-    if (/\.(?:js|mjs)$/.test(name)) checkImports(name, content.toString('utf8'));
-    if (!name.endsWith('.html')) continue;
-    const html = content.toString('utf8').replace(/<!--[\s\S]*?-->/g, '');
-    if (/<base\b/i.test(html)) throw new Error(`NETLIFY_PUBLISH_BASE_URL_UNSUPPORTED: ${name}`);
-    for (const tag of html.matchAll(/<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)(?:<\/script\s*>|$)/gi)) {
-      const attributes = new Map();
-      for (const attribute of tag[1].matchAll(/([^\s=/'">]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
-        const key = attribute[1].toLowerCase();
-        if (!attributes.has(key)) attributes.set(key, attribute[2] ?? attribute[3] ?? attribute[4] ?? '');
-      }
-      const type = (attributes.get('type') || '').trim().toLowerCase();
-      if (type === 'importmap') throw new Error(`NETLIFY_PUBLISH_IMPORT_MAP_UNSUPPORTED: ${name}`);
-      if (type && !['module', 'text/javascript', 'application/javascript'].includes(type)) continue;
-      if (attributes.has('src')) check(name, attributes.get('src'));
-      else checkImports(name, tag[2]);
-    }
-  }
-}
-
 /**
  * Domain redirects are global when declared in netlify.toml.  Add the
  * technical-host redirect to the generated production artifact instead, so a
@@ -178,7 +129,6 @@ export async function buildNetlifyPublish({
   const deployment = JSON.parse(await fs.readFile(path.join(generated, 'deploy-manifest.json'), 'utf8'));
   const selectedSources = selectRuntimeSourceFiles(sourceFiles || loadExactGitRootBlobs(cwd), deployment);
   await assertRuntimeWorktreeMatchesGit(cwd, selectedSources);
-  assertRuntimeScriptDependencies(selectedSources);
   const copied = [];
   for (const [name, content] of selectedSources) {
     await fs.writeFile(path.join(target, name), content, { mode: 0o644 });

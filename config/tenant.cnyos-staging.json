@@ -34,7 +34,7 @@
     "publishableKey": "sb_publishable_REPLACE_AFTER_BOOTSTRAP"
   },
   "auth": {
-    "redirectOrigin": "https://cnyos.netlify.app",
+    "redirectOrigin": "https://cnyos-clinical-staging.netlify.app",
     "provider": "google"
   },
   "identity": {
