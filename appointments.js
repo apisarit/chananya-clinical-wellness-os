@@ -299,8 +299,11 @@
       const confirmation = `จองสำเร็จ ${result.data.appointment_no} • คิว ${result.data.queue_number}`;
       event.target.reset();
       toast('จองนัดหมายสำเร็จ');
-      await Promise.all([loadSchedules(), loadAppointments()]);
-      $('#booking-status').textContent = confirmation;
+      const refreshed = await Promise.allSettled([loadSchedules(), loadAppointments()]);
+      const refreshFailed = refreshed.some(result => result.status === 'rejected');
+      $('#booking-status').textContent = refreshFailed
+        ? `${confirmation} • โหลดตารางหรือรายการนัดล่าสุดไม่สำเร็จ กรุณาโหลดรายการใหม่เพื่อตรวจสอบ ไม่ต้องจองซ้ำ`
+        : confirmation;
     } finally {
       bookingInFlight = false;
       $('#booking-submit').disabled = false;
@@ -315,9 +318,16 @@
     let request = db.from('clinic_appointments').select('*,patient:patients!clinic_appointments_patient_clinic_fkey(id,hn,prefix,first_name,last_name,phone)').order('scheduled_start');
     if (day) request = request.gte('scheduled_start', new Date(`${day}T00:00:00+07:00`).toISOString()).lte('scheduled_start', new Date(`${day}T23:59:59.999+07:00`).toISOString());
     if (status) request = request.eq('status', status);
-    const result = await request;
-    if (version !== appointmentRequestVersion) return;
-    if (result.error) throw result.error;
+    let result;
+    try {
+      result = await request;
+      if (version !== appointmentRequestVersion) return;
+      if (result.error) throw result.error;
+    } catch (error) {
+      if (version !== appointmentRequestVersion) return;
+      $('#appointment-list').innerHTML = '<p class="notice warning" role="alert">โหลดรายการนัดไม่สำเร็จ กรุณากดโหลดรายการใหม่ ไม่ใช่การยืนยันว่าไม่มีนัด</p>';
+      throw error;
+    }
     $('#appointment-list').innerHTML = (result.data || []).map(item => {
       const patient = item.patient || {};
       const mayProvideCare = canClinicalStatus && item.practitioner_id === session.user.id;
@@ -342,7 +352,11 @@
       const result = await db.rpc('set_clinic_appointment_status', { p_appointment_id: id, p_new_status: status, p_note: null });
       if (result.error) throw result.error;
       toast('อัปเดตสถานะแล้ว');
-      await loadAppointments();
+      try {
+        await loadAppointments();
+      } catch {
+        toast('อัปเดตสถานะแล้ว แต่โหลดรายการล่าสุดไม่สำเร็จ กรุณาโหลดรายการใหม่ ไม่ต้องเปลี่ยนสถานะซ้ำ');
+      }
     } finally {
       appointmentActionsInFlight.delete(id);
       document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = false; });
@@ -361,7 +375,10 @@
       const result = await db.rpc('cancel_clinic_appointment', { p_appointment_id: id, p_reason: reason.trim() });
       if (result.error) throw result.error;
       toast('ยกเลิกนัดแล้ว');
-      await Promise.all([loadSchedules(), loadAppointments()]);
+      const refreshed = await Promise.allSettled([loadSchedules(), loadAppointments()]);
+      if (refreshed.some(result => result.status === 'rejected')) {
+        toast('ยกเลิกนัดแล้ว แต่โหลดตารางหรือรายการล่าสุดไม่สำเร็จ กรุณาโหลดรายการใหม่ ไม่ต้องยกเลิกซ้ำ');
+      }
     } finally {
       appointmentActionsInFlight.delete(id);
       document.querySelectorAll('[data-status],[data-cancel]').forEach(button => { if (button.dataset.id === id || button.dataset.cancel === id) button.disabled = false; });

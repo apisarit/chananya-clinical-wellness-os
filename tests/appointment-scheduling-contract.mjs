@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import './appointment-availability-regression.mjs';
 import './appointment-operator-read-regression.mjs';
+import './appointment-practitioner-capacity-regression.mjs';
+import './appointment-booking-refresh.mjs';
 
 const html = fs.readFileSync(new URL('../appointments.html', import.meta.url), 'utf8');
 const js = fs.readFileSync(new URL('../appointments.js', import.meta.url), 'utf8');
@@ -29,7 +31,8 @@ assert.match(js, /if \(scheduleCreateInFlight\) return/);
 assert.match(js, /if \(bookingInFlight\) return/);
 assert.match(js, /\$\('#schedule-submit'\)\.disabled = true/);
 assert.match(js, /\$\('#booking-submit'\)\.disabled = true/);
-assert.match(js, /await Promise\.all\(\[loadSchedules\(\), loadAppointments\(\)\]\);\s*\$\('#booking-status'\)\.textContent = confirmation/);
+assert.match(js, /await Promise\.allSettled\(\[loadSchedules\(\), loadAppointments\(\)\]\)/);
+assert.match(js, /ไม่ต้องจองซ้ำ/);
 assert.match(js, /new Date\(`\$\{day\}T00:00:00\+07:00`\)/);
 assert.match(js, /thaiTime\(item\.ends_at\)/);
 assert.match(js, /patients!clinic_appointments_patient_clinic_fkey\(id,hn,prefix,first_name,last_name,phone\)/);
