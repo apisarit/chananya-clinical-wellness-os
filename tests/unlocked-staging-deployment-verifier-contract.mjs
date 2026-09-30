@@ -20,7 +20,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceCommit = 'a'.repeat(40);
 const sourceTree = 'b'.repeat(40);
 const netlifyDeployId = 'c'.repeat(24);
-const exactDeployOrigin = `https://${netlifyDeployId}--cnyos.netlify.app`;
+const exactDeployOrigin = `https://${netlifyDeployId}--cnyos-clinical-staging.netlify.app`;
 const publishableKey = `sb_publishable_${'k'.repeat(40)}`;
 const production = JSON.parse(fs.readFileSync(path.join(root, 'config/tenant.chananya.json'), 'utf8'));
 const stagingSource = {
@@ -32,6 +32,10 @@ const stagingSource = {
   },
   safety: { previewLocked: true }
 };
+
+assert.notEqual(CNYOS_UNLOCKED_STAGING_IDENTITY.origin, 'https://cnyos.netlify.app');
+assert.notEqual(CNYOS_UNLOCKED_STAGING_IDENTITY.siteId, '7da5e39e-580d-44f1-8623-605313e2fb2b');
+assert.equal(stagingSource.auth.redirectOrigin, CNYOS_UNLOCKED_STAGING_IDENTITY.origin);
 
 const runtimeFiles = Object.freeze([
   '_headers',
