@@ -4,6 +4,30 @@
 
 ## Prepare the exact candidate
 
+After this release-alignment change is merged, a successful **push-to-default-branch**
+`Release candidate contracts` run produces `release-handoff-<full-SHA>-<run-id>`.
+Use that artifact's `release-context.json` as the single selection record for
+promotion, deployment, and post-deploy verification. It contains the final merged
+commit/tree and the matching dispatch inputs for all three stages. The adjacent
+`attestation-draft.json` remains **unapproved**, with every operational gate pending.
+PR runs do not generate a final-main approval handoff; their head-SHA evidence is
+candidate evidence only. A new merge produces a new handoff, not rewritten history.
+
+Each protected release workflow now requires `release_commit`. A secretless
+preflight checks that it equals the selected workflow SHA and checked-out HEAD on
+the default branch **before** requesting production-environment approval. If main
+advanced since the handoff, stop and use the new final-main handoff; do not reuse
+the old approval or edit its SHA. Old historical workflow runs retain their old
+workflow code: do not rerun them to release a newer commit.
+
+This preflight detects selection mistakes; it cannot read or validate a protected
+environment secret before approval. A stale protected attestation still needs a
+genuine reviewer decision for the selected release and an authorized record update.
+No SHA check, environment protection, operational gate or post-deploy requirement
+is bypassed by the new handoff.
+
+For a manual draft using the existing verifier:
+
 Check out the final merged `main` commit. Run:
 
 ```sh
@@ -31,7 +55,12 @@ Store the completed record as the `PRODUCTION_RELEASE_ATTESTATION_JSON` secret i
 
 ## Run the protected workflows
 
-Run `Production promotion gate` on the final `main` commit with its existing confirmation. The gate runs before dependency installation and retains its report even on failure. The Actions job summary lists all missing or invalid evidence without printing secret contents.
+Run `Production promotion gate` on the final `main` commit with `release_commit`
+from the handoff and its existing confirmation. Use the **same full SHA** for
+`Exact CNYOS production deploy` and `Production post-deploy attestation`. Do not
+substitute a PR head or a mutable branch name for this input. The gate runs before
+dependency installation and retains its report even on failure. The Actions job
+summary lists all missing or invalid evidence without printing secret contents.
 
 For `Exact CNYOS production deploy`, configure these existing production-environment values:
 
