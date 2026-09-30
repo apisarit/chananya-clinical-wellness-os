@@ -41,7 +41,7 @@
 
   function patientName(id) {
     const patient = patients.find(item => item.id === id);
-    return patient ? `${patient.prefix || patient.title || ''}${patient.first_name || ''} ${patient.last_name || ''}`.trim() : '-';
+    return patient ? [patient.prefix || patient.title, patient.first_name, patient.last_name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || '-' : '-';
   }
 
   function optionRows(rows, label) {
@@ -122,12 +122,19 @@
       $('#encounter').value = preferredEncounter;
       $('#rx-encounter').value = preferredEncounter;
       await selectEncounter(preferredEncounter);
+    } else if (preferredEncounter) {
+      const url = new URL(location.href);
+      url.searchParams.delete('encounter');
+      history.replaceState({}, '', url);
+      $('#encounter').value = '';
+      $('#rx-encounter').value = '';
+      await selectEncounter('');
     }
     window.dispatchEvent(new CustomEvent('chananya:clinical-references-rendered'));
   }
 
   async function selectEncounter(encounterId) {
-    const nextEncounter = encounterId || null;
+    const nextEncounter = encounterId && encounters.some(item => item.id === encounterId) ? encounterId : null;
     if (nextEncounter !== currentEncounter && prescriptionSubmitting) {
       $('#encounter').value = currentEncounter || '';
       $('#rx-encounter').value = currentEncounter || '';
@@ -143,6 +150,10 @@
       clearPrescriptionDraft();
     }
     currentEncounter = nextEncounter;
+    const url = new URL(location.href);
+    if (currentEncounter) url.searchParams.set('encounter', currentEncounter);
+    else url.searchParams.delete('encounter');
+    history.replaceState({}, '', url);
     $('#encounter').value = currentEncounter || '';
     $('#rx-encounter').value = currentEncounter || '';
     if (!currentEncounter) {
@@ -152,11 +163,15 @@
       window.dispatchEvent(new CustomEvent('chananya:encounter-changed', { detail: { encounterId: null } }));
       return;
     }
+    resetEncounterViews();
     const encounter = encounters.find(item => item.id === currentEncounter);
     $('#encounter-info').textContent = `${encounter?.encounter_no || currentEncounter} • ${patientName(encounter?.patient_id)}`;
     markStep('intake', true);
+    const selectedAtStart = currentEncounter;
     await loadEncounter();
-    window.dispatchEvent(new CustomEvent('chananya:encounter-changed', { detail: { encounterId: currentEncounter } }));
+    if (selectedAtStart === currentEncounter && $('#encounter').value === selectedAtStart) {
+      window.dispatchEvent(new CustomEvent('chananya:encounter-changed', { detail: { encounterId: selectedAtStart } }));
+    }
   }
 
   function resetEncounterViews() {
@@ -323,6 +338,7 @@
     });
     if (result.error) throw result.error;
     await loadEncounter();
+    window.dispatchEvent(new CustomEvent('chananya:clinical-data-changed', { detail: { encounterId: currentEncounter } }));
     toast('บันทึก Treatment Plan แล้ว');
   }
 

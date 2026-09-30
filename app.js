@@ -5,7 +5,8 @@
   const $ = selector => document.querySelector(selector);
   const $$ = selector => [...document.querySelectorAll(selector)];
   const num = value => Number(value || 0);
-  const today = () => new Date().toISOString().slice(0, 10);
+  const BANGKOK_TIME_ZONE = 'Asia/Bangkok';
+  const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: BANGKOK_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const money = value => num(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
@@ -27,8 +28,11 @@
   const data = {
     patients: [], allergies: [], appointments: [], encounters: [], prescriptions: [],
     dispensing: [], dispensingItems: [], rxItems: [], products: [], invoices: [], payments: [], audit: [],
-    billableTreatmentEncounters: [], billableTreatmentError: ''
+    billableTreatmentEncounters: [], billableTreatmentError: '',
+    billableTreatmentState: 'idle', appointmentsState: 'idle', auditState: 'idle'
   };
+
+  let loadAllVersion = 0;
 
   const viewPermissions = {
     super_admin: ['all'], admin: ['audit'], practitioner: ['patients'], doctor: ['patients'],
@@ -67,11 +71,45 @@
   }
 
   async function optionalQuery(table, select = '*', order) {
-    try { return await query(table, select, order); }
-    catch (error) { console.warn(`Optional table unavailable: ${table}`, error); return []; }
+    try { return { status: 'success', data: await query(table, select, order) }; }
+    catch (error) {
+      const status = classifyLoadError(error);
+      console.warn(`Optional table unavailable: ${table} (${status})`);
+      return { status, data: [], error };
+    }
+  }
+
+  function classifyLoadError(error) {
+    const code = String(error?.code || error?.status || '');
+    if (['42501', '401', '403'].includes(code) || /permission|not authorized|forbidden|denied/i.test(String(error?.message || ''))) return 'denied';
+    if (['42P01', '42883', 'PGRST202', 'PGRST205'].includes(code) || /relation .* does not exist|could not find the table|function .* does not exist/i.test(String(error?.message || ''))) return 'missing';
+    return 'error';
+  }
+
+  function appointmentDay(item) {
+    if (item?.scheduled_start || item?.starts_at || item?.scheduled_at) {
+      const instant = new Date(item.scheduled_start || item.starts_at || item.scheduled_at);
+      if (Number.isFinite(instant.getTime())) return new Intl.DateTimeFormat('en-CA', { timeZone: BANGKOK_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+    }
+    return String(item?.appointment_date || '').slice(0, 10);
+  }
+
+  function appointmentIsActive(item) {
+    return !['cancelled', 'no_show', 'rescheduled'].includes(String(item?.status || '').toLowerCase());
+  }
+
+  function appointmentTime(item) {
+    if (item?.appointment_time) return item.appointment_time;
+    const instant = new Date(item?.scheduled_start || item?.starts_at || item?.scheduled_at || '');
+    return Number.isFinite(instant.getTime()) ? instant.toLocaleTimeString('th-TH', { timeZone: BANGKOK_TIME_ZONE, hour: '2-digit', minute: '2-digit' }) : '';
+  }
+
+  function retryButton(kind) {
+    return `<button type="button" class="btn ghost" data-retry-load="${kind}">ลองใหม่</button>`;
   }
 
   async function loadAll() {
+    const requestVersion = ++loadAllVersion;
     const runtime = window.ChananyaRuntime;
     const patientAccess = runtime.can(profile, 'patient_registry')
       || runtime.can(profile, 'appointments_view')
@@ -84,13 +122,18 @@
     const pharmacyAccess = runtime.can(profile, 'pharmacy_operate')
       || runtime.can(profile, 'billing_operate');
     const billingAccess = runtime.can(profile, 'billing_operate');
+    data.appointmentsState = runtime.can(profile, 'appointments_view') ? 'loading' : 'denied';
+    data.auditState = ['admin', 'super_admin'].includes(role) ? 'loading' : 'denied';
+    data.billableTreatmentState = billingAccess ? 'loading' : 'denied';
+    data.billableTreatmentEncounters = [];
+    render();
     const onlyWhen = (allowed, table, select = '*', order) => allowed
       ? optionalQuery(table, select, order)
-      : Promise.resolve([]);
+      : Promise.resolve({ status: 'denied', data: [] });
     const rows = await Promise.all([
       onlyWhen(patientAccess, 'patients', '*', 'created_at'),
       onlyWhen(runtime.can(profile, 'patient_registry') || runtime.can(profile, 'clinical_read') || runtime.can(profile, 'pharmacy_operate'), 'patient_allergies'),
-      onlyWhen(runtime.can(profile, 'appointments_view'), 'appointments'),
+      onlyWhen(runtime.can(profile, 'appointments_view'), 'clinic_appointments', '*,patient:patients!clinic_appointments_patient_clinic_fkey(id,hn,prefix,first_name,last_name,phone)', 'scheduled_start'),
       onlyWhen(clinicalAccess || billingAccess, 'encounters', '*', 'started_at'),
       onlyWhen(clinicalAccess || pharmacyAccess || billingAccess, 'prescriptions', '*', 'prescribed_at'),
       onlyWhen(pharmacyAccess || billingAccess, 'dispensing_orders', '*', 'created_at'),
@@ -101,18 +144,27 @@
       onlyWhen(billingAccess, 'payments'),
       onlyWhen(['admin', 'super_admin'].includes(role), 'audit_logs', '*', 'created_at')
     ]);
+    if (requestVersion !== loadAllVersion) return;
+    const values = rows.map(result => result.status === 'success' ? result.data : []);
     [data.patients, data.allergies, data.appointments, data.encounters, data.prescriptions, data.dispensing,
-      data.dispensingItems, data.rxItems, data.products, data.invoices, data.payments, data.audit] = rows;
-    data.billableTreatmentEncounters = [];
+      data.dispensingItems, data.rxItems, data.products, data.invoices, data.payments, data.audit] = values;
+    data.appointmentsState = rows[2].status;
+    data.auditState = rows[11].status;
     data.billableTreatmentError = '';
+    data.billableTreatmentState = billingAccess ? 'loading' : 'denied';
+    render();
     if (billingAccess) {
       try {
         const result = await db.rpc('list_billable_treatment_encounters');
         if (result.error) throw result.error;
+        if (requestVersion !== loadAllVersion) return;
         data.billableTreatmentEncounters = result.data || [];
+        data.billableTreatmentState = 'success';
       } catch (error) {
-        data.billableTreatmentError = 'ยังโหลดรายการค่าบริการรักษาไม่ได้ กรุณาตรวจสอบ migration ที่เกี่ยวข้อง';
-        console.warn('Optional treatment billing RPC unavailable', error);
+        if (requestVersion !== loadAllVersion) return;
+        data.billableTreatmentState = classifyLoadError(error);
+        data.billableTreatmentError = 'ยังโหลดรายการค่าบริการรักษาไม่ได้ กรุณาลองใหม่';
+        console.warn(`Treatment billing load failed (${data.billableTreatmentState})`);
       }
     }
     render();
@@ -144,7 +196,8 @@
     const openInvoices = data.invoices.filter(invoice => num(invoice.balance_due) > 0 && !['void', 'cancelled'].includes(invoice.status));
     $('#pay-invoice').innerHTML = options(openInvoices, invoice => `${invoice.invoice_number} — ${patientName(invoice.patient_id)} — ฿${money(invoice.balance_due)}`);
     $('#stat-p').textContent = data.patients.length;
-    $('#stat-a').textContent = data.appointments.filter(item => item.appointment_date === today()).length;
+    const todaysAppointments = data.appointments.filter(item => appointmentDay(item) === today() && appointmentIsActive(item));
+    $('#stat-a').textContent = data.appointmentsState === 'success' ? todaysAppointments.length : data.appointmentsState === 'denied' ? 'ไม่มีสิทธิ์' : data.appointmentsState === 'loading' ? 'กำลังโหลด…' : 'โหลดไม่สำเร็จ';
     $('#stat-d').textContent = data.encounters.filter(item => !['closed', 'cancelled'].includes(item.status)).length;
     $('#stat-rx').textContent = data.dispensing.filter(item => !['submitted_to_billing', 'billed', 'cancelled', 'rejected'].includes(item.status)).length;
     $('#stat-b').textContent = billingOrders().length;
@@ -213,8 +266,13 @@
       return `<article class="item column"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(patientName(prescription?.patient_id))}</b><small>${esc(encounter?.encounter_no || '-')} • ค่ายาที่จ่ายจริง ฿${money(medicine)}</small></div><span class="badge">พร้อมออก Invoice</span></div><div class="form"><label>ค่าบริการจริง<input data-service-fee="${order.id}" type="number" min="0" step=".01" value="0"></label><label>ส่วนลด<input data-discount="${order.id}" type="number" min="0" step=".01" value="0"></label><button class="btn primary full" data-action="invoice" data-id="${order.id}">สร้าง Invoice</button></div></article>`;
     }).join('') || '<p class="muted">ไม่มีรายการรอออก Invoice</p>';
 
-    const treatmentNotice = data.billableTreatmentError ? `<p class="notice">${esc(data.billableTreatmentError)}</p>` : '';
-    $('#treatment-billing-queue').innerHTML = treatmentNotice + (data.billableTreatmentEncounters.map(item => `<article class="item column"><div><b>${esc(item.encounter_no || item.encounter_id || '-')} • ${esc(patientName(item.patient_id))}</b><small>บริการรักษาแบบไม่มีรายการยา</small></div><div class="form"><label>รายละเอียดบริการ<input data-treatment-description="${esc(item.encounter_id)}" maxlength="500" value="${esc(item.treatment_description || 'ค่าตรวจและบริการรักษา')}"></label><label>จำนวนเงิน<input data-treatment-amount="${esc(item.encounter_id)}" type="number" min="0.01" step=".01" required></label><button class="btn primary full" data-action="service-invoice" data-id="${esc(item.encounter_id)}">สร้าง Invoice ค่าบริการ</button></div></article>`).join('') || '<p class="muted">ไม่มี Encounter ที่พร้อมออก Invoice ค่าบริการ</p>');
+    let treatmentContent = '';
+    if (data.billableTreatmentState === 'loading') treatmentContent = '<p class="muted">กำลังโหลดรายการค่าบริการรักษา…</p>';
+    else if (data.billableTreatmentState === 'denied') treatmentContent = '<p class="muted">ไม่มีสิทธิ์ดูรายการค่าบริการรักษา</p>';
+    else if (data.billableTreatmentState === 'missing') treatmentContent = '<p class="muted">รายการค่าบริการรักษายังไม่พร้อมใช้งาน</p>';
+    else if (data.billableTreatmentState === 'error') treatmentContent = `<p class="notice">โหลดรายการค่าบริการรักษาไม่สำเร็จ ${retryButton('finance')}</p>`;
+    else if (data.billableTreatmentState === 'success') treatmentContent = data.billableTreatmentEncounters.map(item => `<article class="item column"><div><b>${esc(item.encounter_no || item.encounter_id || '-')} • ${esc(patientName(item.patient_id))}</b><small>บริการรักษาแบบไม่มีรายการยา</small></div><div class="form"><label>รายละเอียดบริการ<input data-treatment-description="${esc(item.encounter_id)}" maxlength="500" value="${esc(item.treatment_description || 'ค่าตรวจและบริการรักษา')}"></label><label>จำนวนเงิน<input data-treatment-amount="${esc(item.encounter_id)}" type="number" min="0.01" step=".01" required></label><button class="btn primary full" data-action="service-invoice" data-id="${esc(item.encounter_id)}">สร้าง Invoice ค่าบริการ</button></div></article>`).join('') || '<p class="muted">ไม่มี Encounter ที่พร้อมออก Invoice ค่าบริการ</p>';
+    $('#treatment-billing-queue').innerHTML = treatmentContent;
     $('#invoice-list').innerHTML = data.invoices.map(invoice => {
       const payments = data.payments.filter(payment => payment.invoice_id === invoice.id);
       const receiptButtons = payments.map(payment => `<button class="btn ghost" data-action="receipt" data-id="${esc(payment.id)}">ใบรับเงิน ${esc(payment.payment_reference)}</button>`).join('');
@@ -229,7 +287,13 @@
 
     const work = [];
     if (window.ChananyaRuntime.can(profile, 'appointments_view')) {
-      work.push(...data.appointments.filter(item => item.appointment_date === today()).slice(0, 4).map(item => `<article class="item"><div><b>นัด ${esc(item.appointment_time || '')}</b><small>${esc(patientName(item.patient_id))}</small></div><span class="badge">นัดหมาย</span></article>`));
+      if (data.appointmentsState === 'loading') work.push('<p class="muted">กำลังโหลดนัดหมาย…</p>');
+      else if (data.appointmentsState === 'denied') work.push('<p class="muted">ไม่มีสิทธิ์ดูนัดหมาย</p>');
+      else if (data.appointmentsState !== 'success') work.push(`<p class="notice">โหลดนัดหมายไม่สำเร็จ ${retryButton('appointments')}</p>`);
+      else {
+        const todays = data.appointments.filter(item => appointmentDay(item) === today() && appointmentIsActive(item));
+        work.push(...todays.slice(0, 4).map(item => `<article class="item"><div><b>นัด ${esc(appointmentTime(item))}</b><small>${esc(patientName(item.patient_id))}</small></div><span class="badge">นัดหมาย</span></article>`));
+      }
     }
     if (window.ChananyaRuntime.can(profile, 'clinical_read')) {
       work.push(...data.encounters.filter(item => !['closed', 'cancelled'].includes(item.status)).slice(0, 4).map(item => `<a class="item" href="/clinical-v3.html?encounter=${encodeURIComponent(item.id)}"><div><b>${esc(item.encounter_no || '-')}</b><small>${esc(patientName(item.patient_id))} • ${esc(item.chief_complaint || 'ยังไม่มีอาการสำคัญ')}</small></div><span class="badge">เวชระเบียน</span></a>`));
@@ -244,7 +308,11 @@
   }
 
   function renderAudit() {
-    $('#audit-list').innerHTML = data.audit.slice(0, 100).map(item => `<article class="item audit-item"><div><b>${esc(item.action)} • ${esc(item.entity)}</b><small>${new Date(item.created_at).toLocaleString('th-TH')} • ${esc(item.user_id || '-')}</small></div></article>`).join('') || '<p class="muted">ไม่มีข้อมูลหรือไม่มีสิทธิ์</p>';
+    if (data.auditState === 'loading') return void ($('#audit-list').innerHTML = '<p class="muted">กำลังโหลด Audit log…</p>');
+    if (data.auditState === 'denied') return void ($('#audit-list').innerHTML = '<p class="muted">ไม่มีสิทธิ์ดู Audit log</p>');
+    if (data.auditState === 'missing') return void ($('#audit-list').innerHTML = '<p class="muted">Audit log ยังไม่พร้อมใช้งาน</p>');
+    if (data.auditState === 'error') return void ($('#audit-list').innerHTML = `<p class="notice">โหลด Audit log ไม่สำเร็จ ${retryButton('audit')}</p>`);
+    $('#audit-list').innerHTML = data.audit.slice(0, 100).map(item => `<article class="item audit-item"><div><b>${esc(item.action)} • ${esc(item.entity)}</b><small>${new Date(item.created_at).toLocaleString('th-TH', { timeZone: BANGKOK_TIME_ZONE })} • ${esc(item.user_id || '-')}</small></div></article>`).join('') || '<p class="muted">ยังไม่มีรายการ Audit log</p>';
   }
 
   function bindActions() {
@@ -252,6 +320,7 @@
     $$('[data-action="service-invoice"]').forEach(button => { button.onclick = () => createServiceInvoice(button.dataset.id).catch(fail); });
     $$('[data-action="receipt"]').forEach(button => { button.onclick = () => showReceipt(button.dataset.id); });
     $$('[data-go-view]').forEach(button => { button.onclick = () => show(button.dataset.goView); });
+    $$('[data-retry-load]').forEach(button => { button.onclick = () => loadAll().catch(fail); });
   }
 
   async function createServiceInvoice(encounterId) {
