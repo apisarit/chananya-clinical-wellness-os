@@ -3,6 +3,10 @@ name: Production post-deploy attestation
 on:
   workflow_dispatch:
     inputs:
+      release_commit:
+        description: 'Full final-main SHA from the release-handoff artifact (not the PR head)'
+        required: true
+        type: string
       confirmation:
         description: 'Type VERIFY_DEPLOYED_PRODUCTION to attest the selected exact commit'
         required: true
@@ -18,7 +22,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-context:
+    name: Check selected release SHA before requesting approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Reject stale or mismatched release selection
+        run: node scripts/release-context.mjs verify
+        env:
+          REQUESTED_RELEASE_COMMIT: ${{ inputs.release_commit }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
   attest-public-production:
+    needs: release-context
     name: Attest exact deployed commit and public surface
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -42,6 +66,8 @@ jobs:
 
       - name: Check out exact selected release commit
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Require trusted default branch and exact checkout
         shell: bash
