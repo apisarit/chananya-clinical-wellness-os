@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { randomUUID } from 'node:crypto';
 import { validateTenantConfig } from './generate-tenant-config.mjs';
-import { compareRestoreCounts, compareRestoreHashes } from './restore-count-comparison.mjs';
-import { requestRestoreTrace } from './restore-trace-request.mjs';
-import { BACKUP_SCHEMA_VERSION, backupSchemaContract } from '../netlify/functions/_shared/database-backup.mjs';
 
 function required(name, { max = 8192 } = {}) {
   const value = String(process.env[name] || '').trim();
@@ -20,6 +16,12 @@ function config(name) {
 
 function projectOrigin(value) {
   return new URL(value).origin.toLowerCase();
+}
+
+function sourceCount(evidence, domain, table) {
+  const count = evidence?.domains?.[domain]?.row_counts?.[table];
+  assert.equal(Number.isInteger(count) && count >= 0, true, `${domain}.${table}: source count missing`);
+  return count;
 }
 
 const countBindings = Object.freeze({
@@ -41,16 +43,7 @@ const countBindings = Object.freeze({
   line_oa_webhook_events: ['transactions', 'line_oa_webhook_events'],
   line_oa_notification_outbox: ['transactions', 'line_oa_notification_outbox'],
   line_oa_delivery_events: ['transactions', 'line_oa_delivery_events'],
-  clinic_subscription_control_events: ['transactions', 'clinic_subscription_control_events'],
-  clinic_drive_destination_events: ['transactions', 'clinic_drive_destination_events'],
-  services: ['products', 'services'],
-  price_lists: ['products', 'price_lists'],
-  price_list_items: ['products', 'price_list_items'],
-  price_master_audit: ['transactions', 'price_master_audit'],
-  'cnyos_billing_internal.invoice_orders': ['transactions', 'cnyos_billing_internal.invoice_orders'],
-  'cnyos_billing_internal.invoice_source_charges': ['transactions', 'cnyos_billing_internal.invoice_source_charges'],
-  'cnyos_billing_internal.invoice_request_receipts': ['transactions', 'cnyos_billing_internal.invoice_request_receipts'],
-  'cnyos_treatment_internal.session_request_receipts': ['transactions', 'cnyos_treatment_internal.session_request_receipts']
+  clinic_subscription_control_events: ['transactions', 'clinic_subscription_control_events']
 });
 
 function safeCode(error) {
@@ -60,14 +53,6 @@ function safeCode(error) {
 }
 
 try {
-  const directory = path.resolve(process.env.RESTORE_EVIDENCE_DIR || 'artifacts/restore-drill');
-  const destination = path.join(directory, 'isolated-restore-drill.json');
-  // Preserve historical evidence, but never leave it named as this invocation's result.
-  try {
-    await fs.rename(destination, `${destination}.${randomUUID()}.superseded`);
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw new Error('RESTORE_PRIOR_EVIDENCE_RETIRE_FAILED');
-  }
   if (process.env.RESTORE_DRILL_ACK !== 'ISOLATED_RESTORE_TEST_ONLY') throw new Error('RESTORE_DRILL_ACK_REQUIRED');
   const restore = config('CLINICAL_OS_RESTORE_TEST_CONFIG_JSON');
   const production = config('CLINICAL_OS_PRODUCTION_CONFIG_JSON');
@@ -78,9 +63,6 @@ try {
   const evidencePath = path.resolve(required('RESTORE_SET_EVIDENCE_PATH', { max: 1024 }));
   const source = JSON.parse(await fs.readFile(evidencePath, 'utf8'));
   assert.equal(source.valid, true, 'Restore set evidence is not valid');
-  const expectedSchema = process.env.RESTORE_EXPECTED_SCHEMA_VERSION || BACKUP_SCHEMA_VERSION;
-  const schemaContract = backupSchemaContract(expectedSchema);
-  assert.equal(source.schema_version, expectedSchema, 'Restore set requires candidate schema upgrade and re-export');
   assert.equal(source.requires_managed_database_restore, true, 'Recovery model must require a managed restore');
   assert.equal(source.clinic_id, restore.tenant.expectedClinicId, 'Restored clinic does not match the source backup');
   const expectedCommit = String(process.env.RESTORE_EXPECTED_SOURCE_COMMIT || process.env.GITHUB_SHA || '').trim();
@@ -88,7 +70,7 @@ try {
   assert.equal(source.source_revision, expectedCommit, 'Backup source revision is not the exact release commit');
 
   const serviceRoleKey = required('RESTORE_TEST_SUPABASE_SERVICE_ROLE_KEY', { max: 4096 });
-  const result = await requestRestoreTrace(`${restore.database.url.replace(/\/$/, '')}/rest/v1/rpc/verify_clinic_restore_trace`, {
+  const response = await fetch(`${restore.database.url.replace(/\/$/, '')}/rest/v1/rpc/verify_clinic_restore_trace`, {
     method: 'POST',
     headers: {
       apikey: serviceRoleKey,
@@ -98,20 +80,20 @@ try {
     },
     body: JSON.stringify({ p_clinic_id: restore.tenant.expectedClinicId })
   });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) throw new Error('RESTORE_TRACE_RPC_FAILED');
   assert.equal(result?.ready, true, 'Restored database integrity check failed');
   assert.equal(result?.schema_version, source.schema_version, 'Restored database schema does not match backup schema');
   assert.equal(result?.clinic_id, source.clinic_id, 'Restored database clinic mismatch');
   assert.equal(result?.referential_integrity_anomalies, 0, 'Restored database contains referential anomalies');
 
-  const expectedCounts = { ...countBindings };
-  if (['2026-09-26.2', '2026-09-27.1', '2026-09-27.2', '2026-09-27.3'].includes(expectedSchema)) {
-    for (const table of schemaContract.required.transactions.filter(table => table.startsWith('cnyos_clarification_internal.') || table.startsWith('cnyos_amendment_internal.') || table.startsWith('cnyos_export_internal.'))) {
-      expectedCounts[table] = ['transactions',table];
-    }
+  const comparisons = {};
+  for (const [targetTable, [domain, sourceTable]] of Object.entries(countBindings)) {
+    const expected = sourceCount(source, domain, sourceTable);
+    const actual = Number(result?.counts?.[targetTable]);
+    assert.equal(actual, expected, `${targetTable}: restored count ${actual} does not equal source ${expected}`);
+    comparisons[targetTable] = { expected, actual };
   }
-  if (['2026-09-27.2','2026-09-27.3'].includes(expectedSchema)) expectedCounts.clinical_record_audit_events = ['transactions','clinical_record_audit_events'];
-  const comparisons = compareRestoreCounts(source, result?.counts, expectedCounts);
-  const hashComparisons = compareRestoreHashes(source, result?.table_sha256, schemaContract.hashed);
   if (process.env.RESTORE_EXPECT_COMPLETE_CHAIN === 'true') {
     assert.ok(Number(result.complete_clinical_financial_chains) > 0, 'No complete clinical-financial chain survived restore');
   }
@@ -142,11 +124,12 @@ try {
     measured_rto_seconds: rtoSeconds,
     complete_clinical_financial_chains: result.complete_clinical_financial_chains,
     referential_integrity_anomalies: result.referential_integrity_anomalies,
-    count_comparisons: comparisons,
-    content_hash_comparisons: hashComparisons
+    count_comparisons: comparisons
   };
+  const directory = path.resolve(process.env.RESTORE_EVIDENCE_DIR || 'artifacts/restore-drill');
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  await fs.writeFile(destination, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+  const destination = path.join(directory, 'isolated-restore-drill.json');
+  await fs.writeFile(destination, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
   process.stdout.write(`Isolated managed restore drill verified; RPO ${rpoSeconds ?? 'n/a'}s, RTO ${rtoSeconds}s; evidence: ${destination}\n`);
 } catch (error) {
   process.stderr.write(`${JSON.stringify({ valid: false, code: safeCode(error) })}\n`);

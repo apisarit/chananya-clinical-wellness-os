@@ -91,14 +91,7 @@ function eventType(event) {
 
 function safeInternalCode(error) {
   const value = String(error?.message || 'UNKNOWN');
-  // Error text is untrusted even when it resembles an uppercase protocol code.
-  const known = new Set([
-    'LINE_REPLY_FAILED', 'LINE_REPLY_TOKEN_INVALID',
-    'LINE_CHANNEL_ACCESS_TOKEN_INVALID', 'LINE_REPLY_MESSAGES_INVALID',
-    'LINE_OA_FINALIZATION_FAILED', 'CNYOS_SUBSCRIPTION_SUSPENDED',
-    'LINE_OA_CROSS_TENANT_SUBJECT', 'IDENTITY_DATABASE_REQUEST_FAILED'
-  ]);
-  return known.has(value) ? value : publicLineWebhookError(error).code;
+  return /^[A-Z][A-Z0-9_]{2,80}$/.test(value) ? value : 'UNKNOWN';
 }
 
 async function finalize(config, channelHash, eventIdHash, processingStatus, replyStatus, errorCode = null) {

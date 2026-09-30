@@ -13,9 +13,7 @@
   <script src="chananya-runtime.js?v=account-access1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="payment-journal.js?v=payment-recovery1"></script>
-  <script defer src="service-invoice-journal.js?v=service-recovery1"></script>
-  <script defer src="app.js?v=encounter-invoice1"></script>
+  <script defer src="app.js?v=account-access1"></script>
 </head>
 <body data-page="operations">
   <div id="boot">
@@ -105,7 +103,7 @@
               <label>ค้นหา<input id="patient-search" type="search" placeholder="HN / ชื่อ / โทรศัพท์ / การแพ้"></label>
               <div id="patient-export" class="notice" data-perm="audit" hidden>
                 <strong>Export selected</strong>
-                <p class="muted">ส่งออกเฉพาะข้อมูลทะเบียนของผู้รับบริการที่เลือก ไม่รวมเวชระเบียน ใบสั่งยา หรือการเงินทั้งหมด ไม่ใช่ชุดข้อมูลผู้ป่วยครบชุดหรือ backup และไม่ส่งขึ้น Drive/NAS</p>
+                <p class="muted">ส่งออกเฉพาะรายการผู้รับบริการที่เลือกจากข้อมูลที่บัญชีนี้อ่านได้ ไม่ใช่ backup และไม่ส่งขึ้น Drive/NAS</p>
                 <div class="actions">
                   <button class="btn ghost" id="patient-export-all" type="button">เลือกทั้งหมดที่แสดง</button>
                   <button class="btn ghost" id="patient-export-clear" type="button">ล้างที่เลือก</button>
@@ -119,8 +117,6 @@
         </section>
 
         <section class="view" id="billing">
-          <button class="btn ghost" id="billing-refresh" type="button">โหลดคิวและยอดเงินล่าสุด</button>
-          <p id="billing-refresh-status" role="status" aria-live="polite">การโหลดข้อมูลใหม่ไม่ออกบิลหรือรับเงินซ้ำ</p>
           <div class="grid2">
             <section class="card">
               <div class="section-heading"><span class="section-number">฿</span><div><h2>รายการรอออก Invoice</h2><p>สร้างจากรายการที่ห้องยาจ่ายจริงแล้วเท่านั้น</p></div></div>
@@ -128,12 +124,6 @@
               <hr>
               <div class="section-heading"><span class="section-number">S</span><div><h2>ค่าบริการรักษา</h2><p>เฉพาะ Encounter ที่ลงนามและไม่มีใบสั่งยา</p></div></div>
               <div id="treatment-billing-queue" class="list"></div>
-              <div id="service-invoice-recovery" class="notice hidden" role="status">
-                <p>พบคำขอออกบิลค่าบริการที่ยังไม่ยืนยันผล กรุณาตรวจบิลเดิมก่อนออกบิลใหม่</p>
-                <button class="btn ghost" id="service-invoice-recover" type="button">ตรวจบิลเดิม (ไม่ออกบิลซ้ำ)</button>
-                <p>หากยังตรวจไม่พบบิล สามารถตรวจราคาปัจจุบันแล้วส่งเลขคำขอเดิมซ้ำได้ ระบบจะหยุดหากราคา/รายละเอียดเปลี่ยน</p>
-                <button class="btn ghost" id="service-invoice-resume" type="button">ตรวจราคาและส่งคำขอเดิมซ้ำ</button>
-              </div>
             </section>
             <section class="card">
               <div class="section-heading"><span class="section-number">02</span><div><h2>รับชำระ</h2><p>บันทึกการรับชำระแบบ manual พร้อมเลขอ้างอิง</p></div></div>
@@ -146,18 +136,6 @@
               </form>
               <hr>
               <h3>Invoice / Payment</h3>
-              <div id="payment-recovery" class="hidden" role="status" aria-live="polite">
-                <p id="payment-recovery-message"></p>
-                <button id="payment-retry" class="btn" type="button">ตรวจและส่งคำขอเดิมซ้ำ</button>
-                <form id="payment-resume-form" class="form hidden">
-                  <p class="full">หากยังตรวจไม่พบรายการ ให้กรอกยอด ช่องทาง และหมายเหตุเดิมทุกช่องเพื่อส่งคำขอเดิมอีกครั้ง ระบบจะไม่สร้างเลขคำขอใหม่ ไม่ต้องเก็บเงินจากผู้รับบริการอีกครั้ง หากจำข้อมูลเดิมไม่ได้ ให้หยุดและส่งตรวจสอบ</p>
-                  <label>ยอดเดิม<input id="resume-amount" type="number" min=".01" step=".01" required></label>
-                  <label>ช่องทางเดิม<select id="resume-channel"><option value="cash">เงินสด</option><option value="qr">QR ตรวจสอบด้วยผู้ใช้</option><option value="bank_transfer">โอนธนาคาร</option><option value="card">บัตร</option></select></label>
-                  <label class="full">เลขอ้างอิง/หมายเหตุเดิม<input id="resume-note" maxlength="200"></label>
-                  <button class="btn full" type="submit">ส่งคำขอเดิมด้วยข้อมูลตรงกันเท่านั้น</button>
-                </form>
-                <p>ยังไม่ต้องรับเงินเพิ่มหรือสร้างรายการใหม่ โปรดตรวจผลให้ครบก่อนปิดหน้านี้</p>
-              </div>
               <div id="invoice-list" class="list"></div>
             </section>
           </div>

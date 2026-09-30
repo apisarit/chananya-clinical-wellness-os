@@ -1,15 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { loadTenantConfig } from './generate-tenant-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DKR_DATASET_VERSION = 'TTM-DKR-v1-complete-20260830';
-// Exact archived input identity, not clinical approval. A changed source requires
-// an explicitly versioned, reviewed importer update rather than count-only reuse.
-export const DKR_DATASET_SHA256 = '40fd0877c4a46bc5d8f4412e2058f096c7c82a4f64d2bf8343399288a035477a';
 export const DKR_SOURCE_CODE = 'TTM-DKR-v1';
 export const DKR_GRAPH_VERSION = 'TTM-REASONING-GRAPH-v2';
 export const BODY_SOURCE_CODE = 'OWNER-TTM-ONTOLOGY-V2-20260830';
@@ -53,14 +49,7 @@ function httpsOrigin(value, field) {
 
 export function loadDkrDataset(cwd = root) {
   const target = path.join(cwd, 'data', 'ttm', 'ttm-dkr-v1-complete-20260830.json.gz');
-  return parseDkrDataset(fs.readFileSync(target));
-}
-
-export function parseDkrDataset(bytes) {
-  if (!Buffer.isBuffer(bytes) || createHash('sha256').update(bytes).digest('hex') !== DKR_DATASET_SHA256) {
-    throw new Error('TTM_DKR_SOURCE_DIGEST_MISMATCH');
-  }
-  const dataset = JSON.parse(zlib.gunzipSync(bytes).toString('utf8'));
+  const dataset = JSON.parse(zlib.gunzipSync(fs.readFileSync(target)).toString('utf8'));
   if (dataset.dataset_version !== DKR_DATASET_VERSION) throw new Error('Unexpected TTM-DKR dataset version');
   if (dataset.source?.source_code !== DKR_SOURCE_CODE) throw new Error('Unexpected TTM-DKR source code');
   if (dataset.source?.metadata?.workbook_rule_count !== 113 || dataset.rules?.length !== 113) {
@@ -122,22 +111,6 @@ async function batches(items, size, worker) {
   for (let start = 0; start < items.length; start += size) await worker(items.slice(start, start + size));
 }
 
-async function ensureSource(target, row) {
-  // Seeding an immutable import is not permission to reset a reviewed source.
-  const result = await request(target, 'ttm_sources?on_conflict=source_code', {
-    method: 'POST', body: [row], prefer: 'resolution=ignore-duplicates,return=representation'
-  });
-  let rows = result.data;
-  if (Array.isArray(rows) && rows.length === 0) {
-    const query = new URLSearchParams({ select: 'id,source_code', source_code: `eq.${row.source_code}`, limit: '2' });
-    rows = (await request(target, `ttm_sources?${query}`)).data;
-  }
-  if (!Array.isArray(rows) || rows.length !== 1 || !rows[0]?.id || rows[0].source_code !== row.source_code) {
-    throw new Error('TTM_DKR_SOURCE_IDENTITY_INVALID');
-  }
-  return rows[0];
-}
-
 function knowledgeKey(row) {
   return [row.domain, row.rule_key, row.input_key || '', row.version || 'TTM-DKR-v1'].join('|');
 }
@@ -188,38 +161,6 @@ function coordinateCode(rule) {
   return COORDINATES.find(([term]) => text.includes(term))?.[1] || null;
 }
 
-function referenceIndex(rows) {
-  if (!Array.isArray(rows)) throw new Error('TTM_DKR_REFERENCE_INVALID_RESPONSE');
-  const index = new Map();
-  for (const row of rows) {
-    if (!row || typeof row.version !== 'string' || typeof row.concept_code !== 'string'
-        || typeof row.id !== 'string' || !row.id) throw new Error('TTM_DKR_REFERENCE_INVALID_RESPONSE');
-    const key = `${row.version}|${row.concept_code}`;
-    if (index.has(key)) throw new Error(`TTM_DKR_REFERENCE_AMBIGUOUS: ${key}`);
-    index.set(key, row);
-  }
-  return index;
-}
-
-function requireReference(index, version, code) {
-  const row = index.get(`${version}|${code}`);
-  if (!row) throw new Error(`TTM_DKR_REFERENCE_MISSING: ${version}|${code}`);
-  return row;
-}
-
-function validateFoundationReferences(dataset, index) {
-  for (const rule of dataset.rules) {
-    if (CONTEXT_DOMAINS.has(rule.domain)) {
-      for (const axis of Object.keys(doshaWeights(rule))) requireReference(index, 'TTM-FOUNDATION-v1', AXES[axis]);
-    }
-    const element = elementCode(rule);
-    if (element) requireReference(index, 'TTM-FOUNDATION-v1', element);
-    const coordinate = coordinateCode(rule);
-    if (coordinate) requireReference(index, 'TTM-FOUNDATION-v1', coordinate);
-  }
-  for (const group of dataset.body_model.groups) requireReference(index, group.anchor_version, group.anchor_code);
-}
-
 function ruleMetadata(rule, existingMetadata = {}) {
   return {
     workbook: 'TTM_Diagnostic_Knowledge_Review_v1.xlsx',
@@ -235,7 +176,7 @@ function ruleMetadata(rule, existingMetadata = {}) {
   };
 }
 
-function relationRow({ subject, predicate, object, sourceId, rule, qualifiers }) {
+function relationRow({ subject, predicate, object, sourceId, rule, qualifiers, reviewStatus }) {
   return {
     subject_concept_id: subject,
     predicate,
@@ -249,8 +190,7 @@ function relationRow({ subject, predicate, object, sourceId, rule, qualifiers })
       evidence_scope: 'context_only_not_diagnosis',
       ...(qualifiers || {})
     },
-    // A concept decision is not a review of this generated relationship.
-    review_status: 'review_required',
+    review_status: reviewStatus || 'review_required',
     version: DKR_GRAPH_VERSION,
     active: true
   };
@@ -271,15 +211,17 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
   if (!target.enabled) return Object.freeze({ skipped: true, reason: 'staging DKR import flag not set' });
   const dataset = loadDkrDataset(cwd);
 
-  // Refuse missing/ambiguous anchors before the first mutation. Counts of the
-  // relations we happened to build cannot prove that no reference was omitted.
-  const foundationQuery = new URLSearchParams({ select: 'id,concept_code,version,review_status', version: 'eq.TTM-FOUNDATION-v1', limit: '1000' });
-  const foundationRows = (await request(target, `ttm_concepts?${foundationQuery}`)).data;
-  validateFoundationReferences(dataset, referenceIndex(foundationRows));
+  const sourceResult = await request(target, 'ttm_sources?on_conflict=source_code', {
+    method: 'POST',
+    body: [{ ...dataset.source, active: true }],
+    prefer: 'resolution=merge-duplicates,return=representation'
+  });
+  const source = sourceResult.data?.[0];
+  if (!source?.id) throw new Error('TTM-DKR source upsert did not return an id');
 
-  const source = await ensureSource(target, { ...dataset.source, active: true });
-
-  const bodySource = await ensureSource(target, {
+  const bodySourceResult = await request(target, 'ttm_sources?on_conflict=source_code', {
+    method: 'POST',
+    body: [{
       source_code: BODY_SOURCE_CODE,
       title_th: 'ข้อกำหนดโครงสร้างกาย TTM แบบไม่สมมาตร v2',
       title_en: 'Owner TTM asymmetric body model constraint v2',
@@ -290,7 +232,11 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
       version: '1',
       active: true,
       metadata: { member_policy: dataset.body_model.member_policy, target_total: 42 }
+    }],
+    prefer: 'resolution=merge-duplicates,return=representation'
   });
+  const bodySource = bodySourceResult.data?.[0];
+  if (!bodySource?.id) throw new Error('TTM body-model source upsert did not return an id');
 
   const existingKnowledgeQuery = new URLSearchParams({ select: '*', version: 'eq.TTM-DKR-v1', limit: '1000' });
   const existingKnowledge = (await request(target, `ttm_diagnostic_knowledge?${existingKnowledgeQuery}`)).data || [];
@@ -313,11 +259,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
       review_status: existing?.review_status || 'review_required',
       version: 'TTM-DKR-v1',
       active: existing?.active ?? true,
-      metadata: {
-        ...ruleMetadata(rule, existing?.metadata),
-        // Re-importing draft content is not a clinical approval.
-        ...(!locked ? { clinical_inference_allowed: false } : {})
-      }
+      metadata: ruleMetadata(rule, existing?.metadata)
     };
   });
   await batches(knowledgeRows, 60, batch => request(target, 'ttm_diagnostic_knowledge?on_conflict=domain,rule_key,input_key,version', {
@@ -341,10 +283,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
       review_status: existing?.review_status || 'review_required',
       version: 'TTM-DKR-v1',
       active: existing?.active ?? true,
-      metadata: {
-        ...ruleMetadata(rule, existing?.metadata),
-        ...(!locked ? { clinical_inference_allowed: false } : {})
-      }
+      metadata: ruleMetadata(rule, existing?.metadata)
     };
   });
   await batches(conceptRows, 60, batch => request(target, 'ttm_concepts?on_conflict=concept_code,version', {
@@ -370,7 +309,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
     }
   }));
   await request(target, 'ttm_concepts?on_conflict=concept_code,version', {
-    method: 'POST', body: bodyConceptRows, prefer: 'resolution=ignore-duplicates,return=minimal', expected: [200, 201]
+    method: 'POST', body: bodyConceptRows, prefer: 'resolution=merge-duplicates,return=minimal', expected: [200, 201]
   });
 
   const queries = [
@@ -380,35 +319,35 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
   ];
   const conceptSets = await Promise.all(queries.map(query => request(target, `ttm_concepts?${query}`)));
   const allConcepts = conceptSets.flatMap(result => result.data || []);
-  const references = referenceIndex(allConcepts);
-  // A concurrent change after preflight is an error too. Earlier table writes
-  // are not atomic across REST calls; do not claim that this rolls them back.
-  validateFoundationReferences(dataset, references);
+  const idByVersionCode = new Map(allConcepts.map(row => [`${row.version}|${row.concept_code}`, row.id]));
+  const statusByCode = new Map(allConcepts.map(row => [row.concept_code, row.review_status]));
 
   const relationRows = [];
   for (const rule of dataset.rules) {
-    const subjectRow = requireReference(references, 'TTM-DKR-v1', rule.concept_code);
-    const subject = subjectRow.id;
+    const subject = idByVersionCode.get(`TTM-DKR-v1|${rule.concept_code}`);
+    if (!subject) throw new Error(`Unresolved TTM-DKR concept ${rule.concept_code}`);
+    const reviewStatus = statusByCode.get(rule.concept_code) || 'review_required';
     if (CONTEXT_DOMAINS.has(rule.domain)) {
       for (const [axis, weight] of Object.entries(doshaWeights(rule))) {
-        const object = requireReference(references, 'TTM-FOUNDATION-v1', AXES[axis]).id;
-        relationRows.push(relationRow({ subject, predicate: 'context_supports_axis', object, sourceId: source.id, rule, qualifiers: { axis, weight } }));
+        const object = idByVersionCode.get(`TTM-FOUNDATION-v1|${AXES[axis]}`);
+        if (object) relationRows.push(relationRow({ subject, predicate: 'context_supports_axis', object, sourceId: source.id, rule, reviewStatus, qualifiers: { axis, weight } }));
       }
     }
     const element = elementCode(rule);
     if (element) {
-      const object = requireReference(references, 'TTM-FOUNDATION-v1', element).id;
-      relationRows.push(relationRow({ subject, predicate: 'context_points_to_element', object, sourceId: source.id, rule }));
+      const object = idByVersionCode.get(`TTM-FOUNDATION-v1|${element}`);
+      if (object) relationRows.push(relationRow({ subject, predicate: 'context_points_to_element', object, sourceId: source.id, rule, reviewStatus }));
     }
     const coordinate = coordinateCode(rule);
     if (coordinate) {
-      const object = requireReference(references, 'TTM-FOUNDATION-v1', coordinate).id;
-      relationRows.push(relationRow({ subject, predicate: 'source_record_for_coordinate', object, sourceId: source.id, rule }));
+      const object = idByVersionCode.get(`TTM-FOUNDATION-v1|${coordinate}`);
+      if (object) relationRows.push(relationRow({ subject, predicate: 'source_record_for_coordinate', object, sourceId: source.id, rule, reviewStatus }));
     }
   }
   for (const group of dataset.body_model.groups) {
-    const subject = requireReference(references, dataset.body_model.version, group.code).id;
-    const object = requireReference(references, group.anchor_version, group.anchor_code).id;
+    const subject = idByVersionCode.get(`${dataset.body_model.version}|${group.code}`);
+    const object = idByVersionCode.get(`${group.anchor_version}|${group.anchor_code}`);
+    if (!subject || !object) throw new Error(`Unresolved body registry relation ${group.code}`);
     relationRows.push({
       subject_concept_id: subject,
       predicate: 'registry_target_for',
@@ -422,9 +361,7 @@ export async function importDkrDataset({ env = process.env, cwd = root } = {}) {
     });
   }
   await batches(relationRows, 60, batch => request(target, 'ttm_concept_relations?on_conflict=subject_concept_id,predicate,object_concept_id,source_id,version', {
-    // The pinned import adds missing edges; it never replaces existing review
-    // decisions/content, including a concurrent decision before the INSERT.
-    method: 'POST', body: batch, prefer: 'resolution=ignore-duplicates,return=minimal', expected: [200, 201]
+    method: 'POST', body: batch, prefer: 'resolution=merge-duplicates,return=minimal', expected: [200, 201]
   }));
 
   const [knowledgeCount, conceptCount, relationCount, bodyGroupCount] = await Promise.all([

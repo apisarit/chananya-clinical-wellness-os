@@ -1,8 +1,4 @@
 import assert from 'node:assert/strict';
-import './foundation-session-boundary.mjs';
-import './knowledge-source-candidate.mjs';
-import './knowledge-source-inspection.mjs';
-import './knowledge-review-html.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -77,22 +73,4 @@ assert.match(reviewCandidate, /review_status='approved'/, 'approval must promote
 assert.match(reviewCandidate, /reject_append_only_mutation/, 'suggestion evidence must be append-only');
 assert.doesNotMatch(controller, /localStorage|MutationObserver|setInterval\s*\(/, 'foundation browser must not introduce a second state engine');
 
-// Execute the real fallback transformation; neither a meaningful name nor an
-// unexpected approval field in a legacy response may manufacture approval.
-const legacyLoader = controller.slice(controller.indexOf('  async function loadLegacy()'), controller.indexOf('  function clinicalRules()'));
-const legacyContext = {
-  LEGACY_DOMAIN: {}, Map,
-  fetchAll: async table => table === 'ttm_diagnostic_knowledge' ? [] : [
-    { code: 'named', name_th: 'เส้นที่มีชื่อ', review_status: 'approved' },
-    { code: 'placeholder', name_th: 'แนวเส้น S.1' },
-    { code: 'missing' }
-  ],
-  setMode() {}
-};
-vm.createContext(legacyContext);
-vm.runInContext(`let state; ${legacyLoader}; globalThis.runLegacy = async () => { await loadLegacy(); return state; };`, legacyContext);
-const legacyState = await legacyContext.runLegacy();
-assert.equal(legacyState.concepts.length, 3);
-assert.ok(legacyState.concepts.every(row => row.review_status === 'review_required'), 'legacy names must never imply reviewer approval');
-
-console.log('TTM foundation contracts passed: 5 layers + provenance + ontology schema + clinical boundary + unverified legacy labels');
+console.log('TTM foundation contracts passed: 5 layers + provenance + ontology schema + clinical boundary');

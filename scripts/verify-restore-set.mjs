@@ -3,8 +3,6 @@ import path from 'node:path';
 import process from 'node:process';
 import {
   parseEncryptionKey,
-  BACKUP_SCHEMA_VERSION,
-  backupSchemaContract,
   verifyBackupSet
 } from '../netlify/functions/_shared/database-backup.mjs';
 
@@ -28,8 +26,6 @@ function safeCode(error) {
 }
 
 try {
-  const schemaVersion = process.env.RESTORE_EXPECTED_SCHEMA_VERSION || BACKUP_SCHEMA_VERSION;
-  backupSchemaContract(schemaVersion);
   const files = await resolveInputs(process.argv.slice(2));
   if (files.length === 0) {
     throw new Error('RESTORE_SET_FILES_REQUIRED');
@@ -40,7 +36,7 @@ try {
   }
   const key = parseEncryptionKey(process.env.BACKUP_ENCRYPTION_KEY_BASE64);
   const evidence = {
-    ...verifyBackupSet(envelopes, key, { schemaVersion }),
+    ...verifyBackupSet(envelopes, key),
     verified_at: new Date().toISOString(),
     files: files.map(file => path.basename(file)).sort()
   };

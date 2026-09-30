@@ -5,9 +5,8 @@ import {
 } from 'node:crypto';
 import {
   BACKUP_DOMAINS,
-  backupSchemaContract,
+  BACKUP_REQUIRED_TABLES,
   BACKUP_SCHEMA_VERSION,
-  assertBackupTableHashes,
   backupFileName,
   countDomainRows,
   encryptBackup,
@@ -200,8 +199,6 @@ function assertUniqueFolderIds(folderIds) {
 }
 
 export function configuration(getEnv = defaultEnvGet) {
-  const schemaVersion = envValue(getEnv, 'BACKUP_EXPECTED_SCHEMA_VERSION') || BACKUP_SCHEMA_VERSION;
-  backupSchemaContract(schemaVersion);
   const environment = parseBackupEnvironment(envValue(getEnv, 'BACKUP_ENVIRONMENT'));
   const deploymentId = envValue(getEnv, 'BACKUP_DEPLOYMENT_ID') || envValue(getEnv, 'SITE_NAME');
   const sourceRevision = (
@@ -210,7 +207,6 @@ export function configuration(getEnv = defaultEnvGet) {
       || envValue(getEnv, 'DEPLOY_ID')
   ).toLowerCase();
   const config = {
-    schemaVersion,
     environment,
     deploymentId,
     sourceRevision,
@@ -371,10 +367,9 @@ function sortedStrings(values) {
   return (Array.isArray(values) ? values : []).map(value => String(value)).sort();
 }
 
-export function assertBackupExportPayload(payload, clinic, domain, schemaVersion = BACKUP_SCHEMA_VERSION) {
-  const contract = backupSchemaContract(schemaVersion);
+export function assertBackupExportPayload(payload, clinic, domain) {
   if (payload?.format !== 'chananya-domain-export/v1'
-    || payload?.schema_version !== schemaVersion
+    || payload?.schema_version !== BACKUP_SCHEMA_VERSION
     || payload?.clinic_id !== clinic.clinic_id
     || payload?.domain !== domain
     || !payload?.data
@@ -384,7 +379,7 @@ export function assertBackupExportPayload(payload, clinic, domain, schemaVersion
   }
   const included = sortedStrings(payload.included_tables);
   const actual = Object.keys(payload.data).sort();
-  const required = [...contract.required[domain]].sort();
+  const required = [...BACKUP_REQUIRED_TABLES[domain]].sort();
   if (required.some(table => !Array.isArray(payload.data[table]))) {
     throw new Error('BACKUP_EXPORT_REQUIRED_TABLE_MISSING');
   }
@@ -392,21 +387,18 @@ export function assertBackupExportPayload(payload, clinic, domain, schemaVersion
     || JSON.stringify(actual) !== JSON.stringify(required)) {
     throw new Error('BACKUP_EXPORT_INCLUDED_TABLES_MISMATCH');
   }
-  try { assertBackupTableHashes(payload, domain, schemaVersion); }
-  catch { throw new Error('BACKUP_EXPORT_TABLE_HASHES_INVALID'); }
   return payload;
 }
 
-export function assertBackupDatabaseContract(value, schemaVersion = BACKUP_SCHEMA_VERSION) {
-  const required = backupSchemaContract(schemaVersion).required;
+export function assertBackupDatabaseContract(value) {
   const health = firstRow(value);
   if (health?.ready !== true
-    || health.schema_version !== schemaVersion
+    || health.schema_version !== BACKUP_SCHEMA_VERSION
     || Number(health.domain_count) !== BACKUP_DOMAINS.length
-    || Number(health.patient_table_count) !== required.patients.length
-    || Number(health.product_table_count) !== required.products.length
-    || Number(health.pharmacy_table_count) !== required.pharmacy.length
-    || Number(health.transaction_table_count) !== required.transactions.length) {
+    || Number(health.patient_table_count) !== BACKUP_REQUIRED_TABLES.patients.length
+    || Number(health.product_table_count) !== BACKUP_REQUIRED_TABLES.products.length
+    || Number(health.pharmacy_table_count) !== BACKUP_REQUIRED_TABLES.pharmacy.length
+    || Number(health.transaction_table_count) !== BACKUP_REQUIRED_TABLES.transactions.length) {
     throw new Error('BACKUP_DATABASE_CONTRACT_MISMATCH');
   }
   return health;
@@ -758,7 +750,7 @@ export async function runBackupClinicJob({
         p_clinic_id: clinic.clinic_id,
         p_domain: domain
       });
-      assertBackupExportPayload(payload, clinic, domain, config.schemaVersion);
+      assertBackupExportPayload(payload, clinic, domain);
       counts[domain] = countDomainRows(payload);
       const encrypted = (deps.encryptBackup || encryptBackup)(payload, credentials.encryptionKey, {
         environment: config.environment,
@@ -1061,7 +1053,7 @@ export async function handleScheduledBackup(request, context = {}, deps = {}) {
       callRpc(config, 'list_backup_export_clinics', {}, deps, SCHEDULER_RPC_TIMEOUT_MS),
       listSlotRuns(config, slot, config.maxClinics, deps)
     ]);
-    assertBackupDatabaseContract(health, config.schemaVersion);
+    assertBackupDatabaseContract(health);
     const clinics = validateClinicList(clinicRows, config.maxClinics);
     const candidates = classifyBackupSlotRuns(clinics, slotRuns, nowMs);
     const results = await mapWithConcurrency(
@@ -1141,7 +1133,7 @@ export async function handleBackupRecovery(request, context = {}, deps = {}) {
       callRpc(config, 'list_backup_export_clinics', {}, deps, SCHEDULER_RPC_TIMEOUT_MS),
       listSlotRuns(config, slot, config.maxClinics, deps)
     ]);
-    assertBackupDatabaseContract(health, config.schemaVersion);
+    assertBackupDatabaseContract(health);
     const clinics = validateClinicList(clinicRows, config.maxClinics);
     const candidates = classifyBackupSlotRuns(clinics, slotRuns, nowMs);
     const results = await mapWithConcurrency(
@@ -1215,7 +1207,7 @@ export async function handleBackgroundBackup(request, context = {}, deps = {}) {
       {},
       deps,
       SCHEDULER_RPC_TIMEOUT_MS
-    ), config.schemaVersion);
+    ));
     const result = await runBackupClinicJob({
       config,
       clinic: bound.clinic,

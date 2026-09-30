@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,23 +13,6 @@ const qualityHtml = read('quality.html');
 const pharmacy = read('pharmacy.js');
 const pharmacyHtml = read('pharmacy.html');
 const uiReview = read('ui-review.html');
-
-const stockContext = {num: value => Number(value || 0)};
-vm.runInNewContext(production.slice(production.indexOf('  function lowMaterialCount('), production.indexOf('  let db;'))
-  + '; this.count = lowMaterialCount;', stockContext);
-const day = new Date(2026, 8, 26, 12);
-const material = {id:'herb',category:'herb',active:true,reorder_level:2};
-const lot = {product_id:'herb',status:'active',current_quantity:10,expiry_date:'2026-09-25'};
-assert.equal(stockContext.count([material],[lot],day),1,'expired units must not hide shortage');
-assert.equal(stockContext.count([material],[{...lot,expiry_date:'2026-09-26'}],day),0,'expiry day remains eligible in display');
-assert.equal(stockContext.count([material],[{...lot,expiry_date:null}],day),0,'null expiry follows existing FEFO eligibility');
-assert.equal(stockContext.count([material],[{...lot,expiry_date:'2026-09-27',status:'quarantined'}],day),1);
-assert.equal(stockContext.count([material],[{...lot,expiry_date:'invalid'}],day),1);
-assert.equal(stockContext.count([material],[{...lot,expiry_date:null,current_quantity:2}],day),1,'reorder threshold is inclusive');
-assert.equal(stockContext.count([{...material,active:false}],[],day),0);
-assert.equal(stockContext.count([{...material,category:'finished_product'}],[],day),0);
-assert.match(productionHtml,/ประมาณการ/);
-assert.match(productionHtml,/วันที่บนอุปกรณ์/);
 
 assert.match(migration, /^begin;/i, 'production migration must be atomic');
 assert.match(migration, /commit;\s*\n\s*select/i, 'migration must commit before its verification query');
@@ -147,4 +129,3 @@ assert.match(migration, /'schema_version','2026-08-27\.2'/);
 console.log(
   'Atomic production contracts passed: tenant FKs/RLS, department ownership, FEFO locks, idempotency, audited RPC-only writes, validated dialogs and complete backup coverage'
 );
-await import('./production-output-validation.mjs');

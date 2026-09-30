@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { assertSameOriginFramePolicy } from './netlify-frame-policy.mjs';
-import { loadExactGitRootBlobs, selectRuntimeSourceFiles } from './build-netlify-publish.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha40 = /^[0-9a-f]{40}$/i;
@@ -39,15 +37,13 @@ export function validateProductionOrigin(raw, expectedHost) {
   let url;
   try { url = new URL(String(raw || '').trim()); }
   catch { throw new Error('PRODUCTION_SITE_URL_INVALID'); }
-  // URL normalizes the default HTTPS port to empty; another port is a different
-  // origin even when its hostname matches the protected production hostname.
-  if (url.protocol !== 'https:' || url.port || url.username || url.password || url.search || url.hash) {
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
     throw new Error('PRODUCTION_SITE_URL_INVALID');
   }
   if (url.pathname !== '/' && url.pathname !== '') throw new Error('PRODUCTION_SITE_URL_MUST_BE_ORIGIN');
   const host = String(expectedHost || '').trim().toLowerCase();
   if (!host || url.hostname.toLowerCase() !== host) throw new Error('PRODUCTION_SITE_HOST_MISMATCH');
-  if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(host)) throw new Error('PRODUCTION_SITE_HOST_INVALID');
+  if (['localhost', '127.0.0.1', '::1'].includes(host)) throw new Error('PRODUCTION_SITE_HOST_INVALID');
   return url.origin;
 }
 
@@ -84,7 +80,6 @@ function required(name) {
 export async function requestPublicDeployment(origin, pathname, {
   expectedStatus,
   json = false,
-  binary = false,
   fetchImpl = globalThis.fetch,
   sleepImpl = wait,
   logImpl = message => process.stderr.write(`${message}\n`),
@@ -139,7 +134,7 @@ export async function requestPublicDeployment(origin, pathname, {
     }
 
     try {
-      const body = binary ? Buffer.from(await response.arrayBuffer()) : json ? await response.json() : await response.text();
+      const body = json ? await response.json() : await response.text();
       return { response, body };
     } catch (error) {
       if (attempt === maxAttempts) {
@@ -153,50 +148,6 @@ export async function requestPublicDeployment(origin, pathname, {
   }
 
   throw new Error(`PUBLIC_DEPLOYMENT_REQUEST_FAILED ${pathname}: retry policy exhausted`);
-}
-
-export function assertRuntimeCodeInventory(manifest, sourceFiles) {
-  const expected = [...sourceFiles.keys(), 'tenant-config.js', 'brand-config.js']
-    .filter(name => /\.(?:m?js|css)$/.test(name)).sort();
-  const observed = manifest.files.filter(name => /\.(?:m?js|css)$/.test(name)).sort();
-  assert.deepEqual(observed, expected, 'runtime code inventory differs from selected committed package');
-}
-
-export async function verifyServedCode(origin, manifest, {
-  request = requestPublicDeployment,
-  readCommitted = name => execFileSync('git', ['show', `HEAD:${name}`], { cwd: root })
-} = {}) {
-  assert.ok(Array.isArray(manifest?.files) && Array.isArray(manifest?.integrity), 'runtime asset inventory missing');
-  assert.ok(manifest.files.length > 0 && manifest.files.length <= 1000, 'runtime asset inventory bounds');
-  assert.equal(manifest.fileCount, manifest.files.length, 'runtime file count mismatch');
-  assert.equal(manifest.integrity.length, manifest.files.length, 'runtime integrity count mismatch');
-  assert.equal(new Set(manifest.files).size, manifest.files.length, 'duplicate runtime path');
-  // The publisher copies root files only. Validate the entire inventory before
-  // any request; never follow a manifest-supplied host, query or traversal.
-  for (const [i, name] of manifest.files.entries()) {
-    assert.ok(typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(name) && !name.includes('..'), 'unsafe runtime path');
-    const entry = manifest.integrity[i];
-    assert.equal(entry?.path, name, 'runtime integrity order mismatch');
-    assert.match(entry?.sha256 || '', /^[a-f0-9]{64}$/, 'invalid runtime digest');
-    assert.ok(Number.isSafeInteger(entry?.size) && entry.size >= 0, 'invalid runtime size');
-  }
-  const evidence = [];
-  for (const entry of manifest.integrity.filter(item => /\.(?:m?js|css)$/.test(item.path))) {
-    const { body } = await request(origin, `/${entry.path}`, { expectedStatus: 200, binary: true });
-    const digest = createHash('sha256').update(body).digest('hex');
-    assert.equal(body.byteLength, entry.size, `served asset size mismatch: ${entry.path}`);
-    assert.equal(digest, entry.sha256, `served asset digest mismatch: ${entry.path}`);
-    // Both configs are generated and separately runtime-bound, not Git blobs.
-    const sourceBound = !['tenant-config.js', 'brand-config.js'].includes(entry.path);
-    if (sourceBound) {
-      const expected = createHash('sha256').update(readCommitted(entry.path)).digest('hex');
-      assert.equal(digest, expected, `served asset source mismatch: ${entry.path}`);
-    }
-    evidence.push({ path: entry.path, size: body.byteLength, sha256: digest, sourceBound });
-  }
-  assert.ok(evidence.some(item => item.path === 'app.js'), 'served app.js evidence missing');
-  assert.ok(evidence.some(item => item.path === 'app.css'), 'served app.css evidence missing');
-  return evidence;
 }
 
 function requireSecurityHeaders(response, pathname, { html = false } = {}) {
@@ -242,8 +193,6 @@ export async function verifyPublicDeployment({
   }
 
   const routes = ['/', '/login.html', '/auth-callback.html', '/owner-control.html'];
-  assertRuntimeCodeInventory(runtime.body, selectRuntimeSourceFiles(loadExactGitRootBlobs(root), deploy.body));
-  const codeAssets = await verifyServedCode(origin, runtime.body);
   const routeEvidence = [];
   for (const route of routes) {
     const result = await requestPublicDeployment(origin, route, { expectedStatus: 200 });
@@ -267,7 +216,6 @@ export async function verifyPublicDeployment({
     deploymentId: deploy.body.deploymentId,
     tenantCode: deploy.body?.tenant?.expectedClinicCode || null,
     runtimeFileCount: runtime.body.fileCount,
-    codeAssets,
     routes: routeEvidence,
     forbiddenPaths: forbiddenEvidence
   };

@@ -13,11 +13,8 @@
   <script src="chananya-runtime.js?v=account-access1"></script>
   <script src="app-shell.js?v=clinical-os-ia1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="admin.js?v=admin-history2"></script>
-  <script defer src="admin-role-history.js?v=role-history1"></script>
-  <script defer src="admin-price-master.js?v=price-master-session2"></script>
-  <script defer src="amendment-journal.js?v=amendment-recovery1"></script>
-  <script defer src="admin-clinical-audit.js?v=amendment-recovery1"></script>
+  <script defer src="admin.js?v=account-access1"></script>
+  <script defer src="admin-clinical-audit.js?v=clinical-os-ia1"></script>
 </head>
 <body data-page="admin">
 <div id="boot"><div><div class="spinner"></div><h2>กำลังเปิด Admin Task Center</h2><p id="boot-error">กำลังตรวจสอบ session และสิทธิ์</p></div></div>
@@ -37,7 +34,6 @@
   <button class="active" data-view="tasks">Admin Tasks</button>
   <button data-view="users">Users & Roles</button>
   <button data-view="history">Approval History</button>
-  <button data-view="price-master">ราคาบริการและยา</button>
   <button data-view="clinical-audit">Clinical Audit</button>
 </nav>
 <main>
@@ -90,37 +86,7 @@
   </div>
   <div class="card"><div class="row"><h3>รายชื่อและสิทธิ์</h3><button type="button" class="btn ghost" id="refresh-users">โหลดรายชื่อใหม่</button></div><div id="user-list" class="list"></div></div>
 </section>
-<section class="view" id="history"><div class="card"><div class="row"><h3>ประวัติการอนุมัติ</h3><button type="button" class="btn ghost" id="refresh-history">โหลดประวัติใหม่</button></div><p id="history-status" class="muted" role="status" aria-live="polite">กำลังโหลด…</p><div id="action-list" class="list"></div></div>
-  <div class="card"><div class="row"><h3>ประวัติเปลี่ยนสิทธิ์</h3><button type="button" class="btn ghost" id="role-history-refresh">โหลดใหม่</button></div><p id="role-history-status" class="muted" role="status" aria-live="polite">แสดงบันทึกตามสิทธิ์อ่านของบัญชีนี้ ไม่ใช่รายการอนุมัติ</p><div id="role-history-list" class="list"></div><button type="button" class="btn ghost" id="role-history-more" disabled>โหลดรายการเก่าเพิ่มเติม</button></div>
-</section>
-<section class="view" id="price-master">
-  <div class="hero"><h2>ราคากลางของคลินิก</h2><p>Owner/Admin กำหนดราคา พร้อมเหตุผลและประวัติค่าเดิม–ค่าใหม่ ราคาที่เปลี่ยนไม่แก้ยอดบิลที่ออกแล้ว</p></div>
-  <div class="card">
-    <div class="row"><h3>รายการราคา</h3><button class="btn ghost" id="price-refresh" type="button">โหลดราคาใหม่</button></div>
-    <p id="price-status" role="status" aria-live="polite">เลือกแท็บเพื่อโหลดราคา</p>
-    <form id="price-setup-form" class="form hidden">
-      <p class="full">ตั้งต้น Session 650 บาท/ชั่วโมงสำหรับคลินิกนี้เท่านั้น ไม่สร้างราคายาให้อัตโนมัติ</p>
-      <label class="full">เหตุผลตั้งราคา<input id="price-setup-reason" required minlength="3" maxlength="500" placeholder="กำหนดอัตราค่าบริการเริ่มต้น"></label>
-      <button class="btn primary full" type="submit">ตั้งต้น Session 650 บาท/ชั่วโมง</button>
-    </form>
-    <label>ค้นหารายการ<input id="price-search" type="search" placeholder="ชื่อบริการหรือยา"></label>
-    <p class="muted">ยา/ผลิตภัณฑ์: ช่วงราคาที่แจ้ง 100–2,000 บาทเป็นแนวทางเท่านั้น ต้องกำหนดราคาจริงต่อหน่วยของแต่ละรายการ</p>
-    <div id="price-list" class="list"></div>
-  </div>
-  <div class="grid2">
-    <div class="card">
-      <h3>แก้ราคาที่เลือก</h3>
-      <form id="price-edit-form" class="form">
-        <label class="full">รายการ<input id="price-item-label" readonly placeholder="เลือกรายการจากด้านบน"></label>
-        <label>ราคาขาย (บาท)<input id="price-amount" type="number" min="0.01" max="10000000" step="0.01" required></label>
-        <label>ต่อหน่วย<input id="price-unit" readonly></label>
-        <label class="full">เหตุผล<input id="price-reason" required minlength="3" maxlength="500"></label>
-        <button class="btn primary full" id="price-save" type="submit" disabled>บันทึกราคากลาง</button>
-      </form>
-    </div>
-    <div class="card"><h3>ประวัติราคาที่เลือก</h3><p class="muted">บันทึกการเปลี่ยนราคาตามสิทธิ์ ไม่ใช่คำรับรองจากผู้ตรวจอิสระ</p><div id="price-history" class="list" aria-live="polite">เลือกรายการเพื่อดูประวัติ</div></div>
-  </div>
-</section>
+<section class="view" id="history"><div class="card"><h3>ประวัติการอนุมัติ</h3><div id="action-list" class="list"></div></div></section>
 <section class="view" id="clinical-audit">
   <div class="hero"><h2>Clinical Audit & Amendment</h2><p>ตรวจการ Sign-off, Record Lock และประวัติการแก้ไขเวชระเบียนจากจุดควบคุมเดียว</p></div>
   <div class="grid2 space-top-md">
@@ -136,11 +102,9 @@
       <div class="section-heading"><span class="section-number">U</span><div><h2>เปิดเพื่อ Amendment</h2><p>ทุกการปลด Lock ต้องมีเหตุผลและถูกบันทึกใน Audit trail</p></div></div>
       <form id="amend-form" class="form">
         <label class="full">Encounter ID<input id="amend-encounter" required readonly></label>
-        <label class="full">เหตุผล 5–2000 ตัวอักษร<textarea id="amend-reason" required minlength="5" maxlength="2000"></textarea></label>
-        <button id="amend-submit" class="btn danger full">Unlock for Amendment</button>
+        <label class="full">เหตุผลอย่างน้อย 5 ตัวอักษร<textarea id="amend-reason" required></textarea></label>
+        <button class="btn danger full">Unlock for Amendment</button>
       </form>
-      <p id="amend-recovery-status" class="status" role="status" aria-live="polite">กำลังตรวจคำขอค้างในแท็บนี้…</p>
-      <button id="amend-recover" type="button" class="btn ghost" disabled>ตรวจผลคำขอเดิม (ไม่ปลดล็อกซ้ำ)</button>
     </div>
   </div>
   <div class="card"><h3>Audit Timeline</h3><div id="clinical-audit-list" class="list"><p class="muted">ค้นหา Encounter เพื่อดู Timeline</p></div></div>

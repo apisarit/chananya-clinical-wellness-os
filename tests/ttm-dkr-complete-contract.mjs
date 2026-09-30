@@ -1,33 +1,18 @@
 import assert from 'node:assert/strict';
-import './ttm-dkr-reference-preflight.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   DKR_DATASET_VERSION,
   DKR_GRAPH_VERSION,
   DKR_SOURCE_CODE,
   loadDkrDataset,
-  parseDkrDataset,
-  importDkrDataset,
   validateDkrImportEnvironment
 } from '../scripts/import-ttm-dkr-staging.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const dataset = loadDkrDataset(root);
-const archive=fs.readFileSync(path.join(root,'data/ttm/ttm-dkr-v1-complete-20260830.json.gz'));
-assert.deepEqual(parseDkrDataset(archive),dataset);
-const changed=structuredClone(dataset);
-changed.rules[0].description='SYNTHETIC content substitution with unchanged version and rule count';
-assert.equal(changed.rules.length,113);
-assert.equal(changed.dataset_version,dataset.dataset_version);
-assert.throws(()=>parseDkrDataset(zlib.gzipSync(JSON.stringify(changed))),/TTM_DKR_SOURCE_DIGEST_MISMATCH/);
-for(const bytes of [Buffer.alloc(0),archive.subarray(0,archive.length-1),Buffer.concat([archive,Buffer.from('extra')]),'not bytes']) {
-  assert.throws(()=>parseDkrDataset(bytes),/TTM_DKR_SOURCE_DIGEST_MISMATCH/);
-}
 
 assert.equal(dataset.dataset_version, DKR_DATASET_VERSION);
 assert.equal(dataset.source.source_code, DKR_SOURCE_CODE);
@@ -83,20 +68,6 @@ assert.equal(validateDkrImportEnvironment(safeEnv, root).enabled, true);
 assert.throws(() => validateDkrImportEnvironment({ ...safeEnv, CLINICAL_OS_STAGING_DATABASE_ACK: '' }, root), /STAGING_ONLY/);
 assert.throws(() => validateDkrImportEnvironment({ ...safeEnv, SUPABASE_URL: production.database.url }, root), /does not match|Production/);
 assert.throws(() => validateDkrImportEnvironment({ ...safeEnv, BACKUP_PRODUCTION_SUPABASE_URL: staging.database.url }, root), /Production Supabase/);
-
-const fixture=fs.mkdtempSync(path.join(os.tmpdir(),'cnyos-dkr-source-pin-'));
-const originalFetch=globalThis.fetch;
-let networkCalls=0;
-try {
-  fs.mkdirSync(path.join(fixture,'data/ttm'),{recursive:true});
-  fs.writeFileSync(path.join(fixture,'data/ttm/ttm-dkr-v1-complete-20260830.json.gz'),zlib.gzipSync(JSON.stringify(changed)));
-  globalThis.fetch=async()=>{networkCalls++;throw new Error('NETWORK_NOT_ALLOWED_IN_FIXTURE');};
-  await assert.rejects(importDkrDataset({env:safeEnv,cwd:fixture}),/TTM_DKR_SOURCE_DIGEST_MISMATCH/);
-  assert.equal(networkCalls,0,'changed source must be refused before the first import request');
-} finally {
-  globalThis.fetch=originalFetch;
-  fs.rmSync(fixture,{recursive:true,force:true});
-}
 
 const importer = read('scripts/import-ttm-dkr-staging.mjs');
 assert.match(importer, new RegExp(DKR_GRAPH_VERSION));

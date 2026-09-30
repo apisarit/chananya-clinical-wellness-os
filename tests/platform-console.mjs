@@ -7,7 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { PLATFORM_FEATURES, normalizePlatformLink, normalizePlatformPlan, resolvePlatformFeatures, platformPlanInput, platformPreflight } from '../platform-config.js';
 import { handlePlatformConsole, platformTargets } from '../netlify/functions/platform-console.mts';
 import { validatePreviewJob, canonicalPreviewAsset } from '../scripts/platform-preview-deploy.mjs';
-import { buildNetlifyPublish, selectRuntimeSourceFiles, isPublicRuntimeRootFile, assertRuntimeScriptDependencies } from '../scripts/build-netlify-publish.mjs';
+import { buildNetlifyPublish } from '../scripts/build-netlify-publish.mjs';
 import {
   buildDeployManifest,
   GENERATED_CONFIG_DIRECTORY,
@@ -155,60 +155,6 @@ await test('resolve feature dependencies and reject unknown features', () => {
 });
 await test('registry rejects duplicate database identities', () => {
   assert.throws(() => platformTargets(JSON.stringify([target, { ...target, key: 'second', siteId: randomUUID() }])), /REGISTRY_INVALID/);
-});
-await test('every package selection retains dependencies and excludes unselected module pages', () => {
-  const ids = PLATFORM_FEATURES.map(feature => feature.id);
-  const files = new Map(PLATFORM_FEATURES.flatMap(feature => feature.pages.map(page => [`${page}.html`, Buffer.from('synthetic')])));
-  files.set('platform-console.html', Buffer.from('synthetic'));
-  for (let mask = 0; mask < 2 ** ids.length; mask++) {
-    const requested = ids.filter((_id, index) => mask & (2 ** index));
-    const selected = resolvePlatformFeatures(requested);
-    assert.ok(selected.includes('core'));
-    assert.equal(new Set(selected).size, selected.length);
-    assert.deepEqual(resolvePlatformFeatures(selected), selected, 'dependency resolution must be idempotent');
-    assert.deepEqual(resolvePlatformFeatures([...requested].reverse()), selected, 'input order must not change package');
-    for (const feature of PLATFORM_FEATURES.filter(item => selected.includes(item.id))) {
-      for (const dependency of feature.requires) assert.ok(selected.includes(dependency));
-    }
-    const packaged = selectRuntimeSourceFiles(files, { package: { features: requested } });
-    assert.equal(packaged.has('platform-console.html'), false);
-    for (const feature of PLATFORM_FEATURES) for (const page of feature.pages) {
-      assert.equal(packaged.has(`${page}.html`), selected.includes(feature.id), `${mask}: ${page}`);
-    }
-  }
-});
-await test('every package retains static script dependencies from the actual working tree', async () => {
-  const root = new URL('../', import.meta.url);
-  const files = new Map();
-  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
-    if (entry.isFile() && isPublicRuntimeRootFile(entry.name)) {
-      files.set(entry.name, await fs.readFile(new URL(entry.name, root)));
-    }
-  }
-  assert.ok(files.has('index.html'), 'must inspect actual application sources');
-  const ids = PLATFORM_FEATURES.map(feature => feature.id);
-  for (let mask = 0; mask < 2 ** ids.length; mask++) {
-    const features = ids.filter((_id, index) => mask & (2 ** index));
-    const packaged = selectRuntimeSourceFiles(files, { package: { features } });
-    assert.doesNotThrow(() => assertRuntimeScriptDependencies(packaged), `package ${features.join(',') || 'core'}`);
-  }
-  // Negative control: the validator must reject a genuinely missing local script.
-  const broken = new Map(files);
-  broken.set('dependency-probe.html', Buffer.from('<script src="missing-package-dependency.js"></script>'));
-  broken.delete('missing-package-dependency.js');
-  assert.throws(() => assertRuntimeScriptDependencies(broken), /SCRIPT_DEPENDENCY_MISSING/);
-  // Real transitive imports, not only a synthetic HTML script. The Luopan page
-  // reaches landscape through several modules; none may silently disappear.
-  for (const dependency of ['u-synthesise-catalog.js', 'u-synthesise-engine.js',
-    'u-synthesise-luopan.js', 'u-synthesise-classical.js',
-    'u-synthesise-landscape-ui.js', 'u-synthesise-landscape.js']) {
-    assert.ok(files.has(dependency), `${dependency} fixture must exist`);
-    const missingModule = new Map(files);
-    missingModule.delete(dependency);
-    assert.throws(() => assertRuntimeScriptDependencies(missingModule), error =>
-      error.message.startsWith('NETLIFY_PUBLISH_SCRIPT_DEPENDENCY_MISSING:')
-      && error.message.endsWith(` -> ${dependency}`), `missing ${dependency} must block`);
-  }
 });
 await test('a pasted destination is pending until its connection is proven', () => {
   const result = platformPreflight(normalizePlatformPlan(input), [target], { dispatcherReady: true });

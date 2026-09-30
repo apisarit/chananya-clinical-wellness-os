@@ -86,10 +86,6 @@
     // tenant + department context. A stale frontend role must never become an
     // authorization fallback while a migration or RPC is unavailable.
     if (profile?.access_context_ready !== true) return false;
-    // The clinic Owner may operate finance, not other departments. Require the
-    // explicit database-resolved membership rather than a legacy profile role.
-    if (capability === 'billing_operate' && profile.clinic_id
-        && normalizeRole(profile.clinic_role) === 'owner') return true;
     const allowed = permissions[capability] || [];
     return rolesOf(profile).grantedRoles.some(role => allowed.includes(role));
   }

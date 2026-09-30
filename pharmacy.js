@@ -17,22 +17,16 @@
   let session;
   let profile;
   let persistenceReady = false;
-  let accountBlocked = false;
   let productionRequestKey = null;
   let productionRequestAttempted = false;
   let loadPromise = null;
   let queueRefreshTimer = null;
-  let productPrices = new Map();
-  let priceLoadError = false;
-  let queueReadFailed = false;
-  const pendingActions = new Set();
   const data = {
     products: [], sales: [], items: [], patients: [], prescriptions: [], dispensing: [],
     prescriptionItems: [], dispensingItems: [], productionRequests: []
   };
 
   function toast(message) {
-    if (accountBlocked) return;
     const element = $('#toast');
     element.textContent = message;
     element.classList.add('show');
@@ -40,7 +34,6 @@
   }
 
   function fail(error) {
-    if (accountBlocked) return;
     console.error(error);
     alert(error?.message || String(error));
   }
@@ -54,7 +47,6 @@
   }
 
   async function query(table, select = '*', order) {
-    requireAccount();
     let request = db.from(table).select(select);
     if (order) request = request.order(order, { ascending: false });
     const result = await request;
@@ -83,48 +75,12 @@
   }
 
   function requirePersistence() {
-    requireAccount();
-    if (queueReadFailed) throw new Error('โหลดข้อมูลห้องยาล่าสุดไม่สำเร็จ กรุณารีเฟรชคิวก่อนทำรายการต่อ');
     if (!persistenceReady) {
       throw new Error('ฐานข้อมูล Pharmacy ยังไม่พร้อมสำหรับการบันทึกแบบตรวจสอบย้อนหลัง');
     }
   }
 
-  function requireAccount() {
-    if (accountBlocked) throw new Error('บัญชีเปลี่ยนหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่');
-  }
-
-  function blockAccount() {
-    accountBlocked = true;
-    persistenceReady = false;
-    stopQueueRefresh();
-    Object.keys(data).forEach(key => { data[key] = []; });
-    productPrices.clear();
-    window.CnyosClarificationHistory?.close();
-    const app = $('#app');
-    if (app) { app.inert = true; app.classList.add('hidden'); }
-    $$('#app input, #app textarea, #app select').forEach(input => {
-      input.value = ''; input.checked = false;
-      if (input.tagName === 'SELECT') input.innerHTML = '';
-    });
-    ['#rx-list', '#walkin-list', '#history-list', '#product-list', '#production-request-list'].forEach(selector => {
-      const element = $(selector); if (element) element.textContent = '';
-    });
-    $$('dialog[open]').forEach(dialog => { dialog.close(); dialog.textContent = ''; });
-    $('#boot')?.classList.remove('hidden');
-    const error = $('#boot-error');
-    if (error) error.textContent = 'บัญชีเปลี่ยนหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่ก่อนใช้ห้องยา';
-  }
-
-  function watchAccount() {
-    const actor = session.user.id;
-    db.auth.onAuthStateChange((event, next) => {
-      if (event === 'SIGNED_OUT' || !next?.user || next.user.id !== actor) blockAccount();
-    });
-  }
-
   async function load() {
-    if (accountBlocked) return;
     if (loadPromise) return loadPromise;
     loadPromise = (async () => {
       const [
@@ -141,44 +97,19 @@
         query('dispensing_items'),
         query('production_requests', '*', 'requested_at')
       ]);
-      if (accountBlocked) return;
       Object.assign(data, {
         products, sales, items, patients, prescriptions, dispensing,
         prescriptionItems, dispensingItems, productionRequests
       });
-      productPrices = new Map();
-      priceLoadError = false;
-      try {
-        const quotes = await window.CnyosPriceMaster.productQuotes(db, products.filter(item => item.active !== false));
-        if (accountBlocked) return;
-        productPrices = quotes;
-      } catch (_) { priceLoadError = true; }
-      if (accountBlocked) return;
       render();
-      queueReadFailed = false;
       const status = $('#rx-refresh-status');
       if (status) status.textContent = `อัปเดต ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
-    })().catch(error => {
-      if (!accountBlocked) {
-        queueReadFailed = true;
-        Object.keys(data).forEach(key => { data[key] = []; });
-        productPrices.clear();
-        priceLoadError = true;
-        window.CnyosClarificationHistory?.close();
-        $$('dialog[open]').forEach(dialog => dialog.close());
-        $$('#app select').forEach(select => { select.innerHTML = ''; });
-        ['#rx-list', '#walkin-list', '#history-list', '#product-list', '#production-request-list', '#rx-refresh-status'].forEach(selector => {
-          const element = $(selector);
-          if (element) element.textContent = 'โหลดข้อมูลล่าสุดไม่สำเร็จ — ไม่ได้หมายความว่าไม่มีงาน กรุณารีเฟรชคิวก่อนทำรายการต่อ';
-        });
-      }
-      throw error;
-    }).finally(() => { loadPromise = null; });
+    })().finally(() => { loadPromise = null; });
     return loadPromise;
   }
 
   function startQueueRefresh() {
-    if (accountBlocked || queueRefreshTimer || document.visibilityState !== 'visible') return;
+    if (queueRefreshTimer || document.visibilityState !== 'visible') return;
     queueRefreshTimer = setTimeout(async () => {
       queueRefreshTimer = null;
       try {
@@ -215,12 +146,26 @@
   function syncItemProduct() {
     const selected = product($('#item-product')?.value);
     if ($('#item-unit')) $('#item-unit').value = selected?.dispense_unit || '';
-    const quote = productPrices.get(selected?.id);
-    if ($('#item-price')) $('#item-price').value = quote ? money(quote.unit_price) : '';
-    if ($('#item-price')) $('#item-price').placeholder = priceLoadError ? 'โหลดราคากลางไม่สำเร็จ — ห้ามจ่ายยา' : 'ยังไม่ตั้งราคา — แจ้ง Owner/Admin';
+  }
+
+  function capturePrescriptionPriceDrafts() {
+    const active = document.activeElement;
+    return {
+      focusedItemId: active?.dataset?.rxPrice || null,
+      values: new Map($$('[data-rx-price]').map(input => [input.dataset.rxPrice, input.value]))
+    };
+  }
+
+  function restorePrescriptionPriceDrafts(drafts) {
+    if (!drafts?.values) return;
+    $$('[data-rx-price]').forEach(input => {
+      if (drafts.values.has(input.dataset.rxPrice)) input.value = drafts.values.get(input.dataset.rxPrice);
+      if (drafts.focusedItemId === input.dataset.rxPrice) input.focus({ preventScroll: true });
+    });
   }
 
   function render() {
+    const prescriptionPriceDrafts = capturePrescriptionPriceDrafts();
     const selectedSale = $('#item-sale')?.value || '';
     const selectedProduct = $('#item-product')?.value || '';
     const selectedPatient = $('#sale-patient')?.value || '';
@@ -243,7 +188,7 @@
     );
 
     syncItemProduct();
-    renderPrescriptionQueue();
+    renderPrescriptionQueue(prescriptionPriceDrafts);
     renderProductionRequests();
     renderWalkin();
     renderProducts();
@@ -251,7 +196,7 @@
     window.dispatchEvent(new CustomEvent('chananya:pharmacy-rendered'));
   }
 
-  function renderPrescriptionQueue() {
+  function renderPrescriptionQueue(priceDrafts = null) {
     const rows = data.dispensing.map(order => {
       const prescription = data.prescriptions.find(item => item.id === order.prescription_id);
       const linkedPatient = patient(prescription?.patient_id);
@@ -266,32 +211,25 @@
           .filter(allocation => allocation.prescription_item_id === item.id)
           .reduce((total, allocation) => total + num(allocation.quantity_dispensed), 0);
         const price = allocations.find(allocation => allocation.prescription_item_id === item.id)?.unit_price;
-        const quote = window.CnyosPriceMaster.checkedPrice(productPrices.get(item.product_id), item.unit);
         const priceControl = order.status === 'reviewed'
-          ? `<small>${quote ? `ราคากลาง ฿${money(quote.unit_price)} / ${esc(item.unit)}` : priceLoadError ? 'โหลดราคากลางไม่สำเร็จ — กรุณาโหลดใหม่' : 'ยังไม่มีราคาตรงหน่วย — ให้ Owner/Admin ตั้งราคาก่อนจ่ายยา'}</small>`
+          ? `<label class="rx-price">ราคาขายต่อ ${esc(item.unit)}<input data-rx-price="${esc(item.id)}" type="number" min="0" max="1000000" step="0.01" required></label>`
           : `<small>จ่าย ${dispensed || 0}/${num(item.quantity_prescribed)} ${esc(item.unit)}${price == null ? '' : ` • ฿${money(price)}/${esc(item.unit)}`}</small>`;
         return `<div class="drug"><b>${esc(linkedProduct?.sku || '-')} • ${esc(linkedProduct?.name_th || '-')}</b><small>สั่ง ${num(item.quantity_prescribed)} ${esc(item.unit)} • ${esc(item.dose || '')} ${esc(item.frequency || '')} ${esc(item.duration || '')}</small>${priceControl}</div>`;
       }).join('');
       const buttons = [];
-      buttons.push(`<button class="btn" data-act="rx-clarification-history" data-id="${esc(order.id)}">ประวัติคำถามถึงผู้สั่งยา</button>`);
       if (['waiting', 'pending'].includes(order.status)) {
         buttons.push(`<button class="btn primary" data-act="rx-review" data-id="${esc(order.id)}">เภสัชกร Review</button>`);
       }
       if (order.status === 'reviewed') {
-        const priced = prescribed.length > 0 && prescribed.every(item => window.CnyosPriceMaster.checkedPrice(productPrices.get(item.product_id), item.unit));
-        buttons.push(`<button class="btn primary" data-act="rx-dispense" data-id="${esc(order.id)}"${priced ? '' : ' disabled'}>จ่ายยา FEFO</button>`);
+        buttons.push(`<button class="btn primary" data-act="rx-dispense" data-id="${esc(order.id)}">จ่ายยา FEFO</button>`);
       }
       if (order.status === 'dispensed') {
         buttons.push(`<button class="btn primary" data-act="rx-billing" data-id="${esc(order.id)}">ส่ง Checkout / Billing</button>`);
       }
-      const handoffStatus = order.status === 'submitted_to_billing'
-        ? '<p class="muted">ส่งฝ่ายการเงินแล้ว — รอรวมค่าบริการและออกบิล ยังไม่ใช่การรับชำระเงิน</p>'
-        : order.status === 'billed'
-          ? '<p class="muted">ออกบิลแล้ว — ให้ฝ่ายการเงินตรวจยอดรับชำระและใบเสร็จ</p>'
-          : '';
-      return `<article class="item column" data-dispensing-order-id="${esc(order.id)}"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(label)}</b><small>${esc(prescription?.prescription_no || '-')}</small></div><span class="badge">${esc(order.status)}</span></div>${itemRows}${handoffStatus}<div class="right">${buttons.join('')}</div></article>`;
+      return `<article class="item column" data-dispensing-order-id="${esc(order.id)}"><div class="row"><div><b>${esc(order.queue_number || '-')} • ${esc(label)}</b><small>${esc(prescription?.prescription_no || '-')}</small></div><span class="badge">${esc(order.status)}</span></div>${itemRows}<div class="right">${buttons.join('')}</div></article>`;
     }).join('');
     $('#rx-list').innerHTML = rows || '<p class="muted">ไม่มีคิวใบสั่งยาจากผู้รักษา</p>';
+    restorePrescriptionPriceDrafts(priceDrafts);
   }
 
   function prescription(id) {
@@ -399,7 +337,6 @@
       p_reason: $('#production-reason').value.trim() || 'out_of_stock'
     });
     if (result.error) throw result.error;
-    requireAccount();
     productionRequestKey = null;
     productionRequestAttempted = false;
     event.target.reset();
@@ -453,26 +390,11 @@
 
   function bindActions() {
     $$('[data-act]').forEach(button => {
-      button.onclick = async () => {
-        const key = `${button.dataset.act}:${button.dataset.id}`;
-        if (pendingActions.has(key)) return;
-        pendingActions.add(key);
-        button.disabled = true;
-        try { await act(button.dataset.act, button.dataset.id); }
-        catch (error) { fail(error); }
-        finally { pendingActions.delete(key); button.disabled = false; }
-      };
+      button.onclick = () => act(button.dataset.act, button.dataset.id).catch(fail);
     });
   }
 
   async function act(action, id) {
-    requireAccount();
-    if (action === 'rx-clarification-history') {
-      const order = dispensingOrder(id);
-      if (!order) return;
-      window.CnyosClarificationHistory.open({ db, orderId: id, actorId: session?.user?.id, mode: 'pharmacy', productLabel: productId => product(productId)?.name_th, label: `คิวห้องยา ${order.queue_number || ''}` });
-      return;
-    }
     requirePersistence();
     let result;
     let successMessage = '';
@@ -490,9 +412,12 @@
       const prices = data.prescriptionItems
         .filter(item => item.prescription_id === rx?.id)
         .map(item => {
-          const quote = window.CnyosPriceMaster.checkedPrice(productPrices.get(item.product_id), item.unit);
-          if (!quote) throw new Error('ยาทุกรายการต้องมีราคากลางตรงหน่วยขาย ให้ Owner/Admin ตั้งราคาก่อน');
-          return { prescription_item_id: item.id, unit_price: Number(quote.unit_price), price_item_id: quote.item_id, price_item_version: quote.item_version };
+          const input = document.querySelector(`[data-rx-price="${item.id}"]`);
+          const unitPrice = num(input?.value);
+          if (!input || input.value === '' || unitPrice < 0) {
+            throw new Error('กรุณาระบุราคาขายของยาทุกรายการ');
+          }
+          return { prescription_item_id: item.id, unit_price: unitPrice };
         });
       result = await db.rpc('transition_atomic_prescription_dispensing', {
         p_dispensing_order_id: id,
@@ -543,23 +468,8 @@
       return;
     }
     if (result.error) throw result.error;
-    requireAccount();
-    try {
-      // A read started before this acknowledgement cannot prove the new state.
-      // Drain it (including failure), then initiate a post-write read.
-      if (loadPromise) await loadPromise.catch(() => {});
-      requireAccount();
-      await load();
-      if (successMessage) toast(successMessage);
-    } catch (_) {
-      if (accountBlocked) return;
-      // The server already acknowledged the write. A failed refresh does not
-      // mean the action failed; load() removes stale actions until recovery.
-      const message = `${successMessage || 'บันทึกสำเร็จแล้ว'} แต่โหลดรายการล่าสุดไม่สำเร็จ — กรุณากดรีเฟรชคิวก่อนทำรายการต่อ`;
-      const status = $('#rx-refresh-status');
-      if (status) status.textContent = message;
-      toast(message);
-    }
+    if (successMessage) toast(successMessage);
+    await load();
   }
 
   function syncSalePatient() {
@@ -584,7 +494,6 @@
       p_advice: $('#advice').value.trim() || null
     });
     if (result.error) throw result.error;
-    requireAccount();
     event.target.reset();
     await load();
     toast('สร้างรายการ Walk-in และบันทึก Audit แล้ว');
@@ -597,21 +506,18 @@
     const productId = $('#item-product').value;
     if (!saleId) throw new Error('กรุณาเลือกรายการขายสถานะ Draft');
     if (!productId) throw new Error('กรุณาเลือกยา/ผลิตภัณฑ์');
-    const quote = window.CnyosPriceMaster.checkedPrice(productPrices.get(productId), product(productId)?.dispense_unit);
-    if (!quote) throw new Error('ยังไม่มีราคากลางของผลิตภัณฑ์นี้ ให้ Owner/Admin ตั้งราคาก่อน');
     const result = await db.rpc('upsert_pharmacy_counter_sale_item', {
       p_sale_item_id: null,
       p_sale_id: saleId,
       p_product_id: productId,
       p_quantity_requested: num($('#item-qty').value),
-      p_unit_price: Number(quote.unit_price),
+      p_unit_price: num($('#item-price').value),
       p_dose: $('#item-dose').value.trim() || null,
       p_frequency: $('#item-frequency').value.trim() || null,
       p_duration: $('#item-duration').value.trim() || null,
       p_instructions: $('#item-instructions').value.trim() || null
     });
     if (result.error) throw result.error;
-    requireAccount();
     event.target.reset();
     await load();
     toast('เพิ่มยาและบันทึก Audit แล้ว');
@@ -665,7 +571,6 @@
       p_reorder_level: num($('#product-reorder').value)
     });
     if (result.error) throw result.error;
-    requireAccount();
     resetProductForm();
     await load();
     toast(id ? 'แก้ไขผลิตภัณฑ์และบันทึก Audit แล้ว' : 'เพิ่มผลิตภัณฑ์และบันทึก Audit แล้ว');
@@ -677,15 +582,12 @@
       db = runtime.getDb();
       session = await runtime.getSession();
       if (!session) { location.replace('/login.html'); return; }
-      watchAccount();
       profile = await runtime.getProfile(session.user.id);
-      requireAccount();
       if (!profile) throw new Error('ไม่พบ Profile');
       if (!runtime.can(profile, 'pharmacy_operate')) {
         throw new Error('บัญชีนี้ไม่มีสิทธิ์ Pharmacy — แต่ละบัญชีเข้าได้เฉพาะแผนกของตน');
       }
       await detectPersistence();
-      requireAccount();
       window.ChananyaShell?.mount({ profile, session, active: 'pharmacy' });
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
@@ -735,13 +637,8 @@
   $('#product-master-search')?.addEventListener('input', renderProducts);
   $('#show-inactive-products')?.addEventListener('change', renderProducts);
   $('#logout').onclick = async () => {
-    blockAccount();
     if (db) await db.auth.signOut();
     location.replace('/login.html');
   };
-  window.addEventListener('pagehide', event => { if (event.persisted) blockAccount(); });
-  window.addEventListener('pageshow', event => {
-    if (event.persisted) { blockAccount(); location.reload(); }
-  });
   init();
 })();

@@ -88,18 +88,6 @@ for (const testCase of cases) {
 }
 
 const superAdmin = { role: 'viewer', system_role: 'super_admin', access_context_ready: true };
-const clinicOwner = { role: 'owner', clinic_role: 'owner', clinic_id: 'synthetic-clinic', system_role: 'staff', access_context_ready: true };
-assert.equal(runtime.can(clinicOwner, 'billing_operate'), true);
-for (const capability of ['clinical_write', 'clinical_read', 'pharmacy_operate', 'quality_operate', 'production_operate']) {
-  assert.equal(runtime.can(clinicOwner, capability), false, `Owner finance must not grant ${capability}`);
-}
-for (const profile of [
-  { ...clinicOwner, access_context_ready: false },
-  { ...clinicOwner, clinic_id: null },
-  { ...clinicOwner, clinic_role: undefined },
-  { ...clinicOwner, clinic_role: 'admin', role: 'admin' },
-  { ...clinicOwner, clinic_role: 'viewer', system_role: 'admin' }
-]) assert.equal(runtime.can(profile, 'billing_operate'), false, 'Only a ready explicit clinic Owner receives the finance exception');
 assert.equal(runtime.can(superAdmin, 'appointments_view'), true, 'super admin may inspect appointments');
 assert.equal(runtime.can(superAdmin, 'clinical_read'), true, 'super admin may inspect tenant-scoped clinical outcomes');
 assert.equal(runtime.can(superAdmin, 'appointments_operate'), true, 'super admin receives the explicit cross-workspace override');

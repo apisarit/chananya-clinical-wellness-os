@@ -103,82 +103,10 @@ const expectedPostBaselineMigrations = Object.freeze([
     name: 'fix_checkin_search_digest',
     file: '20260923084317_fix_checkin_search_digest.sql',
     sha256: 'edc76135755bca10c6b28d389fcbde31244988942b11b6c47440e73c4abdcae8'
-  }),
-  Object.freeze({
-    version: '20260926090000',
-    name: 'tenant_price_master',
-    file: '20260926090000_tenant_price_master.sql',
-    sha256: 'd0f2b087ac9587371c84c519f38ace04ff8efddc5bc8f2a80da230568b3d32df'
-  }),
-  Object.freeze({
-    version: '20260926091000',
-    name: 'enforce_server_price_snapshots',
-    file: '20260926091000_enforce_server_price_snapshots.sql',
-    sha256: '6ee7483a3737361ac3e36728e2e4e074f6dd61ff382e4f4105c48400130c55ba'
-  }),
-  Object.freeze({
-    version: '20260926101714',
-    name: 'treatment_request_replay',
-    file: '20260926101714_treatment_request_replay.sql',
-    sha256: 'd0b2ca949c2fc70120ab9fbd6486f51a1aeca481177b32ad768c3b31214a0bfc'
-  }),
-  Object.freeze({
-    version: '20260926104313',
-    name: 'guard_invoiced_treatment_charges',
-    file: '20260926104313_guard_invoiced_treatment_charges.sql',
-    sha256: 'd173336b7fa312fa18c088a6100a8357d6b3c0ceea1607027cdf2a686dc28793'
-  }),
-  Object.freeze({
-    version: '20260926110419',
-    name: 'guard_invoiced_prescription_creation',
-    file: '20260926110419_guard_invoiced_prescription_creation.sql',
-    sha256: 'c15a8c8b842622297de712fc2890ef6fc4155706e100ed884976c0ffd925cefc'
-  }),
-  Object.freeze({
-    version: '20260926112646',
-    name: 'encounter_invoice_aggregation',
-    file: '20260926112646_encounter_invoice_aggregation.sql',
-    sha256: '4e59bc691746c19c59ffac6b6d8588bf1e50c801d8eedf4cb756903aba81cef6'
-  }),
-  Object.freeze({
-    version: '20260926114320',
-    name: 'financial_backup_provenance',
-    file: '20260926114320_financial_backup_provenance.sql',
-    sha256: '9d5dedcf96edba1eb149952a22001b6823cb11c58938fe0f193634e62b73939f'
-  }),
-  Object.freeze({
-    version: '20260926140812',
-    name: 'admin_role_history_read',
-    file: '20260926140812_admin_role_history_read.sql',
-    sha256: '81ebcaff62a4869a11307d707232e1b55393ff6862d3833d701191c9256f99cd'
-  }),
-  Object.freeze({
-    version: '20260926202710',
-    name: 'quality_evidence_read',
-    file: '20260926202710_quality_evidence_read.sql',
-    sha256: '63bb410e3af9f53db72a545a896a1bbfa657919475faaaeeec54343380665e6e'
-  }),
-  Object.freeze({
-    version: '20260926214550',
-    name: 'pharmacy_clarification_replacement_bundle',
-    file: '20260926214550_pharmacy_clarification_replacement_bundle.sql',
-    sha256: 'f4cda38e6e96df711ec137e3e84e7ad78d52d9c8f44a7031fcc64e2c88c2b37b'
-  }),
-  Object.freeze({
-    version: '20260927003831',
-    name: 'clinical_signoff_assignment',
-    file: '20260927003831_clinical_signoff_assignment.sql',
-    sha256: '83c7a3fe3a99c720baec970fed1081fe3dc0f44e3cdf0f2e03e8e8f2dc45281f'
-  }),
-  Object.freeze({
-    version: '20260927145517',
-    name: 'owner_finance_select_rls',
-    file: '20260927145517_owner_finance_select_rls.sql',
-    sha256: '2319fdaca3d657f74e2d654cc4717a360942c3b94819ef88aaa5a68d371274a0'
   })
 ]);
 
-assert.equal(repositoryEntries.length, 45 + expectedPostBaselineMigrations.length, 'repository must contain the exact reviewed prefix plus declared migration tail');
+assert.equal(repositoryEntries.length, 56, 'repository must contain the 56-file source chain');
 assert.deepEqual(
   repositoryEntries,
   [...repositoryEntries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)

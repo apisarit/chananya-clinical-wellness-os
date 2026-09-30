@@ -191,11 +191,10 @@ export default async (request, context) => {
     return await handlePatientAction(request, context, config);
   } catch (error) {
     const safe = publicError(error);
-    // Operational logs are not a clinical access ledger. Never retain raw
-    // upstream messages, causes, tokens or patient details here.
     console.error('patient-identity request failed', {
       requestId: context.requestId,
-      code: safe.code
+      code: safe.code,
+      internalCode: error?.message || 'UNKNOWN'
     });
     return json({ ok: false, code: safe.code }, safe.status);
   }
