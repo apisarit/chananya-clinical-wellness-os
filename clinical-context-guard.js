@@ -51,6 +51,11 @@
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('th-TH');
   }
 
+  function patientName(patient) {
+    return [patient?.prefix || patient?.title, patient?.first_name, patient?.last_name]
+      .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || 'ไม่ระบุชื่อ';
+  }
+
   function setAlertState(selector, active, warning = false) {
     const box = $(selector);
     if (!box) return;
@@ -97,6 +102,9 @@
       return;
     }
 
+    // Clear the previous identity immediately; pending reads must never leave
+    // another Encounter's patient context visible while the new ID resolves.
+    resetContext('กำลังอ่าน Clinical context…');
     host.setAttribute('aria-busy', 'true');
     text('#ccg-state', 'กำลังตรวจ Clinical context…');
     try {
@@ -106,6 +114,7 @@
         .maybeSingle();
       if (encounterResult.error) throw encounterResult.error;
       if (!encounterResult.data) throw new Error('ไม่พบ Encounter ที่เลือก');
+      if (encounterSelect?.value !== encounterId) return;
 
       const encounter = encounterResult.data;
       const [patientResult, allergyResult, examResult, diagnosisResult, planResult, sessionResult, signoffResult] = await Promise.all([
@@ -118,16 +127,16 @@
         db.from('clinical_record_signoffs').select('signed_at,lock_record,signer_name').eq('encounter_id', encounterId).eq('record_section', 'complete_record').maybeSingle()
       ]);
 
-      if (version !== refreshVersion) return;
+      if (version !== refreshVersion || encounterSelect?.value !== encounterId) return;
       const requiredErrors = [patientResult, diagnosisResult, signoffResult, examResult, planResult, sessionResult]
         .map(result => result?.error)
         .filter(Boolean);
       if (requiredErrors.length) throw requiredErrors[0];
 
       const patient = patientResult.data || {};
-      const patientName = [patient.prefix, patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'ไม่ระบุชื่อ';
       const age = ageAt(patient.date_of_birth);
-      text('#ccg-patient', `${patient.hn || 'ไม่มี HN'} • ${patientName}`);
+      if (encounterSelect?.value !== encounterId) return;
+      text('#ccg-patient', `${patient.hn || 'ไม่มี HN'} • ${patientName(patient)}`);
       text('#ccg-demographic', [patient.gender, age === null ? null : `อายุ ${age} ปี`].filter(Boolean).join(' • ') || 'ไม่ระบุข้อมูลประชากร');
       text('#ccg-encounter', encounter.encounter_no || encounter.id);
       text('#ccg-encounter-meta', `${thaiDateTime(encounter.started_at)} • ${encounter.status || 'ไม่ระบุสถานะ'}`);
@@ -161,10 +170,10 @@
       }
       text('#ccg-state', signoffResult.data?.lock_record ? 'เวชระเบียนถูก Lock' : 'Clinical context พร้อมตรวจสอบ');
     } catch (error) {
-      if (version !== refreshVersion) return;
+      if (version !== refreshVersion || encounterSelect?.value !== encounterId) return;
       console.error('Clinical context guard refresh failed', error);
       text('#ccg-state', 'ตรวจ readiness ไม่สำเร็จ');
-      text('#ccg-allergies', error.message || String(error));
+      text('#ccg-allergies', 'อ่านข้อมูล Clinical context ไม่สำเร็จ');
       text('#ccg-redflags', 'โปรดตรวจ release gate และสิทธิ์ RLS ก่อนลงนาม');
       setAlertState('#ccg-allergy-box', true, true);
       setAlertState('#ccg-redflag-box', true, true);
@@ -189,8 +198,14 @@
     document.addEventListener('submit', event => {
       if (watchedForms.has(event.target?.id)) scheduleRefresh(1100);
     }, true);
-    ['chananya:diagnosis-saved', 'chananya:signoff-changed', 'chananya:clinical-data-changed'].forEach(eventName => {
-      window.addEventListener(eventName, () => scheduleRefresh(150));
+    ['chananya:diagnosis-saved', 'chananya:signoff-changed', 'chananya:clinical-data-changed', 'chananya:encounter-changed'].forEach(eventName => {
+      window.addEventListener(eventName, event => {
+        const changedId = event.detail?.encounterId;
+        if (eventName === 'chananya:encounter-changed' && changedId !== undefined && changedId !== (encounterSelect?.value || null)) {
+          return;
+        }
+        scheduleRefresh(150);
+      });
     });
     window.ChananyaClinicalContext = Object.freeze({ refresh: () => scheduleRefresh() });
     scheduleRefresh();

@@ -199,7 +199,8 @@ assert.ok(contextIndex < bodyMapIndex && bodyMapIndex < signoffIndex, 'Clinical 
 assert.ok(bodyMapIndex < diagnosisIndex && diagnosisIndex < signoffIndex, 'Diagnosis and sign-off sequence should be deterministic');
 assert.match(clinicalHtml, /data-stage="intake"/, 'Clinical page should expose the staged workflow');
 assert.match(clinicalHtml, /data-stage="signoff"/, 'Clinical workflow should end with sign-off');
-assert.match(read('clinical-signoff.js'), /fields\.inert=locked/, 'sign-off lock should disable the owned record boundary');
+assert.match(read('clinical-signoff.js'), /fields\.inert\s*=\s*editingBlocked/, 'sign-off should disable the owned record boundary');
+assert.match(read('clinical-signoff.js'), /const editingBlocked = Boolean\(currentEncounter\) && \(locked \|\| !statusKnown\)/, 'known lock or unknown status must block editing; behavioral races are exercised in clinical-ui-regressions');
 
 for (const page of ['index.html', 'appointments.html', 'check-in.html', 'foundation.html', 'clinical-v3.html', 'outcomes.html', 'pharmacy.html', 'production.html', 'quality.html', 'admin.html']) {
   const html = read(page);
