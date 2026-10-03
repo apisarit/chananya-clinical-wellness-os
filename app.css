@@ -284,6 +284,22 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 
 /* Clinical workflow */
 .clinical-layout { display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); align-items: start; gap: 16px; }
+.clinical-layout > * { min-width: 0; }
+.clinical-worklist { margin: 0 0 14px; }
+.clinical-worklist details { overflow: hidden; }
+.clinical-worklist summary { cursor: pointer; color: var(--forest-950); font-weight: 850; }
+.worklist-controls { display: grid; grid-template-columns: minmax(0, 1fr) 160px 160px auto; align-items: end; gap: 10px; margin: 14px 0 10px; }
+.worklist-controls label { display: grid; gap: 5px; color: var(--muted); font-size: .73rem; font-weight: 750; }
+.worklist-controls input, .worklist-controls select { margin: 0; }
+.worklist-table-wrap { margin-top: 10px; }
+.worklist-scroll-hint { margin: 10px 0 0; font-size: .74rem; }
+.worklist-table-wrap table { min-width: 900px; }
+.worklist-table-wrap th, .worklist-table-wrap td { font-size: .74rem; }
+.worklist-table-wrap .btn { white-space: nowrap; }
+@media (max-width: 760px) {
+  .worklist-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .worklist-controls label:first-child { grid-column: 1 / -1; }
+}
 .encounter-rail { position: sticky; top: calc(var(--topbar-height) + 16px); display: grid; gap: 12px; }
 .encounter-picker { margin: 0; }
 .encounter-picker h2 { margin-bottom: 6px; font-size: 1.05rem; }
@@ -793,3 +809,4 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 
 .knowledge-links { display:flex; flex:0 0 auto; flex-wrap:wrap; gap:0.4rem; padding:0.65rem; }
 .knowledge-links .btn { white-space:normal; text-align:left; }
+.rx-account-attribution { overflow-wrap: anywhere; }
