@@ -36,6 +36,7 @@
   let profile;
   let canOperate = false;
   let canClinicalStatus = false;
+  let canOpenClinicalRecord = false;
   let allPatients = [];
   let allSchedules = [];
   const practitionerNames = new Map();
@@ -331,7 +332,7 @@
     $('#appointment-list').innerHTML = (result.data || []).map(item => {
       const patient = item.patient || {};
       const mayProvideCare = canClinicalStatus && item.practitioner_id === session.user.id;
-      const recordLink = item.encounter_id
+      const recordLink = item.encounter_id && canOpenClinicalRecord
         ? `<a class="btn ghost" href="/clinical-v3.html?encounter=${encodeURIComponent(item.encounter_id)}&step=history">เปิดเวชระเบียน</a>`
         : '';
       const actions = (canOperate || mayProvideCare) ? `${canOperate && item.status === 'booked' ? `<button class="btn ghost" data-status="confirmed" data-id="${item.id}">ยืนยัน</button>` : ''}${(canOperate || mayProvideCare) && ['booked', 'confirmed'].includes(item.status) ? `<a class="btn ghost" href="/check-in.html?appointment=${encodeURIComponent(item.id)}">Check-in และเปิดเวชระเบียน</a>` : ''}${(canOperate || mayProvideCare) && item.status === 'checked_in' && !item.encounter_id ? `<a class="btn ghost" href="/check-in.html?appointment=${encodeURIComponent(item.id)}">ยืนยันผู้รับบริการและเปิดเวชระเบียน</a>` : ''}${(canOperate || mayProvideCare) && item.status === 'checked_in' ? `<button class="btn ghost" data-status="in_service" data-id="${item.id}">เริ่มบริการ</button>` : ''}${(canOperate || mayProvideCare) && item.status === 'in_service' ? `<button class="btn ghost" data-status="completed" data-id="${item.id}">เสร็จสิ้น</button>` : ''}${recordLink}${canOperate && ['booked', 'confirmed'].includes(item.status) ? `<button class="btn danger" data-cancel="${item.id}">ยกเลิก</button>` : ''}` : '';
@@ -397,6 +398,7 @@
       if (!runtime.can(profile, 'appointments_view')) throw new Error('บัญชีนี้ไม่มีสิทธิ์ดูระบบนัดหมาย');
       canOperate = runtime.can(profile, 'appointments_operate');
       canClinicalStatus = runtime.can(profile, 'appointments_clinical_status');
+      canOpenClinicalRecord = runtime.can(profile, 'clinical_write');
       window.ChananyaShell?.mount({ profile, session, active: 'appointments' });
       $('#view-only-notice').classList.toggle('hidden', canOperate);
       if (!canOperate && canClinicalStatus) $('#view-only-notice').textContent = 'บัญชีผู้ให้บริการดูตารางนัดได้ และเริ่มหรือจบการรักษาได้เฉพาะนัดของตน';

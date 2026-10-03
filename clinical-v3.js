@@ -26,6 +26,10 @@
   let encounterLoadVersion = 0;
   let hybridIdentityReady = false;
   let atomicHandoffsReady = false;
+  let clinicalWorklist = null;
+  let worklistLifecycle = 0;
+  let clinicalInitialized = false;
+  let worklistPageActive = true;
 
   function toast(message) {
     const element = $('#toast');
@@ -131,6 +135,52 @@
       await selectEncounter('');
     }
     window.dispatchEvent(new CustomEvent('chananya:clinical-references-rendered'));
+    clinicalWorklist?.update({ encounters, patients, loadedAt: new Date().toISOString() });
+  }
+
+  async function refreshClinicalWorklist() {
+    const [patientResult, encounterResult] = await Promise.all([
+      db.from('patients').select('id,hn,prefix,first_name,last_name').order('created_at', { ascending: false }).limit(500),
+      db.from('encounters').select('id,encounter_no,patient_id,chief_complaint,thai_diagnosis,started_at,status').order('started_at', { ascending: false }).limit(250)
+    ]);
+    if (patientResult.error) throw patientResult.error;
+    if (encounterResult.error) throw encounterResult.error;
+    if (!Array.isArray(patientResult.data) || !Array.isArray(encounterResult.data)) throw new Error('WORKLIST_RESPONSE_INVALID');
+    return { patients: patientResult.data, encounters: encounterResult.data, loadedAt: new Date().toISOString() };
+  }
+
+  function mountClinicalWorklist() {
+    const host = $('#clinical-worklist');
+    if (!host || !window.ChananyaClinicalWorklist) return null;
+    clinicalWorklist = window.ChananyaClinicalWorklist.mount({ host, onRefresh: refreshClinicalWorklist });
+    return clinicalWorklist;
+  }
+
+  async function restoreClinicalWorklist() {
+    if (!clinicalInitialized) return;
+    const lifecycle = ++worklistLifecycle;
+    clinicalWorklist?.destroy();
+    clinicalWorklist = null;
+    try {
+      const runtime = window.ChananyaRuntime;
+      const restoredSession = await runtime.getSession();
+      if (lifecycle !== worklistLifecycle) return;
+      if (!restoredSession?.user?.id || restoredSession.user.id !== session.user.id) throw new Error('WORKLIST_SESSION_CHANGED');
+      const restoredProfile = await runtime.getProfile(restoredSession.user.id);
+      if (lifecycle !== worklistLifecycle) return;
+      if (!restoredProfile?.clinic_id || restoredProfile.clinic_id !== profile.clinic_id
+          || !runtime.can(restoredProfile, 'clinical_write')) throw new Error('WORKLIST_ACCESS_CHANGED');
+      // Browser Back may restore the editor with unsaved drafts. Revalidate access
+      // and refresh only this view; never rerun init/loadReferences over those drafts.
+      await mountClinicalWorklist()?.refresh();
+    } catch {
+      if (lifecycle !== worklistLifecycle) return;
+      const feedback = $('#worklist-feedback');
+      if (feedback) {
+        feedback.className = 'status danger';
+        feedback.textContent = 'ยืนยันสิทธิ์ worklist ไม่สำเร็จ กรุณาเปิดหน้าใหม่หรือลงชื่อเข้าใช้อีกครั้ง';
+      }
+    }
   }
 
   async function selectEncounter(encounterId) {
@@ -456,6 +506,7 @@
   }
 
   async function init() {
+    const lifecycle = worklistLifecycle;
     try {
       const runtime = window.ChananyaRuntime;
       if (!runtime) throw new Error('ChananyaRuntime ไม่พร้อมใช้งาน');
@@ -474,11 +525,16 @@
       $('#prescription-form button').disabled = !atomicHandoffsReady;
       const requested = new URL(location.href).searchParams.get('encounter');
       await loadReferences(requested);
+      if (lifecycle === worklistLifecycle) {
+        mountClinicalWorklist()?.update({ encounters, patients, loadedAt: new Date().toISOString() });
+      }
       renderPrescriptionCart();
       const requestedStep = new URL(location.href).searchParams.get('step');
       if (requestedStep) setStep(requestedStep);
       $('#app').classList.remove('hidden');
       $('#boot').classList.add('hidden');
+      clinicalInitialized = true;
+      if (worklistPageActive && lifecycle !== worklistLifecycle) restoreClinicalWorklist();
     } catch (error) {
       console.error(error);
       $('#boot-error').textContent = error.message;
@@ -503,6 +559,16 @@
     if (currentEncounter && (!event.detail?.encounterId || event.detail.encounterId === currentEncounter)) loadEncounter().catch(fail);
   });
   window.addEventListener('chananya:signoff-changed', event => { markStep('signoff', Boolean(event.detail?.locked)); });
+  window.addEventListener('pagehide', () => {
+    worklistPageActive = false;
+    worklistLifecycle += 1;
+    clinicalWorklist?.destroy();
+    clinicalWorklist = null;
+  });
+  window.addEventListener('pageshow', event => {
+    worklistPageActive = true;
+    if (event.persisted) restoreClinicalWorklist();
+  });
   renderPrescriptionCart();
   init();
 })();

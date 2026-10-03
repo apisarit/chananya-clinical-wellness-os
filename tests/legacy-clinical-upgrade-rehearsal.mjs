@@ -149,10 +149,65 @@ if (!process.exitCode) {
   await db.exec(`reset role; select set_config('request.jwt.claim.sub','${practitioner}',false),set_config('request.jwt.claim.role','authenticated',false); set role authenticated;`);
   assert.equal((await db.query('select auth.uid() as id')).rows[0].id, practitioner);
   assert.equal((await db.query(`select physical_exam_narrative from public.ttm_opd_histories where id='${updated.rows[0].id}'`)).rows[0].physical_exam_narrative, 'Unsigned amendment');
+  // Exercise the same 19-column history contract through real migrated SQL,
+  // as authenticated (not the table owner). These are separate autocommitted
+  // requests, not proof of browser/PostgREST integration or production drift.
+  const historyEncounter = '50000000-0000-4000-8000-000000000002';
+  const guardEncounter = '50000000-0000-4000-8000-000000000003';
+  const historyValues = {
+    accident_history: 'Synthetic accident', surgery_history: 'Synthetic surgery',
+    chronic_diseases: 'Synthetic chronic', family_history: 'Synthetic family',
+    personal_history: 'Synthetic personal', food_pattern: 'Synthetic food',
+    water_glasses_per_day: 2.5, tea_coffee_glasses_per_day: 0,
+    smoking_detail: 'Synthetic smoking', alcohol_detail: 'Synthetic alcohol',
+    urination_per_day: 4, bowel_movement_per_day: null,
+    sleep_detail: 'Synthetic sleep', posture_detail: 'Synthetic posture',
+    emotional_state: 'Synthetic mood', allergy_food_drug: 'Synthetic allergy',
+    menstruation_detail: null, current_medicines_supplements: 'Synthetic supplement',
+    physical_exam_narrative: 'Synthetic full exam'
+  };
+  const numericHistoryKeys = new Set(['water_glasses_per_day', 'tea_coffee_glasses_per_day', 'urination_per_day', 'bowel_movement_per_day']);
+  const historyKeys = Object.keys(historyValues);
+  assert.equal(historyKeys.length, 19);
+  const readHistory = async encounter => (await db.query(
+    `select * from public.ttm_opd_histories where encounter_id=$1`, [encounter]
+  )).rows[0];
+  const guardBefore = await readHistory(guardEncounter);
+  const originalHistory = await readHistory(historyEncounter);
+  const marker = '2026-10-01T00:00:00.123Z';
+  // Column identifiers originate solely from the fixed test allowlist above.
+  const columns = ['encounter_id', ...historyKeys, 'updated_by', 'updated_at'];
+  const parameters = [historyEncounter, ...Object.values(historyValues), practitioner, marker];
+  const upsertSql = `insert into public.ttm_opd_histories (${columns.join(',')})
+    values (${columns.map((_, index) => `$${index + 1}`).join(',')})
+    on conflict(encounter_id) do update set ${columns.slice(1).map(key => `${key}=excluded.${key}`).join(',')}`;
+  await db.query(upsertSql, parameters);
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub','${practitioner}',false),set_config('request.jwt.claim.role','authenticated',false); set role authenticated;`);
+  const savedHistory = await readHistory(historyEncounter);
+  const assertHistoryValues = (row, expected) => {
+    for (const [key, value] of Object.entries(expected)) {
+      assert.equal(numericHistoryKeys.has(key) && row[key] !== null ? Number(row[key]) : row[key], value, `persisted ${key}`);
+    }
+  };
+  assertHistoryValues(savedHistory, historyValues);
+  assert.equal(savedHistory.id, originalHistory.id);
+  assert.equal(savedHistory.encounter_id, historyEncounter);
+  assert.equal(savedHistory.created_by, originalHistory.created_by);
+  assert.equal(savedHistory.updated_by, practitioner);
+  assert.equal(new Date(savedHistory.updated_at).toISOString(), marker);
+  await db.query(`update public.ttm_opd_histories set physical_exam_narrative=$1,updated_by=$2,updated_at=$3 where encounter_id=$4`,
+    ['Synthetic one-field amendment', practitioner, '2026-10-01T00:01:00.456Z', historyEncounter]);
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub','${practitioner}',false),set_config('request.jwt.claim.role','authenticated',false); set role authenticated;`);
+  const amendedHistory = await readHistory(historyEncounter);
+  assertHistoryValues(amendedHistory, { ...historyValues, physical_exam_narrative: 'Synthetic one-field amendment' });
+  assert.equal(amendedHistory.id, savedHistory.id);
+  assert.equal(amendedHistory.created_by, originalHistory.created_by);
+  assert.deepEqual(await readHistory(guardEncounter), guardBefore, 'history writes must leave the guard encounter untouched');
+  await assert.rejects(db.query(upsertSql, ['50000000-0000-4000-8000-000000000001', ...parameters.slice(1)]), /CLINICAL_RECORD_LOCKED/);
   await assert.rejects(db.query(`update public.ttm_opd_histories set physical_exam_narrative='Signed bypass' where encounter_id='50000000-0000-4000-8000-000000000001'`), /CLINICAL_RECORD_LOCKED/);
   assert.equal((await db.query(`select physical_exam_narrative from public.ttm_opd_histories where encounter_id='50000000-0000-4000-8000-000000000001'`)).rows[0].physical_exam_narrative, 'Synthetic OPD history');
   await db.exec('reset role;');
-  console.log('Legacy clinical upgrade rehearsal passed: populated synthetic baseline survived and lock boundary held');
+  console.log('Legacy clinical upgrade rehearsal passed: populated synthetic baseline survived; all 19 OPD history fields and amendment persisted; guard encounter and signed-record lock held');
 }
 } finally {
   await db.close();

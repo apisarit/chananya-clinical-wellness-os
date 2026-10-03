@@ -12,6 +12,12 @@
   let lastDetectionAt = 0;
   let selected = null;
   let appointmentContext = null;
+  let identityVersion = 0;
+  let identityReadVersion = 0;
+  let submissionInFlight = false;
+  let submissionAcknowledged = false;
+  let submissionUncertain = false;
+  let handoffReceipt = null;
   const qrIssuer = String(window.CLINICAL_OS_CONFIG?.identity?.qrIssuer || 'CHANANYA').trim().toUpperCase();
   const qrPrefix = `${qrIssuer}:PT1:`;
 
@@ -43,20 +49,34 @@
   }
 
   function setBusy(busy) {
-    $('#confirm-encounter').disabled = Boolean(busy);
-    $('#scanner-start').disabled = Boolean(busy) || !backendReady || !detector;
+    const locked = Boolean(busy) || submissionInFlight || submissionAcknowledged || submissionUncertain;
+    $('#confirm-encounter').disabled = locked;
+    $('#scanner-start').disabled = locked || !backendReady || !detector;
+    document.querySelectorAll('#credential-form input, #credential-form button, #manual-search-form input, #manual-search-form button, #cancel-confirmation')
+      .forEach(element => { element.disabled = locked; });
+    document.querySelectorAll('#confirmation-form input, #confirmation-form select, #confirmation-form textarea, #manual-results button')
+      .forEach(element => { element.disabled = submissionInFlight || submissionAcknowledged || submissionUncertain; });
   }
 
   function clearConfirmation() {
+    if (submissionInFlight || submissionAcknowledged || submissionUncertain) return;
+    identityVersion += 1;
+    identityReadVersion += 1;
     selected = null;
     $('#identity-confirmation').classList.add('hidden');
     $('#confirmation-form').reset();
     $('#confirm-allergies').replaceChildren();
     $('#confirm-allergy-box').classList.add('hidden');
+    $('#handoff-uncertain').classList.add('hidden');
+    setBusy(false);
   }
 
   function showConfirmation(record, source) {
+    if (submissionInFlight || submissionAcknowledged || submissionUncertain) return;
+    identityVersion += 1;
+    identityReadVersion += 1;
     selected = { ...record, source };
+    $('#confirmation-form').reset();
     $('#confirm-hn').textContent = record.hn || '—';
     $('#confirm-name').textContent = record.display_name || '—';
     $('#confirm-dob').textContent = record.date_of_birth
@@ -72,10 +92,14 @@
       $('#confirm-allergies').append(item);
     }
     $('#confirm-allergy-box').classList.toggle('hidden', allergies.length === 0);
+    $('#handoff-uncertain').classList.add('hidden');
     $('#verification-method-label').classList.toggle('hidden', source === 'qr');
     $('#verification-note-label').classList.toggle('hidden', source === 'qr');
     $('#identity-confirmation').classList.remove('hidden');
     $('#identity-confirmation').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Selection owns the new identity generation; release the superseded read.
+    // Older read finalizers must still never unlock a newer request or write.
+    setBusy(false);
   }
 
   function credentialArguments(value) {
@@ -91,10 +115,13 @@
   }
 
   async function resolveCredential(value) {
+    if (submissionInFlight || submissionAcknowledged || submissionUncertain) return;
     if (!backendReady) throw new Error('Identity backend ยังไม่เปิดใช้งาน');
+    const readVersion = ++identityReadVersion;
     setBusy(true);
     try {
       const result = await db.rpc('resolve_patient_qr', credentialArguments(value));
+      if (readVersion !== identityReadVersion || submissionAcknowledged) return;
       if (result.error) throw result.error;
       const record = Array.isArray(result.data) ? result.data[0] : result.data;
       if (!record) throw new Error('ไม่พบผู้รับบริการจาก QR นี้');
@@ -103,41 +130,49 @@
       showConfirmation(record, 'qr');
       toast('พบผู้รับบริการแล้ว กรุณาตรวจสอบชื่อร่วมกัน');
     } finally {
-      setBusy(false);
+      if (readVersion === identityReadVersion) setBusy(false);
     }
   }
 
   async function searchPatients(event) {
     event.preventDefault();
+    if (submissionInFlight || submissionAcknowledged || submissionUncertain) return;
     if (!backendReady) throw new Error('Identity backend ยังไม่เปิดใช้งาน');
-    const result = await db.rpc('search_patients_for_checkin', { p_query: $('#manual-search').value.trim() });
-    if (result.error) throw result.error;
-    const rows = result.data || [];
-    const host = $('#manual-results');
-    host.replaceChildren();
-    if (!rows.length) {
-      const empty = document.createElement('p');
-      empty.className = 'muted';
-      empty.textContent = 'ไม่พบผู้รับบริการ กรุณาตรวจคำค้นหรือกลับไปลงทะเบียนผู้รับบริการ';
-      host.append(empty);
-      return;
-    }
-    for (const row of rows) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'item identity-result';
-      const main = document.createElement('span');
-      const name = document.createElement('b');
-      name.textContent = `${row.hn} • ${row.display_name}`;
-      const detail = document.createElement('small');
-      detail.textContent = `${row.date_of_birth || 'ไม่ระบุวันเกิด'}${row.phone_last4 ? ` • โทรศัพท์ท้าย ${row.phone_last4}` : ''}`;
-      main.append(name, detail);
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = 'เลือก';
-      button.append(main, badge);
-      button.addEventListener('click', () => showConfirmation(row, 'manual'));
-      host.append(button);
+    const readVersion = ++identityReadVersion;
+    setBusy(true);
+    try {
+      const result = await db.rpc('search_patients_for_checkin', { p_query: $('#manual-search').value.trim() });
+      if (readVersion !== identityReadVersion || submissionAcknowledged) return;
+      if (result.error) throw result.error;
+      const rows = result.data || [];
+      const host = $('#manual-results');
+      host.replaceChildren();
+      if (!rows.length) {
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = 'ไม่พบผู้รับบริการ กรุณาตรวจคำค้นหรือกลับไปลงทะเบียนผู้รับบริการ';
+        host.append(empty);
+        return;
+      }
+      for (const row of rows) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'item identity-result';
+        const main = document.createElement('span');
+        const name = document.createElement('b');
+        name.textContent = `${row.hn} • ${row.display_name}`;
+        const detail = document.createElement('small');
+        detail.textContent = `${row.date_of_birth || 'ไม่ระบุวันเกิด'}${row.phone_last4 ? ` • โทรศัพท์ท้าย ${row.phone_last4}` : ''}`;
+        main.append(name, detail);
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'เลือก';
+        button.append(main, badge);
+        button.addEventListener('click', () => showConfirmation(row, 'manual'));
+        host.append(button);
+      }
+    } finally {
+      if (readVersion === identityReadVersion) setBusy(false);
     }
   }
 
@@ -159,8 +194,11 @@
     $('#appointment-context-detail').textContent = `${new Date(appointmentContext.scheduled_start).toLocaleString('th-TH')} • สถานะ ${appointmentContext.status}${appointmentContext.encounter_id ? ' • มี Encounter แล้ว' : ''}`;
     $('#appointment-context').classList.remove('hidden');
     $('#checkin-chief').value = appointmentContext.chief_complaint || '';
+    const readVersion = identityVersion;
+    const appointmentReadVersion = ++identityReadVersion;
     const identityResult = await db.rpc('search_patients_for_checkin', { p_query: patient.hn });
     if (identityResult.error) throw identityResult.error;
+    if (readVersion !== identityVersion || appointmentReadVersion !== identityReadVersion || submissionAcknowledged) return;
     const verifiedPatient = (identityResult.data || []).find(row => row.patient_id === patient.id);
     if (!verifiedPatient) throw new Error('ไม่พบข้อมูลผู้รับบริการของนัดนี้ในคลินิกปัจจุบัน');
     showConfirmation({
@@ -168,13 +206,60 @@
       display_name: verifiedPatient.display_name || displayName,
       phone_last4: verifiedPatient.phone_last4 || (phoneDigits ? phoneDigits.slice(-4) : null)
     }, 'appointment');
+    $('#checkin-chief').value = appointmentContext.chief_complaint || '';
+  }
+
+  function showHandoffReceipt(encounter) {
+    const encounterId = encodeURIComponent(encounter.encounter_id);
+    const clinicalUrl = `/clinical-v3.html?encounter=${encounterId}&step=history`;
+    const canOpenClinical = Boolean(window.ChananyaRuntime?.can(profile, 'clinical_write'));
+    const primary = $('#handoff-primary');
+    $('#handoff-receipt-detail').textContent = `Encounter ${handoffReceipt.encounterNo || handoffReceipt.encounterId} • ยืนยันผู้รับบริการแล้ว`;
+    if (appointmentContext) {
+      // The initial appointment status is stale after acknowledgement. Show only
+      // the confirmed handoff, without inventing a newly read appointment status.
+      $('#appointment-context-detail').textContent = `${new Date(appointmentContext.scheduled_start).toLocaleString('th-TH')} • เชื่อม Encounter ${handoffReceipt.encounterNo || handoffReceipt.encounterId} สำเร็จ`;
+    }
+    $('#handoff-receipt-status').textContent = canOpenClinical
+      ? 'ตรวจสอบข้อมูลเรียบร้อยแล้ว เปิดเวชระเบียนเพื่อทำงานต่อได้'
+      : appointmentContext
+        ? 'Check-in สำเร็จและเชื่อมกับนัดแล้ว ผู้ให้บริการเปิดเวชระเบียนจากรายการนัดหมายได้'
+        : 'บันทึกผู้รับบริการที่ไม่มีนัดแล้ว กรุณาส่งต่อเลข Encounter ด้านบนให้ผู้ให้บริการค้นและเปิดจากหน้าเวชระเบียน รายการนี้จะไม่ปรากฏในรายการนัดหมาย';
+    primary.href = canOpenClinical ? clinicalUrl : appointmentContext
+      ? '/appointments.html#appointment-register' : '/check-in.html';
+    primary.textContent = canOpenClinical ? 'เปิดเวชระเบียน' : appointmentContext
+      ? 'กลับไปรายการนัดหมาย' : 'เช็กอินผู้รับบริการรายถัดไป';
+    primary.classList.remove('hidden');
+    $('#handoff-receipt').classList.remove('hidden');
+    $('#identity-confirmation').classList.add('hidden');
+  }
+
+  function showUncertainHandoff() {
+    submissionUncertain = true;
+    $('#handoff-uncertain').textContent = appointmentContext
+      ? 'ระบบยังยืนยันผลการเปิด Encounter ไม่ได้ กรุณาตรวจสอบนัดนี้ในรายการนัดหมายก่อน และอย่าส่งแบบฟอร์มซ้ำ'
+      : 'ระบบยังยืนยันผลการเปิด Encounter ไม่ได้ กรุณาให้ผู้ให้บริการตรวจรายการ Encounter ของผู้รับบริการนี้ก่อน และอย่าส่งแบบฟอร์มซ้ำ';
+    $('#handoff-uncertain').classList.remove('hidden');
+    setBusy(false);
+  }
+
+  function isConfirmedCheckinRejection(error) {
+    // Explicit database rollback/input/access errors only. A transport code,
+    // connection loss or arbitrary error label does not prove no write happened.
+    return ['P0001', '42501', '22023', '22P02', '23502', '23503', '23505', '23514',
+      '40001', '40P01', 'PGRST202', 'PGRST301', 'PGRST302'].includes(error?.code);
   }
 
   async function confirmEncounter(event) {
     event.preventDefault();
+    if (submissionInFlight || submissionAcknowledged || submissionUncertain) return;
     if (!selected) throw new Error('กรุณาเลือกผู้รับบริการ');
     if (!$('#patient-present').checked) throw new Error('PATIENT_CONFIRMATION_REQUIRED');
+    const identityAtSubmit = identityVersion;
+    const submittedIdentity = selected;
+    submissionInFlight = true;
     setBusy(true);
+    stopScanner();
     try {
       const request = appointmentContext
         ? db.rpc('check_in_clinic_appointment', {
@@ -203,11 +288,31 @@
           p_intake: {}
         });
       const result = await request;
-      if (result.error) throw result.error;
-      const encounter = Array.isArray(result.data) ? result.data[0] : result.data;
-      if (!encounter?.encounter_id) throw new Error('ไม่สามารถเปิด Encounter ได้');
-      location.assign(`/clinical-v3.html?encounter=${encodeURIComponent(encounter.encounter_id)}&step=history`);
+      if (result?.error) throw result.error;
+      if (identityAtSubmit !== identityVersion || submittedIdentity !== selected) {
+        showUncertainHandoff();
+        throw new Error('IDENTITY_CHANGED_DURING_CHECKIN');
+      }
+      const encounter = Array.isArray(result?.data)
+        ? (result.data.length === 1 ? result.data[0] : null) : result?.data;
+      if (typeof encounter?.encounter_id !== 'string' || !encounter.encounter_id.trim()
+          || encounter.patient_id !== submittedIdentity.patient_id) {
+        showUncertainHandoff();
+        throw new Error('ไม่สามารถยืนยันบริบท Encounter ที่ส่งคืนได้');
+      }
+      submissionAcknowledged = true;
+      handoffReceipt = Object.freeze({
+        encounterId: encounter.encounter_id,
+        encounterNo: encounter.encounter_no || '',
+        patientId: submittedIdentity.patient_id,
+        appointmentId: appointmentContext?.id || null
+      });
+      showHandoffReceipt(encounter);
+    } catch (error) {
+      if (!submissionAcknowledged && !isConfirmedCheckinRejection(error)) showUncertainHandoff();
+      throw error;
     } finally {
+      submissionInFlight = false;
       setBusy(false);
     }
   }
