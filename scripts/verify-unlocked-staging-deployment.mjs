@@ -32,6 +32,9 @@ const MAX_RUNTIME_FILE_BYTES = 16 * 1024 * 1024;
 const MIN_HSTS_MAX_AGE = 31_536_000n;
 const sha1Pattern = /^[0-9a-f]{40}$/;
 const sha256Pattern = /^[0-9a-f]{64}$/;
+// Netlify CLI consumes these files into its synthesized deploy config instead of uploading them.
+const netlifyControlInputNames = Object.freeze(['_headers', '_redirects']);
+const netlifyGeneratedConfigName = 'netlify.toml';
 
 const standardCsp = Object.freeze({
   'default-src': Object.freeze(["'self'"]),
@@ -471,12 +474,17 @@ async function readNetlifyFileInventory(fetchImpl, token) {
 
 function assertInventoryMatchesArtifact(inventory, artifact) {
   const { byPath } = inventory;
-  const expectedPaths = [...artifact.files.keys()].map(name => `/${name}`).sort();
+  const deployedRuntimeFiles = [...artifact.files.entries()]
+    .filter(([name]) => !netlifyControlInputNames.includes(name));
+  const expectedPaths = [
+    ...deployedRuntimeFiles.map(([name]) => `/${name}`),
+    `/${netlifyGeneratedConfigName}`
+  ].sort();
   if (!isDeepStrictEqual([...byPath.keys()].sort(), expectedPaths)) {
     fail('UNLOCKED_STAGING_NETLIFY_FILESET_MISMATCH');
   }
 
-  for (const [name, content] of artifact.files) {
+  for (const [name, content] of deployedRuntimeFiles) {
     const entry = byPath.get(`/${name}`);
     if (!entry || Number(entry.size) !== content.byteLength ||
       !sha1Pattern.test(String(entry.sha || '').toLowerCase()) ||
@@ -484,15 +492,79 @@ function assertInventoryMatchesArtifact(inventory, artifact) {
       fail('UNLOCKED_STAGING_NETLIFY_FILE_METADATA_MISMATCH');
     }
   }
-  return expectedPaths.length;
+  const generatedConfigEntry = byPath.get(`/${netlifyGeneratedConfigName}`);
+  const generatedConfigSize = Number(generatedConfigEntry?.size);
+  const generatedConfigSha1 = String(generatedConfigEntry?.sha || '').toLowerCase();
+  if (!Number.isSafeInteger(generatedConfigSize) || generatedConfigSize < 1 ||
+    generatedConfigSize > MAX_CONFIG_BYTES || !sha1Pattern.test(generatedConfigSha1)) {
+    fail('UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_METADATA_INVALID');
+  }
+  return Object.freeze({
+    artifactFileCount: artifact.files.size,
+    deployedRuntimeFiles: Object.freeze(deployedRuntimeFiles),
+    generatedConfig: Object.freeze({
+      name: netlifyGeneratedConfigName,
+      size: generatedConfigSize,
+      sha1: generatedConfigSha1
+    })
+  });
 }
 
-async function verifyNetlifyFileInventory(fetchImpl, token, artifact) {
+async function verifyGeneratedNetlifyConfig(
+  fetchImpl,
+  token,
+  generatedConfig,
+  expectedSha256
+) {
+  const siteId = CNYOS_UNLOCKED_STAGING_IDENTITY.siteId;
+  const result = await request(
+    fetchImpl,
+    `https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}/files/${encodeURIComponent(generatedConfig.name)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.bitballoon.v1.raw',
+        'Content-Type': 'application/vnd.bitballoon.v1.raw'
+      },
+      maximum: Math.min(MAX_CONFIG_BYTES, Math.max(generatedConfig.size + 1, 1024)),
+      label: 'UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG'
+    }
+  );
+  requireStatus(
+    result.response,
+    200,
+    'UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_STATUS_MISMATCH'
+  );
+  if (result.body.byteLength !== generatedConfig.size ||
+    sha1(result.body) !== generatedConfig.sha1) {
+    fail('UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_BYTES_MISMATCH');
+  }
+  try {
+    if (!new TextDecoder('utf-8', { fatal: true }).decode(result.body).trim()) {
+      fail('UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_INVALID');
+    }
+  } catch (error) {
+    if (error?.message === 'UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_INVALID') throw error;
+    fail('UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_INVALID');
+  }
+  const observedSha256 = sha256(result.body);
+  if (observedSha256 !== expectedSha256) {
+    fail('UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_SHA256_MISMATCH');
+  }
+  return observedSha256;
+}
+
+async function verifyNetlifyFileInventory(
+  fetchImpl,
+  token,
+  artifact,
+  expectedGeneratedConfigSha256
+) {
   const siteId = CNYOS_UNLOCKED_STAGING_IDENTITY.siteId;
   const inventory = await readNetlifyFileInventory(fetchImpl, token);
-  const expectedCount = assertInventoryMatchesArtifact(inventory, artifact);
+  const expected = assertInventoryMatchesArtifact(inventory, artifact);
 
-  for (const [name, content] of artifact.files) {
+  for (const [name, content] of expected.deployedRuntimeFiles) {
     const rawResult = await request(
       fetchImpl,
       `https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}/files/${encodeURIComponent(name)}`,
@@ -511,7 +583,17 @@ async function verifyNetlifyFileInventory(fetchImpl, token, artifact) {
       fail('UNLOCKED_STAGING_NETLIFY_RAW_FILE_MISMATCH');
     }
   }
-  return Object.freeze({ fileCount: expectedCount, normalized: inventory.normalized });
+  const generatedConfigSha256 = await verifyGeneratedNetlifyConfig(
+    fetchImpl,
+    token,
+    expected.generatedConfig,
+    expectedGeneratedConfigSha256
+  );
+  return Object.freeze({
+    fileCount: expected.artifactFileCount,
+    normalized: inventory.normalized,
+    generatedConfigSha256
+  });
 }
 
 async function writeEvidenceFile(cwd, destinationValue, evidence, io) {
@@ -553,6 +635,13 @@ export async function verifyUnlockedStagingDeployment({
   const expectedDeployId = required(env, 'EXPECTED_STAGING_NETLIFY_DEPLOY_ID').toLowerCase();
   if (!/^[0-9a-f]{24}$/.test(expectedDeployId)) {
     fail('EXPECTED_STAGING_NETLIFY_DEPLOY_ID_INVALID');
+  }
+  const expectedGeneratedNetlifyTomlSha256 = required(
+    env,
+    'EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256'
+  );
+  if (!sha256Pattern.test(expectedGeneratedNetlifyTomlSha256)) {
+    fail('EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256_INVALID');
   }
   const netlifyToken = required(env, 'NETLIFY_AUTH_TOKEN');
 
@@ -645,7 +734,12 @@ export async function verifyUnlockedStagingDeployment({
     `/sites/${encodeURIComponent(expectedSiteId)}`
   );
   assertPublishedSite(siteBefore, releaseGate.netlifyDeployId);
-  const initialInventory = await verifyNetlifyFileInventory(fetchImpl, netlifyToken, artifact);
+  const initialInventory = await verifyNetlifyFileInventory(
+    fetchImpl,
+    netlifyToken,
+    artifact,
+    expectedGeneratedNetlifyTomlSha256
+  );
 
   const controls = new Map();
   for (const [originKind, boundOrigin] of [
@@ -741,8 +835,17 @@ export async function verifyUnlockedStagingDeployment({
   }
 
   const finalInventory = await readNetlifyFileInventory(fetchImpl, netlifyToken);
-  assertInventoryMatchesArtifact(finalInventory, artifact);
+  const finalExpected = assertInventoryMatchesArtifact(finalInventory, artifact);
   if (!isDeepStrictEqual(finalInventory.normalized, initialInventory.normalized)) {
+    fail('UNLOCKED_STAGING_NETLIFY_FILE_INVENTORY_CHANGED_DURING_VERIFICATION');
+  }
+  const finalGeneratedConfigSha256 = await verifyGeneratedNetlifyConfig(
+    fetchImpl,
+    netlifyToken,
+    finalExpected.generatedConfig,
+    expectedGeneratedNetlifyTomlSha256
+  );
+  if (finalGeneratedConfigSha256 !== initialInventory.generatedConfigSha256) {
     fail('UNLOCKED_STAGING_NETLIFY_FILE_INVENTORY_CHANGED_DURING_VERIFICATION');
   }
   const siteAfter = await netlifyApiJson(
@@ -781,6 +884,7 @@ export async function verifyUnlockedStagingDeployment({
     tenantConfigSha256: sha256(localTenantBytes),
     deployManifestSha256: sha256(localDeployBytes),
     runtimePublishManifestSha256: sha256(localRuntimeBytes),
+    generatedNetlifyTomlSha256: initialInventory.generatedConfigSha256,
     artifactSha256: artifact.artifactSha256,
     artifactFileCount: initialInventory.fileCount,
     deploymentClass: remoteDeployManifest.build.deploymentClass,
