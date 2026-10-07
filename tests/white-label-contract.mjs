@@ -137,6 +137,7 @@ const lockedPreview = loadTenantConfig({ env: { CONTEXT: 'deploy-preview', DEPLO
 assert.equal(lockedPreview.safety.previewLocked, true);
 assert.equal(lockedPreview.database.url, '');
 assert.equal(lockedPreview.database.publishableKey, '');
+assert.equal(lockedPreview.auth.provider, 'google');
 assert.throws(
   () => loadTenantConfig({ env: { CONTEXT: 'deploy-preview', CLINICAL_OS_ALLOW_PREVIEW_DATABASE: 'true' }, cwd: root }),
   /explicit staging config/
@@ -167,6 +168,7 @@ const stagingPreview = loadTenantConfig({
 assert.equal(stagingPreview.safety.previewLocked, false);
 assert.match(stagingPreview.database.url, /^https:/);
 assert.equal(stagingPreview.auth.redirectOrigin, 'https://deploy-preview-7.example.net');
+assert.equal(stagingPreview.auth.provider, 'google');
 const stagingPreviewManifest = buildDeployManifest(stagingPreview, {
   CONTEXT: 'deploy-preview',
   CLINICAL_OS_ALLOW_PREVIEW_DATABASE: 'true',
@@ -190,6 +192,7 @@ const lockedDedicatedStaging = loadTenantConfig({
 });
 assert.equal(lockedDedicatedStaging.safety.previewLocked, true);
 assert.equal(lockedDedicatedStaging.database.url, '');
+assert.equal(lockedDedicatedStaging.auth.provider, 'google');
 const enabledDedicatedStaging = loadTenantConfig({
   env: {
     CONTEXT: 'production',
@@ -207,6 +210,7 @@ const enabledDedicatedStaging = loadTenantConfig({
 });
 assert.equal(enabledDedicatedStaging.safety.previewLocked, false);
 assert.equal(enabledDedicatedStaging.auth.redirectOrigin, 'https://customer-clinical-staging.example.net');
+assert.equal(enabledDedicatedStaging.auth.provider, 'google');
 assert.throws(
   () => loadTenantConfig({
     env: {

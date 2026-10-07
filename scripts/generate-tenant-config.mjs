@@ -338,7 +338,7 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
     return {
       ...config,
       database: { provider: 'supabase', url: '', publishableKey: '' },
-      auth: { redirectOrigin: nonProductionOrigin },
+      auth: { ...config.auth, redirectOrigin: nonProductionOrigin },
       safety: { previewLocked: true }
     };
   }
@@ -375,7 +375,7 @@ export function loadTenantConfig({ env = process.env, cwd = root } = {}) {
     }
     return {
       ...config,
-      auth: { redirectOrigin: stagingOrigin },
+      auth: { ...config.auth, redirectOrigin: stagingOrigin },
       safety: { previewLocked: false }
     };
   }
