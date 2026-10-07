@@ -108,7 +108,7 @@ const expectedPostBaselineMigrations = Object.freeze([
     version: '20261003162550',
     name: 'treatment_session_idempotency',
     file: '20261003162550_treatment_session_idempotency.sql',
-    sha256: '01ab50aacb5746886f35ed468e17c6406f00c13b87856d4b44ae80d0d19a6637'
+    sha256: '6319a11e5ef8a73c31d5856cf77e123614e8224bb9e2b42a0cf48957f04fef47'
   })
 ]);
 

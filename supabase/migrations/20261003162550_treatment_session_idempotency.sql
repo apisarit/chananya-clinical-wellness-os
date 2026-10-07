@@ -195,6 +195,21 @@ revoke all on function public.create_clinical_treatment_session(
   uuid,text[],text,boolean,text,text,smallint,smallint,text,text
 ) from public, anon, authenticated, service_role;
 
+-- Staging previously introduced an unkeyed duration overload. It must be
+-- retired with the original overload or callers could still append a session
+-- without the durable operation UUID boundary.
+do $retire_duration_overload$
+begin
+  if pg_catalog.to_regprocedure(
+    'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text,integer)'
+  ) is not null then
+    execute 'revoke all on function public.create_clinical_treatment_session(
+      uuid,text[],text,boolean,text,text,smallint,smallint,text,text,integer
+    ) from public, anon, authenticated, service_role';
+  end if;
+end;
+$retire_duration_overload$;
+
 revoke all on function public.create_clinical_treatment_session(
   uuid,uuid,text[],text,boolean,text,text,smallint,smallint,text,text
 ) from public, anon, authenticated, service_role;

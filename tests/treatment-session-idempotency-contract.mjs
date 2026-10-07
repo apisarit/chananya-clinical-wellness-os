@@ -6,9 +6,13 @@ const migration = fs.readFileSync(new URL('../supabase/migrations/20261003162550
 const browser = fs.readFileSync(new URL('../opd-workflow.js', import.meta.url), 'utf8');
 const compactMigration = migration.replace(/\s+/g, '').toLowerCase();
 const legacySignature = 'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)';
+const durationLegacySignature = 'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text,integer)';
 const keyedSignature = 'public.create_clinical_treatment_session(uuid,uuid,text[],text,boolean,text,text,smallint,smallint,text,text)';
 const indexGuard = migration.match(
   /do \$treatment_session_idempotency_index\$[\s\S]*?\$treatment_session_idempotency_index\$;/i
+)?.[0];
+const durationOverloadGuard = migration.match(
+  /do \$retire_duration_overload\$[\s\S]*?\$retire_duration_overload\$;/i
 )?.[0];
 
 assert.match(migration, /add column if not exists client_request_id uuid/i);
@@ -42,9 +46,13 @@ assert.match(migration, /raise exception 'CLIENT_REQUEST_ID_REUSE'/i);
 assert.match(migration, /client_request_id, session_no, treatment_modalities/i);
 assert.match(migration, /'client_request_id',p_client_request_id/i);
 assert.ok(compactMigration.includes(`revokeallonfunction${legacySignature}frompublic,anon,authenticated,service_role;`));
+assert.ok(durationOverloadGuard, 'migration must include the duration-overload retirement guard');
+assert.match(migration, /to_regprocedure\(\s*'public\.create_clinical_treatment_session\(uuid,text\[\],text,boolean,text,text,smallint,smallint,text,text,integer\)'\s*\) is not null/i);
+assert.match(migration, /execute\s+'revoke all on function public\.create_clinical_treatment_session\(\s*uuid,text\[\],text,boolean,text,text,smallint,smallint,text,text,integer\s*\) from public, anon, authenticated, service_role'/i);
 assert.ok(compactMigration.includes(`revokeallonfunction${keyedSignature}frompublic,anon,authenticated,service_role;`));
 assert.ok(compactMigration.includes(`grantexecuteonfunction${keyedSignature}toauthenticated;`));
 assert.ok(!compactMigration.includes(`grantexecuteonfunction${legacySignature}`));
+assert.ok(!compactMigration.includes(`grantexecuteonfunction${durationLegacySignature}`));
 assert.match(migration, /revoke insert, update, delete on public\.clinical_treatment_sessions\s*from authenticated/i);
 
 assert.match(browser, /p_client_request_id: operationId/);
@@ -53,6 +61,102 @@ assert.match(browser, /sessionStorage\?\.setItem/);
 assert.match(browser, /eq\('client_request_id', attempt\.operationId\)/);
 assert.match(browser, /row\.client_request_id === attempt\.operationId/);
 assert.doesNotMatch(browser, /localStorage/);
+
+{
+  const db = new PGlite();
+  try {
+    const absentOverload = await db.query(`
+      select pg_catalog.to_regprocedure('${durationLegacySignature}') as identity
+    `);
+    assert.deepEqual(absentOverload.rows, [{ identity: null }]);
+    await assert.doesNotReject(
+      () => db.exec(durationOverloadGuard),
+      'duration-overload retirement must be safe when the legacy overload is absent'
+    );
+  } finally {
+    await db.close();
+  }
+}
+
+{
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      create role duration_public_probe;
+      create role anon;
+      create role authenticated;
+      create role service_role;
+
+      create function public.create_clinical_treatment_session(
+        uuid, text[], text, boolean, text, text,
+        smallint, smallint, text, text, integer
+      ) returns integer
+      language sql
+      as 'select 1';
+
+      grant execute on function public.create_clinical_treatment_session(
+        uuid, text[], text, boolean, text, text,
+        smallint, smallint, text, text, integer
+      ) to public, anon, authenticated, service_role;
+    `);
+
+    const directExecuteGrantees = async () => {
+      const result = await db.query(`
+        select case
+          when function_acl.grantee = 0 then 'PUBLIC'
+          else function_acl.grantee::regrole::text
+        end as grantee
+        from pg_catalog.pg_proc function_definition
+        cross join lateral pg_catalog.aclexplode(
+          coalesce(
+            function_definition.proacl,
+            pg_catalog.acldefault('f', function_definition.proowner)
+          )
+        ) function_acl
+        where function_definition.oid = pg_catalog.to_regprocedure('${durationLegacySignature}')
+          and function_acl.privilege_type = 'EXECUTE'
+        order by grantee
+      `);
+      return result.rows
+        .map(({ grantee }) => grantee)
+        .filter(grantee => ['PUBLIC', 'anon', 'authenticated', 'service_role'].includes(grantee));
+    };
+
+    assert.deepEqual(await directExecuteGrantees(), [
+      'PUBLIC',
+      'anon',
+      'authenticated',
+      'service_role'
+    ]);
+
+    await db.exec(durationOverloadGuard);
+
+    assert.deepEqual(await directExecuteGrantees(), []);
+    const effectivePrivileges = await db.query(`
+      select
+        pg_catalog.has_function_privilege(
+          'duration_public_probe', '${durationLegacySignature}', 'EXECUTE'
+        ) as public_execute,
+        pg_catalog.has_function_privilege(
+          'anon', '${durationLegacySignature}', 'EXECUTE'
+        ) as anon_execute,
+        pg_catalog.has_function_privilege(
+          'authenticated', '${durationLegacySignature}', 'EXECUTE'
+        ) as authenticated_execute,
+        pg_catalog.has_function_privilege(
+          'service_role', '${durationLegacySignature}', 'EXECUTE'
+        ) as service_role_execute
+    `);
+    assert.deepEqual(effectivePrivileges.rows, [{
+      public_execute: false,
+      anon_execute: false,
+      authenticated_execute: false,
+      service_role_execute: false
+    }]);
+  } finally {
+    await db.close();
+  }
+}
 
 async function withIndexFixture(setupSql, check) {
   const db = new PGlite();
