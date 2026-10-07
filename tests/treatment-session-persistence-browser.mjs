@@ -220,9 +220,17 @@ async function sessionState(page) {
   }));
 }
 
+function configuredBrowserPath() {
+  const configured = process.env.CNYOS_TEST_BROWSER_PATH || process.env.CHROME_BIN;
+  if (!configured) return null;
+  assert.ok(fs.existsSync(configured), `Configured browser executable does not exist: ${configured}`);
+  return configured;
+}
+
+const browserPath = configuredBrowserPath();
 const browser = await chromium.launch({
   headless: true,
-  ...(process.env.CNYOS_TEST_BROWSER_PATH ? { executablePath: process.env.CNYOS_TEST_BROWSER_PATH } : {})
+  ...(browserPath ? { executablePath: browserPath } : {})
 });
 try {
   // An empty acknowledgement is not persistence proof: keep the draft and emit no success.
