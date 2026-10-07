@@ -165,6 +165,48 @@ async function expectDatabaseError(promise, code) {
   await assert.rejects(promise, error => String(error.message).includes(code));
 }
 
+const treatmentSessionAcl = await db.query(`
+  select
+    has_function_privilege(
+      'anon',
+      'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)',
+      'execute'
+    ) legacy_anon,
+    has_function_privilege(
+      'authenticated',
+      'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)',
+      'execute'
+    ) legacy_authenticated,
+    has_function_privilege(
+      'service_role',
+      'public.create_clinical_treatment_session(uuid,text[],text,boolean,text,text,smallint,smallint,text,text)',
+      'execute'
+    ) legacy_service_role,
+    has_function_privilege(
+      'anon',
+      'public.create_clinical_treatment_session(uuid,uuid,text[],text,boolean,text,text,smallint,smallint,text,text)',
+      'execute'
+    ) keyed_anon,
+    has_function_privilege(
+      'authenticated',
+      'public.create_clinical_treatment_session(uuid,uuid,text[],text,boolean,text,text,smallint,smallint,text,text)',
+      'execute'
+    ) keyed_authenticated,
+    has_function_privilege(
+      'service_role',
+      'public.create_clinical_treatment_session(uuid,uuid,text[],text,boolean,text,text,smallint,smallint,text,text)',
+      'execute'
+    ) keyed_service_role
+`);
+assert.deepEqual(treatmentSessionAcl.rows[0], {
+  legacy_anon: false,
+  legacy_authenticated: false,
+  legacy_service_role: false,
+  keyed_anon: false,
+  keyed_authenticated: true,
+  keyed_service_role: false
+});
+
 function sqlQuote(value) {
   if (value == null) return 'null';
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -910,11 +952,13 @@ await asUser(USER_DUAL_PROVIDER, `
     '${dualRoleAppointment.id}','in_service',null
   )
 `);
+const dualRoleTreatmentOperationId = randomUUID();
 const dualRoleTreatment = await asUser(USER_DUAL_PROVIDER, `
   select (public.create_clinical_treatment_session(
-    '${dualRoleCheckedIn.encounter_id}',array['manual_therapy'],
-    'Synthetic dual-role own appointment',false,null::text,null::text,
-    null::smallint,null::smallint,null::text,null::text
+    p_encounter_id => '${dualRoleCheckedIn.encounter_id}',
+    p_client_request_id => '${dualRoleTreatmentOperationId}',
+    p_treatment_modalities => array['manual_therapy'],
+    p_treatment_detail => 'Synthetic dual-role own appointment'
   )).practitioner_id
 `);
 assert.equal(dualRoleTreatment.rows[0].practitioner_id, USER_DUAL_PROVIDER);
@@ -962,9 +1006,10 @@ const doctorStarted = (await asUser(USER_ROLE_TARGET, `
 assert.equal(doctorStarted.status, 'in_service');
 await expectDatabaseError(
   asUser(USER_A, `select public.create_clinical_treatment_session(
-    '${checkedInAppointment.encounter_id}',array['manual_therapy'],
-    'Cross-practitioner attempt',false,null::text,null::text,
-    null::smallint,null::smallint,null::text,null::text
+    p_encounter_id => '${checkedInAppointment.encounter_id}',
+    p_client_request_id => '${randomUUID()}',
+    p_treatment_modalities => array['manual_therapy'],
+    p_treatment_detail => 'Cross-practitioner attempt'
   )`),
   'ENCOUNTER_PRACTITIONER_MISMATCH'
 );
@@ -1018,13 +1063,84 @@ await asUser(USER_ROLE_TARGET, `
     p_knowledge_version => 'SYNTHETIC-APPOINTMENT-v1'
   )
 `);
+await expectDatabaseError(
+  asUser(USER_ROLE_TARGET, `
+    select public.create_clinical_treatment_session(
+      '${checkedInAppointment.encounter_id}',array['manual_therapy'],
+      'Legacy non-keyed attempt',false,null::text,null::text,
+      null::smallint,null::smallint,null::text,null::text
+    )
+  `),
+  'permission denied'
+);
+const firstTreatmentOperationId = randomUUID();
 await asUser(USER_ROLE_TARGET, `
   select public.create_clinical_treatment_session(
-    '${checkedInAppointment.encounter_id}',array['manual_therapy'],
-    'Synthetic treatment only',false,null::text,null::text,3::smallint,1::smallint,
-    'Synthetic improved','Synthetic follow-up'
+    p_encounter_id => '${checkedInAppointment.encounter_id}',
+    p_client_request_id => '${firstTreatmentOperationId}',
+    p_treatment_modalities => array['manual_therapy'],
+    p_treatment_detail => 'Synthetic treatment only',
+    p_pain_before => 3::smallint,
+    p_pain_after => 1::smallint,
+    p_outcome_summary => 'Synthetic improved',
+    p_advice => 'Synthetic follow-up'
   )
 `);
+const treatmentOperationId = randomUUID();
+const idempotentTreatment = (await asUser(USER_ROLE_TARGET, `
+  select
+    (session_row).id,
+    (session_row).session_no,
+    (session_row).client_request_id
+  from (
+    select public.create_clinical_treatment_session(
+      p_encounter_id => '${checkedInAppointment.encounter_id}',
+      p_client_request_id => '${treatmentOperationId}',
+      p_treatment_modalities => array['herbal_compress'],
+      p_treatment_detail => 'Synthetic idempotent treatment',
+      p_pain_before => 3::smallint,
+      p_pain_after => 1::smallint,
+      p_outcome_summary => 'Synthetic stable'
+    ) session_row
+  ) created
+`)).rows[0];
+const replayedTreatment = (await asUser(USER_ROLE_TARGET, `
+  select
+    (session_row).id,
+    (session_row).session_no,
+    (session_row).client_request_id
+  from (
+    select public.create_clinical_treatment_session(
+      p_encounter_id => '${checkedInAppointment.encounter_id}',
+      p_client_request_id => '${treatmentOperationId}',
+      p_treatment_modalities => array['herbal_compress'],
+      p_treatment_detail => 'Synthetic idempotent treatment',
+      p_pain_before => 3::smallint,
+      p_pain_after => 1::smallint,
+      p_outcome_summary => 'Synthetic stable'
+    ) session_row
+  ) replayed
+`)).rows[0];
+assert.deepEqual(replayedTreatment, idempotentTreatment);
+assert.equal(idempotentTreatment.client_request_id, treatmentOperationId);
+const idempotentTreatmentCount = await db.query(`
+  select count(*)::int count
+  from public.clinical_treatment_sessions
+  where encounter_id='${checkedInAppointment.encounter_id}'
+    and client_request_id='${treatmentOperationId}'
+`);
+assert.equal(idempotentTreatmentCount.rows[0].count, 1);
+await expectDatabaseError(
+  asUser(USER_ROLE_TARGET, `
+    select public.create_clinical_treatment_session(
+      p_encounter_id => '${checkedInAppointment.encounter_id}',
+      p_client_request_id => '${treatmentOperationId}',
+      p_treatment_modalities => array['herbal_compress'],
+      p_treatment_detail => 'Synthetic changed payload'
+    )
+  `),
+  'CLIENT_REQUEST_ID_REUSE'
+);
 await asUser(USER_ROLE_TARGET, `
   select public.sign_clinical_record_complete(
     '${checkedInAppointment.encounter_id}','Synthetic Doctor','TEST-LICENSE',
@@ -1043,7 +1159,7 @@ const billableTreatments = await asUser(USER_BILLING, `
   where encounter_id='${checkedInAppointment.encounter_id}'
 `);
 assert.equal(billableTreatments.rows.length, 1);
-assert.equal(billableTreatments.rows[0].treatment_description, 'Synthetic treatment only');
+assert.equal(billableTreatments.rows[0].treatment_description, 'Synthetic idempotent treatment');
 const treatmentInvoiceRequest = randomUUID();
 const treatmentInvoice = (await asUser(USER_BILLING, `
   select * from public.issue_atomic_treatment_invoice(
