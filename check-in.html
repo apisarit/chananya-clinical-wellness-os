@@ -15,7 +15,7 @@
   <script src="chananya-runtime.js?v=clinical-os-department1"></script>
   <script src="app-shell.js?v=hybrid-identity1"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="check-in.js?v=hybrid-identity1"></script>
+    <script defer src="check-in.js?v=checkin-handoff1"></script>
 </head>
 <body data-page="checkin">
   <div id="boot">
@@ -59,6 +59,15 @@
           <div class="section-heading"><span class="section-number">นัด</span><div><h2 id="appointment-context-title">กำลังโหลดนัดหมาย</h2><p id="appointment-context-detail"></p></div></div>
           <p class="muted">ระบบจะเปิดหรือเรียก Encounter เดิมของนัดนี้เท่านั้น และคงผู้ให้บริการที่ได้รับมอบหมายไว้</p>
         </section>
+
+        <section class="card hidden" id="handoff-receipt" aria-live="polite" role="status">
+          <div class="section-heading"><span class="section-number">✓</span><div><h2 id="handoff-receipt-title">ยืนยันการเปิด Encounter สำเร็จ</h2><p id="handoff-receipt-detail"></p></div></div>
+          <p id="handoff-receipt-status" class="muted"></p>
+          <div class="actions">
+            <a class="btn primary hidden" id="handoff-primary" href="#">ไปขั้นตอนถัดไป</a>
+          </div>
+        </section>
+        <div class="alert warning hidden" id="handoff-uncertain" role="alert" aria-live="assertive"></div>
 
         <div class="identity-checkin-grid">
           <section class="card">

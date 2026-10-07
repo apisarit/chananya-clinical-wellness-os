@@ -23,6 +23,15 @@ const netlifyDeployId = 'c'.repeat(24);
 const exactDeployOrigin = `https://${netlifyDeployId}--cnyos-clinical-staging.netlify.app`;
 const publishableKey = `sb_publishable_${'k'.repeat(40)}`;
 const production = JSON.parse(fs.readFileSync(path.join(root, 'config/tenant.chananya.json'), 'utf8'));
+const netlifyControlInputNames = Object.freeze(['_headers', '_redirects']);
+const generatedNetlifyConfigBytes = Buffer.from([
+  '[build]',
+  '  publish = "dist"',
+  '',
+  '[functions]',
+  '  directory = "netlify/functions"',
+  ''
+].join('\n'));
 const stagingSource = {
   ...JSON.parse(fs.readFileSync(path.join(root, 'config/tenant.cnyos-staging.json'), 'utf8')),
   database: {
@@ -141,6 +150,7 @@ function makeFixture({
     tenantBytes,
     deployBytes,
     runtimeBytes,
+    generatedNetlifyConfigBytes,
     fileBytes,
     sourceFiles,
     env: {
@@ -156,6 +166,7 @@ function makeFixture({
       CLINICAL_OS_BUILD_TIMESTAMP: '2026-09-08T00:00:00.000Z',
       STAGING_NETLIFY_SITE_ID: CNYOS_UNLOCKED_STAGING_IDENTITY.siteId,
       EXPECTED_STAGING_NETLIFY_DEPLOY_ID: netlifyDeployId,
+      EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256: digest('sha256', generatedNetlifyConfigBytes),
       NETLIFY_AUTH_TOKEN: 'netlify-test-token-never-log',
       CLINICAL_OS_STAGING_ACK: 'STAGING_ONLY',
       CLINICAL_OS_STAGING_CONFIG_JSON: JSON.stringify(staging),
@@ -197,16 +208,33 @@ function mockFetch(fixture, options = {}) {
       }
       if (url.pathname === `${sitePath}/files`) {
         inventoryReadCount += 1;
-        const inventory = [...fixture.fileBytes.entries()]
+        const deployedFiles = new Map(
+          [...fixture.fileBytes.entries()]
+            .filter(([name]) => !netlifyControlInputNames.includes(name))
+        );
+        deployedFiles.set('netlify.toml', options.generatedNetlifyConfigBytes ?? fixture.generatedNetlifyConfigBytes);
+        if (inventoryReadCount === 2 && options.secondGeneratedNetlifyConfigBytes) {
+          deployedFiles.set('netlify.toml', options.secondGeneratedNetlifyConfigBytes);
+        }
+        const inventory = [...deployedFiles.entries()]
           .filter(([name]) => name !== options.omitInventoryFile &&
             !(inventoryReadCount === 2 && name === options.secondInventoryOmitFile))
-          .map(([name, content]) => ({
-            id: `/${name}`,
-            path: `/${name}`,
-            sha: digest('sha1', content),
-            size: content.byteLength,
-            mime_type: 'application/octet-stream'
-          }));
+          .map(([name, content]) => {
+            const overrides = {
+              ...(options.inventoryMetadataOverrides?.[name] || {}),
+              ...(inventoryReadCount === 2
+                ? options.secondInventoryMetadataOverrides?.[name] || {}
+                : {})
+            };
+            return {
+              id: `/${name}`,
+              path: `/${name}`,
+              sha: digest('sha1', content),
+              size: content.byteLength,
+              mime_type: 'application/octet-stream',
+              ...overrides
+            };
+          });
         if (options.extraInventoryFile) {
           const content = Buffer.from('unreviewed debug payload');
           inventory.push({
@@ -240,7 +268,14 @@ function mockFetch(fixture, options = {}) {
       const rawPrefix = `${sitePath}/files/`;
       if (url.pathname.startsWith(rawPrefix)) {
         const name = decodeURIComponent(url.pathname.slice(rawPrefix.length));
-        const content = options.rawFileOverrides?.[name] ?? fixture.fileBytes.get(name);
+        const content = (inventoryReadCount === 2
+          ? options.secondRawFileOverrides?.[name]
+          : undefined) ?? options.rawFileOverrides?.[name] ??
+          (name === 'netlify.toml'
+            ? inventoryReadCount === 2 && options.secondGeneratedNetlifyConfigBytes
+              ? options.secondGeneratedNetlifyConfigBytes
+              : options.generatedNetlifyConfigBytes ?? fixture.generatedNetlifyConfigBytes
+            : fixture.fileBytes.get(name));
         return new Response(content, { status: content === undefined ? 404 : 200 });
       }
       throw new Error(`Unexpected Netlify API request: ${url}`);
@@ -356,6 +391,10 @@ try {
   assert.equal(passed.evidence.exactDeployOrigin, exactDeployOrigin);
   assert.equal(passed.evidence.artifactFileCount, fixture.fileBytes.size);
   assert.match(passed.evidence.artifactSha256, /^[0-9a-f]{64}$/);
+  assert.equal(
+    passed.evidence.generatedNetlifyTomlSha256,
+    digest('sha256', fixture.generatedNetlifyConfigBytes)
+  );
   assert.equal(passed.evidence.forbiddenPaths.length, unlockedStagingForbiddenPaths.length);
   assert.equal(fs.statSync(passed.evidencePath).mode & 0o777, 0o600);
   const evidenceText = fs.readFileSync(passed.evidencePath, 'utf8');
@@ -369,6 +408,24 @@ try {
   assert.equal(healthCall.init.headers.apikey, publishableKey);
   assert.equal(Object.hasOwn(healthCall.init.headers, 'Authorization'), false);
   assert.ok(passed.calls.every(call => call.init.redirect === 'error'));
+  const rawFilePrefix = `/api/v1/sites/${CNYOS_UNLOCKED_STAGING_IDENTITY.siteId}/files/`;
+  const rawFileNames = passed.calls
+    .filter(call => call.url.origin === 'https://api.netlify.com' &&
+      call.url.pathname.startsWith(rawFilePrefix))
+    .map(call => decodeURIComponent(call.url.pathname.slice(rawFilePrefix.length)))
+    .sort();
+  assert.deepEqual(
+    rawFileNames.filter(name => name !== 'netlify.toml'),
+    [...fixture.fileBytes.keys()].filter(name => !netlifyControlInputNames.includes(name)).sort(),
+    'every deployed runtime file must be read raw'
+  );
+  assert.equal(
+    rawFileNames.filter(name => name === 'netlify.toml').length,
+    2,
+    'the generated Netlify config must be byte-checked before and after behavioral verification'
+  );
+  assert.equal(rawFileNames.includes('_headers'), false, '_headers is a processed control input, not a deployed file');
+  assert.equal(rawFileNames.includes('_redirects'), false, '_redirects is a processed control input, not a deployed file');
 
   await rejectsWith(run(fixture, {
     env: { CNYOS_UNLOCKED_STAGING_VERIFY_ACK: '' }
@@ -388,6 +445,12 @@ try {
   await rejectsWith(run(fixture, {
     env: { EXPECTED_STAGING_NETLIFY_DEPLOY_ID: 'c'.repeat(23) }
   }), /EXPECTED_STAGING_NETLIFY_DEPLOY_ID_INVALID/);
+  await rejectsWith(run(fixture, {
+    env: { EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256: '' }
+  }), /EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256_REQUIRED/);
+  await rejectsWith(run(fixture, {
+    env: { EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256: 'f'.repeat(63) }
+  }), /EXPECTED_STAGING_GENERATED_NETLIFY_TOML_SHA256_INVALID/);
   await rejectsWith(run(fixture, {
     git: { commit: 'c'.repeat(40) }
   }), /UNLOCKED_STAGING_CHECKOUT_IDENTITY_MISMATCH/);
@@ -451,11 +514,55 @@ try {
     fetch: { omitInventoryFile: 'app.js' }
   }), /UNLOCKED_STAGING_NETLIFY_FILESET_MISMATCH/);
   await rejectsWith(run(fixture, {
+    fetch: { omitInventoryFile: 'netlify.toml' }
+  }), /UNLOCKED_STAGING_NETLIFY_FILESET_MISMATCH/);
+  await rejectsWith(run(fixture, {
+    fetch: { extraInventoryFile: '_headers' }
+  }), /UNLOCKED_STAGING_NETLIFY_FILESET_MISMATCH/);
+  await rejectsWith(run(fixture, {
     fetch: { extraInventoryFile: 'debug.html' }
   }), /UNLOCKED_STAGING_NETLIFY_FILESET_MISMATCH/);
   await rejectsWith(run(fixture, {
+    fetch: {
+      inventoryMetadataOverrides: {
+        'netlify.toml': { sha: 'not-a-sha1' }
+      }
+    }
+  }), /UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_METADATA_INVALID/);
+  await rejectsWith(run(fixture, {
+    fetch: {
+      rawFileOverrides: {
+        'netlify.toml': Buffer.from('coherently inventoried config was not returned')
+      }
+    }
+  }), /UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_BYTES_MISMATCH/);
+  await rejectsWith(run(fixture, {
+    fetch: {
+      generatedNetlifyConfigBytes: Buffer.from([
+        '[build]',
+        '  publish = "unexpected"',
+        ''
+      ].join('\n'))
+    }
+  }), /UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_SHA256_MISMATCH/);
+  await rejectsWith(run(fixture, {
     fetch: { secondInventoryExtraFile: 'late-debug.html' }
   }), /UNLOCKED_STAGING_NETLIFY_FILESET_MISMATCH/);
+  await rejectsWith(run(fixture, {
+    fetch: {
+      secondGeneratedNetlifyConfigBytes: Buffer.concat([
+        fixture.generatedNetlifyConfigBytes,
+        Buffer.from('# changed during verification\n')
+      ])
+    }
+  }), /UNLOCKED_STAGING_NETLIFY_FILE_INVENTORY_CHANGED_DURING_VERIFICATION/);
+  await rejectsWith(run(fixture, {
+    fetch: {
+      secondRawFileOverrides: {
+        'netlify.toml': Buffer.from('final raw config drift with stable inventory')
+      }
+    }
+  }), /UNLOCKED_STAGING_NETLIFY_GENERATED_CONFIG_BYTES_MISMATCH/);
   await rejectsWith(run(fixture, {
     fetch: { inventoryPaginationHeader: '<https://api.netlify.com/api/v1/sites/example/files?page=2>; rel="next"' }
   }), /UNLOCKED_STAGING_NETLIFY_FILE_INVENTORY_PAGINATED/);

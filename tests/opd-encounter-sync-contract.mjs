@@ -7,6 +7,7 @@ const source = fs.readFileSync(new URL('../opd-workflow.js', import.meta.url), '
 class Element {
   constructor(value = '') { this.value = value; this.checked = false; this.textContent = ''; this.innerHTML = ''; this.listeners = {}; }
   addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+  setAttribute(name, value) { this[name] = value; }
   dispatch(type, detail) { for (const listener of this.listeners[type] || []) listener({ target: this, detail, preventDefault() {} }); }
   reset() { this.value = ''; this.resetCount = (this.resetCount || 0) + 1; }
 }
@@ -54,7 +55,7 @@ const db = {
       order() {
         return new Promise(resolve => pending.push({ query, resolve }));
       },
-      upsert(payload) { query.mode = 'upsert'; query.payload = payload; db.saved.push(payload); db.history.set(payload.encounter_id, payload); return Promise.resolve({ error: null }); }
+      upsert(payload) { query.mode = 'upsert'; query.payload = payload; db.saved.push(payload); db.history.set(payload.encounter_id, { ...payload, id: `history-${payload.encounter_id}` }); return Promise.resolve({ error: null }); }
     };
   },
   saved: [],
@@ -64,15 +65,18 @@ const db = {
 function resolve(table, encounter, data) {
   const index = pending.findIndex(item => item.query.table === table && item.query.encounter === encounter);
   assert.notEqual(index, -1, `pending ${table}/${encounter}`);
-  pending.splice(index, 1)[0].resolve({ data, error: null });
+  const row = table === 'ttm_opd_histories' && data ? { id: `history-${encounter}`, encounter_id: encounter, ...data } : data;
+  pending.splice(index, 1)[0].resolve({ data: row, error: null });
 }
 function flush() { return new Promise(resolve => setImmediate(resolve)); }
 
 window.ChananyaRuntime = {
   getDb: () => db,
-  getSession: async () => ({ user: { id: 'synthetic-user' } })
+  getSession: async () => ({ user: { id: 'synthetic-user' } }),
+  getProfile: async () => ({ id: 'synthetic-user', clinic_id: 'synthetic-clinic', access_context_ready: true }),
+  can: () => true
 };
-const context = { window, document, CustomEvent, console: { error() {}, log() {} }, alert() {} };
+const context = { window, document, CustomEvent, console: { error() {}, log() {} }, alert() {}, setTimeout, clearTimeout };
 context.alert = message => alerts.push(message);
 vm.runInNewContext(source, context, { filename: 'opd-workflow.js' });
 
@@ -116,7 +120,7 @@ window.dispatchEvent(new CustomEvent('chananya:encounter-changed', { detail: { e
 assert.equal(elements['#opd-accident'].value, '');
 elements['#opd-history-form'].dispatch('submit');
 await flush();
-assert.match(alerts.at(-1), /กำลังโหลด OPD History/);
+assert.match(elements['#opd-history-status'].textContent, /กำลังโหลด OPD History/);
 assert.equal(db.saved.length, 0);
 resolve('ttm_opd_histories', 'enc-C', { accident_history: 'C' });
 resolve('clinical_treatment_sessions', 'enc-C', []);
@@ -141,7 +145,7 @@ resolve('clinical_treatment_sessions', 'enc-D', []);
 assert.equal(elements['#opd-history-form'].inert, true);
 elements['#opd-history-form'].dispatch('submit');
 await flush();
-assert.match(alerts.at(-1), /กำลังโหลด OPD History/);
+assert.match(elements['#opd-history-status'].textContent, /กำลังโหลด OPD History/);
 assert.equal(db.saved.length, 0);
 
 // Save captures A; changing to B while the read is in flight cannot retarget the write or event.
@@ -208,9 +212,9 @@ lateElements['#opd-history-form'].reset = () => {};
 lateElements['#opd-session-form'].reset = () => {};
 const lateWindow = { listeners: {}, addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }, dispatchEvent(event) { for (const listener of this.listeners[event.type] || []) listener(event); } };
 const lateDocument = { readyState: 'complete', querySelector(selector) { return lateElements[selector] || null; }, querySelectorAll() { return []; }, addEventListener() {} };
-const lateDb = { from(table) { const chain = { select() { return this; }, eq() { return this; }, maybeSingle() { return Promise.resolve({ data: table === 'ttm_opd_histories' ? { accident_history: 'late-A' } : null, error: null }); }, order() { return Promise.resolve({ data: [], error: null }); }, upsert() { return Promise.resolve({ error: null }); } }; return chain; }, async rpc() { return { error: null }; } };
-lateWindow.ChananyaRuntime = { getDb: () => lateDb, getSession: async () => ({ user: { id: 'late-user' } }) };
-vm.runInNewContext(source, { window: lateWindow, document: lateDocument, CustomEvent, console: { error() {}, log() {} }, alert() {} }, { filename: 'opd-workflow-empty-init.js' });
+const lateDb = { from(table) { const chain = { select() { return this; }, eq() { return this; }, maybeSingle() { return Promise.resolve({ data: table === 'ttm_opd_histories' ? { id: 'history-late-A', encounter_id: 'late-A', accident_history: 'late-A' } : null, error: null }); }, order() { return Promise.resolve({ data: [], error: null }); }, upsert() { return Promise.resolve({ error: null }); } }; return chain; }, async rpc() { return { error: null }; } };
+lateWindow.ChananyaRuntime = { getDb: () => lateDb, getSession: async () => ({ user: { id: 'late-user' } }), getProfile: async () => ({ id: 'late-user', clinic_id: 'synthetic-clinic', access_context_ready: true }), can: () => true };
+vm.runInNewContext(source, { window: lateWindow, document: lateDocument, CustomEvent, console: { error() {}, log() {} }, alert() {}, setTimeout, clearTimeout }, { filename: 'opd-workflow-empty-init.js' });
 await flush();
 lateElements['#encounter'].value = 'late-A';
 lateWindow.dispatchEvent(new CustomEvent('chananya:encounter-changed', { detail: { encounterId: 'late-A' } }));

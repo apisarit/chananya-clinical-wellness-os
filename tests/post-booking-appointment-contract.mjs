@@ -29,7 +29,11 @@ assert.match(checkin, /clinic_appointments_patient_clinic_fkey/u);
 assert.match(checkin, /rpc\('check_in_clinic_appointment'/u);
 assert.match(checkin, /p_appointment_id: appointmentContext\.id/u);
 assert.match(checkin, /p_qr_session_id: selected\.source === 'qr'/u);
-assert.match(checkin, /location\.assign\(`\/clinical-v3\.html\?encounter=/u);
+assert.match(checkin, /const clinicalUrl = `\/clinical-v3\.html\?encounter=\$\{encounterId\}&step=history`/u);
+assert.match(checkin, /can\(profile, 'clinical_write'\)/u);
+assert.match(checkin, /primary\.href = canOpenClinical \? clinicalUrl : appointmentContext\s*\? '\/appointments\.html#appointment-register' : '\/check-in\.html'/u,
+  'reception must receive a queue handoff rather than the inaccessible clinical editor');
+assert.match(checkinHtml, /id="handoff-receipt"[^>]*role="status"/u);
 
 assert.match(migration, /create unique index if not exists clinic_appointments_encounter_uidx/u);
 assert.match(migration, /foreign key \(encounter_id, clinic_id, patient_id\)/u);
