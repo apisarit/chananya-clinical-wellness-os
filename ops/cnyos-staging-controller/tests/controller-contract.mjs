@@ -189,6 +189,8 @@ const PROTECTED_REQUIRED_SCHEDULES = Object.freeze({
 assert.deepEqual(REQUIRED_SCHEDULES, PROTECTED_REQUIRED_SCHEDULES);
 assert.deepEqual(FUNCTIONS_REQUIRING_NO_SCHEDULE_OR_CUSTOM_ROUTE,
   ['database-backup-background']);
+assert.equal(EXPECTED_FUNCTION_NAMES.includes('who-icd-search'), true,
+  'the deployed WHO ICD connector must remain in the exact function allowlist');
 
 const validFunctionMetadata = {
   available_functions: EXPECTED_FUNCTION_NAMES.map(name => ({ n: name })),

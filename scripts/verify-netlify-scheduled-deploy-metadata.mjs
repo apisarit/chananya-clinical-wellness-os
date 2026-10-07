@@ -18,7 +18,8 @@ export const EXPECTED_FUNCTION_NAMES = Object.freeze([
   'owner-subscription',
   'patient-identity',
   'platform-console',
-  'restore-source'
+  'restore-source',
+  'who-icd-search'
 ]);
 
 const sourceCommitPattern = /^[0-9a-f]{40}$/;

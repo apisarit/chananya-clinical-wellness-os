@@ -385,6 +385,20 @@ await assert.rejects(
   ),
   /SCHEDULED_ROUTE_DENIAL_BODY_TOO_LARGE/
 );
+const functionEntrypointNames = fs.readdirSync(path.join(root, 'netlify/functions'), { withFileTypes: true })
+  .filter(entry => entry.isFile() && entry.name.endsWith('.mts'))
+  .map(entry => entry.name.slice(0, -4))
+  .sort();
+assert.deepEqual(
+  EXPECTED_FUNCTION_NAMES,
+  functionEntrypointNames,
+  'the deployment metadata allowlist must match the tracked Netlify function entrypoints'
+);
+assert.equal(
+  EXPECTED_FUNCTION_NAMES.includes('who-icd-search'),
+  true,
+  'the deployed WHO ICD connector must remain in the exact function allowlist'
+);
 const deployMetadata = {
   id: 'a'.repeat(24),
   site_id: values.BACKUP_EXPECTED_NETLIFY_SITE_ID,
@@ -492,6 +506,13 @@ assert.throws(
   () => assertScheduledDeployMetadata({
     ...deployMetadata,
     available_functions: deployMetadata.available_functions.slice(1)
+  }, deployMetadataExpectation),
+  /NETLIFY_FUNCTION_FILESET_INVALID/
+);
+assert.throws(
+  () => assertScheduledDeployMetadata({
+    ...deployMetadata,
+    available_functions: [...deployMetadata.available_functions, { n: 'unexpected-export' }]
   }, deployMetadataExpectation),
   /NETLIFY_FUNCTION_FILESET_INVALID/
 );
