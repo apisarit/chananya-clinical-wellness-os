@@ -6,8 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   EXPECTED_FUNCTION_NAMES,
-  FUNCTIONS_REQUIRING_NO_SCHEDULE_OR_CUSTOM_ROUTE,
   POLICY,
+  REQUIRED_FUNCTION_ROUTES,
   REQUIRED_SCHEDULES,
   assertControllerRuntime,
   canonicalIsoTimestamp,
@@ -187,13 +187,33 @@ const PROTECTED_REQUIRED_SCHEDULES = Object.freeze({
   'database-backup-recovery': '*/15 0-2,20-23 * * *'
 });
 assert.deepEqual(REQUIRED_SCHEDULES, PROTECTED_REQUIRED_SCHEDULES);
-assert.deepEqual(FUNCTIONS_REQUIRING_NO_SCHEDULE_OR_CUSTOM_ROUTE,
-  ['database-backup-background']);
+assert.deepEqual(REQUIRED_FUNCTION_ROUTES, {
+  'database-backup-background': {
+    path: '/api/internal/database-backup-worker',
+    methods: ['POST'],
+    invocationMode: 'background'
+  }
+});
+assert.equal(Object.isFrozen(REQUIRED_FUNCTION_ROUTES), true);
+assert.equal(Object.isFrozen(REQUIRED_FUNCTION_ROUTES['database-backup-background']), true);
+assert.equal(Object.isFrozen(REQUIRED_FUNCTION_ROUTES['database-backup-background'].methods), true);
 assert.equal(EXPECTED_FUNCTION_NAMES.includes('who-icd-search'), true,
   'the deployed WHO ICD connector must remain in the exact function allowlist');
 
 const validFunctionMetadata = {
-  available_functions: EXPECTED_FUNCTION_NAMES.map(name => ({ n: name })),
+  available_functions: EXPECTED_FUNCTION_NAMES.map(name => name === 'database-backup-background'
+    ? {
+        n: name,
+        im: 'background',
+        ro: [{
+          p: REQUIRED_FUNCTION_ROUTES[name].path,
+          l: REQUIRED_FUNCTION_ROUTES[name].path,
+          e: null,
+          m: [...REQUIRED_FUNCTION_ROUTES[name].methods],
+          ps: false
+        }]
+      }
+    : { n: name }),
   function_schedules: Object.entries(REQUIRED_SCHEDULES).map(([name, cron]) => ({ name, cron })),
   functions_config: {}
 };
@@ -202,14 +222,47 @@ assert.deepEqual(assertFunctionMetadata(validFunctionMetadata),
 assert.throws(() => assertFunctionMetadata({
   ...validFunctionMetadata,
   available_functions: validFunctionMetadata.available_functions.map(item => item.n ===
-    'database-backup-background' ? { ...item, ro: true } : item)
-}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_OR_SCHEDULE_PRESENT/);
+    'database-backup-background' ? { ...item, ro: [] } : item)
+}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID/);
+assert.throws(() => assertFunctionMetadata({
+  ...validFunctionMetadata,
+  available_functions: validFunctionMetadata.available_functions.map(item => item.n ===
+    'database-backup-background'
+    ? { ...item, ro: [{ ...item.ro[0], p: '/unsafe-background-route' }] }
+    : item)
+}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID/);
+assert.throws(() => assertFunctionMetadata({
+  ...validFunctionMetadata,
+  available_functions: validFunctionMetadata.available_functions.map(item => item.n ===
+    'database-backup-background'
+    ? { ...item, ro: [{ ...item.ro[0], m: ['GET', 'POST'] }] }
+    : item)
+}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID/);
+assert.throws(() => assertFunctionMetadata({
+  ...validFunctionMetadata,
+  available_functions: validFunctionMetadata.available_functions.map(item => item.n ===
+    'database-backup-background'
+    ? { ...item, ro: [...item.ro, { ...item.ro[0] }] }
+    : item)
+}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID/);
+assert.throws(() => assertFunctionMetadata({
+  ...validFunctionMetadata,
+  available_functions: validFunctionMetadata.available_functions.map(item => item.n ===
+    'database-backup-background' ? { ...item, im: 'stream' } : item)
+}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID/);
 assert.throws(() => assertFunctionMetadata({
   ...validFunctionMetadata,
   functions_config: {
-    'database-backup-background': { routes: [{ pattern: '/unsafe-background-route' }] }
+    'database-backup-background': {
+      routes: [{
+        pattern: '/unsafe-background-route',
+        literal: '/unsafe-background-route',
+        methods: ['POST']
+      }],
+      excluded_routes: []
+    }
   }
-}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_OR_SCHEDULE_PRESENT/);
+}), /CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID/);
 assert.throws(() => assertFunctionMetadata({
   ...validFunctionMetadata,
   function_schedules: [

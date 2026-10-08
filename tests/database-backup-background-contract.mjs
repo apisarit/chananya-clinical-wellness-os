@@ -824,7 +824,7 @@ assert.deepEqual(await scheduledResponse.json(), {
 assert.equal(captured.length, 1, 'the scheduler must enqueue exactly one background job per clinic');
 assert.equal(
   captured[0].url,
-  'https://synthetic-drive-staging.netlify.app/.netlify/functions/database-backup-background'
+  'https://synthetic-drive-staging.netlify.app/api/internal/database-backup-worker'
 );
 assert.equal(captured[0].options.method, 'POST');
 assert.equal(captured[0].options.redirect, 'error');
@@ -963,7 +963,7 @@ assert.deepEqual(
 
 let unauthorizedRpcCalled = false;
 const unauthorized = await handleBackgroundBackup(
-  new Request('https://synthetic-drive-staging.netlify.app/.netlify/functions/database-backup-background', {
+  new Request('https://synthetic-drive-staging.netlify.app/api/internal/database-backup-worker', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}'
@@ -983,7 +983,7 @@ assert.deepEqual(await unauthorized.json(), { ok: false, code: 'BACKUP_DISPATCH_
 assert.equal(unauthorizedRpcCalled, false, 'unauthorized direct calls must stop before database access');
 
 const disabled = await handleBackgroundBackup(
-  new Request('https://example.netlify.app/.netlify/functions/database-backup-background', {
+  new Request('https://example.netlify.app/api/internal/database-backup-worker', {
     method: 'POST',
     body: '{}'
   }),
@@ -1094,7 +1094,9 @@ assert.deepEqual(await recoveryResponse.json(), {
   failed: 0
 });
 const staleQuery = recoveryFetches.find(call => call.url.includes('/rest/v1/backup_export_runs'));
-const recoveryDispatch = recoveryFetches.find(call => call.url.endsWith('/database-backup-background'));
+const recoveryDispatch = recoveryFetches.find(call =>
+  call.url.endsWith('/api/internal/database-backup-worker')
+);
 assert.ok(staleQuery, 'recovery monitor must query bounded stale-run evidence');
 assert.match(staleQuery.url, /scheduled_for=eq\.2026-09-01T20%3A00%3A00\.000Z/);
 assert.match(staleQuery.url, /limit=11/);

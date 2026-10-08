@@ -47,7 +47,7 @@ const SOURCE_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 const DEPLOYMENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,127}$/;
 const DISPATCH_SIGNATURE_PATTERN = /^[0-9a-f]{64}$/;
 
-export const BACKUP_BACKGROUND_FUNCTION_PATH = '/.netlify/functions/database-backup-background';
+export const BACKUP_BACKGROUND_FUNCTION_PATH = '/api/internal/database-backup-worker';
 export const BACKUP_DISPATCH_VERSION = 1;
 export const BACKUP_DISPATCH_MAX_AGE_MS = 30 * 60 * 1000;
 export const BACKUP_DISPATCH_MAX_FUTURE_SKEW_MS = 60 * 1000;

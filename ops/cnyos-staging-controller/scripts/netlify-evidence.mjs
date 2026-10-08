@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url';
 import {
   DEPLOY_ID,
   EXPECTED_FUNCTION_NAMES,
-  FUNCTIONS_REQUIRING_NO_SCHEDULE_OR_CUSTOM_ROUTE,
   MAX_FILE_BYTES,
   POLICY,
   POLICY_SHA256,
+  REQUIRED_FUNCTION_ROUTES,
   REQUIRED_SCHEDULES,
   assertExactKeys,
   assertControllerRuntime,
@@ -1254,16 +1254,40 @@ export function assertFunctionMetadata(deploy) {
       fail('CNYOS_CONTROLLER_SCHEDULED_FUNCTION_ROUTE_PRESENT');
     }
   }
-  for (const name of FUNCTIONS_REQUIRING_NO_SCHEDULE_OR_CUSTOM_ROUTE) {
+  for (const [name, expectedRoute] of Object.entries(REQUIRED_FUNCTION_ROUTES)) {
     const matchingSchedules = schedules.filter(item => item?.name === name);
     const matchingFunctions = deploy.available_functions.filter(item => item?.n === name);
+    const functionMetadata = matchingFunctions[0];
+    const routes = functionMetadata?.ro;
     const config = deploy.functions_config?.[name];
     if (matchingSchedules.length || matchingFunctions.length !== 1 ||
-      Object.hasOwn(matchingFunctions[0], 'ro') ||
-      (config !== undefined && config !== null &&
-        (!isPlainObject(config) || ['routes', 'excluded_routes'].some(field =>
-          Object.hasOwn(config, field) && (!Array.isArray(config[field]) || config[field].length))))) {
-      fail('CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_OR_SCHEDULE_PRESENT');
+      functionMetadata?.im !== expectedRoute.invocationMode ||
+      !Array.isArray(routes) || routes.length !== 1 ||
+      !isPlainObject(routes[0]) || routes[0].p !== expectedRoute.path ||
+      routes[0].l !== expectedRoute.path || !Array.isArray(routes[0].m) ||
+      routes[0].m.length !== expectedRoute.methods.length ||
+      routes[0].m.some((method, index) => method !== expectedRoute.methods[index])) {
+      fail('CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID');
+    }
+    if (config !== undefined && config !== null) {
+      if (!isPlainObject(config)) fail('CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID');
+      if (Object.hasOwn(config, 'excluded_routes') &&
+        (!Array.isArray(config.excluded_routes) || config.excluded_routes.length)) {
+        fail('CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID');
+      }
+      if (Object.hasOwn(config, 'routes')) {
+        const configuredRoutes = config.routes;
+        const configuredRoute = configuredRoutes?.[0];
+        const configuredMethods = configuredRoute?.methods;
+        if (!Array.isArray(configuredRoutes) || configuredRoutes.length !== 1 ||
+          !isPlainObject(configuredRoute) || configuredRoute.pattern !== expectedRoute.path ||
+          configuredRoute.literal !== expectedRoute.path ||
+          !Array.isArray(configuredMethods) ||
+          configuredMethods.length !== expectedRoute.methods.length ||
+          configuredMethods.some((method, index) => method !== expectedRoute.methods[index])) {
+          fail('CNYOS_CONTROLLER_BACKGROUND_FUNCTION_ROUTE_INVALID');
+        }
+      }
     }
   }
   return Object.freeze(schedules.map(item => Object.freeze({ name: item.name, cron: item.cron })));

@@ -52,9 +52,13 @@ export const REQUIRED_SCHEDULES = Object.freeze({
   'database-backup-recovery': '*/15 0-2,20-23 * * *'
 });
 
-export const FUNCTIONS_REQUIRING_NO_SCHEDULE_OR_CUSTOM_ROUTE = Object.freeze([
-  'database-backup-background'
-]);
+export const REQUIRED_FUNCTION_ROUTES = deepFreeze({
+  'database-backup-background': {
+    path: '/api/internal/database-backup-worker',
+    methods: ['POST'],
+    invocationMode: 'background'
+  }
+});
 
 export function fail(code) {
   throw new Error(code);
