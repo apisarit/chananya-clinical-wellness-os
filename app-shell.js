@@ -13,6 +13,7 @@
     { key: 'pharmacy', href: '/pharmacy.html', icon: 'Rx', label: 'ห้องยา', note: 'จ่ายยาและผลิตภัณฑ์', capability: 'pharmacy_operate' },
     { key: 'production', href: '/production.html', icon: '⚗', label: 'ผลิตและคลัง', note: 'สูตร Batch และวัตถุดิบ', capability: 'production_operate' },
     { key: 'quality', href: '/quality.html', icon: '✓', label: 'คุณภาพ', note: 'ตรวจ QC และปล่อยผ่าน', capability: 'quality_operate' },
+    { key: 'prices', href: '/admin.html#prices', icon: '฿', label: 'Price Master', note: 'ราคากลางและรายการขาดราคา', capability: 'price_master_manage' },
     { key: 'admin', href: '/admin.html', icon: '⚙', label: 'ศูนย์ควบคุม', note: 'สิทธิ์ อนุมัติ Audit', capability: 'admin_center' }
   ]);
 

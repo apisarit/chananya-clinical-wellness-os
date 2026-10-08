@@ -105,11 +105,24 @@
     document.querySelector(`[data-step-state="${step}"]`)?.classList.toggle('ready', Boolean(ready));
   }
 
+  function canReadUnassignedEncounters() {
+    return profile?.system_role === 'super_admin';
+  }
+
+  function clinicalEncounterRequest() {
+    let request = db.from('encounters')
+      .select('id,encounter_no,patient_id,practitioner_id,chief_complaint,thai_diagnosis,started_at,status');
+    if (!canReadUnassignedEncounters()) {
+      request = request.eq('practitioner_id', session.user.id);
+    }
+    return request.order('started_at', { ascending: false }).limit(250);
+  }
+
   async function loadReferences(preferredEncounter) {
     const [patientResult, productResult, encounterResult] = await Promise.all([
       db.from('patients').select('*').order('created_at', { ascending: false }).limit(500),
       db.from('products').select('*').eq('active', true).order('name_th'),
-      db.from('encounters').select('id,encounter_no,patient_id,chief_complaint,thai_diagnosis,started_at,status').order('started_at', { ascending: false }).limit(250)
+      clinicalEncounterRequest()
     ]);
     [patientResult, productResult, encounterResult].forEach(result => { if (result.error) throw result.error; });
     patients = patientResult.data || [];
@@ -141,7 +154,7 @@
   async function refreshClinicalWorklist() {
     const [patientResult, encounterResult] = await Promise.all([
       db.from('patients').select('id,hn,prefix,first_name,last_name').order('created_at', { ascending: false }).limit(500),
-      db.from('encounters').select('id,encounter_no,patient_id,chief_complaint,thai_diagnosis,started_at,status').order('started_at', { ascending: false }).limit(250)
+      clinicalEncounterRequest()
     ]);
     if (patientResult.error) throw patientResult.error;
     if (encounterResult.error) throw encounterResult.error;

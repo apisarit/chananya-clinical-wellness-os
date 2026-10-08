@@ -245,6 +245,18 @@ export const DECLARED_POST_BASELINE_MIGRATIONS = Object.freeze([
     name: 'treatment_session_idempotency',
     file: '20261003162550_treatment_session_idempotency.sql',
     sha256: '6319a11e5ef8a73c31d5856cf77e123614e8224bb9e2b42a0cf48957f04fef47'
+  }),
+  Object.freeze({
+    version: '20261008223000',
+    name: 'enforce_assigned_prescription_authorization',
+    file: '20261008223000_enforce_assigned_prescription_authorization.sql',
+    sha256: '2dcb94f17c67c46efba27f7c5fc7d040db001d149f8ef410e357f2e25c0be2ed'
+  }),
+  Object.freeze({
+    version: '20261008224500',
+    name: 'pharmacy_reviewer_dispenser_separation',
+    file: '20261008224500_pharmacy_reviewer_dispenser_separation.sql',
+    sha256: 'c6252d5cfb601fec2dead581f17ca8e7f2e2731849601ca03631f931b75b1c13'
   })
 ]);
 export const CHANANYA_REVIEWED_SYSTEM_IDENTIFIER = '7666007964130682852';

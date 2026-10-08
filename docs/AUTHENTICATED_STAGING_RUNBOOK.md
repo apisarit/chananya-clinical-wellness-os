@@ -47,7 +47,7 @@ npm run tenant:bootstrap-sql -- /absolute/path/tenant.staging.json
 
 The bootstrap is idempotent: it creates the configured clinic UUID on a fresh database or updates that same UUID, fails on a clinic-code collision, and never re-keys the canonical clinic row seeded by the migrations. A successful run returns `CHANANYA_TENANT_BOOTSTRAP_READY` with the staging deployment and clinic identifiers.
 
-After the clinic bootstrap succeeds, provision the 11 synthetic staging identities. Then verify that `current_access_context()` returns the staging clinic UUID/code for each identity.
+After the clinic bootstrap succeeds, provision the 11 canonical-role identities plus separate Pharmacy reviewer and dispenser identities (13 synthetic accounts total). Then verify that `current_access_context()` returns the staging clinic UUID/code for every account and that both duty-separation accounts resolve to the canonical `pharmacy` role.
 
 ### One-time migration ledger recovery
 
@@ -56,7 +56,7 @@ was initialized, do not simply mark filenames as applied or replay them blindly.
 Establish object-level provenance first. For the pinned Chananya snapshot in
 this workstream, do not apply a migration from PR #36 and do not perform any new
 staging bootstrap or identity provisioning before the independent security
-review and exact-head CI gates below pass. Bootstrap and the 11 synthetic
+review and exact-head CI gates below pass. Bootstrap and the 13 synthetic
 identities are later verifier/repair prerequisites if they are not already
 present; their need must be established without treating this draft as staging
 mutation authorization. Keep PR #36 draft and unapproved; merging is unnecessary
@@ -614,11 +614,11 @@ signed release packet has passed may the controller perform:
    draft-gate evidence, and promotion of that same deploy ID;
 3. the full post-promotion static/schedule gate and GET/malformed-POST denial for
    both scheduled Functions on immutable and canonical origins;
-4. provisioning of the 11 synthetic staging identities;
+4. provisioning of 13 synthetic staging identities: the 11 canonical roles plus distinct Pharmacy reviewer and dispenser accounts;
 5. exact `current_access_context()` and `department_can()` role/tenant checks;
 6. all ten workspace routes in mobile Chromium, including denied-route behavior;
 7. migration health, ten synthetic clinical-to-payment journeys, audit and
-   segregation checks;
+   segregation checks at the API/RPC/database layer;
 8. reversible subscription OFF/ON proof using the original tenant boundary;
 9. a final current-deploy check, atomic publisher-lease release receipt, and a
    cross-linked evidence manifest;
@@ -628,6 +628,15 @@ signed release packet has passed may the controller perform:
 The protected controller intentionally creates synthetic staging records. It
 must run only after the independent Environment reviewer confirms the exact
 controller commit, signed packet, staging project and site.
+
+`scripts/run-staging-synthetic-uat.mjs` is an authenticated API/RPC runner. Its
+output proves database persistence, role-separated calls and audit rows, but it
+does not launch the hosted application in a browser. Its reviewer/dispenser
+token switch is not browser session-switch proof. Keep hosted-browser reload,
+readback and Reception → Practitioner → Pharmacy Reviewer → Pharmacy
+Dispenser account-switch status at `pending` until a separate browser run is
+captured against the exact promoted staging deploy. Do not use the API/RPC JSON
+alone to claim complete browser UAT or production readiness.
 
 ## Evidence and release decision
 
@@ -651,8 +660,11 @@ A successful protected controller run must produce:
   `scheduled-route-denial.json`, `final-current.json` and
   `publisher-release.json`, all bound to that same deploy ID;
 - `uat.json`, cross-linking the 11-role provisioning, access matrix, mobile
-  route matrix, ten synthetic journeys, migration health, audit segregation and
-  subscription-restoration evidence, plus a screenshot for any browser failure;
+  route matrix, ten synthetic API/RPC journeys, migration health, audit
+  segregation and subscription-restoration evidence. It must link a separate
+  hosted-browser reload/account-switch artifact (and a screenshot for any
+  browser failure); `authenticated-staging-synthetic-uat.json` alone is
+  insufficient;
 - `final.json`, requiring every expected digest and receipt; or
   `rollback-chain-validation.json` (when promotion was attempted) plus
   reconciliation evidence proving conditional baseline restoration,

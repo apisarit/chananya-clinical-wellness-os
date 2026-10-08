@@ -78,6 +78,7 @@
     production_operate: ['super_admin','production','inventory'],
     quality_operate: ['super_admin','quality'],
     billing_operate: ['super_admin','billing'],
+    price_master_manage: ['super_admin','admin','billing'],
     admin_center: ['super_admin','admin']
   });
 

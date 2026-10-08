@@ -36,8 +36,13 @@ assert.ok(pharmacy.includes('setTimeout(async () =>'));
 assert.ok(pharmacy.includes('startQueueRefresh();'));
 assert.match(pharmacy, /document.visibilityState/);
 assert.match(pharmacy, /refresh-rx-queue/);
-assert.match(pharmacy, /capturePrescriptionPriceDrafts/);
-assert.match(pharmacy, /restorePrescriptionPriceDrafts/);
+assert.match(pharmacy, /clinic_product_prices/);
+assert.match(pharmacy, /dispensing_order_events/);
+assert.match(pharmacy, /ฐานข้อมูลเป็นผู้กำหนดราคา/);
+assert.match(pharmacy, /รอบัญชีผู้จ่ายยาอีกคน/);
+assert.match(pharmacy, /ประวัติผู้ปฏิบัติงานและสถานะ/);
+assert.doesNotMatch(pharmacy, /data-rx-price/);
+assert.match(pharmacy, /p_item_prices:\s*\[\]/);
 
 const makeElement = () => ({
   value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, dataset: {},
@@ -197,45 +202,4 @@ assert.match(clinicalElement('#rx-handoff-receipt').innerHTML, /RX-A/);
 assert.match(clinicalElement('#toast').textContent, /ส่งใบสั่งยาสำเร็จ.*คิว Q-A.*รีเฟรชข้อมูลล่าสุดไม่สำเร็จ/);
 assert.ok(clinicalErrors.length > 0);
 
-// Execute the Pharmacy draft snapshot/restore functions. A refresh must preserve
-// unsaved unit prices and keyboard focus while replacing queue DOM.
-const pharmacyNodes = new Map();
-const pharmacyElement = selector => {
-  if (!pharmacyNodes.has(selector)) pharmacyNodes.set(selector, makeElement());
-  return pharmacyNodes.get(selector);
-};
-let pharmacyPriceInputs = [];
-const pharmacyDocument = {
-  visibilityState: 'visible',
-  activeElement: null,
-  querySelector: pharmacyElement,
-  querySelectorAll: selector => selector === '[data-rx-price]' ? pharmacyPriceInputs : [],
-  addEventListener() {}
-};
-const pharmacySandbox = {
-  console, Intl, setTimeout, clearTimeout,
-  document: pharmacyDocument,
-  window: {},
-  location: { replace() {} },
-  alert() {},
-  crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000002' }
-};
-const pharmacyForTest = pharmacy.replace(
-  '  init();\n})();',
-  '  globalThis.__pharmacyDraftTest = { capturePrescriptionPriceDrafts, restorePrescriptionPriceDrafts };\n})();'
-);
-vm.runInNewContext(pharmacyForTest, pharmacySandbox);
-const priceA = Object.assign(makeElement(), { value: '125.50', dataset: { rxPrice: 'item-a' } });
-const priceB = Object.assign(makeElement(), { value: '', dataset: { rxPrice: 'item-b' } });
-pharmacyPriceInputs = [priceA, priceB];
-pharmacyDocument.activeElement = priceA;
-const priceDrafts = pharmacySandbox.__pharmacyDraftTest.capturePrescriptionPriceDrafts();
-const replacementA = Object.assign(makeElement(), { value: '', dataset: { rxPrice: 'item-a' } });
-const replacementB = Object.assign(makeElement(), { value: '', dataset: { rxPrice: 'item-b' } });
-pharmacyPriceInputs = [replacementA, replacementB];
-pharmacySandbox.__pharmacyDraftTest.restorePrescriptionPriceDrafts(priceDrafts);
-assert.equal(replacementA.value, '125.50');
-assert.equal(replacementB.value, '');
-assert.equal(replacementA.focused, true);
-
-console.log('Prescription/pharmacy handoff UI contract passed: patient-bound cart, stale-response retention, exact readback, and refresh-safe price drafts');
+console.log('Prescription/pharmacy handoff UI contract passed: patient-bound cart, exact readback, governed price display, duty separation and durable event history');

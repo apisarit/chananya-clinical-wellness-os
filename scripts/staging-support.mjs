@@ -7,6 +7,9 @@ import { validateTenantConfig } from './generate-tenant-config.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stagingMarker = /(?:^|[-_.])(staging|stage|nonprod|test)(?:$|[-_.])/i;
 const emailDomain = /^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const PRODUCTION_SITE_ALIASES = Object.freeze([
+  'https://cnyos.netlify.app'
+]);
 
 export const STAGING_ROLES = Object.freeze([
   'practitioner',
@@ -21,6 +24,20 @@ export const STAGING_ROLES = Object.freeze([
   'super_admin',
   'viewer'
 ]);
+
+// Canonical database roles stay small. These extra identities let staging
+// prove separation-of-duties with two different authenticated users that both
+// resolve to the canonical Pharmacy role.
+export const STAGING_TEST_IDENTITIES = Object.freeze([
+  ...STAGING_ROLES,
+  'pharmacy_reviewer',
+  'pharmacy_dispenser'
+]);
+
+const STAGING_ROLE_ALIASES = Object.freeze({
+  pharmacy_reviewer: 'pharmacy',
+  pharmacy_dispenser: 'pharmacy'
+});
 
 export const DATABASE_CAPABILITIES = Object.freeze([
   'governance',
@@ -133,7 +150,10 @@ export function loadStagingTarget({ env = process.env, cwd = root } = {}) {
   if (sameOrigin(config.database.url, production.database.url)) {
     throw new Error('Staging database resolves to the Production Supabase project');
   }
-  if (sameOrigin(siteUrl, production.auth.redirectOrigin)) {
+  if (
+    sameOrigin(siteUrl, production.auth.redirectOrigin)
+    || PRODUCTION_SITE_ALIASES.some(alias => sameOrigin(siteUrl, alias))
+  ) {
     throw new Error('Staging site resolves to the Production site');
   }
   if (origin(config.auth.redirectOrigin, 'auth.redirectOrigin') !== siteUrl) {
@@ -170,16 +190,17 @@ export function loadStagingCredentials(env = process.env) {
 }
 
 export function stagingIdentity(role, env = process.env) {
-  if (!STAGING_ROLES.includes(role)) throw new Error(`Unknown staging role: ${role}`);
+  if (!STAGING_TEST_IDENTITIES.includes(role)) throw new Error(`Unknown staging role: ${role}`);
   const { domain, prefix } = loadStagingCredentials(env);
+  const effectiveRole = STAGING_ROLE_ALIASES[role] || role;
   return Object.freeze({
     role,
     email: `${prefix}-${role.replaceAll('_', '-')}@${domain}`,
     fullName: `Synthetic E2E ${role}`,
-    clinicRole: ['admin', 'super_admin'].includes(role) ? 'viewer' : role,
-    profileRole: ['admin', 'super_admin'].includes(role) ? 'viewer' : role,
-    systemRole: role === 'super_admin' ? 'super_admin' : role === 'admin' ? 'admin' : 'staff',
-    effectiveRole: role
+    clinicRole: ['admin', 'super_admin'].includes(effectiveRole) ? 'viewer' : effectiveRole,
+    profileRole: ['admin', 'super_admin'].includes(effectiveRole) ? 'viewer' : effectiveRole,
+    systemRole: effectiveRole === 'super_admin' ? 'super_admin' : effectiveRole === 'admin' ? 'admin' : 'staff',
+    effectiveRole
   });
 }
 

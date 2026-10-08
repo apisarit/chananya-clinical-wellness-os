@@ -1,5 +1,5 @@
 import {
-  STAGING_ROLES,
+  STAGING_TEST_IDENTITIES,
   loadStagingCredentials,
   loadStagingTarget,
   requestJson,
@@ -108,7 +108,7 @@ const existingUsers = await listUsers();
 const byEmail = new Map(existingUsers.map(user => [String(user.email || '').toLowerCase(), user]));
 const provisioned = [];
 
-for (const role of STAGING_ROLES) {
+for (const role of STAGING_TEST_IDENTITIES) {
   const identity = stagingIdentity(role);
   const existing = byEmail.get(identity.email);
   const user = await ensureAuthUser(identity, existing);

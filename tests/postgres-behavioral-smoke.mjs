@@ -12,6 +12,7 @@ const USER_A = '11111111-1111-4111-a111-111111111111';
 const USER_B = '22222222-2222-4222-a222-222222222222';
 const USER_C = '44444444-4444-4444-a444-444444444444';
 const USER_PHARMACY = 'aaaaaaaa-1111-4111-a111-111111111111';
+const USER_PHARMACY_DISPENSER = 'aaaaaaaa-2222-4222-a222-222222222222';
 const USER_PRODUCTION = 'bbbbbbbb-2222-4222-a222-222222222222';
 const USER_QUALITY = 'abababab-7777-4777-a777-777777777777';
 const USER_RECEPTION = 'cccccccc-3333-4333-a333-333333333333';
@@ -23,6 +24,7 @@ const CLINIC_A = '00000000-0000-0000-0000-000000000001';
 const CLINIC_B = '33333333-3333-4333-a333-333333333333';
 const RX_REQUEST = '55555555-5555-4555-a555-555555555555';
 const RX_BAD_REQUEST = '66666666-6666-4666-a666-666666666666';
+const RX_WRONG_PRACTITIONER_REQUEST = '61616161-6161-4616-a161-616161616161';
 const PAYMENT_PARTIAL_REQUEST = '77777777-7777-4777-a777-777777777777';
 const PAYMENT_FINAL_REQUEST = '88888888-8888-4888-a888-888888888888';
 const PAYMENT_OVER_REQUEST = '99999999-9999-4999-a999-999999999999';
@@ -486,6 +488,42 @@ await execAsDatabaseOwnerWithServiceClaim(`
     '${productId}','TTM-TEST-001','ยาทดสอบ','medicine','ขวด','ขวด'
   );
 `);
+
+// A second practitioner in the same clinic and clinical department must not
+// prescribe against another practitioner's assigned Encounter. Prove the
+// denial with the native PL/pgSQL function and verify the failed transaction
+// leaves no prescription, item, queue order, or audit mutation behind.
+const assignmentBefore = await db.query(`
+  select
+    (select count(*)::int from public.prescriptions) prescriptions,
+    (select count(*)::int from public.prescription_items) items,
+    (select count(*)::int from public.dispensing_orders) orders,
+    (select count(*)::int from public.audit_logs) audit_logs
+`);
+await expectDatabaseError(
+  asUser(USER_B, `
+    select * from public.create_atomic_prescription_handoff(
+      '${RX_WRONG_PRACTITIONER_REQUEST}',
+      '${manualEncounter.rows[0].encounter_id}',
+      'must be rejected before mutation',
+      '[{"product_id":"${productId}","quantity_prescribed":1,"unit":"ขวด"}]'::jsonb
+    )
+  `),
+  'ENCOUNTER_PRACTITIONER_MISMATCH'
+);
+const assignmentAfter = await db.query(`
+  select
+    (select count(*)::int from public.prescriptions) prescriptions,
+    (select count(*)::int from public.prescription_items) items,
+    (select count(*)::int from public.dispensing_orders) orders,
+    (select count(*)::int from public.audit_logs) audit_logs
+`);
+assert.deepEqual(
+  assignmentAfter.rows[0],
+  assignmentBefore.rows[0],
+  'wrong-practitioner denial must not mutate prescription, order, or audit state'
+);
+
 const prescription = await asUser(USER_A, `
   select * from public.create_atomic_prescription_handoff(
     '${RX_REQUEST}',
@@ -726,6 +764,7 @@ assert.equal(crossTenantOutcomes.rows.length, 0, 'outcome search must not cross 
 await execAsDatabaseOwnerWithServiceClaim(`
   insert into auth.users(id,email,raw_user_meta_data) values
     ('${USER_PHARMACY}','pharmacy@example.test','{"full_name":"Pharmacist"}'),
+    ('${USER_PHARMACY_DISPENSER}','pharmacy-dispenser@example.test','{"full_name":"Pharmacy Dispenser"}'),
     ('${USER_PRODUCTION}','production@example.test','{"full_name":"Production"}'),
     ('${USER_QUALITY}','quality@example.test','{"full_name":"Quality"}'),
     ('${USER_RECEPTION}','reception@example.test','{"full_name":"Reception"}'),
@@ -734,6 +773,7 @@ await execAsDatabaseOwnerWithServiceClaim(`
     ('${USER_BILLING}','billing@example.test','{"full_name":"Billing"}'),
     ('${USER_DUAL_PROVIDER}','dual-provider@example.test','{"full_name":"Dual-role Provider"}');
   update public.profiles set role='pharmacy',system_role='staff' where id='${USER_PHARMACY}';
+  update public.profiles set role='pharmacy',system_role='staff' where id='${USER_PHARMACY_DISPENSER}';
   update public.profiles set role='production',system_role='staff' where id='${USER_PRODUCTION}';
   update public.profiles set role='quality',system_role='staff' where id='${USER_QUALITY}';
   update public.profiles set role='reception',system_role='staff' where id='${USER_RECEPTION}';
@@ -743,6 +783,7 @@ await execAsDatabaseOwnerWithServiceClaim(`
   update public.profiles set role='practitioner',system_role='admin' where id='${USER_DUAL_PROVIDER}';
   insert into public.clinic_memberships(clinic_id,profile_id,clinic_role,is_primary) values
     ('00000000-0000-0000-0000-000000000001','${USER_PHARMACY}','pharmacy',true),
+    ('00000000-0000-0000-0000-000000000001','${USER_PHARMACY_DISPENSER}','pharmacy',true),
     ('00000000-0000-0000-0000-000000000001','${USER_PRODUCTION}','production',true),
     ('00000000-0000-0000-0000-000000000001','${USER_QUALITY}','quality',true),
     ('00000000-0000-0000-0000-000000000001','${USER_RECEPTION}','reception',true),
@@ -1884,6 +1925,12 @@ for (const [index, demo] of demoCases.entries()) {
     )
   `);
   const productId = product.rows[0].id;
+  await asUser(USER_BILLING, `
+    select public.set_clinic_product_price(
+      '${productId}',${demo.price},'THB',
+      ${sqlQuote(`${demo.id} synthetic approved sale price`)}
+    )
+  `);
   const lots = await asService(`
     insert into public.inventory_lots(
       clinic_id,product_id,lot_number,expiry_date,received_quantity,
@@ -1955,6 +2002,17 @@ for (const [index, demo] of demoCases.entries()) {
       'Synthetic UAT pharmacist review'
     )
   `);
+  if (index === 0) {
+    await expectDatabaseError(
+      asUser(USER_PHARMACY, `
+        select public.transition_atomic_prescription_dispensing(
+          '${prescription.rows[0].dispensing_order_id}','dispense','[]'::jsonb,
+          'Synthetic UAT same-actor denial'
+        )
+      `),
+      'PRESCRIPTION_REVIEWER_DISPENSER_MUST_DIFFER'
+    );
+  }
   const prescriptionItems = await asUser(USER_PHARMACY, `
     select id,product_id,quantity_prescribed,unit
     from public.prescription_items
@@ -1966,7 +2024,7 @@ for (const [index, demo] of demoCases.entries()) {
     prescription_item_id: prescriptionItems.rows[0].id,
     unit_price: demo.price
   }]);
-  const dispensed = await asUser(USER_PHARMACY, `
+  const dispensed = await asUser(USER_PHARMACY_DISPENSER, `
     select public.transition_atomic_prescription_dispensing(
       '${prescription.rows[0].dispensing_order_id}','dispense',
       ${sqlQuote(pricePayload)}::jsonb,'Synthetic UAT FEFO dispense'
@@ -1975,7 +2033,7 @@ for (const [index, demo] of demoCases.entries()) {
   assert.equal(dispensed.rows[0].result.status, 'dispensed');
   if (demo.qty > 1) assert.equal(dispensed.rows[0].result.allocation_count, 2);
 
-  const dispenseRetry = await asUser(USER_PHARMACY, `
+  const dispenseRetry = await asUser(USER_PHARMACY_DISPENSER, `
     select public.transition_atomic_prescription_dispensing(
       '${prescription.rows[0].dispensing_order_id}','dispense',
       ${sqlQuote(pricePayload)}::jsonb,'Synthetic UAT retry'
@@ -1983,7 +2041,7 @@ for (const [index, demo] of demoCases.entries()) {
   `);
   assert.equal(dispenseRetry.rows[0].result.idempotent, true);
 
-  await asUser(USER_PHARMACY, `
+  await asUser(USER_PHARMACY_DISPENSER, `
     select public.transition_atomic_prescription_dispensing(
       '${prescription.rows[0].dispensing_order_id}','submit_billing',
       '[]'::jsonb,'Synthetic UAT checkout handoff'

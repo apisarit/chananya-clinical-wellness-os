@@ -36,7 +36,13 @@ assert.match(pharmacy, /rpc\('transition_atomic_prescription_dispensing'/);
 for (const action of ['review', 'dispense', 'submit_billing']) {
   assert.match(pharmacy, new RegExp(`p_action:\\s*'${action}'`));
 }
-assert.match(pharmacy, /data-rx-price=/, 'Pharmacy must capture a visible sale price');
+assert.match(
+  pharmacy,
+  /query\('clinic_product_prices'/,
+  'Pharmacy must read the governed clinic price master'
+);
+assert.match(pharmacy, /p_item_prices:\s*\[\]/, 'Browser must not submit an authoritative price');
+assert.doesNotMatch(pharmacy, /data-rx-price=/, 'Browser price entry must not override server pricing');
 assert.match(pharmacyHtml, /Review → Prepare → Dispense FEFO → Print label → Submit Billing/);
 assert.doesNotMatch(
   pharmacy,

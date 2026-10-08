@@ -8,8 +8,10 @@ import {
   EXPECTED_DATABASE_CAPABILITIES,
   EXPECTED_WORKSPACES,
   STAGING_ROLES,
+  STAGING_TEST_IDENTITIES,
   WORKSPACE_ROUTES,
-  loadStagingTarget
+  loadStagingTarget,
+  stagingIdentity
 } from '../scripts/staging-support.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -91,6 +93,21 @@ assert.throws(
   () => loadStagingTarget({
     env: {
       ...baseEnv,
+      CLINICAL_OS_STAGING_CONFIG_JSON: JSON.stringify({
+        ...staging,
+        auth: { ...staging.auth, redirectOrigin: 'https://cnyos.netlify.app' }
+      }),
+      STAGING_SITE_URL: 'https://cnyos.netlify.app'
+    },
+    cwd: root
+  }),
+  /Production site/,
+  'the legacy cnyos.netlify.app alias is a live Production target, never staging'
+);
+assert.throws(
+  () => loadStagingTarget({
+    env: {
+      ...baseEnv,
       CLINICAL_OS_STAGING_CONFIG_JSON: JSON.stringify({ ...staging, deploymentId: 'chananya-clinical-production' })
     },
     cwd: root
@@ -100,6 +117,15 @@ assert.throws(
 
 assert.deepEqual(Object.keys(EXPECTED_DATABASE_CAPABILITIES), STAGING_ROLES);
 assert.deepEqual(Object.keys(EXPECTED_WORKSPACES), STAGING_ROLES);
+assert.ok(STAGING_TEST_IDENTITIES.includes('pharmacy_reviewer'));
+assert.ok(STAGING_TEST_IDENTITIES.includes('pharmacy_dispenser'));
+const identityEnv = {
+  STAGING_SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-for-contract-only',
+  STAGING_TEST_PASSWORD: 'contract-password-1234',
+  STAGING_TEST_EMAIL_DOMAIN: 'example.test'
+};
+assert.equal(stagingIdentity('pharmacy_reviewer', identityEnv).effectiveRole, 'pharmacy');
+assert.equal(stagingIdentity('pharmacy_dispenser', identityEnv).clinicRole, 'pharmacy');
 assert.ok(DATABASE_CAPABILITIES.includes('quality'));
 assert.ok(DATABASE_CAPABILITIES.includes('billing'));
 assert.equal(EXPECTED_WORKSPACES.super_admin.length, Object.keys(WORKSPACE_ROUTES).length);
@@ -123,6 +149,50 @@ assert.match(verifier, /department_can/);
 assert.match(verifier, /STAGING_BROWSER_E2E/);
 assert.match(verifier, /ไม่มีสิทธิ์/);
 assert.match(verifier, /runOwnerSubscriptionProof/);
+const syntheticUat = read('scripts/run-staging-synthetic-uat.mjs');
+assert.match(syntheticUat, /\['reception', 'practitioner'/);
+assert.match(syntheticUat, /token\('reception'\), 'upsert_patient_registration'/);
+assert.match(syntheticUat, /token\('reception'\), 'create_practitioner_schedule'/);
+assert.match(syntheticUat, /token\('reception'\), 'book_clinic_appointment'/);
+assert.match(syntheticUat, /token\('reception'\), 'check_in_clinic_appointment'/);
+assert.match(syntheticUat, /token\('practitioner'\), 'set_clinic_appointment_status'/);
+assert.match(syntheticUat, /p_new_status: 'in_service'/);
+assert.match(syntheticUat, /Reception and practitioner staging evidence must use distinct authenticated accounts/);
+assert.match(syntheticUat, /appointment was not created by the reception account/);
+assert.match(syntheticUat, /check-in did not preserve the appointment practitioner/);
+assert.match(syntheticUat, /booking actor is not reception/);
+assert.match(syntheticUat, /check-in actor is not reception/);
+assert.match(syntheticUat, /in-service handoff was not accepted by the assigned practitioner/);
+assert.match(syntheticUat, /check-in audit actor is not the reception account/);
+assert.match(syntheticUat, /check-in audit does not preserve practitioner assignment/);
+assert.doesNotMatch(syntheticUat, /token\('practitioner'\), 'start_manual_patient_encounter'/);
+assert.match(syntheticUat, /pharmacy_reviewer/);
+assert.match(syntheticUat, /pharmacy_dispenser/);
+assert.match(syntheticUat, /PRESCRIPTION_REVIEWER_DISPENSER_MUST_DIFFER/);
+assert.match(syntheticUat, /set_clinic_product_price/);
+assert.doesNotMatch(syntheticUat, /const prices\s*=/, 'staging UAT must not submit browser-selected medicine prices');
+assert.match(
+  syntheticUat,
+  /p_action: 'dispense',\s*p_item_prices: \[\]/,
+  'dispense UAT must require the database price master to resolve every item price'
+);
+assert.match(syntheticUat, /dispensing_order_events/);
+assert.match(syntheticUat, /queue history changed across authenticated Pharmacy API account switch/);
+assert.match(syntheticUat, /evidenceType: 'authenticated_staging_synthetic_api_rpc_uat'/);
+assert.match(syntheticUat, /evidenceScope: 'api_rpc_database_only'/);
+assert.match(syntheticUat, /status: 'pending'/);
+assert.match(syntheticUat, /reloadVerified: false/);
+assert.match(syntheticUat, /accountSwitchVerified: false/);
+assert.match(syntheticUat, /Hosted-browser reload\/account-switch proof remains pending/);
+const verticalSliceSpec = read('specs/phis_opd_pharmacy_vertical_slice.md');
+assert.match(verticalSliceSpec, /API\/RPC\/database evidence only/);
+assert.match(verticalSliceSpec, /account-switch evidence remains \*\*pending\*\*/);
+assert.match(verticalSliceSpec, /must not be labelled as complete browser UAT or production readiness/);
+const stagingRunbook = read('docs/AUTHENTICATED_STAGING_RUNBOOK.md');
+assert.match(stagingRunbook, /authenticated API\/RPC runner/);
+assert.match(stagingRunbook, /does not launch the hosted application in a browser/);
+assert.match(stagingRunbook, /status at `pending`/);
+assert.match(stagingRunbook, /API\/RPC JSON\s+alone to claim complete browser UAT or production readiness/);
 assert.match(verifier, /runStaffMembershipProof/);
 assert.doesNotMatch(verifier, /admin_set_staff_membership_active/);
 assert.doesNotMatch(verifier, /finally\s*\{[\s\S]*admin_set_staff_membership_active/);
@@ -133,6 +203,14 @@ assert.match(uat, /record_atomic_invoice_payment/);
 assert.match(uat, /FEFO/);
 const workflow = read('.github/workflows/authenticated-staging-e2e.yml');
 const lineWorkflow = read('.github/workflows/line-staging-e2e.yml');
+const cnyosStaging = JSON.parse(read('config/tenant.cnyos-staging.json'));
+const workflowUrl = workflow.match(/^\s*URL:\s*(\S+)\s*$/m)?.[1];
+assert.equal(
+  workflowUrl,
+  cnyosStaging.auth.redirectOrigin,
+  'candidate workflow URL must equal the browser-public staging auth redirect origin'
+);
+assert.notEqual(workflowUrl, 'https://cnyos.netlify.app', 'candidate workflow must never target the live Production alias');
 assert.match(workflow, /workflow_dispatch:/);
 assert.doesNotMatch(
   workflow,
@@ -233,4 +311,4 @@ assert.match(releaseAuthorization, /CNYOS_STAGING_RELEASE_APPROVER_KEY_REGISTRY_
 assert.doesNotMatch(releaseAuthorization, /config\/cnyos-staging-release-approver-keys\.json/);
 assert.match(releaseAuthorization, /CNYOS_STAGING_RELEASE_ACTOR_NOT_NAMED_RISK_OWNER/);
 
-console.log('Staging safety contracts passed: Production rejection, offline candidate isolation, 11 roles and 10 synthetic flow definitions');
+console.log(`Staging safety contracts passed: Production rejection, offline candidate isolation, ${STAGING_ROLES.length} canonical roles, ${STAGING_TEST_IDENTITIES.length} synthetic identities and 10 flow definitions`);

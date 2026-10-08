@@ -109,10 +109,22 @@ const expectedPostBaselineMigrations = Object.freeze([
     name: 'treatment_session_idempotency',
     file: '20261003162550_treatment_session_idempotency.sql',
     sha256: '6319a11e5ef8a73c31d5856cf77e123614e8224bb9e2b42a0cf48957f04fef47'
+  }),
+  Object.freeze({
+    version: '20261008223000',
+    name: 'enforce_assigned_prescription_authorization',
+    file: '20261008223000_enforce_assigned_prescription_authorization.sql',
+    sha256: '2dcb94f17c67c46efba27f7c5fc7d040db001d149f8ef410e357f2e25c0be2ed'
+  }),
+  Object.freeze({
+    version: '20261008224500',
+    name: 'pharmacy_reviewer_dispenser_separation',
+    file: '20261008224500_pharmacy_reviewer_dispenser_separation.sql',
+    sha256: 'c6252d5cfb601fec2dead581f17ca8e7f2e2731849601ca03631f931b75b1c13'
   })
 ]);
 
-assert.equal(repositoryEntries.length, 57, 'repository must contain the 57-file source chain');
+assert.equal(repositoryEntries.length, 59, 'repository must contain the 59-file source chain');
 assert.deepEqual(
   repositoryEntries,
   [...repositoryEntries].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)
@@ -120,7 +132,7 @@ assert.deepEqual(
 assert.deepEqual(
   repositoryEntries.slice(-expectedPostBaselineMigrations.length),
   expectedPostBaselineMigrations,
-  'pending migration ledger tail must bind treatment-session idempotency without expanding the reviewed baseline'
+  'pending migration ledger tail must bind every post-baseline migration without expanding the reviewed baseline'
 );
 const entries = loadReviewedMigrationEntries(root);
 assert.equal(entries.length, 45, 'reviewed hosted baseline must remain the exact 45-file prefix');

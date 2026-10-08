@@ -810,3 +810,8 @@ th { position: sticky; top: 0; z-index: 1; color: var(--forest-800); background:
 .knowledge-links { display:flex; flex:0 0 auto; flex-wrap:wrap; gap:0.4rem; padding:0.65rem; }
 .knowledge-links .btn { white-space:normal; text-align:left; }
 .rx-account-attribution { overflow-wrap: anywhere; }
+.danger-text { color: var(--danger); font-weight: 750; }
+.rx-event-history { margin-top: .65rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: #f7faf8; }
+.rx-event-history summary { cursor: pointer; color: var(--forest-800); font-weight: 750; }
+.rx-event-history ol { display: grid; gap: .4rem; margin: .55rem 0 0; padding-left: 1.3rem; }
+.rx-event-history li small { display: block; color: var(--muted); overflow-wrap: anywhere; }

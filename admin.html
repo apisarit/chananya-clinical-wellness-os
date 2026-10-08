@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0d2d24">
   <title>Chananya Admin Task Center</title>
-  <link rel="stylesheet" href="app.css?v=account-access1">
+  <link rel="stylesheet" href="app.css?v=cnyos-price-master-20261008">
   <script src="tenant-config.js?v=white-label1"></script>
   <script src="tenant-brand.js?v=white-label1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous"></script>
   <script src="auth-config.js?v=clinical-os-ia1"></script>
-  <script src="chananya-runtime.js?v=account-access1"></script>
-  <script src="app-shell.js?v=clinical-os-ia1"></script>
+  <script src="chananya-runtime.js?v=cnyos-price-master-20261008"></script>
+  <script src="app-shell.js?v=cnyos-price-master-20261008"></script>
   <script defer src="searchable-select.js?v=clinical-os-department1"></script>
-  <script defer src="admin.js?v=account-access1"></script>
+  <script defer src="admin.js?v=pharmacy-audit-history-20261008-price-master1"></script>
   <script defer src="admin-clinical-audit.js?v=clinical-os-ia1"></script>
 </head>
 <body data-page="admin">
@@ -34,6 +34,7 @@
   <button class="active" data-view="tasks">Admin Tasks</button>
   <button data-view="users">Users & Roles</button>
   <button data-view="history">Approval History</button>
+  <button data-view="prices">Price Master</button>
   <button data-view="clinical-audit">Clinical Audit</button>
 </nav>
 <main>
@@ -86,7 +87,34 @@
   </div>
   <div class="card"><div class="row"><h3>รายชื่อและสิทธิ์</h3><button type="button" class="btn ghost" id="refresh-users">โหลดรายชื่อใหม่</button></div><div id="user-list" class="list"></div></div>
 </section>
-<section class="view" id="history"><div class="card"><h3>ประวัติการอนุมัติ</h3><div id="action-list" class="list"></div></div></section>
+<section class="view" id="history">
+  <div class="card"><h3>ประวัติการอนุมัติ</h3><div id="action-list" class="list"></div></div>
+  <div class="card"><h3>ประวัติ Clinical → Pharmacy</h3><p>แสดงสถานะเดิม–สถานะใหม่ ผู้ปฏิบัติงาน บทบาท เวลา และเหตุผลจาก event ledger แบบ append-only</p><div id="pharmacy-event-list" class="list"></div></div>
+</section>
+<section class="view" id="prices">
+  <div class="hero"><h2>Service / Product Price Master</h2><p>ราคาขายกลางของคลินิกกำหนดโดย Billing หรือ Governance เท่านั้น ห้องยาอ่านราคาเดียวกันจากฐานข้อมูล และสินค้าที่ยังไม่มีราคาจะถูกบล็อกไม่ให้จ่ายยา</p></div>
+  <div class="stats">
+    <div class="stat">พร้อมใช้งาน<strong id="price-ready-count">0</strong></div>
+    <div class="stat">ขาดราคา (Blocking)<strong id="price-missing-count">0</strong></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>กำหนดราคาขาย</h3>
+      <p>ช่วงราคาที่อนุญาต 100–2,000 บาทต่อหน่วยจ่าย ระบบไม่รับสกุลเงินอื่นในรอบนี้</p>
+      <form id="price-master-form" class="form">
+        <label class="full">ผลิตภัณฑ์<select id="price-product" required></select></label>
+        <label>ราคาต่อหน่วยจ่าย (บาท)<input id="price-unit-price" type="number" min="100" max="2000" step="0.01" required></label>
+        <label>สกุลเงิน<input id="price-currency" value="THB" readonly required></label>
+        <label class="full">เหตุผล / หลักฐานอนุมัติ<input id="price-reason" maxlength="1000" required placeholder="เช่น อนุมัติโดย Billing วันที่ ..."></label>
+        <button class="btn primary full">บันทึกราคาและ Audit</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="row"><div><h3>ความครบถ้วนของราคา</h3><p id="price-blocking-message" class="muted">กำลังตรวจสอบ Price Master</p></div><button type="button" class="btn ghost" id="refresh-prices">ตรวจใหม่</button></div>
+      <div id="price-master-list" class="list"></div>
+    </div>
+  </div>
+</section>
 <section class="view" id="clinical-audit">
   <div class="hero"><h2>Clinical Audit & Amendment</h2><p>ตรวจการ Sign-off, Record Lock และประวัติการแก้ไขเวชระเบียนจากจุดควบคุมเดียว</p></div>
   <div class="grid2 space-top-md">

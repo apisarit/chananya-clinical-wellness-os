@@ -55,7 +55,7 @@ jobs:
         run: npm run build:staging-artifact
         env:
           CONTEXT: production
-          URL: https://cnyos.netlify.app
+          URL: https://cnyos-clinical-staging.netlify.app
           CLINICAL_OS_STAGING_DEPLOYMENT: "true"
           CLINICAL_OS_TENANT_CONFIG_PATH: config/tenant.cnyos-staging.json
           CLINICAL_OS_SOURCE_COMMIT: ${{ github.sha }}
